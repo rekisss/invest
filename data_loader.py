@@ -7,6 +7,7 @@ from typing import Iterable
 
 import pandas as pd
 import requests
+from pandas.errors import EmptyDataError, ParserError
 
 
 FINMIND_API_URL = "https://api.finmindtrade.com/api/v4/data"
@@ -43,7 +44,11 @@ class FinMindClient:
             ]
         )
         if use_cache and cache_path.exists():
-            return pd.read_csv(cache_path)
+            try:
+                return pd.read_csv(cache_path)
+            except (EmptyDataError, ParserError):
+                # A partially written cache file should not break the entire scan.
+                cache_path.unlink(missing_ok=True)
 
         request_params: dict[str, str] = {}
         request_params["dataset"] = dataset

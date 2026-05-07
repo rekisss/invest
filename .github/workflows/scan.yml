@@ -1,19 +1,19 @@
-name: Taiwan Hybrid Monitor
+name: Taiwan Daily Scan
 
 on:
   workflow_dispatch:
   schedule:
-    # 09:00-13:55 Asia/Taipei every 5 minutes on weekdays.
-    - cron: "*/5 1-5 * * 1-5"
+    # 13:45 Asia/Taipei on weekdays, after the cash session close.
+    - cron: "45 5 * * 1-5"
 
 concurrency:
-  group: taiwan-hybrid-monitor
+  group: taiwan-daily-scan
   cancel-in-progress: false
 
 jobs:
-  hybrid-monitor:
+  scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -29,19 +29,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run hybrid monitor
+      - name: Run daily scan
         env:
           TZ: Asia/Taipei
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
-          FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          python main.py --mode hybrid-monitor --stocks watchlist.csv --end "$(date +%F)" --watch-top 5 --output output --notify
+          python main.py --mode scan --stocks auto --end "$(date +%F)" --max-universe 120 --top-n 15 --output output --notify
 
       - name: Upload reports
         uses: actions/upload-artifact@v4
         with:
-          name: taiwan-hybrid-monitor
+          name: taiwan-daily-scan
           path: |
-            output/hybrid_monitor_report.xlsx
+            output/scan_report.xlsx
           if-no-files-found: warn

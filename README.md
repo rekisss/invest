@@ -146,12 +146,28 @@ Depending on mode, the project writes:
 This repo includes a workflow in:
 
 - `.github/workflows/report.yml`
+- `.github/workflows/scan.yml`
 
 Important note:
 
 - GitHub Actions cron cannot run every 2 minutes
 - GitHub Actions minimum practical schedule is every 5 minutes
 - if you want true `120-second` monitoring, run it on your own machine or server
+
+### Scheduled jobs
+
+- `report.yml`: runs `hybrid-monitor` every 5 minutes on weekdays during `09:00-13:55` Asia/Taipei
+- `scan.yml`: runs `scan` once per weekday at `13:45` Asia/Taipei
+
+### Required GitHub repository secrets
+
+Set these in `GitHub -> Settings -> Secrets and variables -> Actions`:
+
+- `FINMIND_TOKEN`
+- `DISCORD_WEBHOOK_URL`
+- `FUGLE_API_KEY` for `hybrid-monitor`
+
+Without these secrets, GitHub Actions cannot fetch data or push Discord notifications.
 
 ## Recommended Practical Setup
 

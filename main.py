@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+import sys
 import time
 from typing import Any
 
@@ -72,13 +73,19 @@ def collect_signals(
     signal_frames: list[pd.DataFrame] = []
 
     def load_one(stock: dict[str, Any]) -> tuple[str, pd.DataFrame] | None:
-        prices = fetch_stock_prices(client, stock["stock_id"], start_date, end_date)
-        if prices.empty:
+        try:
+            prices = fetch_stock_prices(client, stock["stock_id"], start_date, end_date)
+            if prices.empty:
+                return None
+            foreign = fetch_foreign_investor_data(client, stock["stock_id"], start_date, end_date)
+            earnings = pd.DataFrame(columns=["date"])
+            if config.use_earnings_filter:
+                earnings = fetch_financial_statement_dates(client, stock["stock_id"], start_date, end_date)
+            frame = prepare_stock_signals(stock, prices, market, foreign, config, earnings_dates=earnings)
+            return stock["stock_id"], frame
+        except Exception as error:
+            print(f"[warn] skipped {stock['stock_id']}: {error}", file=sys.stderr)
             return None
-        foreign = fetch_foreign_investor_data(client, stock["stock_id"], start_date, end_date)
-        earnings = fetch_financial_statement_dates(client, stock["stock_id"], start_date, end_date)
-        frame = prepare_stock_signals(stock, prices, market, foreign, config, earnings_dates=earnings)
-        return stock["stock_id"], frame
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [executor.submit(load_one, stock) for stock in stock_list.to_dict("records")]
