@@ -1,0 +1,38 @@
+name: Taiwan Sponsor Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 1-5 * * 1-5"
+
+jobs:
+  sponsor-monitor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run sponsor monitor
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python main.py --mode sponsor-monitor --stocks auto --end $(date +%F) --max-universe 120 --top-n 15 --watch-top 10 --output output --notify
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: taiwan-sponsor-monitor
+          path: |
+            output/sponsor_monitor_report.xlsx

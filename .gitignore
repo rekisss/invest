@@ -1,0 +1,11 @@
+.venv/
+.vendor/
+__pycache__/
+*.pyc
+output/
+auto_scan/
+smoke_output/
+cache/
+*.xlsx
+*.png
+.DS_Store
