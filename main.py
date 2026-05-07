@@ -1,7 +1,7 @@
 # main.py
 import os
+import csv
 import requests
-import pandas as pd
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -9,54 +9,71 @@ from zoneinfo import ZoneInfo
 STOCKS_FILE = "stocks.csv"
 
 
-def send_to_discord(message: str):
+def send_to_discord(message):
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
 
-    if not webhook_url:
+    if webhook_url is None or webhook_url.strip() == "":
         raise RuntimeError("找不到 DISCORD_WEBHOOK_URL，請確認 GitHub Secrets 已設定")
 
-    payload = {"content": message}
+    payload = {
+        "content": message
+    }
 
     response = requests.post(webhook_url, json=payload, timeout=30)
 
-    if response.status_code not in (200, 204):
-        raise RuntimeError(
-            f"Discord Webhook 發送失敗：{response.status_code} {response.text}"
-        )
+    if response.status_code not in [200, 204]:
+        raise RuntimeError("Discord Webhook 發送失敗：" + str(response.status_code) + " " + response.text)
 
 
 def load_stocks():
-    df = pd.read_csv(STOCKS_FILE, dtype={"stock_id": str})
+    stocks = []
 
-    if "stock_id" not in df.columns:
-        raise RuntimeError("stocks.csv 必須包含 stock_id 欄位")
+    with open(STOCKS_FILE, mode="r", encoding="utf-8-sig", newline="") as file:
+        reader = csv.DictReader(file)
 
-    if "name" not in df.columns:
-        df["name"] = ""
+        if reader.fieldnames is None:
+            raise RuntimeError("stocks.csv 是空的")
 
-    df["stock_id"] = df["stock_id"].astype(str).str.strip()
-    df["name"] = df["name"].astype(str).str.strip()
+        if "stock_id" not in reader.fieldnames:
+            raise RuntimeError("stocks.csv 必須包含 stock_id 欄位")
 
-    df = df[df["stock_id"] != ""].copy()
-    df = df.drop_duplicates(subset=["stock_id"]).reset_index(drop=True)
+        for row in reader:
+            stock_id = str(row.get("stock_id", "")).strip()
+            name = str(row.get("name", "")).strip()
 
-    return df
+            if stock_id != "":
+                stocks.append({
+                    "stock_id": stock_id,
+                    "name": name
+                })
+
+    return stocks
 
 
-def build_stock_list_message(df: pd.DataFrame):
+def build_message(stocks):
     now = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
 
-    stock_lines = []
-    for _, row in df.iterrows():
-        stock_id = row["stock_id"]
-        name = row["name"]
-        stock_lines.append(f"{stock_id} {name}")
+    lines = []
+    lines.append("📌 台股清單讀取成功")
+    lines.append("🕒 台灣時間：" + now)
+    lines.append("📊 股票數量：" + str(len(stocks)) + " 檔")
+    lines.append("")
 
-    stock_text = "\n".join(stock_lines)
+    for stock in stocks:
+        line = stock["stock_id"] + " " + stock["name"]
+        lines.append(line)
 
-    message = (
-        "📌 台股清單讀取成功\n"
-        f"🕒 台灣時間：{now}\n"
-        f"📊 股票數量：{len(df)} 檔\n"
-        "\n"
-        "
+    lines.append("")
+    lines.append("✅ 下一階段可以開始接 FinMind 抓日 K 與技術指標。")
+
+    message = "\n".join(lines)
+    return message
+
+
+def main():
+    stocks = load_stocks()
+    message = build_message(stocks)
+    send_to_discord(message)
+
+
+main()
