@@ -571,7 +571,9 @@ def apply_grade_style(summary_sheet):
 
         for col in range(1, summary_sheet.max_column + 1):
             summary_sheet.cell(row=row, column=col).fill = fill
-
+            
+def make_output_dir():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def create_excel(results, market):
     make_output_dir()
