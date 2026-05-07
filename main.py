@@ -5,10 +5,15 @@ import math
 import requests
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
 
 
 STOCKS_FILE = "stocks.csv"
 FINMIND_API_URL = "https://api.finmindtrade.com/api/v3/data"
+OUTPUT_DIR = "output"
+EXCEL_FILE = OUTPUT_DIR + "/report.xlsx"
 
 
 def send_to_discord(message):
@@ -48,7 +53,7 @@ def load_stocks():
 
 def fetch_stock_price(stock_id):
     end_date = datetime.now(ZoneInfo("Asia/Taipei")).date()
-    start_date = end_date - timedelta(days=260)
+    start_date = end_date - timedelta(days=320)
 
     params = {
         "dataset": "TaiwanStockPrice",
@@ -101,10 +106,6 @@ def to_int(value):
 
 def ema(values, period):
     result = []
-
-    if len(values) == 0:
-        return result
-
     alpha = 2 / (period + 1)
     prev = None
 
@@ -166,7 +167,6 @@ def calc_macd(closes):
 
 def calc_rsi(closes, period):
     result = []
-
     gains = []
     losses = []
 
@@ -197,8 +197,7 @@ def calc_rsi(closes, period):
             result.append(100)
         else:
             rs = avg_gain / avg_loss
-            rsi = 100 - (100 / (1 + rs))
-            result.append(rsi)
+            result.append(100 - (100 / (1 + rs)))
 
     return result
 
@@ -221,11 +220,7 @@ def calc_adx(highs, lows, closes, period):
         prev_high = highs[i - 1]
         prev_low = lows[i - 1]
 
-        tr = max(
-            high - low,
-            abs(high - prev_close),
-            abs(low - prev_close)
-        )
+        tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
         trs.append(tr)
 
         up_move = high - prev_high
@@ -241,11 +236,11 @@ def calc_adx(highs, lows, closes, period):
         else:
             minus_dm.append(0)
 
-    adx_values = []
+    dx_values = []
 
     for i in range(len(closes)):
         if i < period:
-            adx_values.append(None)
+            dx_values.append(None)
             continue
 
         tr_window = trs[i + 1 - period:i + 1]
@@ -253,26 +248,32 @@ def calc_adx(highs, lows, closes, period):
         minus_window = minus_dm[i + 1 - period:i + 1]
 
         if any(v is None for v in tr_window):
-            adx_values.append(None)
+            dx_values.append(None)
             continue
 
         atr = sum(tr_window) / period
 
         if atr == 0:
-            adx_values.append(None)
+            dx_values.append(None)
             continue
 
         plus_di = 100 * (sum(plus_window) / period) / atr
         minus_di = 100 * (sum(minus_window) / period) / atr
 
         if plus_di + minus_di == 0:
-            adx_values.append(None)
+            dx_values.append(None)
         else:
             dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
-            adx_values.append(dx)
+            dx_values.append(dx)
 
-    adx_smoothed = sma(adx_values, period)
-    return adx_smoothed
+    adx_values = sma(dx_values, period)
+    return adx_values
+
+
+def round_value(value, digits):
+    if value is None:
+        return None
+    return round(value, digits)
 
 
 def round_text(value, digits):
@@ -281,10 +282,18 @@ def round_text(value, digits):
     return str(round(value, digits))
 
 
-def money_text(value):
-    if value is None:
-        return "N/A"
-    return "{:,}".format(value)
+def bool_text(value):
+    if value:
+        return "Y"
+    return "N"
+
+
+def grade_result(condition_count, risk_count, liquidity_ok, avoid_chase):
+    if condition_count >= 8 and risk_count == 0 and liquidity_ok and avoid_chase:
+        return "A"
+    if condition_count >= 6 and liquidity_ok and avoid_chase:
+        return "B"
+    return "C"
 
 
 def analyze_stock(stock):
@@ -297,7 +306,8 @@ def analyze_stock(stock):
         return {
             "stock_id": stock_id,
             "name": name,
-            "status": "NO_ENOUGH_DATA"
+            "status": "NO_ENOUGH_DATA",
+            "error": "資料不足"
         }
 
     dates = []
@@ -331,15 +341,15 @@ def analyze_stock(stock):
 
     latest_close = closes[i]
     prev_close = closes[p]
-    day_return = None
 
+    day_return = None
     if prev_close is not None and prev_close != 0 and latest_close is not None:
         day_return = ((latest_close / prev_close) - 1) * 100
 
     return_5d = None
     if len(rows) >= 6:
         close_5d_ago = closes[i - 5]
-        if close_5d_ago is not None and close_5d_ago != 0:
+        if close_5d_ago is not None and close_5d_ago != 0 and latest_close is not None:
             return_5d = ((latest_close / close_5d_ago) - 1) * 100
 
     prev20_high = None
@@ -359,8 +369,10 @@ def analyze_stock(stock):
     ema60_gt_ema120 = ema60[i] is not None and ema120[i] is not None and ema60[i] > ema120[i]
 
     volume_break = False
-    if volumes[i] is not None and vol_ma20[i] is not None:
-        volume_break = volumes[i] > vol_ma20[i] * 1.5
+    volume_ratio = None
+    if volumes[i] is not None and vol_ma20[i] is not None and vol_ma20[i] != 0:
+        volume_ratio = volumes[i] / vol_ma20[i]
+        volume_break = volume_ratio > 1.5
 
     rsi_strong = rsi14[i] is not None and rsi14[i] > 55
     adx_trending = adx14[i] is not None and adx14[i] > 20
@@ -378,10 +390,18 @@ def analyze_stock(stock):
         liquidity_ok = amount_ma20[i] >= 50000000
 
     long_upper_shadow = False
-    body = abs(closes[i] - opens[i])
-    upper_shadow = highs[i] - max(opens[i], closes[i])
-    if body > 0 and upper_shadow > body * 2:
-        long_upper_shadow = True
+    if opens[i] is not None and highs[i] is not None and closes[i] is not None:
+        body = abs(closes[i] - opens[i])
+        upper_shadow = highs[i] - max(opens[i], closes[i])
+
+        if body > 0 and upper_shadow > body * 2:
+            long_upper_shadow = True
+
+    risk_count = 0
+    if long_upper_shadow:
+        risk_count += 1
+    if not avoid_chase:
+        risk_count += 1
 
     conditions = [
         macd_golden_cross,
@@ -401,11 +421,32 @@ def analyze_stock(stock):
         if c:
             condition_count += 1
 
+    grade = grade_result(condition_count, risk_count, liquidity_ok, avoid_chase)
+
+    note_parts = []
+
+    if long_upper_shadow:
+        note_parts.append("長上影風險")
+
+    if not avoid_chase:
+        note_parts.append("單日漲幅大於7%")
+
+    if not liquidity_ok:
+        note_parts.append("流動性不足")
+
+    if len(note_parts) == 0:
+        note = "無明顯風險註記"
+    else:
+        note = "；".join(note_parts)
+
     return {
         "stock_id": stock_id,
         "name": name,
         "status": "OK",
         "date": dates[i],
+        "open": opens[i],
+        "high": highs[i],
+        "low": lows[i],
         "close": latest_close,
         "day_return": day_return,
         "return_5d": return_5d,
@@ -419,8 +460,12 @@ def analyze_stock(stock):
         "hist": hist[i],
         "rsi14": rsi14[i],
         "adx14": adx14[i],
+        "volume_ratio": volume_ratio,
         "amount_ma20": amount_ma20[i],
         "condition_count": condition_count,
+        "risk_count": risk_count,
+        "grade": grade,
+        "note": note,
         "macd_golden_cross": macd_golden_cross,
         "hist_turn_positive": hist_turn_positive,
         "above_ema60": above_ema60,
@@ -435,53 +480,165 @@ def analyze_stock(stock):
     }
 
 
-def bool_text(value):
-    if value:
-        return "Y"
-    return "N"
+def make_output_dir():
+    if not os.path.exists(OUTPUT_DIR):
+        os.makedirs(OUTPUT_DIR)
 
 
-def build_message(results):
+def append_row(sheet, values):
+    sheet.append(values)
+
+
+def style_sheet(sheet):
+    header_fill = PatternFill("solid", fgColor="1F4E78")
+    header_font = Font(color="FFFFFF", bold=True)
+
+    for cell in sheetcell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center")
+
+    for col in range(1, sheet.max_column + 1):
+        col_letter = get_column_letter(col)
+        sheet.column_dimensions[col_letter].width = 16
+
+    sheet.freeze_panes = "A2"
+
+
+def create_excel(results):
+    make_output_dir()
+
+    wb = Workbook()
+
+    summary = wb.active
+    summary.title = "summary"
+
+    conditions = wb.create_sheet("conditions")
+    raw_latest = wb.create_sheet("raw_latest")
+
+    append_row(summary, [
+        "date", "stock_id", "name", "grade", "condition_count", "risk_count",
+        "close", "day_return_pct", "return_5d_pct",
+        "rsi14", "adx14", "macd", "signal", "hist",
+        "ema20", "ema60", "ema120",
+        "volume_ratio", "amount_ma20", "note"
+    ])
+
+    append_row(conditions, [
+        "date", "stock_id", "name",
+        "macd_golden_cross", "hist_turn_positive",
+        "above_ema60", "ema60_gt_ema120",
+        "volume_break", "rsi_strong", "adx_trending",
+        "breakout_20d", "avoid_chase", "liquidity_ok",
+        "long_upper_shadow"
+    ])
+
+    append_row(raw_latest, [
+        "date", "stock_id", "name",
+        "open", "high", "low", "close",
+        "volume", "amount"
+    ])
+
+    for item in results:
+        if item["status"] != "OK":
+            append_row(summary, [
+                "", item["stock_id"], item["name"], "ERROR", 0, 0,
+                "", "", "", "", "", "", "", "", "", "", "", "", "", item.get("error", "資料錯誤")
+            ])
+            continue
+
+        append_row(summary, [
+            item["date"], item["stock_id"], item["name"], item["grade"],
+            item["condition_count"], item["risk_count"],
+            round_value(item["close"], 2),
+            round_value(item["day_return"], 2),
+            round_value(item["return_5d"], 2),
+            round_value(item["rsi14"], 2),
+            round_value(item["adx14"], 2),
+            round_value(item["macd"], 4),
+            round_value(item["signal"], 4),
+            round_value(item["hist"], 4),
+            round_value(item["ema20"], 2),
+            round_value(item["ema60"], 2),
+            round_value(item["ema120"], 2),
+            round_value(item["volume_ratio"], 2),
+            round_value(item["amount_ma20"], 0),
+            item["note"]
+        ])
+
+        append_row(conditions, [
+            item["date"], item["stock_id"], item["name"],
+            bool_text(item["macd_golden_cross"]),
+            bool_text(item["hist_turn_positive"]),
+            bool_text(item["above_ema60"]),
+            bool_text(item["ema60_gt_ema120"]),
+            bool_text(item["volume_break"]),
+            bool_text(item["rsi_strong"]),
+            bool_text(item["adx_trending"]),
+            bool_text(item["breakout_20d"]),
+            bool_text(item["avoid_chase"]),
+            bool_text(item["liquidity_ok"]),
+            bool_text(item["long_upper_shadow"])
+        ])
+
+        append_row(raw_latest, [
+            item["date"], item["stock_id"], item["name"],
+            round_value(item["open"], 2),
+            round_value(item["high"], 2),
+            round_value(item["low"], 2),
+            round_value(item["close"], 2),
+            item["volume"],
+            item["amount"]
+        ])
+
+    style_sheet(summary)
+    style_sheet(conditions)
+    style_sheet(raw_latest)
+
+    wb.save(EXCEL_FILE)
+
+
+def build_discord_summary(results):
     now = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
 
+    important = []
+
+    for item in results:
+        if item["status"] == "OK" and item["grade"] in ["A", "B"]:
+            important.append(item)
+
+    important = sorted(
+        important,
+        key=lambda x: (x["grade"], -x["condition_count"], x["risk_count"])
+    )
+
     lines = []
-    lines.append("📊 台股技術條件觀察回報")
+    lines.append("📊 台股 Excel 報表已產生")
     lines.append("🕒 台灣時間：" + now)
+    lines.append("📄 報表檔案：report.xlsx")
     lines.append("📌 說明：這是研究觀察資料，不是買賣建議。")
     lines.append("")
 
-    for item in results:
-        stock_id = item["stock_id"]
-        name = item["name"]
+    if len(important) == 0:
+        lines.append("今日沒有 A/B 級觀察標的。")
+        lines.append("完整結果請下載 GitHub Actions Artifact 的 report.xlsx。")
+        return "\n".join(lines)
 
-        if item["status"] != "OK":
-            lines.append("⚠️ " + stock_id + " " + name + "：資料不足或查無資料")
-            lines.append("")
-            continue
+    lines.append("今日 A/B 級觀察摘要：")
+    lines.append("")
 
-        lines.append(stock_id + " " + name)
-        lines.append("日期：" + str(item["date"]))
+    for item in important:
+        lines.append(item["grade"] + "級 " + item["stock_id"] + " " + item["name"])
+        lines.append("條件：" + str(item["condition_count"]) + "/10，風險：" + str(item["risk_count"]))
         lines.append("收盤：" + round_text(item["close"], 2))
-        lines.append("單日漲跌：" + round_text(item["day_return"], 2) + "%")
-        lines.append("5日漲跌：" + round_text(item["return_5d"], 2) + "%")
         lines.append("RSI14：" + round_text(item["rsi14"], 2))
         lines.append("ADX14：" + round_text(item["adx14"], 2))
-        lines.append("MACD Hist：" + round_text(item["hist"], 4))
-        lines.append("20日均成交金額：" + money_text(item["amount_ma20"]))
-        lines.append("條件觀察數：" + str(item["condition_count"]) + " / 10")
-        lines.append("MACD黃金交叉：" + bool_text(item["macd_golden_cross"]))
-        lines.append("Hist轉正：" + bool_text(item["hist_turn_positive"]))
-        lines.append("站上EMA60：" + bool_text(item["above_ema60"]))
-        lines.append("EMA60>EMA120：" + bool_text(item["ema60_gt_ema120"]))
-        lines.append("量大於20均量1.5倍：" + bool_text(item["volume_break"]))
-        lines.append("突破近20日高點：" + bool_text(item["breakout_20d"]))
-        lines.append("避免追高條件：" + bool_text(item["avoid_chase"]))
-        lines.append("流動性條件：" + bool_text(item["liquidity_ok"]))
-        lines.append("長上影風險：" + bool_text(item["long_upper_shadow"]))
+        lines.append("5日漲跌：" + round_text(item["return_5d"], 2) + "%")
+        lines.append("備註：" + item["note"])
         lines.append("")
 
-    message = "\n".join(lines)
-    return message
+    lines.append("完整報表請到 GitHub Actions 的 Artifacts 下載 report.xlsx。")
+
+    return "\n".join(lines)
 
 
 def split_message(message, max_length):
@@ -520,7 +677,9 @@ def main():
                 "error": str(error)
             })
 
-    message = build_message(results)
+    create_excel(results)
+
+    message = build_discord_summary(results)
     messages = split_message(message, 1800)
 
     for msg in messages:
