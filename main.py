@@ -57,9 +57,7 @@ def round_text(value, digits):
 
 
 def bool_text(value):
-    if value:
-        return "Y"
-    return "N"
+    return "Y" if value else "N"
 
 
 def make_output_dir():
@@ -70,7 +68,6 @@ def make_output_dir():
 def split_message(message, max_length=1800):
     parts = []
     current = ""
-
     for line in message.split("\n"):
         if len(current) + len(line) + 1 > max_length:
             if current != "":
@@ -81,97 +78,70 @@ def split_message(message, max_length=1800):
                 current = line
             else:
                 current = current + "\n" + line
-
     if current != "":
         parts.append(current)
-
     return parts
 
 
 def load_stocks():
     stocks = []
-
     with open(STOCKS_FILE, mode="r", encoding="utf-8-sig", newline="") as file:
         reader = csv.DictReader(file)
-
         if reader.fieldnames is None:
             raise RuntimeError("stocks.csv 是空的")
-
         if "stock_id" not in reader.fieldnames:
             raise RuntimeError("stocks.csv 必須包含 stock_id 欄位")
-
         for row in reader:
             stock_id = str(row.get("stock_id", "")).strip()
             name = str(row.get("name", "")).strip()
-
             if stock_id != "":
-                stocks.append({
-                    "stock_id": stock_id,
-                    "name": name
-                })
-
+                stocks.append({"stock_id": stock_id, "name": name})
     return stocks
 
 
 def finmind_params_base():
     params = {}
-
     user_id = os.getenv("FINMIND_USER_ID")
     password = os.getenv("FINMIND_PASSWORD")
-
     if user_id is not None and user_id.strip() != "":
         params["user_id"] = user_id
-
     if password is not None and password.strip() != "":
         params["password"] = password
-
     return params
 
 
 def fetch_finmind(params):
     response = requests.get(FINMIND_API_URL, params=params, timeout=90)
-
     if response.status_code != 200:
         raise RuntimeError("FinMind API 錯誤：" + str(response.status_code) + " " + response.text)
-
     data = response.json()
-
     if "data" not in data:
         raise RuntimeError("FinMind 回傳格式異常：" + str(data))
-
     return data["data"]
 
 
 def fetch_stock_price(stock_id):
     end_date = taipei_now().date()
     start_date = end_date - timedelta(days=360)
-
     params = finmind_params_base()
     params["dataset"] = "TaiwanStockPrice"
     params["stock_id"] = stock_id
     params["date"] = start_date.strftime("%Y-%m-%d")
     params["end_date"] = end_date.strftime("%Y-%m-%d")
-
     rows = fetch_finmind(params)
-    rows = sorted(rows, key=lambda x: x.get("date", ""))
-
-    return rows
+    return sorted(rows, key=lambda x: x.get("date", ""))
 
 
 def fetch_foreign_investors(stock_id):
     end_date = taipei_now().date()
     start_date = end_date - timedelta(days=45)
-
     params = finmind_params_base()
     params["dataset"] = "TaiwanStockInstitutionalInvestorsBuySell"
     params["stock_id"] = stock_id
     params["date"] = start_date.strftime("%Y-%m-%d")
     params["end_date"] = end_date.strftime("%Y-%m-%d")
-
     rows = fetch_finmind(params)
-    rows = sorted(rows, key=lambda x: x.get("date", ""))
-
-    return rows
+    return sorted(rows, key=lambda x: x.get("date", ""))
 
 
 def fetch_market_taiex():
@@ -183,7 +153,6 @@ def fetch_market_taiex():
 
     while chunk_start <= end_date:
         chunk_end = chunk_start + timedelta(days=20)
-
         if chunk_end > end_date:
             chunk_end = end_date
 
@@ -203,18 +172,13 @@ def fetch_market_taiex():
 
             if dt_text != "" and taiex is not None:
                 day = dt_text[:10]
-                daily_map[day] = {
-                    "date": day,
-                    "close": taiex
-                }
+                daily_map[day] = {"date": day, "close": taiex}
 
         chunk_start = chunk_end + timedelta(days=1)
 
     daily_rows = []
-
     for day in sorted(daily_map.keys()):
         daily_rows.append(daily_map[day])
-
     return daily_rows
 
 
@@ -261,7 +225,6 @@ def calc_macd(closes):
     ema26 = ema(closes, 26)
 
     macd_line = []
-
     for i in range(len(closes)):
         if ema12[i] is None or ema26[i] is None:
             macd_line.append(None)
@@ -271,7 +234,6 @@ def calc_macd(closes):
     signal_line = ema(macd_line, 9)
 
     hist = []
-
     for i in range(len(closes)):
         if macd_line[i] is None or signal_line[i] is None:
             hist.append(None)
@@ -342,26 +304,14 @@ def calc_adx(highs, lows, closes, period=14):
             minus_dm.append(0)
             continue
 
-        tr = max(
-            high - low,
-            abs(high - prev_close),
-            abs(low - prev_close)
-        )
-
+        tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
         trs.append(tr)
 
         up_move = high - prev_high
         down_move = prev_low - low
 
-        if up_move > down_move and up_move > 0:
-            plus_dm.append(up_move)
-        else:
-            plus_dm.append(0)
-
-        if down_move > up_move and down_move > 0:
-            minus_dm.append(down_move)
-        else:
-            minus_dm.append(0)
+        plus_dm.append(up_move if up_move > down_move and up_move > 0 else 0)
+        minus_dm.append(down_move if down_move > up_move and down_move > 0 else 0)
 
     dx_values = []
 
@@ -391,12 +341,9 @@ def calc_adx(highs, lows, closes, period=14):
         if plus_di + minus_di == 0:
             dx_values.append(None)
         else:
-            dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
-            dx_values.append(dx)
+            dx_values.append(100 * abs(plus_di - minus_di) / (plus_di + minus_di))
 
-    adx_values = sma(dx_values, period)
-
-    return adx_values
+    return sma(dx_values, period)
 
 
 def analyze_market():
@@ -414,7 +361,6 @@ def analyze_market():
             }
 
         closes = []
-
         for row in rows:
             closes.append(to_float(row.get("close")))
 
@@ -425,15 +371,12 @@ def analyze_market():
         market_ma60 = ma60[i]
 
         market_above_ma60 = False
-
         if close is not None and market_ma60 is not None:
             market_above_ma60 = close > market_ma60
 
         market_return_5d = None
-
         if len(rows) >= 6:
             close_5d_ago = closes[i - 5]
-
             if close is not None and close_5d_ago is not None and close_5d_ago != 0:
                 market_return_5d = ((close / close_5d_ago) - 1) * 100
 
@@ -476,16 +419,10 @@ def analyze_foreign(stock_id):
 
             if buy is None:
                 buy = 0
-
             if sell is None:
                 sell = 0
 
-            net = buy - sell
-
-            if day not in daily_net:
-                daily_net[day] = 0
-
-            daily_net[day] = daily_net[day] + net
+            daily_net[day] = daily_net.get(day, 0) + buy - sell
 
         days = sorted(daily_net.keys())
 
@@ -501,7 +438,7 @@ def analyze_foreign(stock_id):
 
         for day in reversed(days):
             if daily_net[day] > 0:
-                streak = streak + 1
+                streak += 1
             else:
                 break
 
@@ -522,10 +459,8 @@ def analyze_foreign(stock_id):
 def grade_result(condition_count, risk_count, liquidity_ok, avoid_chase):
     if condition_count >= 10 and risk_count == 0 and liquidity_ok and avoid_chase:
         return "A"
-
     if condition_count >= 8 and liquidity_ok and avoid_chase:
         return "B"
-
     return "C"
 
 
@@ -576,20 +511,16 @@ def analyze_stock(stock, market):
     prev_close = closes[p]
 
     day_return = None
-
     if prev_close is not None and prev_close != 0 and latest_close is not None:
         day_return = ((latest_close / prev_close) - 1) * 100
 
     return_5d = None
-
     if len(rows) >= 6:
         close_5d_ago = closes[i - 5]
-
         if close_5d_ago is not None and close_5d_ago != 0 and latest_close is not None:
             return_5d = ((latest_close / close_5d_ago) - 1) * 100
 
     market_return_5d = market.get("market_return_5d")
-
     relative_strength_5d = None
     stronger_than_market = False
 
@@ -598,91 +529,51 @@ def analyze_stock(stock, market):
         stronger_than_market = relative_strength_5d > 0
 
     prev20_high = None
-
     if len(closes) >= 21:
         prev20_high = max(closes[i - 20:i])
 
     macd_golden_cross = False
-
-    if (
-        macd_line[p] is not None
-        and signal_line[p] is not None
-        and macd_line[i] is not None
-        and signal_line[i] is not None
-    ):
+    if macd_line[p] is not None and signal_line[p] is not None and macd_line[i] is not None and signal_line[i] is not None:
         macd_golden_cross = macd_line[p] <= signal_line[p] and macd_line[i] > signal_line[i]
 
     hist_turn_positive = False
-
     if hist[p] is not None and hist[i] is not None:
         hist_turn_positive = hist[p] <= 0 and hist[i] > 0
 
-    above_ema60 = False
-
-    if latest_close is not None and ema60[i] is not None:
-        above_ema60 = latest_close > ema60[i]
-
-    ema60_gt_ema120 = False
-
-    if ema60[i] is not None and ema120[i] is not None:
-        ema60_gt_ema120 = ema60[i] > ema120[i]
+    above_ema60 = latest_close is not None and ema60[i] is not None and latest_close > ema60[i]
+    ema60_gt_ema120 = ema60[i] is not None and ema120[i] is not None and ema60[i] > ema120[i]
 
     volume_ratio = None
     volume_break = False
-
     if volumes[i] is not None and vol_ma20[i] is not None and vol_ma20[i] != 0:
         volume_ratio = volumes[i] / vol_ma20[i]
         volume_break = volume_ratio > 1.5
 
-    rsi_strong = False
-
-    if rsi14[i] is not None:
-        rsi_strong = rsi14[i] > 55
-
-    adx_trending = False
-
-    if adx14[i] is not None:
-        adx_trending = adx14[i] > 20
-
-    breakout_20d = False
-
-    if prev20_high is not None and latest_close is not None:
-        breakout_20d = latest_close > prev20_high
-
-    avoid_chase = True
-
-    if day_return is not None and day_return > 7:
-        avoid_chase = False
-
-    liquidity_ok = False
-
-    if amount_ma20[i] is not None:
-        liquidity_ok = amount_ma20[i] >= 50000000
+    rsi_strong = rsi14[i] is not None and rsi14[i] > 55
+    adx_trending = adx14[i] is not None and adx14[i] > 20
+    breakout_20d = prev20_high is not None and latest_close is not None and latest_close > prev20_high
+    avoid_chase = not (day_return is not None and day_return > 7)
+    liquidity_ok = amount_ma20[i] is not None and amount_ma20[i] >= 50000000
 
     long_upper_shadow = False
-
     if opens[i] is not None and highs[i] is not None and closes[i] is not None:
         body = abs(closes[i] - opens[i])
         upper_shadow = highs[i] - max(opens[i], closes[i])
-
         if body > 0 and upper_shadow > body * 2:
             long_upper_shadow = True
 
     market_filter = market.get("market_above_ma60", False)
 
     foreign = analyze_foreign(stock_id)
-
     foreign_buy_3d = foreign.get("foreign_buy_3d", False)
     foreign_buy_streak = foreign.get("foreign_buy_streak", 0)
     foreign_net_latest = foreign.get("foreign_net_latest")
 
     risk_count = 0
-
     if long_upper_shadow:
-        risk_count = risk_count + 1
-
+        risk_count += 1
     if not avoid_chase:
-        risk_count = risk_count + 1
+        risk_count += 1
 
     conditions = [
         macd_golden_cross,
@@ -700,31 +591,21 @@ def analyze_stock(stock, market):
         stronger_than_market
     ]
 
-    condition_count = 0
-
-    for condition in conditions:
-        if condition:
-            condition_count = condition_count + 1
-
+    condition_count = sum(1 for condition in conditions if condition)
     grade = grade_result(condition_count, risk_count, liquidity_ok, avoid_chase)
 
     note_parts = []
 
     if long_upper_shadow:
         note_parts.append("長上影風險")
-
     if not avoid_chase:
         note_parts.append("單日漲幅大於7%")
-
     if not liquidity_ok:
         note_parts.append("流動性不足")
-
     if not market_filter:
         note_parts.append("大盤未站上MA60")
-
     if not foreign_buy_3d:
         note_parts.append("外資未連買3日")
-
     if not stronger_than_market:
         note_parts.append("5日表現未強於大盤")
 
@@ -839,71 +720,29 @@ def create_excel(results, market):
     market_sheet = wb.create_sheet("market")
 
     append_row(summary, [
-        "date",
-        "stock_id",
-        "name",
-        "grade",
-        "condition_count",
-        "risk_count",
-        "close",
-        "day_return_pct",
-        "return_5d_pct",
-        "market_return_5d_pct",
-        "relative_strength_5d",
-        "rsi14",
-        "adx14",
-        "macd",
-        "signal",
-        "hist",
-        "ema20",
-        "ema60",
-        "ema120",
-        "volume_ratio",
-        "amount_ma20",
-        "foreign_net_latest",
-        "foreign_buy_streak",
-        "note"
+        "date", "stock_id", "name", "grade", "condition_count", "risk_count",
+        "close", "day_return_pct", "return_5d_pct", "market_return_5d_pct",
+        "relative_strength_5d", "rsi14", "adx14", "macd", "signal", "hist",
+        "ema20", "ema60", "ema120", "volume_ratio", "amount_ma20",
+        "foreign_net_latest", "foreign_buy_streak", "note"
     ])
 
     append_row(conditions, [
-        "date",
-        "stock_id",
-        "name",
-        "macd_golden_cross",
-        "hist_turn_positive",
-        "above_ema60",
-        "ema60_gt_ema120",
-        "volume_break",
-        "rsi_strong",
-        "adx_trending",
-        "breakout_20d",
-        "avoid_chase",
-        "liquidity_ok",
-        "market_filter",
-        "foreign_buy_3d",
-        "stronger_than_market",
+        "date", "stock_id", "name", "macd_golden_cross", "hist_turn_positive",
+        "above_ema60", "ema60_gt_ema120", "volume_break", "rsi_strong",
+        "adx_trending", "breakout_20d", "avoid_chase", "liquidity_ok",
+        "market_filter", "foreign_buy_3d", "stronger_than_market",
         "long_upper_shadow"
     ])
 
     append_row(raw_latest, [
-        "date",
-        "stock_id",
-        "name",
-        "open",
-        "high",
-        "low",
-        "close",
-        "volume",
-        "amount"
+        "date", "stock_id", "name", "open", "high", "low", "close",
+        "volume", "amount"
     ])
 
     append_row(market_sheet, [
-        "date",
-        "market_close",
-        "market_ma60",
-        "market_above_ma60",
-        "market_return_5d",
-        "status"
+        "date", "market_close", "market_ma60", "market_above_ma60",
+        "market_return_5d", "status"
     ])
 
     append_row(market_sheet, [
@@ -918,40 +757,15 @@ def create_excel(results, market):
     for item in results:
         if item["status"] != "OK":
             append_row(summary, [
-                "",
-                item["stock_id"],
-                item["name"],
-                "ERROR",
-                0,
-                0,
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                item.get("error", "資料錯誤")
+                "", item["stock_id"], item["name"], "ERROR", 0, 0,
+                "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+                "", "", item.get("error", "資料錯誤")
             ])
             continue
 
         append_row(summary, [
-            item["date"],
-            item["stock_id"],
-            item["name"],
-            item["grade"],
-            item["condition_count"],
-            item["risk_count"],
+            item["date"], item["stock_id"], item["name"], item["grade"],
+            item["condition_count"], item["risk_count"],
             round_value(item["close"], 2),
             round_value(item["day_return"], 2),
             round_value(item["return_5d"], 2),
@@ -973,9 +787,7 @@ def create_excel(results, market):
         ])
 
         append_row(conditions, [
-            item["date"],
-            item["stock_id"],
-            item["name"],
+            item["date"], item["stock_id"], item["name"],
             bool_text(item["macd_golden_cross"]),
             bool_text(item["hist_turn_positive"]),
             bool_text(item["above_ema60"]),
@@ -993,9 +805,7 @@ def create_excel(results, market):
         ])
 
         append_row(raw_latest, [
-            item["date"],
-            item["stock_id"],
-            item["name"],
+            item["date"], item["stock_id"], item["name"],
             round_value(item["open"], 2),
             round_value(item["high"], 2),
             round_value(item["low"], 2),
@@ -1034,7 +844,6 @@ def build_discord_summary(results, market):
     lines.append("報表檔案：report.xlsx")
     lines.append("說明：這是研究觀察資料，不是買賣建議。")
     lines.append("")
-
     lines.append("大盤濾網")
     lines.append("TAIEX日期：" + str(market.get("date", "")))
     lines.append("TAIEX收盤：" + round_text(market.get("market_close"), 2))
@@ -1067,14 +876,12 @@ def build_discord_summary(results, market):
         lines.append("")
 
     lines.append("完整報表請到 GitHub Actions 的 Artifacts 下載 report.xlsx。")
-
     return "\n".join(lines)
 
 
 def main():
     stocks = load_stocks()
     market = analyze_market()
-
     results = []
 
     for stock in stocks:
