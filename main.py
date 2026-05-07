@@ -151,6 +151,7 @@ def to_int(value):
 def safe_round(value, digits):
     if value is None:
         return None
+
     try:
         return round(value, digits)
     except Exception:
@@ -160,6 +161,7 @@ def safe_round(value, digits):
 def text_round(value, digits):
     if value is None:
         return "N/A"
+
     try:
         return str(round(value, digits))
     except Exception:
@@ -170,15 +172,6 @@ def bool_text(value):
     if value:
         return "Y"
     return "N"
-
-
-def money_text(value):
-    if value is None:
-        return "N/A"
-    try:
-        return "{:,}".format(int(value))
-    except Exception:
-        return "N/A"
 
 
 # =========================
@@ -286,7 +279,8 @@ def calc_rsi(closes, period):
             result.append(100)
         else:
             rs = avg_gain / avg_loss
-            result.append(100 - (100 / (1 + rs)))
+            rsi = 100 - (100 / (1 + rs))
+            result.append(rsi)
 
     return result
 
@@ -471,8 +465,13 @@ def analyze_stock(stock):
     if hist[p] is not None and hist[i] is not None:
         hist_turn_positive = hist[p] <= 0 and hist[i] > 0
 
-    above_ema60 = latest_close is not None and ema60[i] is not None and latest_close > ema60[i]
-    ema60_gt_ema120 = ema60[i] is not None and ema120[i] is not None and ema60[i] > ema120[i]
+    above_ema60 = False
+    if latest_close is not None and ema60[i] is not None:
+        above_ema60 = latest_close > ema60[i]
+
+    ema60_gt_ema120 = False
+    if ema60[i] is not None and ema120[i] is not None:
+        ema60_gt_ema120 = ema60[i] > ema120[i]
 
     volume_ratio = None
     volume_break = False
@@ -481,8 +480,13 @@ def analyze_stock(stock):
         volume_ratio = volumes[i] / vol_ma20[i]
         volume_break = volume_ratio > 1.5
 
-    rsi_strong = rsi14[i] is not None and rsi14[i] > 55
-    adx_trending = adx14[i] is not None and adx14[i] > 20
+    rsi_strong = False
+    if rsi14[i] is not None:
+        rsi_strong = rsi14[i] > 55
+
+    adx_trending = False
+    if adx14[i] is not None:
+        adx_trending = adx14[i] > 20
 
     breakout_20d = False
     if prev20_high is not None and latest_close is not None:
@@ -526,6 +530,7 @@ def analyze_stock(stock):
     ]
 
     condition_count = 0
+
     for condition in conditions:
         if condition:
             condition_count += 1
