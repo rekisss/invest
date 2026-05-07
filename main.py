@@ -182,17 +182,13 @@ def format_hybrid_message(candidates: pd.DataFrame, watchlist: pd.DataFrame, liv
             )
 
     if not live_quotes.empty:
-        lines.extend(["", "Step 3: Fugle live quotes"])
+        lines.extend(["", "Step 3: Fugle live quotes (ranked by intraday strength)"])
         for _, row in live_quotes.iterrows():
             if pd.notna(row.get("error")):
                 lines.append(f"- {row['symbol']} | live quote error: {row['error']}")
                 continue
-            last = row.get("last")
-            prev_close = row.get("prev_close")
-            intraday = None
-            if pd.notna(last) and pd.notna(prev_close) and prev_close not in (0, None):
-                intraday = (float(last) / float(prev_close) - 1) * 100
-            intraday_text = f"{intraday:.2f}%" if intraday is not None else "N/A"
+            intraday = row.get("intraday_pct")
+            intraday_text = f"{float(intraday) * 100:.2f}%" if pd.notna(intraday) else "N/A"
             lines.append(
                 f"- {row['symbol']} {row.get('name') or ''} | last {row.get('last')} | open {row.get('open')} | high {row.get('high')} | vol {row.get('volume')} | intraday {intraday_text}"
             )

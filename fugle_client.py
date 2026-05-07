@@ -71,4 +71,19 @@ def fetch_watch_quotes(client: FugleClient, symbols: list[str]) -> pd.DataFrame:
             rows.append(normalize_quote(symbol, payload))
         except Exception as error:
             rows.append({"symbol": symbol, "error": str(error)})
-    return pd.DataFrame(rows)
+    frame = pd.DataFrame(rows)
+    if frame.empty:
+        return frame
+
+    if "last" in frame.columns and "prev_close" in frame.columns:
+        frame["intraday_pct"] = pd.to_numeric(frame["last"], errors="coerce") / pd.to_numeric(frame["prev_close"], errors="coerce") - 1
+        frame.loc[pd.to_numeric(frame["prev_close"], errors="coerce") == 0, "intraday_pct"] = pd.NA
+    else:
+        frame["intraday_pct"] = pd.NA
+
+    if "error" not in frame.columns:
+        frame["error"] = pd.NA
+
+    frame["sort_intraday"] = pd.to_numeric(frame["intraday_pct"], errors="coerce").fillna(-999)
+    frame = frame.sort_values(["error", "sort_intraday"], ascending=[True, False], na_position="last").drop(columns=["sort_intraday"])
+    return frame.reset_index(drop=True)
