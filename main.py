@@ -1,8 +1,12 @@
 # main.py
 import os
 import requests
+import pandas as pd
 from datetime import datetime
 from zoneinfo import ZoneInfo
+
+
+STOCKS_FILE = "stocks.csv"
 
 
 def send_to_discord(message: str):
@@ -23,16 +27,30 @@ def send_to_discord(message: str):
         )
 
 
-def main():
+def load_stocks():
+    df = pd.read_csv(STOCKS_FILE, dtype={"stock_id": str})
+
+    if "stock_id" not in df.columns:
+        raise RuntimeError("stocks.csv 必須包含 stock_id 欄位")
+
+    if "name" not in df.columns:
+        df["name"] = ""
+
+    df["stock_id"] = df["stock_id"].astype(str).str.strip()
+    df["name"] = df["name"].astype(str).str.strip()
+
+    df = df[df["stock_id"] != ""].copy()
+    df = df.drop_duplicates(subset=["stock_id"]).reset_index(drop=True)
+
+    return df
+
+
+def build_stock_list_message(df: pd.DataFrame):
     now = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
 
-    message = (
-        "✅ GitHub Actions 測試成功！\n"
-        f"🕒 台灣時間：{now}\n"
-        "📌 GitHub Actions → Python → Discord Webhook 已正常連線"
-    )
-
-    send_to_discord(message)
-
-
-main()
+    lines = [
+        "📌 台股清單讀取成功",
+        f"🕒 台灣時間：{now}",
+        f"📊 股票數量：{len(df)} 檔",
+        "",
+        "
