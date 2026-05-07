@@ -15,9 +15,7 @@ def send_to_discord(message: str):
     if not webhook_url:
         raise RuntimeError("找不到 DISCORD_WEBHOOK_URL，請確認 GitHub Secrets 已設定")
 
-    payload = {
-        "content": message
-    }
+    payload = {"content": message}
 
     response = requests.post(webhook_url, json=payload, timeout=30)
 
@@ -48,9 +46,17 @@ def load_stocks():
 def build_stock_list_message(df: pd.DataFrame):
     now = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
 
-    lines = [
-        "📌 台股清單讀取成功",
-        f"🕒 台灣時間：{now}",
-        f"📊 股票數量：{len(df)} 檔",
-        "",
+    stock_lines = []
+    for _, row in df.iterrows():
+        stock_id = row["stock_id"]
+        name = row["name"]
+        stock_lines.append(f"{stock_id} {name}")
+
+    stock_text = "\n".join(stock_lines)
+
+    message = (
+        "📌 台股清單讀取成功\n"
+        f"🕒 台灣時間：{now}\n"
+        f"📊 股票數量：{len(df)} 檔\n"
+        "\n"
         "
