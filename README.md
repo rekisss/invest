@@ -2,11 +2,11 @@
 
 This project scans Taiwan stocks with a high-selectivity MACD swing strategy, supports historical backtesting, and can monitor a small watchlist during market hours.
 
-It is designed around three modes:
+It is designed around three practical modes:
 
 - `scan`: daily end-of-day candidate scan
 - `hybrid-monitor`: FinMind daily prefilter + Fugle live watchlist
-- `sponsor-monitor`: FinMind Sponsor intraday K-bar monitor
+- `sponsor-monitor`: experimental FinMind Sponsor K-bar fetch mode
 
 ## Strategy Summary
 
@@ -67,7 +67,7 @@ Used for:
 
 - daily scan
 - backtest data download
-- Sponsor intraday K-bar mode
+- optional historical / sponsor-only datasets
 
 ### Discord
 
@@ -93,20 +93,21 @@ python main.py --mode scan --stocks auto --end 2026-05-07 --max-universe 120 --t
 
 ### 2. Hybrid Monitor
 
-Use FinMind daily scan first, then monitor a small watchlist with Fugle live quotes.
+Use `watchlist.csv` or a small candidate list, then monitor it with Fugle live quotes.
 
 ```powershell
-python main.py --mode hybrid-monitor --stocks auto --end 2026-05-07 --max-universe 120 --top-n 15 --watch-top 5 --output output
+python main.py --mode hybrid-monitor --stocks watchlist.csv --end 2026-05-07 --watch-top 5 --output output
 ```
 
 Best for:
 
 - lower-cost live monitoring
-- free / low-limit setups
+- practical intraday monitoring
+- low-limit setups
 
 ### 3. Sponsor Monitor
 
-Use FinMind Sponsor intraday K-bar data to monitor a larger watchlist during the market session.
+This mode is kept for users who have confirmed FinMind Sponsor K-bar access, but it should be treated as optional / experimental.
 
 Recommended setting for a `600 requests/hour` token:
 
@@ -119,11 +120,7 @@ Example:
 python main.py --mode sponsor-monitor --stocks auto --end 2026-05-07 --max-universe 120 --top-n 15 --watch-top 10 --interval-seconds 120 --repeat-count 999 --output output --notify
 ```
 
-This is the most practical setup if you want:
-
-- automatic candidate discovery
-- intraday monitoring
-- Discord notifications
+For most users, `hybrid-monitor` is the recommended live workflow instead.
 
 ### 4. Backtest
 
@@ -158,21 +155,17 @@ Important note:
 
 ## Recommended Practical Setup
 
-### If you only have daily / low-limit access
+### Recommended setup for most users
 
-- use `scan`
-- optionally add `hybrid-monitor`
+- use `scan` for end-of-day candidate discovery
+- maintain a small `watchlist.csv`
+- use `hybrid-monitor` during market hours
 
-### If you have FinMind Sponsor access
-
-- use `sponsor-monitor`
-- set `watch-top 10`
-- set `interval-seconds 120`
-
-This balances signal quality and API usage for a `600/hour` limit.
+This is the most stable setup under limited API quotas.
 
 ## Notes
 
 - Taiwan stock intraday monitoring with full-market high frequency is not realistic under low API limits.
+- FinMind `TaiwanStockKBar` is not a guaranteed real-time feed for all tokens, so Fugle is the safer live-monitor path.
 - This project intentionally uses a narrow, high-selectivity filter rather than frequent signals.
 - The earnings-date avoidance filter is optional because source timing fields can vary.

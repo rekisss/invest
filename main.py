@@ -162,15 +162,23 @@ def format_hybrid_message(candidates: pd.DataFrame, watchlist: pd.DataFrame, liv
         lines.append("No full-match candidates today.")
     else:
         for _, row in candidates.head(5).iterrows():
+            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
+            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
+            close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
+            score_text = f"{int(score_value)}/13" if score_value is not None else "manual"
             lines.append(
-                f"- {row['stock_id']} {row['name']} | close {row['close']:.2f} | score {int(row['condition_count'])}/13"
+                f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}"
             )
 
     if not watchlist.empty:
         lines.extend(["", "Step 2: near-match watchlist"])
         for _, row in watchlist.head(5).iterrows():
+            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
+            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
+            close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
+            score_text = f"{int(score_value)}/13" if score_value is not None else "manual"
             lines.append(
-                f"- {row['stock_id']} {row['name']} | close {row['close']:.2f} | score {int(row['condition_count'])}/13"
+                f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}"
             )
 
     if not live_quotes.empty:
@@ -223,12 +231,20 @@ def format_sponsor_message(
         lines.append("No full-match candidates today.")
     else:
         for _, row in candidates.head(5).iterrows():
-            lines.append(f"- {row['stock_id']} {row['name']} | close {row['close']:.2f} | score {int(row['condition_count'])}/13")
+            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
+            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
+            close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
+            score_text = f"{int(score_value)}/13" if score_value is not None else "manual"
+            lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
 
     if not watchlist.empty:
         lines.extend(["", "Step 2: tracked symbols"])
         for _, row in watchlist.head(5).iterrows():
-            lines.append(f"- {row['stock_id']} {row['name']} | close {row['close']:.2f} | score {int(row['condition_count'])}/13")
+            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
+            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
+            close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
+            score_text = f"{int(score_value)}/13" if score_value is not None else "manual"
+            lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
 
     if not intraday_rows.empty:
         lines.extend(["", "Step 3: intraday KBar snapshot"])
@@ -255,11 +271,17 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
 
 
 def run_hybrid_monitor(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
-    candidates, watchlist, universe = build_daily_snapshot(args, client, config)
-    watch_pool = candidates.copy()
-    if len(watch_pool) < args.watch_top:
-        extra = watchlist.head(args.watch_top - len(watch_pool))
-        watch_pool = pd.concat([watch_pool, extra], ignore_index=True)
+    if args.stocks != "auto":
+        universe = load_universe(args, client)
+        candidates = pd.DataFrame(columns=["stock_id", "name"])
+        watchlist = universe.copy()
+        watch_pool = universe.copy()
+    else:
+        candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+        watch_pool = candidates.copy()
+        if len(watch_pool) < args.watch_top:
+            extra = watchlist.head(args.watch_top - len(watch_pool))
+            watch_pool = pd.concat([watch_pool, extra], ignore_index=True)
     watch_symbols = watch_pool["stock_id"].astype(str).head(args.watch_top).tolist()
 
     fugle = FugleClient()
@@ -280,11 +302,18 @@ def run_hybrid_monitor(args: argparse.Namespace, client: FinMindClient, config: 
 
 
 def run_sponsor_monitor(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
-    candidates, watchlist, universe = build_daily_snapshot(args, client, config)
-    watch_pool = candidates.copy()
-    if len(watch_pool) < args.watch_top:
-        extra = watchlist.head(args.watch_top - len(watch_pool))
-        watch_pool = pd.concat([watch_pool, extra], ignore_index=True)
+    if args.stocks != "auto":
+        universe = load_universe(args, client)
+        candidates = pd.DataFrame(columns=["stock_id", "name"])
+        watchlist = universe.copy()
+        watch_pool = universe.copy()
+    else:
+        candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+        watch_pool = candidates.copy()
+        if len(watch_pool) < args.watch_top:
+            extra = watchlist.head(args.watch_top - len(watch_pool))
+            watch_pool = pd.concat([watch_pool, extra], ignore_index=True)
+
     watch_symbols = watch_pool["stock_id"].astype(str).head(args.watch_top).tolist()
 
     last_report_path = None

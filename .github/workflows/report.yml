@@ -1,4 +1,4 @@
-name: Taiwan Sponsor Monitor
+name: Taiwan Hybrid Monitor
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
     - cron: "*/5 1-5 * * 1-5"
 
 jobs:
-  sponsor-monitor:
+  hybrid-monitor:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,16 +23,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run sponsor monitor
+      - name: Run hybrid monitor
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          python main.py --mode sponsor-monitor --stocks auto --end $(date +%F) --max-universe 120 --top-n 15 --watch-top 10 --output output --notify
+          python main.py --mode hybrid-monitor --stocks watchlist.csv --end $(date +%F) --watch-top 5 --output output --notify
 
       - name: Upload reports
         uses: actions/upload-artifact@v4
         with:
-          name: taiwan-sponsor-monitor
+          name: taiwan-hybrid-monitor
           path: |
-            output/sponsor_monitor_report.xlsx
+            output/hybrid_monitor_report.xlsx
