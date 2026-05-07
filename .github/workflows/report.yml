@@ -1,10 +1,7 @@
 name: Discord Report Test
 
 on:
-  # 允許你在 GitHub 上手動點 Run
   workflow_dispatch:
-
-  # 每週一到五 UTC 10:00 執行（之後可改台灣時間）
   schedule:
     - cron: "0 10 * * 1-5"
 
@@ -29,5 +26,13 @@ jobs:
       - name: 執行程式並發送 Discord 訊息
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          FINMIND_USER_ID: ${{ secrets.FINMIND_USER_ID }}
+          FINMIND_PASSWORD: ${{ secrets.FINMIND_PASSWORD }}
         run: |
           python main.py
+
+      - name: 上傳 Excel 報表
+        uses: actions/upload-artifact@v4
+        with:
+          name: report
+          path: output/report.xlsx
