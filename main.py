@@ -16,31 +16,15 @@ OUTPUT_DIR = "output"
 EXCEL_FILE = OUTPUT_DIR + "/report.xlsx"
 
 
-# =========================
-# Discord
-# =========================
-
 def send_to_discord(message):
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
-
     if webhook_url is None or webhook_url.strip() == "":
         raise RuntimeError("找不到 DISCORD_WEBHOOK_URL，請確認 GitHub Secrets 已設定")
 
-    payload = {
-        "content": message
-    }
-
-    response = requests.post(webhook_url, json=payload, timeout=30)
-
+    response = requests.post(webhook_url, json={"content": message}, timeout=30)
     if response.status_code not in [200, 204]:
-        raise RuntimeError(
-            "Discord Webhook 發送失敗：" + str(response.status_code) + " " + response.text
-        )
+        raise RuntimeError("Discord Webhook 發送失敗：" + str(response.status_code) + " " + response.text)
 
-
-# =========================
-# 基礎工具
-# =========================
 
 def taipei_now():
     return datetime.now(ZoneInfo("Asia/Taipei"))
@@ -78,18 +62,12 @@ def bool_text(value):
     return "N"
 
 
-def money_text(value):
-    if value is None:
-        return "N/A"
-    return "{:,}".format(int(value))
-
-
 def make_output_dir():
     if not os.path.exists(OUTPUT_DIR):
         os.makedirs(OUTPUT_DIR)
 
 
-def split_message(message, max_length):
+def split_message(message, max_length=1800):
     parts = []
     current = ""
 
@@ -109,10 +87,6 @@ def split_message(message, max_length):
 
     return parts
 
-
-# =========================
-# 股票清單
-# =========================
 
 def load_stocks():
     stocks = []
@@ -139,21 +113,17 @@ def load_stocks():
     return stocks
 
 
-# =========================
-# FinMind API
-# =========================
-
 def finmind_params_base():
     params = {}
 
-    finmind_user_id = os.getenv("FINMIND_USER_ID")
-    finmind_password = os.getenv("FINMIND_PASSWORD")
+    user_id = os.getenv("FINMIND_USER_ID")
+    password = os.getenv("FINMIND_PASSWORD")
 
-    if finmind_user_id is not None and finmind_user_id.strip() != "":
-        params["user_id"] = finmind_user_id
+    if user_id is not None and user_id.strip() != "":
+        params["user_id"] = user_id
 
-    if finmind_password is not None and finmind_password.strip() != "":
-        params["password"] = finmind_password
+    if password is not None and password.strip() != "":
+        params["password"] = password
 
     return params
 
@@ -162,9 +132,7 @@ def fetch_finmind(params):
     response = requests.get(FINMIND_API_URL, params=params, timeout=90)
 
     if response.status_code != 200:
-        raise RuntimeError(
-            "FinMind API 錯誤：" + str(response.status_code) + " " + response.text
-        )
+        raise RuntimeError("FinMind API 錯誤：" + str(response.status_code) + " " + response.text)
 
     data = response.json()
 
@@ -207,15 +175,10 @@ def fetch_foreign_investors(stock_id):
 
 
 def fetch_market_taiex():
-    """
-    使用 TaiwanVariousIndicators5Seconds 抓 TAIEX。
-    資料量比較大，所以分段抓，每天取最後一筆 TAIEX 當作日收盤近似值。
-    """
     end_date = taipei_now().date()
     start_date = end_date - timedelta(days=150)
 
     daily_map = {}
-
     chunk_start = start_date
 
     while chunk_start <= end_date:
@@ -238,15 +201,12 @@ def fetch_market_taiex():
             dt_text = str(row.get("date", ""))
             taiex = to_float(row.get("TAIEX"))
 
-            if dt_text == "" or taiex is None:
-                continue
-
-            day = dt_text[:10]
-
-            daily_map[day] = {
-                "date": day,
-                "close": taiex
-            }
+            if dt_text != "" and taiex is not None:
+                day = dt_text[:10]
+                daily_map[day] = {
+                    "date": day,
+                    "close": taiex
+                }
 
         chunk_start = chunk_end + timedelta(days=1)
 
@@ -257,10 +217,6 @@ def fetch_market_taiex():
 
     return daily_rows
 
-
-# =========================
-# 技術指標
-# =========================
 
 def ema(values, period):
     result = []
@@ -325,13 +281,13 @@ def calc_macd(closes):
     return macd_line, signal_line, hist
 
 
-def calc_rsi(closes, period):
+def calc_rsi(closes, period=14):
     result = []
     gains = []
     losses = []
 
     for i in range(len(closes)):
-        if i == 0:
+        if i == 0 or closes[i] is None or closes[i - 1] is None:
             gains.append(0)
             losses.append(0)
             result.append(None)
@@ -357,13 +313,12 @@ def calc_rsi(closes, period):
             result.append(100)
         else:
             rs = avg_gain / avg_loss
-            rsi = 100 - (100 / (1 + rs))
-            result.append(rsi)
+            result.append(100 - (100 / (1 + rs)))
 
     return result
 
 
-def calc_adx(highs, lows, closes, period):
+def calc_adx(highs, lows, closes, period=14):
     trs = []
     plus_dm = []
     minus_dm = []
@@ -416,8 +371,6 @@ def calc_adx(highs, lows, closes, period):
             continue
 
         tr_window = trs[i + 1 - period:i + 1]
-        plus_window = plus_dm[i + 1 - period:i + 1]
-        minus_window = minus_dm[i + 1 - period:i + 1]
 
         if any(v is None for v in tr_window):
             dx_values.append(None)
@@ -428,6 +381,9 @@ def calc_adx(highs, lows, closes, period):
         if atr == 0:
             dx_values.append(None)
             continue
+
+        plus_window = plus_dm[i + 1 - period:i + 1]
+        minus_window = minus_dm[i + 1 - period:i + 1]
 
         plus_di = 100 * (sum(plus_window) / period) / atr
         minus_di = 100 * (sum(minus_window) / period) / atr
@@ -442,10 +398,6 @@ def calc_adx(highs, lows, closes, period):
 
     return adx_values
 
-
-# =========================
-# 大盤分析
-# =========================
 
 def analyze_market():
     try:
@@ -505,10 +457,6 @@ def analyze_market():
             "error": str(error)
         }
 
-
-# =========================
-# 外資分析
-# =========================
 
 def analyze_foreign(stock_id):
     try:
@@ -571,10 +519,6 @@ def analyze_foreign(stock_id):
         }
 
 
-# =========================
-# 個股分析
-# =========================
-
 def grade_result(condition_count, risk_count, liquidity_ok, avoid_chase):
     if condition_count >= 10 and risk_count == 0 and liquidity_ok and avoid_chase:
         return "A"
@@ -619,12 +563,9 @@ def analyze_stock(stock, market):
     ema20 = ema(closes, 20)
     ema60 = ema(closes, 60)
     ema120 = ema(closes, 120)
-
     macd_line, signal_line, hist = calc_macd(closes)
-
     rsi14 = calc_rsi(closes, 14)
     adx14 = calc_adx(highs, lows, closes, 14)
-
     vol_ma20 = sma(volumes, 20)
     amount_ma20 = sma(amounts, 20)
 
@@ -662,7 +603,6 @@ def analyze_stock(stock, market):
         prev20_high = max(closes[i - 20:i])
 
     macd_golden_cross = False
-    hist_turn_positive = False
 
     if (
         macd_line[p] is not None
@@ -671,6 +611,8 @@ def analyze_stock(stock, market):
         and signal_line[i] is not None
     ):
         macd_golden_cross = macd_line[p] <= signal_line[p] and macd_line[i] > signal_line[i]
+
+    hist_turn_positive = False
 
     if hist[p] is not None and hist[i] is not None:
         hist_turn_positive = hist[p] <= 0 and hist[i] > 0
@@ -729,6 +671,7 @@ def analyze_stock(stock, market):
     market_filter = market.get("market_above_ma60", False)
 
     foreign = analyze_foreign(stock_id)
+
     foreign_buy_3d = foreign.get("foreign_buy_3d", False)
     foreign_buy_streak = foreign.get("foreign_buy_streak", 0)
     foreign_net_latest = foreign.get("foreign_net_latest")
@@ -759,8 +702,8 @@ def analyze_stock(stock, market):
 
     condition_count = 0
 
-    for item in conditions:
-        if item:
+    for condition in conditions:
+        if condition:
             condition_count = condition_count + 1
 
     grade = grade_result(condition_count, risk_count, liquidity_ok, avoid_chase)
@@ -838,10 +781,6 @@ def analyze_stock(stock, market):
     }
 
 
-# =========================
-# Excel
-# =========================
-
 def append_row(sheet, values):
     sheet.append(values)
 
@@ -870,9 +809,6 @@ def apply_grade_style(summary_sheet):
     fill_b = PatternFill("solid", fgColor="FFEB9C")
     fill_c = PatternFill("solid", fgColor="F2F2F2")
     fill_error = PatternFill("solid", fgColor="FFC7CE")
-
-    if summary_sheet.max_row < 2:
-        return
 
     for row in range(2, summary_sheet.max_row + 1):
         grade = summary_sheet.cell(row=row, column=4).value
@@ -1078,10 +1014,6 @@ def create_excel(results, market):
     wb.save(EXCEL_FILE)
 
 
-# =========================
-# Discord 摘要
-# =========================
-
 def build_discord_summary(results, market):
     now = taipei_now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1097,10 +1029,10 @@ def build_discord_summary(results, market):
     )
 
     lines = []
-    lines.append("📊 台股 Excel 報表已產生")
-    lines.append("🕒 台灣時間：" + now)
-    lines.append("📄 報表檔案：report.xlsx")
-    lines.append("📌 說明：這是研究觀察資料，不是買賣建議。")
+    lines.append("台股 Excel 報表已產生")
+    lines.append("台灣時間：" + now)
+    lines.append("報表檔案：report.xlsx")
+    lines.append("說明：這是研究觀察資料，不是買賣建議。")
     lines.append("")
 
     lines.append("大盤濾網")
@@ -1138,10 +1070,6 @@ def build_discord_summary(results, market):
 
     return "\n".join(lines)
 
-
-# =========================
-# Main
-# =========================
 
 def main():
     stocks = load_stocks()
