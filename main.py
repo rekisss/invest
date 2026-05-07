@@ -175,25 +175,25 @@ def bool_text(value):
 
 
 # =========================
-# 指標計算
+# 技術指標
 # =========================
 
 def ema(values, period):
     result = []
     alpha = 2 / (period + 1)
-    prev = None
+    previous = None
 
     for value in values:
         if value is None:
-            result.append(prev)
+            result.append(previous)
             continue
 
-        if prev is None:
-            prev = value
+        if previous is None:
+            previous = value
         else:
-            prev = alpha * value + (1 - alpha) * prev
+            previous = alpha * value + (1 - alpha) * previous
 
-        result.append(prev)
+        result.append(previous)
 
     return result
 
@@ -208,7 +208,13 @@ def sma(values, period):
 
         window = values[i + 1 - period:i + 1]
 
-        if any(v is None for v in window):
+        has_none = False
+        for value in window:
+            if value is None:
+                has_none = True
+                break
+
+        if has_none:
             result.append(None)
         else:
             result.append(sum(window) / period)
@@ -299,18 +305,11 @@ def calc_adx(highs, lows, closes, period):
 
         high = highs[i]
         low = lows[i]
-        close = closes[i]
         prev_close = closes[i - 1]
         prev_high = highs[i - 1]
         prev_low = lows[i - 1]
 
-        if high is None or low is None or close is None:
-            trs.append(None)
-            plus_dm.append(0)
-            minus_dm.append(0)
-            continue
-
-        if prev_close is None or prev_high is None or prev_low is None:
+        if high is None or low is None or prev_close is None or prev_high is None or prev_low is None:
             trs.append(None)
             plus_dm.append(0)
             minus_dm.append(0)
@@ -348,7 +347,13 @@ def calc_adx(highs, lows, closes, period):
         plus_window = plus_dm[i + 1 - period:i + 1]
         minus_window = minus_dm[i + 1 - period:i + 1]
 
-        if any(v is None for v in tr_window):
+        has_none = False
+        for value in tr_window:
+            if value is None:
+                has_none = True
+                break
+
+        if has_none:
             dx_values.append(None)
             continue
 
@@ -372,7 +377,7 @@ def calc_adx(highs, lows, closes, period):
 
 
 # =========================
-# 分級邏輯
+# 分級
 # =========================
 
 def grade_result(condition_count, risk_count, liquidity_ok, avoid_chase):
