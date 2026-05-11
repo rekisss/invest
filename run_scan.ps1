@@ -6,7 +6,7 @@ Set-Location $projectRoot
 $pythonPath = "python"
 $outputDir = "output"
 $endDate = Get-Date -Format "yyyy-MM-dd"
-$maxUniverse = 120
+$maxUniverse = 40
 $topN = 15
 
 if (-not $env:FINMIND_TOKEN -or [string]::IsNullOrWhiteSpace($env:FINMIND_TOKEN)) {
@@ -37,5 +37,7 @@ Write-Host ""
     --end $endDate `
     --max-universe $maxUniverse `
     --top-n $topN `
+    --max-price 120 `
+    --prefer-lower-price `
     --output $outputDir `
     --notify

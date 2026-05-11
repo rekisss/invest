@@ -233,12 +233,21 @@ def latest_signal_snapshot(signals_by_stock: dict[str, pd.DataFrame]) -> pd.Data
     ).reset_index(drop=True)
 
 
-def rank_candidates(snapshot: pd.DataFrame, top_n: int = 20) -> tuple[pd.DataFrame, pd.DataFrame]:
+def rank_candidates(
+    snapshot: pd.DataFrame,
+    top_n: int = 20,
+    max_price: float | None = None,
+    prefer_lower_price: bool = False,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     if snapshot.empty:
         return pd.DataFrame(), pd.DataFrame()
 
     candidates = snapshot[snapshot["entry_signal"]].copy()
     watchlist = snapshot[~snapshot["entry_signal"]].copy()
+
+    if max_price is not None:
+        candidates = candidates[pd.to_numeric(candidates["close"], errors="coerce") <= max_price].copy()
+        watchlist = watchlist[pd.to_numeric(watchlist["close"], errors="coerce") <= max_price].copy()
 
     candidate_columns = [
         "date",
@@ -269,6 +278,16 @@ def rank_candidates(snapshot: pd.DataFrame, top_n: int = 20) -> tuple[pd.DataFra
         "entry_reason",
     ]
 
-    candidates = candidates.sort_values(["entry_score", "condition_count"], ascending=[False, False]).head(top_n)
-    watchlist = watchlist.sort_values(["condition_count", "entry_score"], ascending=[False, False]).head(top_n)
+    if prefer_lower_price:
+        candidates = candidates.sort_values(
+            ["condition_count", "close", "entry_score"],
+            ascending=[False, True, False],
+        ).head(top_n)
+        watchlist = watchlist.sort_values(
+            ["condition_count", "close", "entry_score"],
+            ascending=[False, True, False],
+        ).head(top_n)
+    else:
+        candidates = candidates.sort_values(["entry_score", "condition_count"], ascending=[False, False]).head(top_n)
+        watchlist = watchlist.sort_values(["condition_count", "entry_score"], ascending=[False, False]).head(top_n)
     return candidates[candidate_columns], watchlist[watch_columns]

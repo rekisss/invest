@@ -48,6 +48,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--interval-seconds", type=int, default=120, help="Polling interval for repeated monitor runs.")
     parser.add_argument("--repeat-count", type=int, default=1, help="How many monitor cycles to run.")
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--max-price", type=float, default=None, help="Optional maximum close price filter for ranking.")
+    parser.add_argument("--prefer-lower-price", action="store_true", help="Prefer lower-priced names when ranking candidates.")
     parser.add_argument("--notify", action="store_true")
     parser.add_argument("--use-earnings-filter", action="store_true")
     return parser.parse_args()
@@ -135,7 +137,12 @@ def build_daily_snapshot(args: argparse.Namespace, client: FinMindClient, config
     universe = load_universe(args, client)
     signals_by_stock, _ = collect_signals(universe, client, market, config, start_date, end_date_text, args.workers)
     snapshot = latest_signal_snapshot(signals_by_stock)
-    candidates, watchlist = rank_candidates(snapshot, args.top_n)
+    candidates, watchlist = rank_candidates(
+        snapshot,
+        args.top_n,
+        max_price=args.max_price,
+        prefer_lower_price=args.prefer_lower_price,
+    )
     return candidates, watchlist, universe
 
 

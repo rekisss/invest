@@ -6,7 +6,9 @@ Set-Location $projectRoot
 $pythonPath = "python"
 $outputDir = "output"
 $endDate = Get-Date -Format "yyyy-MM-dd"
-$watchFile = "watchlist.csv"
+$watchMode = "auto"
+$maxUniverse = 40
+$topN = 10
 $watchTop = 5
 
 if (-not $env:FUGLE_API_KEY -or [string]::IsNullOrWhiteSpace($env:FUGLE_API_KEY)) {
@@ -27,14 +29,20 @@ if (Test-Path ".vendor") {
 
 Write-Host "Starting hybrid monitor..." -ForegroundColor Green
 Write-Host "Date: $endDate"
-Write-Host "Watch file: $watchFile"
+Write-Host "Watch mode: $watchMode"
+Write-Host "Max universe: $maxUniverse"
+Write-Host "Top N: $topN"
 Write-Host "Watch symbols: $watchTop"
 Write-Host ""
 
 & $pythonPath "main.py" `
     --mode hybrid-monitor `
-    --stocks $watchFile `
+    --stocks $watchMode `
     --end $endDate `
+    --max-universe $maxUniverse `
+    --top-n $topN `
     --watch-top $watchTop `
+    --max-price 120 `
+    --prefer-lower-price `
     --output $outputDir `
     --notify

@@ -36,7 +36,7 @@ jobs:
           FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          python main.py --mode hybrid-monitor --stocks watchlist.csv --end "$(date +%F)" --watch-top 5 --output output --notify
+          python main.py --mode hybrid-monitor --stocks auto --end "$(date +%F)" --max-universe 40 --top-n 10 --watch-top 5 --max-price 120 --prefer-lower-price --output output --notify
 
       - name: Upload reports
         uses: actions/upload-artifact@v4
