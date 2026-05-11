@@ -21,6 +21,7 @@ from data_loader import (
     load_stock_list,
 )
 from fugle_client import FugleClient, fetch_watch_quotes
+from news_service import NewsClient, summarize_news
 from notifier import send_discord_messages, split_message
 from report import save_hybrid_report, save_reports, save_scan_report, save_sponsor_monitor_report
 from strategy import (
@@ -35,7 +36,7 @@ from universe import build_auto_universe
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Taiwan MACD swing strategy backtester and scanner.")
-    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor"], default="scan")
+    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor"], default="scan")
     parser.add_argument("--stocks", default="auto", help="CSV file containing stock_id and optional name, or 'auto'.")
     parser.add_argument("--start", default="2020-01-01")
     parser.add_argument("--end", default=pd.Timestamp.today().strftime("%Y-%m-%d"))
@@ -50,9 +51,94 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--max-price", type=float, default=None, help="Optional maximum close price filter for ranking.")
     parser.add_argument("--prefer-lower-price", action="store_true", help="Prefer lower-priced names when ranking candidates.")
+    parser.add_argument("--include-news", action="store_true", help="Attach recent news summary to notifications.")
+    parser.add_argument("--news-limit", type=int, default=2, help="Maximum number of news headlines per stock in notifications.")
+    parser.add_argument("--event-rise-threshold", type=float, default=0.035, help="Intraday rise threshold for event monitor.")
+    parser.add_argument("--event-drop-threshold", type=float, default=-0.025, help="Intraday drop threshold for event monitor.")
+    parser.add_argument("--event-volume-multiplier", type=float, default=1.8, help="Volume surge multiple versus previous sample.")
+    parser.add_argument("--event-cooldown-seconds", type=int, default=600, help="Cooldown before the same symbol+event can notify again.")
     parser.add_argument("--notify", action="store_true")
     parser.add_argument("--use-earnings-filter", action="store_true")
     return parser.parse_args()
+
+
+ENTRY_REASON_LABELS = {
+    "macd_golden_cross": "MACD黃金交叉",
+    "hist_turn_positive": "柱狀圖翻正",
+    "above_ema60": "站上EMA60",
+    "ema60_gt_ema120": "EMA60大於EMA120",
+    "volume_break": "量能放大",
+    "rsi_strong": "RSI偏強",
+    "adx_trending": "ADX趨勢成立",
+    "breakout_20d": "突破20日高點",
+    "market_above_ma60": "大盤站上MA60",
+    "foreign_buy_3d": "外資連3買",
+    "avoid_chase": "未過度追價",
+    "liquidity_ok": "流動性合格",
+    "stronger_than_market": "強於大盤",
+}
+
+
+def _safe_print(message: str = "") -> None:
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        encoded = message.encode(sys.stdout.encoding or "utf-8", errors="replace").decode(sys.stdout.encoding or "utf-8", errors="replace")
+        print(encoded)
+
+
+def _reason_labels(raw_reason: object, max_items: int = 3) -> str:
+    parts = [part.strip() for part in str(raw_reason or "").split(",") if part.strip()]
+    labels = [ENTRY_REASON_LABELS.get(part, part) for part in parts[:max_items]]
+    return " / ".join(labels) if labels else "條件接近"
+
+
+def _low_price_tag(close_value: object) -> str:
+    try:
+        close_float = float(close_value)
+    except (TypeError, ValueError):
+        return ""
+    if close_float <= 30:
+        return "低價"
+    if close_float <= 80:
+        return "中低價"
+    return ""
+
+
+def build_news_map(
+    output_dir: str | Path,
+    rows: list[dict[str, object]],
+    news_limit: int = 2,
+) -> dict[str, dict[str, object]]:
+    client = NewsClient(cache_dir=Path(output_dir) / "news_cache")
+    news_map: dict[str, dict[str, object]] = {}
+    for row in rows[:5]:
+        stock_id = str(row.get("stock_id") or "")
+        name = str(row.get("name") or stock_id)
+        if not stock_id:
+            continue
+        frame = client.fetch_stock_news(stock_id, name, limit=news_limit)
+        items = frame.to_dict(orient="records")
+        news_map[stock_id] = {
+            "items": items,
+            "summary": summarize_news(items),
+        }
+    return news_map
+
+
+def _news_brief(stock_id: str, news_map: dict[str, dict[str, object]]) -> str:
+    payload = news_map.get(stock_id)
+    if not payload:
+        return ""
+    summary = payload.get("summary", {})
+    headline = str(summary.get("headline") or "").strip()
+    sentiment = str(summary.get("sentiment") or "neutral")
+    if not headline:
+        return ""
+    headline = headline.replace("\n", " ").strip()
+    if len(headline) > 48:
+        headline = headline[:48] + "..."
+    return f" | 新聞:{sentiment} | {headline}"
 
 
 def load_universe(args: argparse.Namespace, client: FinMindClient) -> pd.DataFrame:
@@ -170,6 +256,42 @@ def format_scan_message(candidates: pd.DataFrame, watchlist: pd.DataFrame, lates
     return "\n".join(lines)
 
 
+def format_scan_message_rich(
+    candidates: pd.DataFrame,
+    watchlist: pd.DataFrame,
+    latest_date: str,
+    news_map: dict[str, dict[str, object]] | None = None,
+) -> str:
+    news_map = news_map or {}
+    lines = [f"Captain Hook: Taiwan MACD scan ({latest_date})", ""]
+    if candidates.empty:
+        lines.extend(["今日無 full-match 候選。", "", "Closest watchlist"])
+        for _, row in watchlist.head(8).iterrows():
+            price_tag = _low_price_tag(row.get("close"))
+            price_note = f" | {price_tag}" if price_tag else ""
+            lines.append(
+                f"- {row['stock_id']} {row['name']} | {row['industry_category']} | {int(row['condition_count'])}/13 | close {row['close']:.2f}{price_note} | 理由:{_reason_labels(row.get('entry_reason'))}{_news_brief(str(row['stock_id']), news_map)}"
+            )
+        return "\n".join(lines)
+
+    lines.append("Daily candidates")
+    for _, row in candidates.head(8).iterrows():
+        price_tag = _low_price_tag(row.get("close"))
+        price_note = f" | {price_tag}" if price_tag else ""
+        lines.append(
+            f"- {row['stock_id']} {row['name']} | close {row['close']:.2f}{price_note} | RSI {row['rsi14']:.1f} | ADX {row['adx14']:.1f} | 理由:{_reason_labels(row.get('entry_reason'))}{_news_brief(str(row['stock_id']), news_map)}"
+        )
+    if not watchlist.empty:
+        lines.extend(["", "Near-match watchlist"])
+        for _, row in watchlist.head(5).iterrows():
+            price_tag = _low_price_tag(row.get("close"))
+            price_note = f" | {price_tag}" if price_tag else ""
+            lines.append(
+                f"- {row['stock_id']} {row['name']} | {int(row['condition_count'])}/13 | close {row['close']:.2f}{price_note} | 理由:{_reason_labels(row.get('entry_reason'))}{_news_brief(str(row['stock_id']), news_map)}"
+            )
+    return "\n".join(lines)
+
+
 def format_hybrid_message(candidates: pd.DataFrame, watchlist: pd.DataFrame, live_quotes: pd.DataFrame, latest_date: str) -> str:
     lines = [f"Taiwan hybrid monitor ({latest_date})", "", "Step 1: daily MACD prefilter"]
     if candidates.empty:
@@ -207,6 +329,124 @@ def format_hybrid_message(candidates: pd.DataFrame, watchlist: pd.DataFrame, liv
                 f"- {row['symbol']} {row.get('name') or ''} | last {row.get('last')} | open {row.get('open')} | high {row.get('high')} | vol {row.get('volume')} | intraday {intraday_text}"
             )
     return "\n".join(lines)
+
+
+def format_hybrid_message_rich(
+    candidates: pd.DataFrame,
+    watchlist: pd.DataFrame,
+    live_quotes: pd.DataFrame,
+    latest_date: str,
+    news_map: dict[str, dict[str, object]] | None = None,
+) -> str:
+    news_map = news_map or {}
+    lines = [f"Captain Hook: Taiwan hybrid monitor ({latest_date})", "", "Step 1: daily MACD prefilter"]
+    if candidates.empty:
+        lines.append("No full-match candidates today.")
+    else:
+        for _, row in candidates.head(5).iterrows():
+            price_tag = _low_price_tag(row.get("close"))
+            price_note = f" | {price_tag}" if price_tag else ""
+            lines.append(
+                f"- {row['stock_id']} {row['name']} | close {float(row['close']):.2f}{price_note} | 理由:{_reason_labels(row.get('entry_reason'))}{_news_brief(str(row['stock_id']), news_map)}"
+            )
+    if not watchlist.empty:
+        lines.extend(["", "Step 2: near-match watchlist"])
+        for _, row in watchlist.head(5).iterrows():
+            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
+            close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
+            price_tag = _low_price_tag(close_value)
+            price_note = f" | {price_tag}" if price_tag else ""
+            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
+            score_text = f"{int(score_value)}/13" if score_value is not None else "manual"
+            lines.append(
+                f"- {row['stock_id']} {row['name']} | close {close_text}{price_note} | score {score_text} | 理由:{_reason_labels(row.get('entry_reason'))}{_news_brief(str(row['stock_id']), news_map)}"
+            )
+    if not live_quotes.empty:
+        lines.extend(["", "Step 3: live quotes and alerts"])
+        for _, row in live_quotes.iterrows():
+            if pd.notna(row.get("error")):
+                lines.append(f"- {row['symbol']} | live quote error: {row['error']}")
+                continue
+            intraday = row.get("intraday_pct")
+            intraday_text = f"{float(intraday) * 100:.2f}%" if pd.notna(intraday) else "N/A"
+            last_text = row.get("last")
+            high_text = row.get("high")
+            volume_text = row.get("volume")
+            lines.append(
+                f"- {row['symbol']} {row.get('name') or ''} | last {last_text} | high {high_text} | vol {volume_text} | intraday {intraday_text}"
+            )
+    return "\n".join(lines)
+
+
+def detect_quote_events(
+    current_quotes: pd.DataFrame,
+    previous_state: dict[str, dict[str, float | str]],
+    rise_threshold: float,
+    drop_threshold: float,
+    volume_multiplier: float,
+) -> tuple[list[dict[str, object]], dict[str, dict[str, float | str]]]:
+    events: list[dict[str, object]] = []
+    next_state = dict(previous_state)
+    for _, row in current_quotes.iterrows():
+        symbol = str(row.get("symbol") or "")
+        if not symbol or pd.notna(row.get("error")):
+            continue
+        last_value = pd.to_numeric(pd.Series([row.get("last")]), errors="coerce").iloc[0]
+        high_value = pd.to_numeric(pd.Series([row.get("high")]), errors="coerce").iloc[0]
+        volume_value = pd.to_numeric(pd.Series([row.get("volume")]), errors="coerce").iloc[0]
+        intraday_value = pd.to_numeric(pd.Series([row.get("intraday_pct")]), errors="coerce").iloc[0]
+        previous = next_state.get(symbol, {})
+        previous_high = float(previous.get("high") or 0)
+        previous_intraday = float(previous.get("intraday_pct") or 0)
+        previous_volume = float(previous.get("volume") or 0)
+
+        if pd.notna(high_value) and high_value > previous_high and pd.notna(last_value) and last_value >= high_value * 0.998:
+            events.append({"symbol": symbol, "event_key": "breakout_high", "label": "突破盤中新高", "row": row.to_dict()})
+        if pd.notna(intraday_value) and intraday_value >= rise_threshold and previous_intraday < rise_threshold:
+            events.append({"symbol": symbol, "event_key": "sharp_rise", "label": f"急拉 {intraday_value * 100:.2f}%", "row": row.to_dict()})
+        if pd.notna(intraday_value) and intraday_value <= drop_threshold and previous_intraday > drop_threshold:
+            events.append({"symbol": symbol, "event_key": "sharp_drop", "label": f"急跌 {intraday_value * 100:.2f}%", "row": row.to_dict()})
+        if pd.notna(volume_value) and previous_volume > 0 and volume_value >= previous_volume * volume_multiplier:
+            events.append({"symbol": symbol, "event_key": "volume_surge", "label": f"量能放大 x{volume_value / previous_volume:.1f}", "row": row.to_dict()})
+
+        next_state[symbol] = {
+            "high": float(high_value) if pd.notna(high_value) else previous_high,
+            "intraday_pct": float(intraday_value) if pd.notna(intraday_value) else previous_intraday,
+            "volume": float(volume_value) if pd.notna(volume_value) else previous_volume,
+            "quote_time": str(row.get("quote_time") or ""),
+        }
+    return events, next_state
+
+
+def format_event_message(
+    event: dict[str, object],
+    snapshot_lookup: dict[str, dict[str, object]],
+    news_map: dict[str, dict[str, object]] | None = None,
+) -> str:
+    news_map = news_map or {}
+    row = event["row"]
+    symbol = str(event["symbol"])
+    snapshot = snapshot_lookup.get(symbol, {})
+    name = row.get("name") or snapshot.get("name") or ""
+    last_value = row.get("last")
+    high_value = row.get("high")
+    volume_value = row.get("volume")
+    intraday_value = row.get("intraday_pct")
+    intraday_text = f"{float(intraday_value) * 100:.2f}%" if pd.notna(intraday_value) else "N/A"
+    price_tag = _low_price_tag(last_value)
+    price_note = f" | {price_tag}" if price_tag else ""
+    reason_text = _reason_labels(snapshot.get("entry_reason"))
+    news_text = _news_brief(symbol, news_map)
+    if news_text.startswith(" | "):
+        news_text = news_text[3:]
+    return "\n".join(
+        [
+            f"Captain Hook: 即時盯盤警報 | {event['label']}",
+            f"- {symbol} {name} | last {last_value} | high {high_value} | vol {volume_value} | intraday {intraday_text}{price_note}",
+            f"- 技術面: {reason_text}",
+            f"- 新聞: {news_text if news_text else '無明顯近期摘要'}",
+        ]
+    )
 
 
 def collect_intraday_snapshot(
@@ -272,10 +512,14 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
     candidates, watchlist, universe = build_daily_snapshot(args, client, config)
     latest_date = args.end
     report_path = save_scan_report(args.output, candidates, watchlist, universe)
-    message = format_scan_message(candidates, watchlist, latest_date)
-    print(message)
-    print("")
-    print(f"Scan report: {report_path}")
+    news_map = {}
+    if args.include_news:
+        scan_rows = candidates.to_dict("records") if not candidates.empty else watchlist.to_dict("records")
+        news_map = build_news_map(args.output, scan_rows, news_limit=args.news_limit)
+    message = format_scan_message_rich(candidates, watchlist, latest_date, news_map=news_map)
+    _safe_print(message)
+    _safe_print("")
+    _safe_print(f"Scan report: {report_path}")
     if args.notify:
         send_discord_messages(split_message(message))
 
@@ -303,10 +547,13 @@ def run_hybrid_monitor(args: argparse.Namespace, client: FinMindClient, config: 
         )
 
     report_path = save_hybrid_report(args.output, candidates, watchlist, live_quotes, universe)
-    message = format_hybrid_message(candidates, watchlist, live_quotes, args.end)
-    print(message)
-    print("")
-    print(f"Hybrid report: {report_path}")
+    news_map = {}
+    if args.include_news:
+        news_map = build_news_map(args.output, watch_pool.to_dict("records"), news_limit=args.news_limit)
+    message = format_hybrid_message_rich(candidates, watchlist, live_quotes, args.end, news_map=news_map)
+    _safe_print(message)
+    _safe_print("")
+    _safe_print(f"Hybrid report: {report_path}")
     if args.notify:
         send_discord_messages(split_message(message))
 
@@ -331,11 +578,67 @@ def run_sponsor_monitor(args: argparse.Namespace, client: FinMindClient, config:
         intraday_rows = collect_intraday_snapshot(client, watch_symbols, args.end)
         last_report_path = save_sponsor_monitor_report(args.output, candidates, watchlist, intraday_rows, universe)
         message = format_sponsor_message(candidates, watchlist, intraday_rows, args.end, cycle, args.repeat_count)
-        print(message)
-        print("")
-        print(f"Sponsor report: {last_report_path}")
+        _safe_print(message)
+        _safe_print("")
+        _safe_print(f"Sponsor report: {last_report_path}")
         if args.notify:
             send_discord_messages(split_message(message))
+        if cycle < args.repeat_count:
+            time.sleep(args.interval_seconds)
+
+
+def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
+    if args.stocks != "auto":
+        universe = load_universe(args, client)
+        candidates = pd.DataFrame(columns=["stock_id", "name"])
+        watchlist = universe.copy()
+        watch_pool = universe.copy()
+    else:
+        candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+        watch_pool = candidates.copy()
+        if len(watch_pool) < args.watch_top:
+            extra = watchlist.head(args.watch_top - len(watch_pool))
+            watch_pool = pd.concat([watch_pool, extra], ignore_index=True)
+
+    watch_pool = watch_pool.head(args.watch_top).copy()
+    watch_symbols = watch_pool["stock_id"].astype(str).tolist()
+    snapshot_lookup = {str(row["stock_id"]): row for row in watch_pool.to_dict("records")}
+    news_map = build_news_map(args.output, watch_pool.to_dict("records"), news_limit=args.news_limit) if args.include_news else {}
+
+    fugle = FugleClient()
+    if not fugle.enabled:
+        raise RuntimeError("FUGLE_API_KEY is not configured.")
+
+    previous_state: dict[str, dict[str, float | str]] = {}
+    last_notified: dict[str, float] = {}
+    _safe_print(f"Event monitor started for {', '.join(watch_symbols)}")
+
+    for cycle in range(1, args.repeat_count + 1):
+        quotes = fetch_watch_quotes(fugle, watch_symbols)
+        events, next_state = detect_quote_events(
+            quotes,
+            previous_state,
+            rise_threshold=args.event_rise_threshold,
+            drop_threshold=args.event_drop_threshold,
+            volume_multiplier=args.event_volume_multiplier,
+        )
+        if not previous_state:
+            previous_state = next_state
+            if cycle < args.repeat_count:
+                time.sleep(args.interval_seconds)
+            continue
+        previous_state = next_state
+        now_ts = time.time()
+        for event in events:
+            key = f"{event['symbol']}:{event['event_key']}"
+            if now_ts - last_notified.get(key, 0) < args.event_cooldown_seconds:
+                continue
+            message = format_event_message(event, snapshot_lookup, news_map=news_map)
+            _safe_print("")
+            _safe_print(message)
+            if args.notify:
+                send_discord_messages(split_message(message))
+            last_notified[key] = now_ts
         if cycle < args.repeat_count:
             time.sleep(args.interval_seconds)
 
@@ -367,17 +670,17 @@ def run_backtest_mode(args: argparse.Namespace, client: FinMindClient, config: S
             "Position sizing uses integer shares and a 5% initial stop to cap risk at roughly 1% of portfolio equity.",
         ],
     )
-    print("Backtest complete.")
-    print(f"Excel report: {reports['excel']}")
-    print(f"Equity chart: {reports['equity_chart']}")
-    print(f"Yearly chart: {reports['yearly_chart']}")
-    print("")
-    print("Key metrics:")
+    _safe_print("Backtest complete.")
+    _safe_print(f"Excel report: {reports['excel']}")
+    _safe_print(f"Equity chart: {reports['equity_chart']}")
+    _safe_print(f"Yearly chart: {reports['yearly_chart']}")
+    _safe_print("")
+    _safe_print("Key metrics:")
     for key, value in backtest["metrics"].items():
         if isinstance(value, float):
-            print(f"- {key}: {value:,.2f}")
+            _safe_print(f"- {key}: {value:,.2f}")
         else:
-            print(f"- {key}: {value}")
+            _safe_print(f"- {key}: {value}")
 
 
 def main() -> None:
@@ -389,6 +692,8 @@ def main() -> None:
         run_backtest_mode(args, client, config)
     elif args.mode == "sponsor-monitor":
         run_sponsor_monitor(args, client, config)
+    elif args.mode == "event-monitor":
+        run_event_monitor(args, client, config)
     elif args.mode == "hybrid-monitor":
         run_hybrid_monitor(args, client, config)
     else:

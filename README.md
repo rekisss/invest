@@ -7,6 +7,7 @@ It is designed around three practical modes:
 - `scan`: daily end-of-day candidate scan
 - `hybrid-monitor`: FinMind daily prefilter + Fugle live watchlist
 - `sponsor-monitor`: experimental FinMind Sponsor K-bar fetch mode
+- `event-monitor`: local real-time alert monitor with Discord push on triggers
 
 ## Strategy Summary
 
@@ -129,6 +130,42 @@ Run historical backtest from 2020-01-01 to 2024-12-31:
 ```powershell
 python main.py --mode backtest --stocks auto --start 2020-01-01 --end 2024-12-31 --capital 1000000 --output output
 ```
+
+### 5. Local Web Dashboard
+
+Run a local website for scan / monitor / backtest:
+
+```powershell
+python -m pip install -r requirements.txt
+python web_app.py
+```
+
+Then open:
+
+```text
+http://127.0.0.1:5000
+```
+
+The dashboard reuses your existing environment variables such as:
+
+- `FINMIND_TOKEN`
+- `FUGLE_API_KEY`
+- `DISCORD_WEBHOOK_URL`
+
+### 6. Local Real-Time Event Monitor
+
+Run a local monitor that polls Fugle every 15-30 seconds and only pushes Discord when events trigger:
+
+```powershell
+python main.py --mode event-monitor --stocks auto --end 2026-05-12 --max-universe 40 --top-n 10 --watch-top 5 --max-price 120 --prefer-lower-price --include-news --interval-seconds 20 --repeat-count 999999 --notify
+```
+
+Built-in event types:
+
+- intraday breakout to new high
+- sharp rise above threshold
+- sharp drop below threshold
+- volume surge versus prior sample
 
 ## Output Files
 

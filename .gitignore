@@ -8,4 +8,5 @@ smoke_output/
 cache/
 *.xlsx
 *.png
+sponsor_log.txt
 .DS_Store

@@ -35,7 +35,7 @@ jobs:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          python main.py --mode scan --stocks auto --end "$(date +%F)" --max-universe 40 --top-n 15 --max-price 120 --prefer-lower-price --output output --notify
+          python main.py --mode scan --stocks auto --end "$(date +%F)" --max-universe 40 --top-n 15 --max-price 120 --prefer-lower-price --include-news --output output --notify
 
       - name: Upload reports
         uses: actions/upload-artifact@v4

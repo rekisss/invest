@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Taiwan Stock Scanner Dashboard</title>
+  <style>
+    :root {
+      --bg: #f5f2ea;
+      --panel: #fffaf0;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #d6d0c4;
+      --accent: #8a4b08;
+      --accent-soft: #f2dfc2;
+      --ok: #1f7a4c;
+      --bad: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Noto Sans TC", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, #f7dfb8 0, transparent 28%),
+        linear-gradient(180deg, #fbf7ef 0%, var(--bg) 100%);
+    }
+    .wrap {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+    }
+    .hero {
+      margin-bottom: 24px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: rgba(255, 250, 240, 0.9);
+      box-shadow: 0 18px 40px rgba(31, 41, 55, 0.08);
+    }
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: 32px;
+    }
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 20px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 14px 30px rgba(31, 41, 55, 0.06);
+    }
+    .panel h2, .panel h3 {
+      margin-top: 0;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+    }
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--ink);
+      margin-top: 10px;
+    }
+    .check input {
+      width: auto;
+    }
+    .actions {
+      margin-top: 16px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 18px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--accent);
+      color: white;
+    }
+    .ghost {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .error {
+      border: 1px solid #f3c1c1;
+      background: #fff2f2;
+      color: var(--bad);
+      padding: 12px 14px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid #ece6db;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 700;
+      background: #fcfaf5;
+      position: sticky;
+      top: 0;
+    }
+    .table-wrap {
+      overflow: auto;
+      max-height: 420px;
+      border: 1px solid #ece6db;
+      border-radius: 12px;
+      background: white;
+    }
+    .section {
+      margin-top: 18px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+    .stat {
+      padding: 14px;
+      border-radius: 14px;
+      background: white;
+      border: 1px solid #ece6db;
+    }
+    .stat .k {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    .stat .v {
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .charts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .news-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .news-card {
+      border: 1px solid #ece6db;
+      border-radius: 14px;
+      padding: 14px;
+      background: white;
+    }
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .pill.positive { background: #e9f8ef; color: var(--ok); }
+    .pill.neutral { background: #efebe4; color: #6b7280; }
+    .pill.negative { background: #fff0f0; color: var(--bad); }
+    .news-card ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+    .news-card li {
+      margin-bottom: 10px;
+    }
+    img {
+      max-width: 100%;
+      border-radius: 14px;
+      border: 1px solid #ece6db;
+      background: white;
+    }
+    a {
+      color: var(--accent);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .muted {
+      color: var(--muted);
+    }
+    @media (max-width: 960px) {
+      .grid, .charts, .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div class="badge">Local Dashboard</div>
+      <h1>Taiwan Stock Scanner</h1>
+      <p>今天日期預設是 {{ today }}。你可以在這裡直接跑 `scan`、`hybrid-monitor`、`backtest`，不用再手打 CLI 參數。</p>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>Run Mode</h2>
+        {% if errors %}
+          {% for error in errors %}
+            <div class="error">{{ error }}</div>
+          {% endfor %}
+        {% endif %}
+        <form method="post" action="/run">
+          <div class="form-grid">
+            <div>
+              <label for="mode">Mode</label>
+              <select id="mode" name="mode">
+                <option value="scan">scan</option>
+                <option value="hybrid-monitor">hybrid-monitor</option>
+                <option value="backtest">backtest</option>
+              </select>
+            </div>
+            <div>
+              <label for="stocks">Stocks</label>
+              <input id="stocks" name="stocks" value="auto">
+            </div>
+            <div>
+              <label for="start">Start</label>
+              <input id="start" name="start" value="2020-01-01">
+            </div>
+            <div>
+              <label for="end">End</label>
+              <input id="end" name="end" value="{{ today }}">
+            </div>
+            <div>
+              <label for="max_universe">Max Universe</label>
+              <input id="max_universe" name="max_universe" value="40">
+            </div>
+            <div>
+              <label for="top_n">Top N</label>
+              <input id="top_n" name="top_n" value="15">
+            </div>
+            <div>
+              <label for="watch_top">Watch Top</label>
+              <input id="watch_top" name="watch_top" value="5">
+            </div>
+            <div>
+              <label for="workers">Workers</label>
+              <input id="workers" name="workers" value="2">
+            </div>
+            <div>
+              <label for="max_price">Max Price</label>
+              <input id="max_price" name="max_price" value="120">
+            </div>
+            <div>
+              <label for="capital">Capital</label>
+              <input id="capital" name="capital" value="1000000">
+            </div>
+          </div>
+
+          <label class="check"><input type="checkbox" name="prefer_lower_price" checked> Prefer lower-priced names</label>
+          <label class="check"><input type="checkbox" name="include_news" checked> Include news analysis</label>
+          <label class="check"><input type="checkbox" name="use_earnings_filter"> Use earnings filter</label>
+          <label class="check"><input type="checkbox" name="notify"> Send Discord notification</label>
+
+          <div class="actions">
+            <button type="submit">Run</button>
+            <span class="muted">本地網站會共用現有的環境變數與 API token。</span>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel">
+        {% if scan %}
+          <h2>Scan Result</h2>
+          <p class="muted">Universe size: {{ scan.universe_size }}{% if scan.report_url %} · <a href="{{ scan.report_url }}">Download report</a>{% endif %}</p>
+          <div class="section">
+            <h3>Candidates</h3>
+            {% if scan.candidates %}
+              <div class="table-wrap">
+                <table>
+                  <thead><tr>{% for key in scan.candidates[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr></thead>
+                  <tbody>
+                    {% for row in scan.candidates %}
+                      <tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <p class="muted">No full-match candidates in this run.</p>
+            {% endif %}
+          </div>
+          <div class="section">
+            <h3>Watchlist</h3>
+            {% if scan.watchlist %}
+              <div class="table-wrap">
+                <table>
+                  <thead><tr>{% for key in scan.watchlist[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr></thead>
+                  <tbody>
+                    {% for row in scan.watchlist %}
+                      <tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <p class="muted">No near-match watchlist rows in this run.</p>
+            {% endif %}
+          </div>
+          {% if scan.news_map %}
+            <div class="section">
+              <h3>News Analysis</h3>
+              <div class="news-grid">
+                {% for stock_id, payload in scan.news_map.items() %}
+                  <div class="news-card">
+                    <span class="pill {{ payload.summary.sentiment }}">{{ stock_id }} · {{ payload.summary.sentiment }}</span>
+                    {% if payload.news_items %}
+                      <ul>
+                        {% for item in payload.news_items %}
+                          <li>
+                            <a href="{{ item.link }}" target="_blank" rel="noreferrer">{{ item.title }}</a><br>
+                            <span class="muted">{{ item.source }}{% if item.published_at %} · {{ item.published_at[:19].replace('T', ' ') }}{% endif %}</span>
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    {% else %}
+                      <p class="muted">No recent news found.</p>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
+        {% elif hybrid %}
+          <h2>Hybrid Monitor</h2>
+          <p class="muted">Watching: {{ hybrid.watch_symbols|join(", ") }}{% if hybrid.report_url %} · <a href="{{ hybrid.report_url }}">Download report</a>{% endif %}</p>
+          <div class="section">
+            <h3>Daily Watchlist</h3>
+            {% if hybrid.watchlist %}
+              <div class="table-wrap">
+                <table>
+                  <thead><tr>{% for key in hybrid.watchlist[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr></thead>
+                  <tbody>
+                    {% for row in hybrid.watchlist %}
+                      <tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <p class="muted">No watchlist rows in this run.</p>
+            {% endif %}
+          </div>
+          <div class="section">
+            <h3>Live Quotes</h3>
+            {% if hybrid.live_quotes %}
+              <div class="table-wrap">
+                <table>
+                  <thead><tr>{% for key in hybrid.live_quotes[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr></thead>
+                  <tbody>
+                    {% for row in hybrid.live_quotes %}
+                      <tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <p class="muted">No live quotes returned in this run.</p>
+            {% endif %}
+          </div>
+          {% if hybrid.news_map %}
+            <div class="section">
+              <h3>News Analysis</h3>
+              <div class="news-grid">
+                {% for stock_id, payload in hybrid.news_map.items() %}
+                  <div class="news-card">
+                    <span class="pill {{ payload.summary.sentiment }}">{{ stock_id }} · {{ payload.summary.sentiment }}</span>
+                    {% if payload.news_items %}
+                      <ul>
+                        {% for item in payload.news_items %}
+                          <li>
+                            <a href="{{ item.link }}" target="_blank" rel="noreferrer">{{ item.title }}</a><br>
+                            <span class="muted">{{ item.source }}{% if item.published_at %} · {{ item.published_at[:19].replace('T', ' ') }}{% endif %}</span>
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    {% else %}
+                      <p class="muted">No recent news found.</p>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
+        {% elif backtest %}
+          <h2>Backtest Result</h2>
+          <p class="muted">{% if backtest.excel_url %}<a href="{{ backtest.excel_url }}">Download Excel report</a>{% endif %}</p>
+          <div class="stats">
+            {% for key, value in backtest.metrics.items() %}
+              <div class="stat">
+                <div class="k">{{ key }}</div>
+                <div class="v">{{ value }}</div>
+              </div>
+            {% endfor %}
+          </div>
+          <div class="section charts">
+            {% if backtest.equity_chart_url %}
+              <img src="{{ backtest.equity_chart_url }}" alt="Equity Curve">
+            {% endif %}
+            {% if backtest.yearly_chart_url %}
+              <img src="{{ backtest.yearly_chart_url }}" alt="Yearly Performance">
+            {% endif %}
+          </div>
+          <div class="section">
+            <h3>Trades</h3>
+            {% if backtest.trades %}
+              <div class="table-wrap">
+                <table>
+                  <thead><tr>{% for key in backtest.trades[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr></thead>
+                  <tbody>
+                    {% for row in backtest.trades %}
+                      <tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <p class="muted">No completed trades in this backtest.</p>
+            {% endif %}
+          </div>
+        {% else %}
+          <h2>Ready</h2>
+          <p class="muted">左邊選模式並執行。這個版本先做成本地儀表板，適合你先驗證流程與參數，再決定要不要部署成正式網站。</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</body>
+</html>

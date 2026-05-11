@@ -44,5 +44,6 @@ Write-Host ""
     --watch-top $watchTop `
     --max-price 120 `
     --prefer-lower-price `
+    --include-news `
     --output $outputDir `
     --notify
