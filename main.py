@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
 from pathlib import Path
 import sys
 import time
@@ -32,6 +33,7 @@ from strategy import (
     rank_candidates,
 )
 from universe import build_auto_universe
+from notion_sync import notion_enabled, recommend_observation_period, sync_scan_results
 
 
 def parse_args() -> argparse.Namespace:
@@ -291,18 +293,22 @@ def format_scan_message_rich(
         price_tag = _low_price_tag(row.get("close"))
         price_note = f" `{price_tag}`" if price_tag else ""
         brief = _news_brief(str(row["stock_id"]), news_map)
+        obs = recommend_observation_period(row, is_candidate=True)
         lines.append(
             f"• **{row['stock_id']}** {row['name']} | 收 `{row['close']:.2f}`{price_note} | RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}` | {_reason_labels(row.get('entry_reason'))}{brief}"
         )
+        lines.append(f"  ⏱ {obs}")
     if not watchlist.empty:
         lines.extend(["", "**近似觀察名單**"])
         for _, row in watchlist.head(5).iterrows():
             price_tag = _low_price_tag(row.get("close"))
             price_note = f" `{price_tag}`" if price_tag else ""
             brief = _news_brief(str(row["stock_id"]), news_map)
+            obs = recommend_observation_period(row, is_candidate=False)
             lines.append(
                 f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/13` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
             )
+            lines.append(f"  ⏱ {obs}")
     return "\n".join(lines)
 
 
@@ -615,6 +621,8 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
     _safe_print(f"Scan report: {report_path}")
     if args.notify:
         send_discord_messages(split_message(message))
+    if notion_enabled():
+        sync_scan_results(candidates, watchlist, latest_date, news_map)
 
 
 def run_hybrid_monitor(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:

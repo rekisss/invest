@@ -1,9 +1,9 @@
-name: 盤前掃描 (08:45 CST)
+name: 每日選股掃描 (20:00 CST)
 
 on:
   schedule:
-    - cron: "45 0 * * 1-5"   # UTC 00:45 = CST 08:45，週一至週五
-  workflow_dispatch:           # 允許手動觸發
+    - cron: "0 12 * * 1-5"    # UTC 12:00 = CST 20:00，週一至週五收盤後
+  workflow_dispatch:            # 允許手動觸發
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -26,11 +26,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run morning scan
+      - name: Run daily scan
         env:
           FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
         run: |
           python main.py \
             --mode scan \
