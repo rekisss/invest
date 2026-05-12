@@ -30,7 +30,7 @@ jobs:
         env:
           FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           python main.py \
             --mode scan \
