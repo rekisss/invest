@@ -5,6 +5,9 @@ on:
     - cron: "15 6 * * 1-5"   # UTC 06:15 = CST 14:15，週一至週五
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   report:
     runs-on: ubuntu-latest

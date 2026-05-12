@@ -5,6 +5,9 @@ on:
     - cron: "45 0 * * 1-5"   # UTC 00:45 = CST 08:45，週一至週五
   workflow_dispatch:           # 允許手動觸發
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   scan:
     runs-on: ubuntu-latest
