@@ -102,6 +102,12 @@ def sync_scan_results(
         rsi = float(row.get("rsi14", 0) or 0)
         adx = float(row.get("adx14", 0) or 0)
         condition_count = int(row.get("condition_count", 0) or 0)
+        industry = str(row.get("industry_category", "") or "")
+        foreign_streak = int(row.get("foreign_buy_streak", 0) or 0)
+        return_5d = float(row.get("return_5d", 0) or 0)
+        rs5d = float(row.get("relative_strength_5d", 0) or 0)
+        vol_ratio = float(row.get("volume_ratio", 0) or 0)
+        stop_loss = round(close * 0.95, 2) if close > 0 else 0.0
         obs = recommend_observation_period(row, is_candidate=(row_type == "候選"))
         sentiment_label, news_summary = _news_sentiment(news_map.get(stock_id, {}))
 
@@ -115,6 +121,12 @@ def sync_scan_results(
             "RSI": {"number": round(rsi, 1)},
             "ADX": {"number": round(adx, 1)},
             "條件達成": {"rich_text": _rt(f"{condition_count}/13")},
+            "產業別": {"rich_text": _rt(industry)},
+            "外資連買天數": {"number": foreign_streak},
+            "5日漲幅%": {"number": round(return_5d * 100, 2)},
+            "相對強度": {"number": round(rs5d * 100, 2)},
+            "成交量比": {"number": round(vol_ratio, 2)},
+            "參考停損價": {"number": stop_loss},
             "觀察建議": {"rich_text": _rt(obs)},
             "新聞情緒": {"select": {"name": sentiment_label}},
             "新聞摘要": {"rich_text": _rt(news_summary)},
