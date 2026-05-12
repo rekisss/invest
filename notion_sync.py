@@ -106,7 +106,7 @@ def sync_scan_results(
         sentiment_label, news_summary = _news_sentiment(news_map.get(stock_id, {}))
 
         properties = {
-            "Name": {"title": _rt(f"{stock_id} {name}")},
+            "股票名稱": {"title": _rt(f"{stock_id} {name}")},
             "股票代號": {"rich_text": _rt(stock_id)},
             "日期": {"date": {"start": date}},
             "類型": {"select": {"name": row_type}},
