@@ -1,0 +1,51 @@
+name: 盤後總結 (14:15 CST)
+
+on:
+  schedule:
+    - cron: "15 6 * * 1-5"   # UTC 06:15 = CST 14:15，週一至週五
+  workflow_dispatch:
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily report
+        env:
+          FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          python main.py \
+            --mode daily-report \
+            --stocks auto \
+            --end $(date +%Y-%m-%d) \
+            --max-universe 40 \
+            --top-n 15 \
+            --watch-top 5 \
+            --max-price 120 \
+            --prefer-lower-price \
+            --include-news \
+            --output output \
+            --notify
+
+      - name: Upload daily report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-report-${{ github.run_id }}
+          path: output/
+          retention-days: 14

@@ -6,13 +6,9 @@ Set-Location $projectRoot
 $pythonPath = "python"
 $outputDir = "output"
 $endDate = Get-Date -Format "yyyy-MM-dd"
-$watchMode = "auto"
 $maxUniverse = 40
 $topN = 15
 $watchTop = 5
-$intervalSeconds = 60        # 每分鐘輪詢一次
-$repeatCount = 270           # 09:00-13:30 = 270 分鐘
-$heartbeatMinutes = 30       # 每 30 分鐘發一次靜默快報
 
 if (-not $env:FUGLE_API_KEY -or [string]::IsNullOrWhiteSpace($env:FUGLE_API_KEY)) {
     Write-Host "FUGLE_API_KEY is not set." -ForegroundColor Red
@@ -28,13 +24,13 @@ if (Test-Path ".vendor") {
     }
 }
 
-Write-Host "盤中事件監控啟動" -ForegroundColor Green
-Write-Host "日期: $endDate | 輪詢間隔: ${intervalSeconds}s | 心跳: ${heartbeatMinutes}min"
+Write-Host "盤後總結啟動" -ForegroundColor Green
+Write-Host "日期: $endDate"
 Write-Host ""
 
 & $pythonPath "main.py" `
-    --mode event-monitor `
-    --stocks $watchMode `
+    --mode daily-report `
+    --stocks auto `
     --end $endDate `
     --max-universe $maxUniverse `
     --top-n $topN `
@@ -42,12 +38,5 @@ Write-Host ""
     --max-price 120 `
     --prefer-lower-price `
     --include-news `
-    --interval-seconds $intervalSeconds `
-    --repeat-count $repeatCount `
-    --event-rise-threshold 0.045 `
-    --event-drop-threshold -0.035 `
-    --event-volume-multiplier 2.5 `
-    --event-cooldown-seconds 600 `
-    --heartbeat-minutes $heartbeatMinutes `
     --output $outputDir `
     --notify
