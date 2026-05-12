@@ -69,6 +69,7 @@ def _build_args(mode: str) -> SimpleNamespace:
         include_news=_bool_from_form("include_news"),
         notify=_bool_from_form("notify"),
         use_earnings_filter=_bool_from_form("use_earnings_filter"),
+        next_day_fill=_bool_from_form("next_day_fill"),
     )
 
 
@@ -130,7 +131,10 @@ def run_dashboard() -> str:
 
     client = FinMindClient(cache_dir=OUTPUT_DIR / "cache")
     news_client = NewsClient(cache_dir=OUTPUT_DIR / "news_cache")
-    config = StrategyConfig(use_earnings_filter=args.use_earnings_filter)
+    config = StrategyConfig(
+        use_earnings_filter=args.use_earnings_filter,
+        next_day_fill=args.next_day_fill,
+    )
 
     try:
         with RUN_LOCK:

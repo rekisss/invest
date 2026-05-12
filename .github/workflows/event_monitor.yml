@@ -1,0 +1,58 @@
+name: 盤中事件監控 (09:00–13:30 CST)
+
+on:
+  schedule:
+    - cron: "0 1 * * 1-5"    # UTC 01:00 = CST 09:00，週一至週五
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300       # 270 分鐘 + 緩衝
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run event monitor
+        env:
+          FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          python main.py \
+            --mode event-monitor \
+            --stocks auto \
+            --end $(date +%Y-%m-%d) \
+            --max-universe 40 \
+            --top-n 15 \
+            --watch-top 5 \
+            --max-price 120 \
+            --prefer-lower-price \
+            --include-news \
+            --interval-seconds 60 \
+            --repeat-count 270 \
+            --event-rise-threshold 0.045 \
+            --event-drop-threshold -0.035 \
+            --event-volume-multiplier 2.5 \
+            --event-cooldown-seconds 600 \
+            --heartbeat-minutes 30 \
+            --output output \
+            --notify
+
+      - name: Upload monitor log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitor-log-${{ github.run_id }}
+          path: output/
+          retention-days: 3

@@ -56,8 +56,52 @@ def run_backtest(
     equity_rows: list[dict[str, float | pd.Timestamp]] = []
     notes: list[str] = []
     next_position_id = 1
+    pending_entries: list[tuple[float, str, str]] = []  # (score, stock_id, name) — filled next-day open
+
+    if config.next_day_fill:
+        notes.append("next_day_fill=True: entries are filled at the next trading day's open price, not signal-day close.")
 
     for date in master_dates:
+        # Fill pending entries at today's open (next_day_fill mode)
+        if config.next_day_fill and pending_entries and len(positions) < config.max_positions:
+            pending_entries.sort(reverse=True)
+            opened_today = 0
+            for entry_score, stock_id, name in pending_entries:
+                if opened_today >= config.max_new_positions_per_day:
+                    break
+                if len(positions) >= config.max_positions:
+                    break
+                if stock_id in positions:
+                    continue
+                frame = prepared.get(stock_id)
+                if frame is None or date not in frame.index:
+                    continue
+                price = float(frame.loc[date, "open"])
+                risk_budget = portfolio_equity(cash, positions, prepared, date) * config.risk_per_trade
+                risk_per_share = price * config.stop_loss_pct
+                if risk_per_share <= 0:
+                    continue
+                shares_by_risk = math.floor(risk_budget / risk_per_share)
+                shares_by_cash = math.floor(cash / price)
+                quantity = int(min(shares_by_risk, shares_by_cash))
+                if quantity <= 0:
+                    continue
+                position = Position(
+                    position_id=next_position_id,
+                    stock_id=stock_id,
+                    name=name,
+                    entry_date=date,
+                    entry_price=price,
+                    quantity=quantity,
+                    initial_quantity=quantity,
+                    peak_price=price,
+                )
+                positions[stock_id] = position
+                cash -= quantity * price
+                next_position_id += 1
+                opened_today += 1
+            pending_entries.clear()
+
         daily_candidates: list[tuple[float, str, pd.Series]] = []
 
         for stock_id, frame in prepared.items():
@@ -102,7 +146,11 @@ def run_backtest(
             if stock_id not in positions and bool(row["entry_signal"]):
                 daily_candidates.append((float(row["entry_score"]), stock_id, row))
 
-        if daily_candidates and len(positions) < config.max_positions:
+        if config.next_day_fill:
+            for score, stock_id, row in daily_candidates:
+                if stock_id not in positions:
+                    pending_entries.append((score, stock_id, str(row.get("name", stock_id))))
+        elif daily_candidates and len(positions) < config.max_positions:
             daily_candidates.sort(key=lambda item: item[0], reverse=True)
             opened_today = 0
 

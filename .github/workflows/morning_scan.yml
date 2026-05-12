@@ -1,0 +1,50 @@
+name: 盤前掃描 (08:45 CST)
+
+on:
+  schedule:
+    - cron: "45 0 * * 1-5"   # UTC 00:45 = CST 08:45，週一至週五
+  workflow_dispatch:           # 允許手動觸發
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run morning scan
+        env:
+          FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          python main.py \
+            --mode scan \
+            --stocks auto \
+            --end $(date +%Y-%m-%d) \
+            --max-universe 40 \
+            --top-n 15 \
+            --max-price 120 \
+            --prefer-lower-price \
+            --include-news \
+            --output output \
+            --notify
+
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-report-${{ github.run_id }}
+          path: output/
+          retention-days: 7

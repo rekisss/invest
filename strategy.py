@@ -23,7 +23,7 @@ class StrategyConfig:
     adx_threshold: float = 20.0
     breakout_window: int = 20
     swing_low_window: int = 10
-    max_recent_rise_pct: float = 0.07
+    max_recent_rise_pct: float = 0.05
     min_amount_ma20: float = 50_000_000
     market_ma_window: int = 60
     relative_strength_window: int = 5
@@ -36,6 +36,7 @@ class StrategyConfig:
     max_new_positions_per_day: int = 1
     use_earnings_filter: bool = False
     earnings_lookback_days: int = 5
+    next_day_fill: bool = False
 
 
 def prepare_market_frame(market_df: pd.DataFrame, config: StrategyConfig) -> pd.DataFrame:
@@ -95,6 +96,7 @@ def prepare_stock_signals(
     frame["prev_close"] = frame["close"].shift(1)
     frame["prev_volume_ratio"] = (frame["volume"] / frame["volume_ma20"]).shift(1)
 
+    foreign_data_missing = foreign_df.empty
     foreign = foreign_df.copy()
     if foreign.empty:
         foreign = pd.DataFrame({"date": frame["date"], "foreign_net": 0})
@@ -128,6 +130,8 @@ def prepare_stock_signals(
     merged["adx_trending"] = merged["adx14"] > config.adx_threshold
     merged["breakout_20d"] = merged["close"] > merged["close_20d_high"]
     merged["foreign_buy_3d"] = merged["foreign_buy_streak"] >= config.foreign_buy_streak
+    if foreign_data_missing:
+        merged["foreign_buy_3d"] = True
     merged["avoid_chase"] = merged["return_5d"] < config.max_recent_rise_pct
     merged["liquidity_ok"] = merged["amount_ma20"] > config.min_amount_ma20
     merged["stronger_than_market"] = merged["relative_strength_5d"] > 0
@@ -150,21 +154,24 @@ def prepare_stock_signals(
         config,
     ).values
 
-    entry_columns = [
+    hard_entry_columns = [
         "macd_golden_cross",
         "hist_turn_positive",
         "above_ema60",
         "ema60_gt_ema120",
         "volume_break",
         "rsi_strong",
-        "adx_trending",
         "breakout_20d",
         "market_above_ma60",
-        "foreign_buy_3d",
         "avoid_chase",
         "liquidity_ok",
+    ]
+    soft_entry_columns = [
+        "foreign_buy_3d",
+        "adx_trending",
         "stronger_than_market",
     ]
+    entry_columns = hard_entry_columns + soft_entry_columns
     merged["condition_count"] = merged[entry_columns].sum(axis=1)
 
     merged["skip_trade"] = (
@@ -173,12 +180,15 @@ def prepare_stock_signals(
         | merged["gap_chase_after_blowout"]
         | merged["earnings_blocked"]
     )
-    merged["entry_signal"] = merged[entry_columns].all(axis=1) & ~merged["skip_trade"]
+    merged["entry_signal"] = merged[hard_entry_columns].all(axis=1) & ~merged["skip_trade"]
     merged["entry_score"] = (
         merged["condition_count"] * 100
         + merged["relative_strength_5d"].fillna(-99) * 100
         + merged["volume_ratio"].fillna(0) * 10
         + merged["adx14"].fillna(0)
+        + merged["foreign_buy_3d"].astype(int) * 25
+        + merged["adx_trending"].astype(int) * 20
+        + merged["stronger_than_market"].astype(int) * 15
     )
 
     merged["macd_death_cross"] = (
@@ -260,6 +270,7 @@ def rank_candidates(
         "rsi14",
         "adx14",
         "volume_ratio",
+        "volume_ma20",
         "return_5d",
         "relative_strength_5d",
         "foreign_buy_streak",
@@ -274,6 +285,7 @@ def rank_candidates(
         "close",
         "condition_count",
         "entry_score",
+        "volume_ma20",
         "skip_reason",
         "entry_reason",
     ]

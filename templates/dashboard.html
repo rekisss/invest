@@ -222,6 +222,14 @@
       font-weight: 700;
       text-decoration: none;
     }
+    code {
+      font-family: "Consolas", "Courier New", monospace;
+      background: var(--accent-soft);
+      color: var(--accent);
+      padding: 1px 5px;
+      border-radius: 5px;
+      font-size: 13px;
+    }
     .muted {
       color: var(--muted);
     }
@@ -235,14 +243,14 @@
 <body>
   <div class="wrap">
     <div class="hero">
-      <div class="badge">Local Dashboard</div>
+      <div class="badge">本機儀表板</div>
       <h1>Taiwan Stock Scanner</h1>
-      <p>今天日期預設是 {{ today }}。你可以在這裡直接跑 `scan`、`hybrid-monitor`、`backtest`，不用再手打 CLI 參數。</p>
+      <p>今日日期：<strong>{{ today }}</strong>。在此直接執行 <code>scan</code>、<code>hybrid-monitor</code>、<code>backtest</code>，毋需手打 CLI 參數。環境變數與 API Token 沿用現有設定。</p>
     </div>
 
     <div class="grid">
       <div class="panel">
-        <h2>Run Mode</h2>
+        <h2>執行設定</h2>
         {% if errors %}
           {% for error in errors %}
             <div class="error">{{ error }}</div>
@@ -251,69 +259,69 @@
         <form method="post" action="/run">
           <div class="form-grid">
             <div>
-              <label for="mode">Mode</label>
+              <label for="mode">執行模式</label>
               <select id="mode" name="mode">
-                <option value="scan">scan</option>
-                <option value="hybrid-monitor">hybrid-monitor</option>
-                <option value="backtest">backtest</option>
+                <option value="scan">scan（每日篩選）</option>
+                <option value="hybrid-monitor">hybrid-monitor（即時監控）</option>
+                <option value="backtest">backtest（回測）</option>
               </select>
             </div>
             <div>
-              <label for="stocks">Stocks</label>
+              <label for="stocks">股票清單（auto 或 CSV 路徑）</label>
               <input id="stocks" name="stocks" value="auto">
             </div>
             <div>
-              <label for="start">Start</label>
+              <label for="start">起始日期</label>
               <input id="start" name="start" value="2020-01-01">
             </div>
             <div>
-              <label for="end">End</label>
+              <label for="end">結束日期</label>
               <input id="end" name="end" value="{{ today }}">
             </div>
             <div>
-              <label for="max_universe">Max Universe</label>
+              <label for="max_universe">股票池上限</label>
               <input id="max_universe" name="max_universe" value="40">
             </div>
             <div>
-              <label for="top_n">Top N</label>
+              <label for="top_n">候選名單取前 N 名</label>
               <input id="top_n" name="top_n" value="15">
             </div>
             <div>
-              <label for="watch_top">Watch Top</label>
+              <label for="watch_top">即時監控股數上限</label>
               <input id="watch_top" name="watch_top" value="5">
             </div>
             <div>
-              <label for="workers">Workers</label>
+              <label for="workers">平行執行緒數</label>
               <input id="workers" name="workers" value="2">
             </div>
             <div>
-              <label for="max_price">Max Price</label>
+              <label for="max_price">股價上限（元，留空不限）</label>
               <input id="max_price" name="max_price" value="120">
             </div>
             <div>
-              <label for="capital">Capital</label>
+              <label for="capital">回測本金（元）</label>
               <input id="capital" name="capital" value="1000000">
             </div>
           </div>
 
-          <label class="check"><input type="checkbox" name="prefer_lower_price" checked> Prefer lower-priced names</label>
-          <label class="check"><input type="checkbox" name="include_news" checked> Include news analysis</label>
-          <label class="check"><input type="checkbox" name="use_earnings_filter"> Use earnings filter</label>
-          <label class="check"><input type="checkbox" name="notify"> Send Discord notification</label>
+          <label class="check"><input type="checkbox" name="prefer_lower_price" checked> 優先低股價標的</label>
+          <label class="check"><input type="checkbox" name="include_news" checked> 附帶新聞分析</label>
+          <label class="check"><input type="checkbox" name="use_earnings_filter"> 啟用財報過濾</label>
+          <label class="check"><input type="checkbox" name="next_day_fill"> 隔日開盤成交（回測保守模式）</label>
+          <label class="check"><input type="checkbox" name="notify"> 發送 Discord 通知</label>
 
           <div class="actions">
-            <button type="submit">Run</button>
-            <span class="muted">本地網站會共用現有的環境變數與 API token。</span>
+            <button type="submit">執行</button>
           </div>
         </form>
       </div>
 
       <div class="panel">
         {% if scan %}
-          <h2>Scan Result</h2>
-          <p class="muted">Universe size: {{ scan.universe_size }}{% if scan.report_url %} · <a href="{{ scan.report_url }}">Download report</a>{% endif %}</p>
+          <h2>掃描結果</h2>
+          <p class="muted">股票池大小：{{ scan.universe_size }}{% if scan.report_url %} · <a href="{{ scan.report_url }}">下載報告</a>{% endif %}</p>
           <div class="section">
-            <h3>Candidates</h3>
+            <h3>全條件候選</h3>
             {% if scan.candidates %}
               <div class="table-wrap">
                 <table>
@@ -326,11 +334,11 @@
                 </table>
               </div>
             {% else %}
-              <p class="muted">No full-match candidates in this run.</p>
+              <p class="muted">本次無全條件候選股。</p>
             {% endif %}
           </div>
           <div class="section">
-            <h3>Watchlist</h3>
+            <h3>觀察名單（近似）</h3>
             {% if scan.watchlist %}
               <div class="table-wrap">
                 <table>
@@ -343,27 +351,30 @@
                 </table>
               </div>
             {% else %}
-              <p class="muted">No near-match watchlist rows in this run.</p>
+              <p class="muted">本次無近似觀察名單。</p>
             {% endif %}
           </div>
           {% if scan.news_map %}
             <div class="section">
-              <h3>News Analysis</h3>
+              <h3>新聞分析</h3>
               <div class="news-grid">
                 {% for stock_id, payload in scan.news_map.items() %}
                   <div class="news-card">
-                    <span class="pill {{ payload.summary.sentiment }}">{{ stock_id }} · {{ payload.summary.sentiment }}</span>
+                    <span class="pill {{ payload.summary.sentiment }}">{{ stock_id }} · {% if payload.summary.sentiment == 'positive' %}正面{% elif payload.summary.sentiment == 'negative' %}負面{% else %}中性{% endif %}</span>
+                    <span class="muted" style="font-size:12px">正面 {{ payload.summary.counts.positive }} / 負面 {{ payload.summary.counts.negative }} / 中性 {{ payload.summary.counts.neutral }}</span>
                     {% if payload.news_items %}
                       <ul>
                         {% for item in payload.news_items %}
                           <li>
-                            <a href="{{ item.link }}" target="_blank" rel="noreferrer">{{ item.title }}</a><br>
-                            <span class="muted">{{ item.source }}{% if item.published_at %} · {{ item.published_at[:19].replace('T', ' ') }}{% endif %}</span>
+                            <span class="pill {{ item.sentiment }}" style="font-size:10px;padding:2px 6px;margin-bottom:4px">{% if item.sentiment == 'positive' %}↑{% elif item.sentiment == 'negative' %}↓{% else %}—{% endif %}</span>
+                            <a href="{{ item.link }}" target="_blank" rel="noreferrer">{{ item.title }}</a>
+                            {% if item.snippet %}<br><span class="muted" style="font-size:12px">{{ item.snippet }}</span>{% endif %}
+                            <br><span class="muted" style="font-size:11px">{{ item.source }}{% if item.published_at %} · {{ item.published_at[:10] }}{% endif %}</span>
                           </li>
                         {% endfor %}
                       </ul>
                     {% else %}
-                      <p class="muted">No recent news found.</p>
+                      <p class="muted">近期無相關新聞。</p>
                     {% endif %}
                   </div>
                 {% endfor %}
@@ -371,10 +382,10 @@
             </div>
           {% endif %}
         {% elif hybrid %}
-          <h2>Hybrid Monitor</h2>
-          <p class="muted">Watching: {{ hybrid.watch_symbols|join(", ") }}{% if hybrid.report_url %} · <a href="{{ hybrid.report_url }}">Download report</a>{% endif %}</p>
+          <h2>即時監控</h2>
+          <p class="muted">監控標的：{{ hybrid.watch_symbols|join(", ") }}{% if hybrid.report_url %} · <a href="{{ hybrid.report_url }}">下載報告</a>{% endif %}</p>
           <div class="section">
-            <h3>Daily Watchlist</h3>
+            <h3>每日觀察名單</h3>
             {% if hybrid.watchlist %}
               <div class="table-wrap">
                 <table>
@@ -387,11 +398,11 @@
                 </table>
               </div>
             {% else %}
-              <p class="muted">No watchlist rows in this run.</p>
+              <p class="muted">本次無觀察名單。</p>
             {% endif %}
           </div>
           <div class="section">
-            <h3>Live Quotes</h3>
+            <h3>即時報價</h3>
             {% if hybrid.live_quotes %}
               <div class="table-wrap">
                 <table>
@@ -404,27 +415,30 @@
                 </table>
               </div>
             {% else %}
-              <p class="muted">No live quotes returned in this run.</p>
+              <p class="muted">本次無即時報價（請確認 FUGLE_API_KEY 已設定）。</p>
             {% endif %}
           </div>
           {% if hybrid.news_map %}
             <div class="section">
-              <h3>News Analysis</h3>
+              <h3>新聞分析</h3>
               <div class="news-grid">
                 {% for stock_id, payload in hybrid.news_map.items() %}
                   <div class="news-card">
-                    <span class="pill {{ payload.summary.sentiment }}">{{ stock_id }} · {{ payload.summary.sentiment }}</span>
+                    <span class="pill {{ payload.summary.sentiment }}">{{ stock_id }} · {% if payload.summary.sentiment == 'positive' %}正面{% elif payload.summary.sentiment == 'negative' %}負面{% else %}中性{% endif %}</span>
+                    <span class="muted" style="font-size:12px">正面 {{ payload.summary.counts.positive }} / 負面 {{ payload.summary.counts.negative }} / 中性 {{ payload.summary.counts.neutral }}</span>
                     {% if payload.news_items %}
                       <ul>
                         {% for item in payload.news_items %}
                           <li>
-                            <a href="{{ item.link }}" target="_blank" rel="noreferrer">{{ item.title }}</a><br>
-                            <span class="muted">{{ item.source }}{% if item.published_at %} · {{ item.published_at[:19].replace('T', ' ') }}{% endif %}</span>
+                            <span class="pill {{ item.sentiment }}" style="font-size:10px;padding:2px 6px;margin-bottom:4px">{% if item.sentiment == 'positive' %}↑{% elif item.sentiment == 'negative' %}↓{% else %}—{% endif %}</span>
+                            <a href="{{ item.link }}" target="_blank" rel="noreferrer">{{ item.title }}</a>
+                            {% if item.snippet %}<br><span class="muted" style="font-size:12px">{{ item.snippet }}</span>{% endif %}
+                            <br><span class="muted" style="font-size:11px">{{ item.source }}{% if item.published_at %} · {{ item.published_at[:10] }}{% endif %}</span>
                           </li>
                         {% endfor %}
                       </ul>
                     {% else %}
-                      <p class="muted">No recent news found.</p>
+                      <p class="muted">近期無相關新聞。</p>
                     {% endif %}
                   </div>
                 {% endfor %}
@@ -432,8 +446,8 @@
             </div>
           {% endif %}
         {% elif backtest %}
-          <h2>Backtest Result</h2>
-          <p class="muted">{% if backtest.excel_url %}<a href="{{ backtest.excel_url }}">Download Excel report</a>{% endif %}</p>
+          <h2>回測結果</h2>
+          <p class="muted">{% if backtest.excel_url %}<a href="{{ backtest.excel_url }}">下載 Excel 報告</a>{% endif %}</p>
           <div class="stats">
             {% for key, value in backtest.metrics.items() %}
               <div class="stat">
@@ -451,7 +465,7 @@
             {% endif %}
           </div>
           <div class="section">
-            <h3>Trades</h3>
+            <h3>交易紀錄</h3>
             {% if backtest.trades %}
               <div class="table-wrap">
                 <table>
@@ -464,12 +478,17 @@
                 </table>
               </div>
             {% else %}
-              <p class="muted">No completed trades in this backtest.</p>
+              <p class="muted">本次回測無已完成交易。</p>
             {% endif %}
           </div>
         {% else %}
-          <h2>Ready</h2>
-          <p class="muted">左邊選模式並執行。這個版本先做成本地儀表板，適合你先驗證流程與參數，再決定要不要部署成正式網站。</p>
+          <h2>就緒</h2>
+          <p class="muted">在左側選擇執行模式並按「執行」，結果會顯示在這裡。</p>
+          <ul class="muted" style="font-size:13px;line-height:2">
+            <li><strong>scan</strong> — 每日 MACD 篩選，輸出候選 + 觀察名單</li>
+            <li><strong>hybrid-monitor</strong> — 每日篩選 + Fugle 即時報價（需設 <code>FUGLE_API_KEY</code>）</li>
+            <li><strong>backtest</strong> — 歷史回測，產出 Excel 報告與績效圖表</li>
+          </ul>
         {% endif %}
       </div>
     </div>

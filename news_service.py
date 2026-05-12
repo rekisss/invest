@@ -8,8 +8,14 @@ from typing import Iterable
 from urllib.parse import quote
 import xml.etree.ElementTree as ET
 
+import re
+
 import pandas as pd
 import requests
+
+
+def _clean_html(text: str) -> str:
+    return re.sub(r"<[^>]+>", "", text).strip()
 
 
 POSITIVE_KEYWORDS = [
@@ -83,11 +89,14 @@ class NewsClient:
             source = (item.findtext("source") or "").strip()
             pub_date_text = (item.findtext("pubDate") or "").strip()
             published_at = _parse_pub_date(pub_date_text)
+            raw_desc = (item.findtext("description") or "").strip()
+            snippet = _clean_html(raw_desc)[:120] + ("…" if len(_clean_html(raw_desc)) > 120 else "")
             rows.append(
                 {
                     "stock_id": stock_id,
                     "name": name,
                     "title": title,
+                    "snippet": snippet,
                     "source": source or "Google News",
                     "link": link,
                     "published_at": published_at.isoformat() if published_at else None,
@@ -135,11 +144,24 @@ def summarize_news(news_items: Iterable[dict[str, object]]) -> dict[str, object]
         summary = "positive"
     elif counts["negative"] > counts["positive"]:
         summary = "negative"
+    top_headlines = [
+        {
+            "title": str(item.get("title") or ""),
+            "snippet": str(item.get("snippet") or ""),
+            "sentiment": str(item.get("sentiment") or "neutral"),
+            "source": str(item.get("source") or ""),
+            "published_at": str(item.get("published_at") or ""),
+            "link": str(item.get("link") or ""),
+        }
+        for item in items[:3]
+        if item.get("title")
+    ]
     return {
         "sentiment": summary,
         "counts": counts,
         "has_recent_news": any(_is_recent(item.get("published_at")) for item in items),
         "headline": str(items[0].get("title") or "") if items else "",
+        "top_headlines": top_headlines,
     }
 
 
