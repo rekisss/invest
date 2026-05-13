@@ -40,7 +40,7 @@ from notion_sync import notion_enabled, recommend_observation_period, sync_scan_
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Taiwan MACD swing strategy backtester and scanner.")
-    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report"], default="scan")
+    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward"], default="scan")
     parser.add_argument("--stocks", default="auto", help="CSV file containing stock_id and optional name, or 'auto'.")
     parser.add_argument("--start", default="2020-01-01")
     parser.add_argument("--end", default=pd.Timestamp.today().strftime("%Y-%m-%d"))
@@ -67,6 +67,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--heartbeat-minutes", type=int, default=0, help="Send a status snapshot every N minutes during event-monitor (0 = disabled).")
     parser.add_argument("--clean-cache", action="store_true", help="Delete stale cache files before running.")
     parser.add_argument("--clean-cache-days", type=int, default=30, help="Age threshold in days for --clean-cache (default 30).")
+    parser.add_argument("--wf-folds", type=int, default=4, help="Number of folds for walk-forward analysis (default 4).")
+    parser.add_argument("--wf-overlap-days", type=int, default=0, help="Overlap days between walk-forward folds (default 0).")
     return parser.parse_args()
 
 
@@ -111,10 +113,16 @@ def _confidence_score(row: object) -> int:
 
 
 def _entry_stop_target(close: float, atr: float | None, stop_pct: float = 0.05, target_pct: float = 0.10) -> tuple[str, str, str, str]:
-    stop = round(close * (1 - stop_pct), 2)
-    target = round(close * (1 + target_pct), 2)
+    if atr and atr > 0:
+        # ATR-based: entry within 0.5 ATR, stop 2 ATR below, target 3 ATR above
+        entry_hi = round(close + 0.5 * atr, 2)
+        stop = round(close - 2.0 * atr, 2)
+        target = round(close + 3.0 * atr, 2)
+    else:
+        entry_hi = round(close * 1.015, 2)
+        stop = round(close * (1 - stop_pct), 2)
+        target = round(close * (1 + target_pct), 2)
     rr = round((target - close) / max(close - stop, 0.01), 1)
-    entry_hi = round(close * 1.015, 2)
     return f"{close:.2f}–{entry_hi:.2f}", f"{stop:.2f}", f"{target:.2f}", f"{rr}:1"
 
 
@@ -870,6 +878,84 @@ def run_backtest_mode(args: argparse.Namespace, client: FinMindClient, config: S
             _safe_print(f"- {key}: {value}")
 
 
+def run_walk_forward(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
+    """Run walk-forward validation: split the date range into folds and backtest each."""
+    folds = getattr(args, "wf_folds", 4)
+    overlap = getattr(args, "wf_overlap_days", 0)
+    full_start = pd.Timestamp(args.start)
+    full_end = pd.Timestamp(args.end)
+    total_days = (full_end - full_start).days
+    fold_days = total_days // folds
+
+    _safe_print(f"Walk-forward: {folds} folds × ~{fold_days}d, {full_start.date()} → {full_end.date()}")
+
+    market_raw = fetch_market_index(client, args.start, args.end)
+    if market_raw.empty:
+        raise RuntimeError("Unable to download TAIEX market data.")
+    market_full = prepare_market_frame(market_raw, config)
+
+    stock_list = load_universe(args, client)
+    signals_by_stock, _ = collect_signals(stock_list, client, market_full, config, args.start, args.end, args.workers)
+    if not signals_by_stock:
+        raise RuntimeError("No signal data loaded.")
+
+    fold_rows: list[dict[str, object]] = []
+    for fold_idx in range(folds):
+        fold_start = full_start + pd.Timedelta(days=fold_idx * fold_days - overlap)
+        fold_end = full_start + pd.Timedelta(days=(fold_idx + 1) * fold_days)
+        if fold_idx == folds - 1:
+            fold_end = full_end
+        fold_start = max(fold_start, full_start)
+        fold_label = f"{fold_start.date()} → {fold_end.date()}"
+
+        market_slice = market_full[
+            (pd.to_datetime(market_full["date"]) >= fold_start)
+            & (pd.to_datetime(market_full["date"]) <= fold_end)
+        ].copy()
+        signals_slice = {
+            sid: frame[
+                (pd.to_datetime(frame["date"]) >= fold_start)
+                & (pd.to_datetime(frame["date"]) <= fold_end)
+            ].copy()
+            for sid, frame in signals_by_stock.items()
+        }
+        signals_slice = {sid: f for sid, f in signals_slice.items() if not f.empty}
+        if not signals_slice or market_slice.empty:
+            _safe_print(f"  Fold {fold_idx + 1}: no data — skipping")
+            continue
+
+        try:
+            result = run_backtest(signals_slice, market_slice, config, args.capital)
+            m = result["metrics"]
+            fold_rows.append({
+                "fold": fold_idx + 1,
+                "period": fold_label,
+                "total_return_pct": m.get("total_return_pct", 0),
+                "annual_return_pct": m.get("annual_return_pct", 0),
+                "max_drawdown_pct": m.get("max_drawdown_pct", 0),
+                "sharpe_ratio": m.get("sharpe_ratio", 0),
+                "win_rate_pct": m.get("win_rate_pct", 0),
+                "total_trades": m.get("total_trades", 0),
+                "benchmark_return_pct": m.get("benchmark_return_pct", None),
+            })
+            _safe_print(f"  Fold {fold_idx + 1} [{fold_label}]: "
+                        f"return={m.get('total_return_pct', 0):+.1f}% "
+                        f"DD={m.get('max_drawdown_pct', 0):.1f}% "
+                        f"Sharpe={m.get('sharpe_ratio', 0):.2f} "
+                        f"trades={m.get('total_trades', 0)}")
+        except Exception as exc:
+            _safe_print(f"  Fold {fold_idx + 1} error: {exc}")
+
+    if fold_rows:
+        wf_frame = pd.DataFrame(fold_rows)
+        _safe_print("\nWalk-forward summary:")
+        _safe_print(wf_frame.to_string(index=False))
+        output_path = Path(args.output)
+        output_path.mkdir(parents=True, exist_ok=True)
+        wf_frame.to_csv(output_path / "walk_forward_results.csv", index=False)
+        _safe_print(f"\nSaved: {output_path / 'walk_forward_results.csv'}")
+
+
 def main() -> None:
     args = parse_args()
     cache_dir = Path(args.output) / "cache"
@@ -885,6 +971,8 @@ def main() -> None:
 
     if args.mode == "backtest":
         run_backtest_mode(args, client, config)
+    elif args.mode == "walk-forward":
+        run_walk_forward(args, client, config)
     elif args.mode == "sponsor-monitor":
         run_sponsor_monitor(args, client, config)
     elif args.mode == "event-monitor":
