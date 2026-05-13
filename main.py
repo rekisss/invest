@@ -71,6 +71,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--wf-overlap-days", type=int, default=0, help="Overlap days between walk-forward folds (default 0).")
     parser.add_argument("--watch-extra", default="", help="Comma-separated stock IDs to always include in event-monitor watch list.")
     parser.add_argument("--min-confidence", type=int, default=0, help="Minimum confidence score (0-100) to include a candidate in notifications (default 0 = all).")
+    parser.add_argument("--use-atr-stop", action="store_true", help="Use ATR-based stop loss instead of fixed percentage in backtest.")
+    parser.add_argument("--atr-stop-multiplier", type=float, default=2.0, help="ATR multiplier for stop loss (default 2.0, used with --use-atr-stop).")
+    parser.add_argument("--max-holding-days", type=int, default=0, help="Force-exit positions after N calendar days in backtest (0 = disabled).")
+    parser.add_argument("--max-positions-per-sector", type=int, default=2, help="Max simultaneous positions per industry sector in backtest (default 2, 0 = unlimited).")
     return parser.parse_args()
 
 
@@ -1032,6 +1036,10 @@ def main() -> None:
     config = StrategyConfig(
         use_earnings_filter=args.use_earnings_filter,
         next_day_fill=args.next_day_fill,
+        use_atr_stop=getattr(args, "use_atr_stop", False),
+        atr_stop_multiplier=getattr(args, "atr_stop_multiplier", 2.0),
+        max_holding_days=getattr(args, "max_holding_days", 0),
+        max_positions_per_sector=getattr(args, "max_positions_per_sector", 2),
     )
 
     if getattr(args, "clean_cache", False):
