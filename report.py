@@ -45,6 +45,14 @@ def save_reports(
     }
 
 
+def _auto_width(writer: "pd.ExcelWriter") -> None:
+    for sheet in writer.book.sheetnames:
+        ws = writer.book[sheet]
+        for col in ws.columns:
+            max_len = max((len(str(cell.value or "")) for cell in col), default=0)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 50)
+
+
 def save_scan_report(
     output_dir: str | Path,
     candidates: pd.DataFrame,
@@ -58,6 +66,7 @@ def save_scan_report(
         candidates.to_excel(writer, sheet_name="candidates", index=False)
         watchlist.to_excel(writer, sheet_name="watchlist", index=False)
         universe.to_excel(writer, sheet_name="universe", index=False)
+        _auto_width(writer)
     return excel_path
 
 
@@ -76,6 +85,7 @@ def save_hybrid_report(
         watchlist.to_excel(writer, sheet_name="watchlist", index=False)
         live_quotes.to_excel(writer, sheet_name="live_quotes", index=False)
         universe.to_excel(writer, sheet_name="universe", index=False)
+        _auto_width(writer)
     return excel_path
 
 
@@ -94,6 +104,7 @@ def save_sponsor_monitor_report(
         watchlist.to_excel(writer, sheet_name="watchlist", index=False)
         intraday_rows.to_excel(writer, sheet_name="intraday_snapshot", index=False)
         universe.to_excel(writer, sheet_name="universe", index=False)
+        _auto_width(writer)
     return excel_path
 
 
@@ -131,6 +142,7 @@ def _write_excel(
                 config_frame.to_excel(writer, sheet_name="config", index=False)
             except Exception:
                 pass
+        _auto_width(writer)
 
 
 def _plot_equity_curve(equity_curve: pd.DataFrame, output_path: Path) -> None:

@@ -193,7 +193,9 @@ def _news_brief(stock_id: str, news_map: dict[str, dict[str, object]]) -> str:
     if not payload:
         return ""
     summary = payload.get("summary", {})
-    sentiment = str(summary.get("sentiment") or "neutral")
+    # Prefer recent_sentiment (3-day window) over overall sentiment when fresh news exists
+    has_recent = bool(summary.get("has_recent_news"))
+    sentiment = str(summary.get("recent_sentiment" if has_recent else "sentiment") or "neutral")
     emoji = _SENTIMENT_EMOJI.get(sentiment, "📰")
     top = summary.get("top_headlines") or []
     titles = [str(h.get("title") or "").replace("\n", " ").strip() for h in top[:2] if h.get("title")]
@@ -203,7 +205,8 @@ def _news_brief(stock_id: str, news_map: dict[str, dict[str, object]]) -> str:
             return ""
         titles = [headline]
     parts = [(t[:38] + "…") if len(t) > 38 else t for t in titles]
-    return f"\n  {emoji} {' / '.join(parts)}"
+    freshness = "" if has_recent else " (舊)"
+    return f"\n  {emoji}{freshness} {' / '.join(parts)}"
 
 
 def load_universe(args: argparse.Namespace, client: FinMindClient) -> pd.DataFrame:
