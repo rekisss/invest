@@ -979,14 +979,21 @@ def run_walk_forward(args: argparse.Namespace, client: FinMindClient, config: St
                 "annual_return_pct": m.get("annual_return_pct", 0),
                 "max_drawdown_pct": m.get("max_drawdown_pct", 0),
                 "sharpe_ratio": m.get("sharpe_ratio", 0),
+                "sortino_ratio": m.get("sortino_ratio", 0),
+                "calmar_ratio": m.get("calmar_ratio", 0),
                 "win_rate_pct": m.get("win_rate_pct", 0),
+                "profit_factor": m.get("profit_factor", 0),
+                "expectancy_pct": m.get("expectancy_pct", 0),
                 "total_trades": m.get("total_trades", 0),
+                "avg_holding_days": m.get("avg_holding_days", 0),
                 "benchmark_return_pct": m.get("benchmark_return_pct", None),
+                "alpha_pct": m.get("alpha_pct", None),
             })
             _safe_print(f"  Fold {fold_idx + 1} [{fold_label}]: "
                         f"return={m.get('total_return_pct', 0):+.1f}% "
                         f"DD={m.get('max_drawdown_pct', 0):.1f}% "
                         f"Sharpe={m.get('sharpe_ratio', 0):.2f} "
+                        f"Sortino={m.get('sortino_ratio', 0):.2f} "
                         f"trades={m.get('total_trades', 0)}")
         except Exception as exc:
             _safe_print(f"  Fold {fold_idx + 1} error: {exc}")
@@ -995,6 +1002,17 @@ def run_walk_forward(args: argparse.Namespace, client: FinMindClient, config: St
         wf_frame = pd.DataFrame(fold_rows)
         _safe_print("\nWalk-forward summary:")
         _safe_print(wf_frame.to_string(index=False))
+
+        # Aggregate summary
+        numeric_cols = ["total_return_pct", "max_drawdown_pct", "sharpe_ratio",
+                        "sortino_ratio", "win_rate_pct", "profit_factor", "total_trades"]
+        agg = {col: wf_frame[col].mean() for col in numeric_cols if col in wf_frame.columns}
+        _safe_print("\nMean across folds:")
+        for k, v in agg.items():
+            _safe_print(f"  {k}: {v:.2f}")
+        consistency = int((wf_frame["total_return_pct"] > 0).sum())
+        _safe_print(f"  Positive folds: {consistency}/{len(fold_rows)}")
+
         output_path = Path(args.output)
         output_path.mkdir(parents=True, exist_ok=True)
         wf_frame.to_csv(output_path / "walk_forward_results.csv", index=False)
