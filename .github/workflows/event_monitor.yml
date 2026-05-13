@@ -51,19 +51,21 @@ jobs:
             --mode event-monitor \
             --stocks auto \
             --end $(date +%Y-%m-%d) \
-            --max-universe 40 \
+            --lookback-days 420 \
+            --max-universe 50 \
             --top-n 15 \
-            --watch-top 5 \
+            --watch-top 8 \
             --max-price 120 \
             --prefer-lower-price \
             --include-news \
+            --news-limit 2 \
             --interval-seconds 60 \
             --repeat-count 270 \
             --event-rise-threshold 0.045 \
             --event-drop-threshold -0.035 \
             --event-volume-multiplier 2.5 \
             --event-cooldown-seconds 600 \
-            --heartbeat-minutes 0 \
+            --heartbeat-minutes 30 \
             --output output \
             --notify
 

@@ -38,11 +38,15 @@ jobs:
             --mode scan \
             --stocks auto \
             --end $(date +%Y-%m-%d) \
-            --max-universe 40 \
+            --lookback-days 420 \
+            --max-universe 50 \
             --top-n 15 \
             --max-price 120 \
             --prefer-lower-price \
             --include-news \
+            --news-limit 3 \
+            --clean-cache \
+            --clean-cache-days 14 \
             --output output \
             --notify
 

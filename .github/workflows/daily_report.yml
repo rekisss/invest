@@ -38,12 +38,14 @@ jobs:
             --mode daily-report \
             --stocks auto \
             --end $(date +%Y-%m-%d) \
-            --max-universe 40 \
+            --lookback-days 420 \
+            --max-universe 50 \
             --top-n 15 \
-            --watch-top 5 \
+            --watch-top 8 \
             --max-price 120 \
             --prefer-lower-price \
             --include-news \
+            --news-limit 3 \
             --output output \
             --notify
 
