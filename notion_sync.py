@@ -60,6 +60,9 @@ def _setup_database(database_id: str) -> None:
         "外資連買天數": {"number": {"format": "number"}},
         "投信連買天數": {"number": {"format": "number"}},
         "自營連買天數": {"number": {"format": "number"}},
+        "MFI": {"number": {"format": "number"}},
+        "BB位置%": {"number": {"format": "number"}},
+        "一目雲上": {"checkbox": {}},
         "5日漲幅%": {"number": {"format": "number"}},
         "相對強度": {"number": {"format": "number"}},
         "成交量比": {"number": {"format": "number"}},
@@ -83,8 +86,10 @@ def _news_sentiment(summary: dict[str, Any]) -> tuple[str, str]:
         headline = str(summary.get("headline") or "")
         if not headline:
             return "無資料", ""
-        sentiment = str(summary.get("sentiment") or "neutral")
-        label = {"positive": "正面", "negative": "負面"}.get(sentiment, "中性")
+        # Prefer recent_sentiment when fresh news exists
+        has_recent = bool(summary.get("has_recent_news"))
+        raw = str(summary.get("recent_sentiment" if has_recent else "sentiment") or "neutral")
+        label = {"positive": "正面", "negative": "負面"}.get(raw, "中性")
         return label, headline[:500]
     pos = sum(1 for h in headlines if h.get("sentiment") == "positive")
     neg = sum(1 for h in headlines if h.get("sentiment") == "negative")
@@ -142,6 +147,9 @@ def sync_scan_results(
         foreign_streak = int(row.get("foreign_buy_streak", 0) or 0)
         invest_trust_streak = int(row.get("invest_trust_streak", 0) or 0)
         dealer_streak = int(row.get("dealer_buy_streak", 0) or 0)
+        mfi14 = round(float(row.get("mfi14", 50) or 50), 1)
+        bb_pct_b = round(float(row.get("bb_pct_b", 0) or 0) * 100, 1)
+        above_cloud = bool(row.get("above_ichimoku_cloud", False))
         return_5d = float(row.get("return_5d", 0) or 0)
         rs5d = float(row.get("relative_strength_5d", 0) or 0)
         vol_ratio = float(row.get("volume_ratio", 0) or 0)
@@ -167,6 +175,9 @@ def sync_scan_results(
             "外資連買天數": {"number": foreign_streak},
             "投信連買天數": {"number": invest_trust_streak},
             "自營連買天數": {"number": dealer_streak},
+            "MFI": {"number": mfi14},
+            "BB位置%": {"number": bb_pct_b},
+            "一目雲上": {"checkbox": above_cloud},
             "5日漲幅%": {"number": round(return_5d * 100, 2)},
             "相對強度": {"number": round(rs5d * 100, 2)},
             "成交量比": {"number": round(vol_ratio, 2)},
