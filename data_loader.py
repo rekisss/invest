@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import random
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -74,7 +75,7 @@ class FinMindClient:
             except requests.exceptions.RequestException as exc:
                 last_error = exc
                 if attempt < 2:
-                    time.sleep(2 ** attempt * 2)
+                    time.sleep(2 ** attempt * 2 + random.uniform(0, 1))
         else:
             raise last_error  # type: ignore[misc]
 

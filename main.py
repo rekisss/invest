@@ -244,9 +244,15 @@ def collect_signals(
             print(f"[warn] skipped {stock['stock_id']}: {error}", file=sys.stderr)
             return None
 
+    stock_records = stock_list.to_dict("records")
+    total = len(stock_records)
+    done = 0
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(load_one, stock) for stock in stock_list.to_dict("records")]
+        futures = [executor.submit(load_one, stock) for stock in stock_records]
         for future in as_completed(futures):
+            done += 1
+            if done % 10 == 0 or done == total:
+                print(f"[collect_signals] {done}/{total} stocks loaded", file=sys.stderr)
             result = future.result()
             if result is None:
                 continue
