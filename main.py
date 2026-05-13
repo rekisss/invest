@@ -304,11 +304,17 @@ def _format_breadth_line(breadth: dict[str, object]) -> str:
     trend_up = int(breadth.get("ema60_gt_ema120", 0))
     market_ok = int(breadth.get("market_above_ma60", 0))
     momentum = int(breadth.get("macd_golden_cross", 0))
-    return (
+    mfi_pct = int(breadth.get("mfi_strong", 0))
+    ichi_pct = int(breadth.get("above_ichimoku_cloud", 0))
+    market_tag = "✅" if market_ok > 50 else "⚠️熊市"
+    line = (
         f"📊 市場廣度（{total}支）｜全條件候選 `{entry_pct}%` | "
-        f"站EMA60 `{above_ema}%` | 趨勢向上 `{trend_up}%` | "
-        f"MACD交叉 `{momentum}%` | 大盤 `{'✅' if market_ok > 50 else '❌'}`"
+        f"站EMA60 `{above_ema}%` | 趨勢 `{trend_up}%` | "
+        f"MACD `{momentum}%` | MFI `{mfi_pct}%` | 雲上 `{ichi_pct}%` | 大盤 `{market_tag}`"
     )
+    if market_ok <= 50 and above_ema < 30:
+        line += "\n⚠️ **市場偏弱，候選訊號謹慎看待，注意風險控管**"
+    return line
 
 
 def format_scan_message_rich(
@@ -335,6 +341,15 @@ def format_scan_message_rich(
                 f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
             )
         return "\n".join(lines)
+
+    # Sector concentration warning
+    if "industry_category" in candidates.columns and len(candidates) >= 3:
+        top_sector = candidates["industry_category"].mode()
+        if not top_sector.empty:
+            top_count = int((candidates["industry_category"] == top_sector.iloc[0]).sum())
+            if top_count >= max(3, len(candidates) // 2):
+                lines.append(f"⚠️ 候選集中於 **{top_sector.iloc[0]}** ({top_count}/{len(candidates)})，注意分散")
+                lines.append("")
 
     lines.append("**每日候選**")
     for _, row in candidates.head(6).iterrows():
