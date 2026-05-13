@@ -353,6 +353,11 @@ def compute_performance_metrics(
     if daily_returns.std(ddof=0) > 0:
         sharpe = (daily_returns.mean() / daily_returns.std(ddof=0)) * (252 ** 0.5)
 
+    sortino = 0.0
+    downside = daily_returns[daily_returns < 0]
+    if len(downside) > 0 and downside.std(ddof=0) > 0:
+        sortino = (daily_returns.mean() / downside.std(ddof=0)) * (252 ** 0.5)
+
     calmar = (cagr / abs(max_dd)) if max_dd < 0 else float("inf")
 
     gross_profit = float(trade_summary.loc[trade_summary["pnl"] > 0, "pnl"].sum()) if not trade_summary.empty else 0.0
@@ -383,6 +388,7 @@ def compute_performance_metrics(
         "annual_return_pct": cagr * 100,
         "max_drawdown_pct": max_dd * 100,
         "sharpe_ratio": sharpe,
+        "sortino_ratio": sortino,
         "calmar_ratio": calmar,
         "profit_factor": profit_factor,
         "win_rate_pct": win_rate * 100,

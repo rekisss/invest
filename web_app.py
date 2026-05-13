@@ -222,6 +222,7 @@ def run_dashboard() -> str:
                     equity_curve=backtest["equity_curve"],
                     signals=all_signals,
                     notes=backtest["notes"],
+                    config=config,
                 )
                 context["backtest"] = {
                     "metrics": backtest["metrics"],

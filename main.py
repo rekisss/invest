@@ -233,30 +233,20 @@ def collect_signals(
                 continue
             stock_id, signal_frame = result
             signals_by_stock[stock_id] = signal_frame
-            signal_frames.append(
-                signal_frame[
-                    [
-                        "date",
-                        "stock_id",
-                        "name",
-                        "industry_category",
-                        "entry_signal",
-                        "entry_reason",
-                        "skip_trade",
-                        "skip_reason",
-                        "base_exit_signal",
-                        "base_exit_reason",
-                        "condition_count",
-                        "entry_score",
-                        "relative_strength_5d",
-                        "volume_ratio",
-                        "rsi14",
-                        "adx14",
-                        "foreign_buy_streak",
-                        "close",
-                    ]
-                ].copy()
-            )
+            _signal_cols = [
+                "date", "stock_id", "name", "industry_category",
+                "open", "high", "low", "close",
+                "entry_signal", "entry_reason", "skip_trade", "skip_reason",
+                "base_exit_signal", "base_exit_reason",
+                "condition_count", "entry_score",
+                "relative_strength_5d", "volume_ratio",
+                "rsi14", "adx14", "atr14",
+                "foreign_buy_streak", "invest_trust_streak",
+                "stoch_k", "stoch_d", "bb_pct_b", "bb_bandwidth",
+                "obv_uptrend", "bb_squeeze_breakout", "breakout_volume_confirm",
+            ]
+            _signal_cols_present = [c for c in _signal_cols if c in signal_frame.columns]
+            signal_frames.append(signal_frame[_signal_cols_present].copy())
     return signals_by_stock, signal_frames
 
 
@@ -836,6 +826,7 @@ def run_backtest_mode(args: argparse.Namespace, client: FinMindClient, config: S
             "The earnings-date filter is optional because FinMind statement timing fields may vary by dataset.",
             "Position sizing uses integer shares and a 5% initial stop to cap risk at roughly 1% of portfolio equity.",
         ],
+        config=config,
     )
     _safe_print("Backtest complete.")
     _safe_print(f"Excel report: {reports['excel']}")

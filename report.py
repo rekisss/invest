@@ -19,12 +19,13 @@ def save_reports(
     equity_curve: pd.DataFrame,
     signals: pd.DataFrame,
     notes: list[str],
+    config: object | None = None,
 ) -> dict[str, Path]:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
     excel_path = output_path / "backtest_report.xlsx"
-    _write_excel(excel_path, metrics, yearly, trade_summary, fills, equity_curve, signals, notes)
+    _write_excel(excel_path, metrics, yearly, trade_summary, fills, equity_curve, signals, notes, config)
 
     equity_chart = output_path / "equity_curve.png"
     yearly_chart = output_path / "yearly_performance.png"
@@ -105,6 +106,7 @@ def _write_excel(
     equity_curve: pd.DataFrame,
     signals: pd.DataFrame,
     notes: list[str],
+    config: object | None = None,
 ) -> None:
     metrics_frame = pd.DataFrame(
         [{"metric": key, "value": value} for key, value in metrics.items()]
@@ -119,6 +121,16 @@ def _write_excel(
         equity_curve.to_excel(writer, sheet_name="equity_curve", index=False)
         signals.to_excel(writer, sheet_name="signals", index=False)
         notes_frame.to_excel(writer, sheet_name="notes", index=False)
+        if config is not None:
+            try:
+                from dataclasses import asdict
+                config_dict = asdict(config)  # type: ignore[arg-type]
+                config_frame = pd.DataFrame(
+                    [{"parameter": k, "value": v} for k, v in config_dict.items()]
+                )
+                config_frame.to_excel(writer, sheet_name="config", index=False)
+            except Exception:
+                pass
 
 
 def _plot_equity_curve(equity_curve: pd.DataFrame, output_path: Path) -> None:
