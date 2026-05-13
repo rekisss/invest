@@ -83,3 +83,26 @@ def consecutive_positive(series: pd.Series) -> pd.Series:
             streak = 0
         streaks.append(streak)
     return pd.Series(streaks, index=series.index, dtype="int64")
+
+
+def add_williams_r(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    highest_high = high.rolling(window=period, min_periods=period).max()
+    lowest_low = low.rolling(window=period, min_periods=period).min()
+    wr = -100 * (highest_high - close) / (highest_high - lowest_low).replace(0, np.nan)
+    return wr
+
+
+def add_cci(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 20) -> pd.Series:
+    typical_price = (high + low + close) / 3
+    sma_tp = typical_price.rolling(window=period, min_periods=period).mean()
+    mean_dev = typical_price.rolling(window=period, min_periods=period).apply(
+        lambda x: np.mean(np.abs(x - x.mean())), raw=True
+    )
+    return (typical_price - sma_tp) / (0.015 * mean_dev.replace(0, np.nan))
+
+
+def add_donchian_channel(high: pd.Series, low: pd.Series, period: int = 20) -> pd.DataFrame:
+    upper = high.rolling(window=period, min_periods=period).max()
+    lower = low.rolling(window=period, min_periods=period).min()
+    mid = (upper + lower) / 2
+    return pd.DataFrame({"dc_upper": upper, "dc_lower": lower, "dc_mid": mid})

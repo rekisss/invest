@@ -5,8 +5,9 @@ from dataclasses import dataclass
 import pandas as pd
 
 from indicators import (
-    add_adx, add_atr, add_bollinger_bands, add_ema, add_macd,
-    add_obv, add_rsi, add_sma, add_stochastic, consecutive_positive,
+    add_adx, add_atr, add_bollinger_bands, add_cci, add_donchian_channel,
+    add_ema, add_macd, add_obv, add_rsi, add_sma, add_stochastic,
+    add_williams_r, consecutive_positive,
 )
 
 
@@ -115,6 +116,10 @@ def prepare_stock_signals(
     frame = pd.concat([frame, kd], axis=1)
     frame["obv"] = add_obv(frame["close"], frame["volume"])
     frame["obv_ma"] = add_sma(frame["obv"], config.obv_ma_window)
+    frame["williams_r"] = add_williams_r(frame["high"], frame["low"], frame["close"])
+    frame["cci20"] = add_cci(frame["high"], frame["low"], frame["close"])
+    dc = add_donchian_channel(frame["high"], frame["low"])
+    frame = pd.concat([frame, dc], axis=1)
 
     institutional_missing = institutional_df.empty
     inst = institutional_df.copy()
@@ -187,6 +192,18 @@ def prepare_stock_signals(
     # Breakout confirmed with simultaneous volume surge (quality entry filter)
     merged["breakout_volume_confirm"] = merged["breakout_20d"] & merged["volume_break"]
 
+    # Williams %R recovering from oversold (was below -80, now above -50)
+    merged["williams_r_recovery"] = (
+        (merged["williams_r"].shift(1) < -80)
+        & (merged["williams_r"] > -50)
+    )
+
+    # CCI momentum: CCI crossed above +100 from below (strong bullish momentum)
+    merged["cci_momentum"] = (
+        (merged["cci20"].shift(1) < 100)
+        & (merged["cci20"] >= 100)
+    )
+
     # ── Candlestick filters ───────────────────────────────────────────────────
     body = (merged["close"] - merged["open"]).abs()
     upper_shadow = merged["high"] - merged[["open", "close"]].max(axis=1)
@@ -212,6 +229,7 @@ def prepare_stock_signals(
         "foreign_buy_3d", "adx_trending", "stronger_than_market",
         "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
         "bb_squeeze_breakout", "breakout_volume_confirm",
+        "williams_r_recovery", "cci_momentum",
     ]
     entry_columns = hard_entry_columns + soft_entry_columns
     merged["condition_count"] = merged[entry_columns].sum(axis=1)
@@ -234,6 +252,8 @@ def prepare_stock_signals(
         + merged["stronger_than_market"].astype(int) * 10
         + merged["bb_squeeze_breakout"].astype(int) * 30
         + merged["breakout_volume_confirm"].astype(int) * 20
+        + merged["williams_r_recovery"].astype(int) * 15
+        + merged["cci_momentum"].astype(int) * 15
     )
 
     merged["macd_death_cross"] = (
