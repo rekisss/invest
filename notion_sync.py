@@ -25,6 +25,16 @@ def _rt(content: str) -> list[dict]:
     return [{"text": {"content": str(content)[:2000]}}]
 
 
+def _get_title_property_name(database_id: str) -> str:
+    resp = requests.get(f"{NOTION_API}/databases/{database_id}", headers=_headers(), timeout=30)
+    if not resp.ok:
+        return "股票名稱"
+    for name, prop in resp.json().get("properties", {}).items():
+        if prop.get("type") == "title":
+            return name
+    return "股票名稱"
+
+
 def _setup_database(database_id: str) -> None:
     props = {
         "股票代號": {"rich_text": {}},
@@ -35,6 +45,12 @@ def _setup_database(database_id: str) -> None:
         "RSI": {"number": {"format": "number"}},
         "ADX": {"number": {"format": "number"}},
         "條件達成": {"rich_text": {}},
+        "產業別": {"rich_text": {}},
+        "外資連買天數": {"number": {"format": "number"}},
+        "5日漲幅%": {"number": {"format": "number"}},
+        "相對強度": {"number": {"format": "number"}},
+        "成交量比": {"number": {"format": "number"}},
+        "參考停損價": {"number": {"format": "number"}},
         "觀察建議": {"rich_text": {}},
         "新聞情緒": {"select": {}},
         "新聞摘要": {"rich_text": {}},
@@ -48,10 +64,15 @@ def _setup_database(database_id: str) -> None:
     ).raise_for_status()
 
 
-def _news_sentiment(news_info: dict[str, Any]) -> tuple[str, str]:
-    headlines = news_info.get("top_headlines") or []
+def _news_sentiment(summary: dict[str, Any]) -> tuple[str, str]:
+    headlines = summary.get("top_headlines") or []
     if not headlines:
-        return "無資料", ""
+        headline = str(summary.get("headline") or "")
+        if not headline:
+            return "無資料", ""
+        sentiment = str(summary.get("sentiment") or "neutral")
+        label = {"positive": "正面", "negative": "負面"}.get(sentiment, "中性")
+        return label, headline[:500]
     pos = sum(1 for h in headlines if h.get("sentiment") == "positive")
     neg = sum(1 for h in headlines if h.get("sentiment") == "negative")
     label = "正面" if pos > neg else ("負面" if neg > pos else "中性")
@@ -83,6 +104,7 @@ def sync_scan_results(
         return
     news_map = news_map or {}
 
+    title_prop = _get_title_property_name(database_id)
     try:
         _setup_database(database_id)
     except Exception as exc:
@@ -109,10 +131,11 @@ def sync_scan_results(
         vol_ratio = float(row.get("volume_ratio", 0) or 0)
         stop_loss = round(close * 0.95, 2) if close > 0 else 0.0
         obs = recommend_observation_period(row, is_candidate=(row_type == "候選"))
-        sentiment_label, news_summary = _news_sentiment(news_map.get(stock_id, {}))
+        news_info = news_map.get(stock_id, {})
+        sentiment_label, news_summary = _news_sentiment(news_info.get("summary", {}))
 
         properties = {
-            "股票名稱": {"title": _rt(f"{stock_id} {name}")},
+            title_prop: {"title": _rt(f"{stock_id} {name}")},
             "股票代號": {"rich_text": _rt(stock_id)},
             "日期": {"date": {"start": date}},
             "類型": {"select": {"name": row_type}},
