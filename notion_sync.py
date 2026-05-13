@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Any
 
 import requests
@@ -173,13 +174,23 @@ def sync_scan_results(
             "狀態": {"select": {"name": "新增"}},
         }
 
-        try:
-            requests.post(
-                f"{NOTION_API}/pages",
-                headers=_headers(),
-                json={"parent": {"database_id": database_id}, "properties": properties},
-                timeout=30,
-            ).raise_for_status()
-            print(f"[Notion] synced {stock_id} {name}")
-        except Exception as exc:
-            print(f"[Notion] failed {stock_id}: {exc}")
+        for attempt in range(3):
+            try:
+                resp = requests.post(
+                    f"{NOTION_API}/pages",
+                    headers=_headers(),
+                    json={"parent": {"database_id": database_id}, "properties": properties},
+                    timeout=30,
+                )
+                if resp.status_code == 429:
+                    retry_after = float(resp.json().get("retry_after", 1))
+                    time.sleep(retry_after)
+                    continue
+                resp.raise_for_status()
+                print(f"[Notion] synced {stock_id} {name}")
+                break
+            except Exception as exc:
+                if attempt == 2:
+                    print(f"[Notion] failed {stock_id}: {exc}")
+                else:
+                    time.sleep(2 ** attempt)

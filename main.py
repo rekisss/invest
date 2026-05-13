@@ -69,6 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--clean-cache-days", type=int, default=30, help="Age threshold in days for --clean-cache (default 30).")
     parser.add_argument("--wf-folds", type=int, default=4, help="Number of folds for walk-forward analysis (default 4).")
     parser.add_argument("--wf-overlap-days", type=int, default=0, help="Overlap days between walk-forward folds (default 0).")
+    parser.add_argument("--watch-extra", default="", help="Comma-separated stock IDs to always include in event-monitor watch list.")
     return parser.parse_args()
 
 
@@ -732,6 +733,12 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
 
     watch_pool = watch_pool.head(args.watch_top).copy()
     watch_symbols = watch_pool["stock_id"].astype(str).tolist()
+
+    extra_symbols = [s.strip() for s in getattr(args, "watch_extra", "").split(",") if s.strip()]
+    for sym in extra_symbols:
+        if sym not in watch_symbols:
+            watch_symbols.append(sym)
+
     snapshot_lookup = {str(row["stock_id"]): row for row in watch_pool.to_dict("records")}
     daily_volume_lookup: dict[str, float] = {
         str(row.get("stock_id") or ""): float(row["volume_ma20"])
