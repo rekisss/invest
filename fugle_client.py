@@ -1,10 +1,23 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 
 import pandas as pd
 import requests
+
+
+def _retry(func, max_attempts: int = 3, backoff: float = 2.0):
+    last_error: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            return func()
+        except Exception as exc:
+            last_error = exc
+            if attempt < max_attempts - 1:
+                time.sleep(backoff * (2 ** attempt))
+    raise last_error  # type: ignore[misc]
 
 
 @dataclass
@@ -27,13 +40,15 @@ class FugleClient:
         return {"X-API-KEY": self.api_key}
 
     def fetch_quote(self, symbol: str) -> dict[str, object]:
-        response = requests.get(
-            f"{self.base_url}/stock/intraday/quote/{symbol}",
-            headers=self._headers(),
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        def _do() -> dict[str, object]:
+            response = requests.get(
+                f"{self.base_url}/stock/intraday/quote/{symbol}",
+                headers=self._headers(),
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            return response.json()
+        return _retry(_do)
 
 
 def normalize_quote(symbol: str, payload: dict[str, object]) -> dict[str, object]:

@@ -31,6 +31,8 @@ jobs:
           FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
         run: |
           python main.py \
             --mode daily-report \
@@ -44,6 +46,15 @@ jobs:
             --include-news \
             --output output \
             --notify
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"⚠️ **盤後總結執行失敗** · $(date -u +%Y-%m-%d) · 請檢查 GitHub Actions logs\"}" \
+            "$DISCORD_WEBHOOK_URL" || true
 
       - name: Upload daily report
         if: always()

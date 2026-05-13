@@ -2,7 +2,7 @@ name: 盤中事件監控 (09:00–13:30 CST)
 
 on:
   schedule:
-    - cron: "0 1 * * 1-5"    # UTC 01:00 = CST 09:00，週一至週五
+    - cron: "50 0 * * 1-5"    # UTC 00:50 = CST 08:50，提早10分鐘確保準時
   workflow_dispatch:
 
 env:
@@ -26,13 +26,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Check market hours (CST 09:00–13:30 = UTC 01:00–05:30)
+      - name: Check market hours (CST 08:50–13:30 = UTC 00:50–05:30)
         run: |
           HOUR=$(date -u +%H)
           MIN=$(date -u +%M)
           TOTAL=$(( HOUR * 60 + MIN ))
-          if [ "$TOTAL" -lt 60 ] || [ "$TOTAL" -gt 330 ]; then
-            echo "Current UTC time is $(date -u +%H:%M), outside Taiwan market hours (01:00–05:30 UTC). Skipping."
+          if [ "$TOTAL" -lt 50 ] || [ "$TOTAL" -gt 330 ]; then
+            echo "Current UTC time is $(date -u +%H:%M), outside Taiwan market hours. Skipping."
             exit 0
           fi
           echo "Market is open. Proceeding."
@@ -62,6 +62,15 @@ jobs:
             --heartbeat-minutes 0 \
             --output output \
             --notify
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"⚠️ **事件監控執行失敗** · $(date -u +%Y-%m-%d) · 請檢查 GitHub Actions logs\"}" \
+            "$DISCORD_WEBHOOK_URL" || true
 
       - name: Upload monitor log
         if: always()

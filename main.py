@@ -122,17 +122,28 @@ def build_news_map(
 ) -> dict[str, dict[str, object]]:
     client = NewsClient(cache_dir=Path(output_dir) / "news_cache")
     news_map: dict[str, dict[str, object]] = {}
-    for row in rows[:5]:
+
+    def _fetch_one(row: dict[str, object]) -> tuple[str, dict[str, object]] | None:
         stock_id = str(row.get("stock_id") or "")
         name = str(row.get("name") or stock_id)
         if not stock_id:
-            continue
-        frame = client.fetch_stock_news(stock_id, name, limit=news_limit)
-        items = frame.to_dict(orient="records")
-        news_map[stock_id] = {
-            "items": items,
-            "summary": summarize_news(items),
-        }
+            return None
+        try:
+            frame = client.fetch_stock_news(stock_id, name, limit=news_limit)
+            items = frame.to_dict(orient="records")
+            return stock_id, {"items": items, "summary": summarize_news(items)}
+        except Exception as exc:
+            print(f"[news] {stock_id} 抓取失敗: {exc}", file=sys.stderr)
+            return None
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(_fetch_one, row) for row in rows[:5]]
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                stock_id, data = result
+                news_map[stock_id] = data
+
     return news_map
 
 
@@ -245,30 +256,6 @@ def build_daily_snapshot(args: argparse.Namespace, client: FinMindClient, config
     return candidates, watchlist, universe
 
 
-def format_scan_message(candidates: pd.DataFrame, watchlist: pd.DataFrame, latest_date: str) -> str:
-    lines = [f"🔍 **Taiwan MACD Scan** · {latest_date}", ""]
-    if candidates.empty:
-        lines.extend(["今日無全條件候選。", "", "**近似觀察名單**"])
-        for _, row in watchlist.head(10).iterrows():
-            lines.append(
-                f"• **{row['stock_id']}** {row['name']} | {row['industry_category']} | `{int(row['condition_count'])}/13` | 收 `{row['close']:.2f}`"
-            )
-        return "\n".join(lines)
-
-    lines.append("**每日候選**")
-    for _, row in candidates.iterrows():
-        lines.append(
-            f"• **{row['stock_id']}** {row['name']} | 收 `{row['close']:.2f}` | RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}` | RS5d `{row['relative_strength_5d']:.2%}` | 外資連買 `{int(row['foreign_buy_streak'])}d`"
-        )
-    if not watchlist.empty:
-        lines.extend(["", "**近似觀察名單**"])
-        for _, row in watchlist.head(8).iterrows():
-            lines.append(
-                f"• **{row['stock_id']}** {row['name']} | {row['industry_category']} | `{int(row['condition_count'])}/13` | 收 `{row['close']:.2f}`"
-            )
-    return "\n".join(lines)
-
-
 def format_scan_message_rich(
     candidates: pd.DataFrame,
     watchlist: pd.DataFrame,
@@ -309,41 +296,6 @@ def format_scan_message_rich(
                 f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/13` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
             )
             lines.append(f"  ⏱ {obs}")
-    return "\n".join(lines)
-
-
-def format_hybrid_message(candidates: pd.DataFrame, watchlist: pd.DataFrame, live_quotes: pd.DataFrame, latest_date: str) -> str:
-    lines = [f"📊 **Taiwan Hybrid Monitor** · {latest_date}", "", "**Step 1｜MACD 每日篩選**"]
-    if candidates.empty:
-        lines.append("今日無全條件候選。")
-    else:
-        for _, row in candidates.head(5).iterrows():
-            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
-            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
-            close_text = f"`{float(close_value):.2f}`" if close_value is not None else "N/A"
-            score_text = f"`{int(score_value)}/13`" if score_value is not None else "manual"
-            lines.append(f"• **{row['stock_id']}** {row['name']} | 收 {close_text} | {score_text}")
-
-    if not watchlist.empty:
-        lines.extend(["", "**Step 2｜近似觀察名單**"])
-        for _, row in watchlist.head(5).iterrows():
-            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
-            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
-            close_text = f"`{float(close_value):.2f}`" if close_value is not None else "N/A"
-            score_text = f"`{int(score_value)}/13`" if score_value is not None else "manual"
-            lines.append(f"• **{row['stock_id']}** {row['name']} | 收 {close_text} | {score_text}")
-
-    if not live_quotes.empty:
-        lines.extend(["", "**Step 3｜即時報價**"])
-        for _, row in live_quotes.iterrows():
-            if pd.notna(row.get("error")):
-                lines.append(f"• {row['symbol']} — 報價錯誤: {row['error']}")
-                continue
-            intraday = row.get("intraday_pct")
-            intraday_text = f"`{float(intraday) * 100:.2f}%`" if pd.notna(intraday) else "N/A"
-            lines.append(
-                f"• **{row['symbol']}** {row.get('name') or ''} | 最新 `{row.get('last')}` | 高 `{row.get('high')}` | 量 `{row.get('volume')}` | 漲幅 {intraday_text}"
-            )
     return "\n".join(lines)
 
 
@@ -407,10 +359,10 @@ def detect_quote_events(
         symbol = str(row.get("symbol") or "")
         if not symbol or pd.notna(row.get("error")):
             continue
-        last_value = pd.to_numeric(pd.Series([row.get("last")]), errors="coerce").iloc[0]
-        high_value = pd.to_numeric(pd.Series([row.get("high")]), errors="coerce").iloc[0]
-        volume_value = pd.to_numeric(pd.Series([row.get("volume")]), errors="coerce").iloc[0]
-        intraday_value = pd.to_numeric(pd.Series([row.get("intraday_pct")]), errors="coerce").iloc[0]
+        last_value = pd.to_numeric(row.get("last"), errors="coerce")
+        high_value = pd.to_numeric(row.get("high"), errors="coerce")
+        volume_value = pd.to_numeric(row.get("volume"), errors="coerce")
+        intraday_value = pd.to_numeric(row.get("intraday_pct"), errors="coerce")
         previous = next_state.get(symbol, {})
         previous_high = float(previous.get("high") or 0)
         previous_intraday = float(previous.get("intraday_pct") or 0)
@@ -718,6 +670,8 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
     previous_state: dict[str, dict[str, float | str]] = {}
     last_notified: dict[str, float] = {}
     last_heartbeat_ts: float = 0.0
+    consecutive_error_cycles = 0
+    _MAX_ERROR_CYCLES = 10
     start_msg = f"🟢 **事件監控啟動** · {pd.Timestamp.now().strftime('%H:%M')} (UTC)\n監控標的：{', '.join(watch_symbols)}\n觸發條件：急拉 ≥{args.event_rise_threshold*100:.1f}% ｜急跌 ≤{args.event_drop_threshold*100:.1f}% ｜量能 ≥{args.event_volume_multiplier}x"
     _safe_print(start_msg)
     if args.notify:
@@ -725,6 +679,23 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
 
     for cycle in range(1, args.repeat_count + 1):
         quotes = fetch_watch_quotes(fugle, watch_symbols)
+
+        all_errors = (
+            not quotes.empty
+            and "error" in quotes.columns
+            and quotes["error"].notna().all()
+        )
+        if all_errors:
+            consecutive_error_cycles += 1
+            if consecutive_error_cycles >= _MAX_ERROR_CYCLES:
+                abort_msg = f"⚠️ **事件監控中止** · Fugle API 連續 {_MAX_ERROR_CYCLES} 個週期全部錯誤，已停止"
+                _safe_print(abort_msg)
+                if args.notify:
+                    send_discord_messages(split_message(abort_msg))
+                break
+        else:
+            consecutive_error_cycles = 0
+
         events, next_state = detect_quote_events(
             quotes,
             previous_state,

@@ -121,9 +121,24 @@ def _parse_pub_date(value: str) -> datetime | None:
         return None
 
 
+_NEGATION_CHARS = frozenset("不未沒無非")
+
+
+def _keyword_hit(text: str, keyword: str) -> bool:
+    idx = 0
+    while True:
+        pos = text.find(keyword, idx)
+        if pos < 0:
+            return False
+        preceding = text[max(0, pos - 2):pos]
+        if not any(c in _NEGATION_CHARS for c in preceding):
+            return True
+        idx = pos + 1
+
+
 def _classify_sentiment(title: str) -> str:
-    positive_hits = sum(keyword in title for keyword in POSITIVE_KEYWORDS)
-    negative_hits = sum(keyword in title for keyword in NEGATIVE_KEYWORDS)
+    positive_hits = sum(_keyword_hit(title, kw) for kw in POSITIVE_KEYWORDS)
+    negative_hits = sum(_keyword_hit(title, kw) for kw in NEGATIVE_KEYWORDS)
     if positive_hits > negative_hits:
         return "positive"
     if negative_hits > positive_hits:

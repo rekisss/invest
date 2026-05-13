@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -32,7 +33,7 @@ class FinMindClient:
         safe_name = "_".join(str(part).replace("/", "-") for part in key_parts if str(part))
         return self.cache_dir / f"{dataset}_{safe_name}.csv"
 
-    def fetch_dataset(self, dataset: str, use_cache: bool = True, **params: str) -> pd.DataFrame:
+    def fetch_dataset(self, dataset: str, use_cache: bool = True, cache_ttl_days: int = 0, **params: str) -> pd.DataFrame:
         cache_path = self._cache_path(
             dataset,
             [
@@ -43,24 +44,40 @@ class FinMindClient:
                 params.get("end_date", ""),
             ]
         )
+        cache_fresh = False
         if use_cache and cache_path.exists():
+            if cache_ttl_days <= 0:
+                cache_fresh = True
+            else:
+                age_days = (time.time() - cache_path.stat().st_mtime) / 86400
+                cache_fresh = age_days < cache_ttl_days
+        if cache_fresh:
             try:
                 return pd.read_csv(cache_path)
             except (EmptyDataError, ParserError):
-                # A partially written cache file should not break the entire scan.
                 cache_path.unlink(missing_ok=True)
 
-        request_params: dict[str, str] = {}
-        request_params["dataset"] = dataset
+        request_params: dict[str, str] = {"dataset": dataset}
         request_params.update({key: value for key, value in params.items() if value is not None})
 
-        response = requests.get(
-            FINMIND_API_URL,
-            headers=self._auth_headers(),
-            params=request_params,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                response = requests.get(
+                    FINMIND_API_URL,
+                    headers=self._auth_headers(),
+                    params=request_params,
+                    timeout=self.timeout,
+                )
+                response.raise_for_status()
+                break
+            except requests.exceptions.RequestException as exc:
+                last_error = exc
+                if attempt < 2:
+                    time.sleep(2 ** attempt * 2)
+        else:
+            raise last_error  # type: ignore[misc]
+
         payload = response.json()
         if "data" not in payload:
             raise RuntimeError(f"Unexpected FinMind payload for {dataset}: {payload}")
@@ -72,7 +89,7 @@ class FinMindClient:
 
 
 def fetch_stock_info(client: FinMindClient, use_cache: bool = True) -> pd.DataFrame:
-    frame = client.fetch_dataset("TaiwanStockInfo", use_cache=use_cache)
+    frame = client.fetch_dataset("TaiwanStockInfo", use_cache=use_cache, cache_ttl_days=1)
     if frame.empty:
         return pd.DataFrame(columns=["stock_id", "stock_name", "industry_category", "type", "date"])
     return frame

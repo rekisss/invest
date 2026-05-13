@@ -97,7 +97,7 @@ def run_backtest(
                     peak_price=price,
                 )
                 positions[stock_id] = position
-                cash -= quantity * price
+                cash -= quantity * price * (1 + config.brokerage_fee_pct)
                 next_position_id += 1
                 opened_today += 1
             pending_entries.clear()
@@ -128,7 +128,7 @@ def run_backtest(
                     sell_qty = max(1, position.quantity // 2)
                     fill = _close_quantity(position, sell_qty, close_price, date, "take_profit_10pct_partial")
                     fills.append(fill)
-                    cash += sell_qty * close_price
+                    cash += sell_qty * close_price * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
                     position.quantity -= sell_qty
                     position.partial_taken = True
 
@@ -139,7 +139,7 @@ def run_backtest(
                     sell_qty = position.quantity
                     fill = _close_quantity(position, sell_qty, close_price, date, "|".join(exit_reasons))
                     fills.append(fill)
-                    cash += sell_qty * close_price
+                    cash += sell_qty * close_price * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
                     del positions[stock_id]
                     continue
 
@@ -185,7 +185,7 @@ def run_backtest(
                     peak_price=price,
                 )
                 positions[stock_id] = position
-                cash -= quantity * price
+                cash -= quantity * price * (1 + config.brokerage_fee_pct)
                 next_position_id += 1
                 opened_today += 1
 
@@ -205,7 +205,7 @@ def run_backtest(
             close_price = _get_close_price(prepared[stock_id], final_date)
             fill = _close_quantity(position, position.quantity, close_price, final_date, "final_liquidation")
             fills.append(fill)
-            cash += position.quantity * close_price
+            cash += position.quantity * close_price * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
             del positions[stock_id]
         equity_rows[-1]["cash"] = cash
         equity_rows[-1]["market_value"] = 0.0

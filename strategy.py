@@ -37,6 +37,8 @@ class StrategyConfig:
     use_earnings_filter: bool = False
     earnings_lookback_days: int = 5
     next_day_fill: bool = False
+    brokerage_fee_pct: float = 0.001425   # 0.1425% 手續費（買賣各收）
+    transaction_tax_pct: float = 0.003    # 0.3% 證交稅（賣出時收）
 
 
 def prepare_market_frame(market_df: pd.DataFrame, config: StrategyConfig) -> pd.DataFrame:
@@ -131,7 +133,7 @@ def prepare_stock_signals(
     merged["breakout_20d"] = merged["close"] > merged["close_20d_high"]
     merged["foreign_buy_3d"] = merged["foreign_buy_streak"] >= config.foreign_buy_streak
     if foreign_data_missing:
-        merged["foreign_buy_3d"] = True
+        merged["foreign_buy_3d"] = False
     merged["avoid_chase"] = merged["return_5d"] < config.max_recent_rise_pct
     merged["liquidity_ok"] = merged["amount_ma20"] > config.min_amount_ma20
     merged["stronger_than_market"] = merged["relative_strength_5d"] > 0
@@ -201,30 +203,17 @@ def prepare_stock_signals(
         merged["macd_death_cross"] | merged["close_below_ema20"] | merged["close_below_swing_low"]
     )
 
-    def build_entry_reason(row: pd.Series) -> str:
-        reason_parts: list[str] = []
-        for column in entry_columns:
-            if bool(row[column]):
-                reason_parts.append(column)
-        return ", ".join(reason_parts)
+    _skip_cols = ["long_upper_shadow", "open_high_close_low", "gap_chase_after_blowout", "earnings_blocked"]
+    _exit_cols = ["macd_death_cross", "close_below_ema20", "close_below_swing_low"]
 
-    def build_skip_reason(row: pd.Series) -> str:
-        reason_parts: list[str] = []
-        for column in ["long_upper_shadow", "open_high_close_low", "gap_chase_after_blowout", "earnings_blocked"]:
-            if bool(row[column]):
-                reason_parts.append(column)
-        return ", ".join(reason_parts)
+    def _build_all_reasons(row: pd.Series) -> pd.Series:
+        return pd.Series({
+            "entry_reason": ", ".join(c for c in entry_columns if bool(row[c])),
+            "skip_reason": ", ".join(c for c in _skip_cols if bool(row[c])),
+            "base_exit_reason": ", ".join(c for c in _exit_cols if bool(row[c])),
+        })
 
-    merged["entry_reason"] = merged.apply(build_entry_reason, axis=1)
-    merged["skip_reason"] = merged.apply(build_skip_reason, axis=1)
-    merged["base_exit_reason"] = merged.apply(
-        lambda row: ", ".join(
-            reason
-            for reason in ["macd_death_cross", "close_below_ema20", "close_below_swing_low"]
-            if bool(row[reason])
-        ),
-        axis=1,
-    )
+    merged[["entry_reason", "skip_reason", "base_exit_reason"]] = merged.apply(_build_all_reasons, axis=1)
 
     return merged
 

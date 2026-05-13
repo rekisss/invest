@@ -29,6 +29,9 @@ EXCLUDE_NAME_KEYWORDS = [
     "牛證",
     "熊證",
     "特別股",
+    "認購",
+    "認售",
+    "可轉債",
 ]
 
 
@@ -54,7 +57,6 @@ def build_auto_universe(stock_info: pd.DataFrame, max_symbols: int = 120) -> pd.
         frame["stock_name"].str.contains("|".join(THEME_KEYWORDS), case=False, na=False)
         | frame["industry_category"].str.contains("|".join(THEME_KEYWORDS), case=False, na=False)
     )
-    frame["is_etf"] = frame["stock_name"].str.contains("ETF|指數股票型", case=False, na=False)
     frame["is_listed"] = frame["type"].str.contains("twse|tse|上市", case=False, na=False)
     frame["is_otc"] = frame["type"].str.contains("otc|tpex|上櫃", case=False, na=False)
 
@@ -65,8 +67,8 @@ def build_auto_universe(stock_info: pd.DataFrame, max_symbols: int = 120) -> pd.
     frame.loc[frame["is_otc"], "theme_score"] += 1
 
     ranked = frame.sort_values(
-        ["theme_score", "is_theme", "is_etf", "stock_id"],
-        ascending=[False, False, False, True],
+        ["theme_score", "is_theme", "stock_id"],
+        ascending=[False, False, True],
     ).drop_duplicates(subset=["stock_id"])
 
     selected = ranked.head(max_symbols).copy()
