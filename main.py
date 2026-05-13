@@ -13,6 +13,7 @@ import pandas as pd
 from backtest import run_backtest
 from data_loader import (
     FinMindClient,
+    clean_cache,
     fetch_financial_statement_dates,
     fetch_institutional_data,
     fetch_market_index,
@@ -63,6 +64,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--use-earnings-filter", action="store_true")
     parser.add_argument("--next-day-fill", action="store_true", help="Fill backtest entries at next day open instead of signal-day close.")
     parser.add_argument("--heartbeat-minutes", type=int, default=0, help="Send a status snapshot every N minutes during event-monitor (0 = disabled).")
+    parser.add_argument("--clean-cache", action="store_true", help="Delete stale cache files before running.")
+    parser.add_argument("--clean-cache-days", type=int, default=30, help="Age threshold in days for --clean-cache (default 30).")
     return parser.parse_args()
 
 
@@ -845,11 +848,16 @@ def run_backtest_mode(args: argparse.Namespace, client: FinMindClient, config: S
 
 def main() -> None:
     args = parse_args()
-    client = FinMindClient(cache_dir=Path(args.output) / "cache")
+    cache_dir = Path(args.output) / "cache"
+    client = FinMindClient(cache_dir=cache_dir)
     config = StrategyConfig(
         use_earnings_filter=args.use_earnings_filter,
         next_day_fill=args.next_day_fill,
     )
+
+    if getattr(args, "clean_cache", False):
+        deleted = clean_cache(cache_dir, max_age_days=getattr(args, "clean_cache_days", 30))
+        _safe_print(f"[cache] Deleted {deleted} stale cache files from {cache_dir}")
 
     if args.mode == "backtest":
         run_backtest_mode(args, client, config)

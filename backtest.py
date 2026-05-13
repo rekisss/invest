@@ -343,6 +343,7 @@ def compute_performance_metrics(
     daily_returns = equity.pct_change().fillna(0)
     running_max = equity.cummax()
     drawdown = equity / running_max - 1
+    max_dd = float(drawdown.min())
 
     years = max((equity_curve["date"].iloc[-1] - equity_curve["date"].iloc[0]).days / 365.25, 1 / 365.25)
     ending_value = float(equity.iloc[-1])
@@ -352,25 +353,57 @@ def compute_performance_metrics(
     if daily_returns.std(ddof=0) > 0:
         sharpe = (daily_returns.mean() / daily_returns.std(ddof=0)) * (252 ** 0.5)
 
+    calmar = (cagr / abs(max_dd)) if max_dd < 0 else float("inf")
+
     gross_profit = float(trade_summary.loc[trade_summary["pnl"] > 0, "pnl"].sum()) if not trade_summary.empty else 0.0
     gross_loss = float(trade_summary.loc[trade_summary["pnl"] < 0, "pnl"].sum()) if not trade_summary.empty else 0.0
     profit_factor = gross_profit / abs(gross_loss) if gross_loss != 0 else float("inf") if gross_profit > 0 else 0.0
 
-    wins = int((trade_summary["pnl"] > 0).sum()) if not trade_summary.empty else 0
     trades = int(len(trade_summary))
+    wins = int((trade_summary["pnl"] > 0).sum()) if not trade_summary.empty else 0
+    losses = trades - wins
     win_rate = wins / trades if trades else 0.0
+
+    avg_win_pct = float(trade_summary.loc[trade_summary["pnl"] > 0, "return_pct"].mean() * 100) if wins > 0 else 0.0
+    avg_loss_pct = float(trade_summary.loc[trade_summary["pnl"] < 0, "return_pct"].mean() * 100) if losses > 0 else 0.0
+    expectancy = (win_rate * avg_win_pct / 100 + (1 - win_rate) * avg_loss_pct / 100) if trades else 0.0
+
+    avg_hold_days = 0.0
+    if not trade_summary.empty and "entry_date" in trade_summary.columns and "exit_date" in trade_summary.columns:
+        hold_days = (pd.to_datetime(trade_summary["exit_date"]) - pd.to_datetime(trade_summary["entry_date"])).dt.days
+        avg_hold_days = float(hold_days.mean())
+
+    max_consec_wins = _max_consecutive(trade_summary["pnl"] > 0) if not trade_summary.empty else 0
+    max_consec_losses = _max_consecutive(trade_summary["pnl"] < 0) if not trade_summary.empty else 0
 
     return {
         "initial_capital": initial_capital,
         "ending_capital": ending_value,
         "total_return_pct": (ending_value / initial_capital - 1) * 100,
         "annual_return_pct": cagr * 100,
-        "max_drawdown_pct": drawdown.min() * 100,
+        "max_drawdown_pct": max_dd * 100,
         "sharpe_ratio": sharpe,
+        "calmar_ratio": calmar,
         "profit_factor": profit_factor,
         "win_rate_pct": win_rate * 100,
+        "avg_win_pct": avg_win_pct,
+        "avg_loss_pct": avg_loss_pct,
+        "expectancy_pct": expectancy * 100,
         "total_trades": trades,
+        "winning_trades": wins,
+        "losing_trades": losses,
+        "avg_holding_days": round(avg_hold_days, 1),
+        "max_consecutive_wins": max_consec_wins,
+        "max_consecutive_losses": max_consec_losses,
     }
+
+
+def _max_consecutive(mask: pd.Series) -> int:
+    best = current = 0
+    for val in mask:
+        current = current + 1 if val else 0
+        best = max(best, current)
+    return best
 
 
 def compute_yearly_performance(equity_curve: pd.DataFrame) -> pd.DataFrame:

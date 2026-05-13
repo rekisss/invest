@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Lock
 from types import SimpleNamespace
@@ -14,8 +15,8 @@ from news_service import NewsClient, summarize_news
 from main import (
     build_daily_snapshot,
     collect_signals,
-    format_hybrid_message,
-    format_scan_message,
+    format_hybrid_message_rich,
+    format_scan_message_rich,
     load_universe,
 )
 from notifier import send_discord_messages, split_message
@@ -103,18 +104,23 @@ def _default_context() -> dict[str, object]:
 
 
 def _build_news_map(news_client: NewsClient, rows: list[dict[str, object]], limit: int = 3) -> dict[str, dict[str, object]]:
+    targets = [(str(row.get("stock_id") or ""), str(row.get("name") or row.get("stock_id") or "")) for row in rows[:5]]
+    targets = [(sid, name) for sid, name in targets if sid]
+
+    def _fetch_one(stock_id: str, name: str) -> tuple[str, dict[str, object]]:
+        try:
+            items = news_client.fetch_stock_news(stock_id, name, limit=limit)
+            item_records = _frame_records(items, limit=limit)
+            return stock_id, {"news_items": item_records, "summary": summarize_news(item_records)}
+        except Exception:
+            return stock_id, {"news_items": [], "summary": {}}
+
     news_map: dict[str, dict[str, object]] = {}
-    for row in rows[:5]:
-        stock_id = str(row.get("stock_id") or "")
-        name = str(row.get("name") or stock_id)
-        if not stock_id:
-            continue
-        items = news_client.fetch_stock_news(stock_id, name, limit=limit)
-        item_records = _frame_records(items, limit=limit)
-        news_map[stock_id] = {
-            "news_items": item_records,
-            "summary": summarize_news(item_records),
-        }
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = {pool.submit(_fetch_one, sid, name): sid for sid, name in targets}
+        for future in as_completed(futures):
+            sid, data = future.result()
+            news_map[sid] = data
     return news_map
 
 
@@ -142,7 +148,8 @@ def run_dashboard() -> str:
                 candidates, watchlist, universe = build_daily_snapshot(args, client, config)
                 report_path = save_scan_report(args.output, candidates, watchlist, universe)
                 if args.notify:
-                    send_discord_messages(split_message(format_scan_message(candidates, watchlist, args.end)))
+                    news_map_notify = _build_news_map(news_client, _frame_records(candidates)) if args.include_news else {}
+                    send_discord_messages(split_message(format_scan_message_rich(candidates, watchlist, args.end, news_map_notify)))
                 context["scan"] = {
                     "report_path": str(report_path),
                     "report_url": _artifact_url(report_path),
@@ -175,7 +182,8 @@ def run_dashboard() -> str:
 
                 report_path = save_hybrid_report(args.output, candidates, watchlist, live_quotes, universe)
                 if args.notify:
-                    send_discord_messages(split_message(format_hybrid_message(candidates, watchlist, live_quotes, args.end)))
+                    news_map_notify = _build_news_map(news_client, _frame_records(watch_pool)) if args.include_news else {}
+                    send_discord_messages(split_message(format_hybrid_message_rich(candidates, watchlist, live_quotes, args.end, news_map_notify)))
                 context["hybrid"] = {
                     "report_path": str(report_path),
                     "report_url": _artifact_url(report_path),
@@ -222,6 +230,8 @@ def run_dashboard() -> str:
                     "excel_url": _artifact_url(reports["excel"]),
                     "equity_chart_url": _artifact_url(reports["equity_chart"]),
                     "yearly_chart_url": _artifact_url(reports["yearly_chart"]),
+                    "monthly_chart_url": _artifact_url(reports.get("monthly_chart")),
+                    "trade_dist_chart_url": _artifact_url(reports.get("trade_dist_chart")),
                 }
             else:
                 raise RuntimeError(f"Unsupported mode: {mode}")

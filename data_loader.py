@@ -248,6 +248,23 @@ def fetch_foreign_investor_data(
     return df[["date", "foreign_net"]]
 
 
+def clean_cache(cache_dir: Path | str, max_age_days: int = 30) -> int:
+    """Delete CSV cache files older than max_age_days. Returns count of deleted files."""
+    cache_path = Path(cache_dir)
+    if not cache_path.exists():
+        return 0
+    cutoff = time.time() - max_age_days * 86400
+    deleted = 0
+    for csv_file in cache_path.glob("*.csv"):
+        try:
+            if csv_file.stat().st_mtime < cutoff:
+                csv_file.unlink()
+                deleted += 1
+        except OSError:
+            pass
+    return deleted
+
+
 def fetch_financial_statement_dates(
     client: FinMindClient,
     stock_id: str,
