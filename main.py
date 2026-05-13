@@ -528,23 +528,29 @@ def format_event_message(
     emoji = _EVENT_EMOJI.get(str(event["event_key"]), "⚠️")
     news_text = _news_brief(symbol, news_map).strip()
     confidence = _confidence_score(snapshot) if snapshot else 0
-    # Stop / target based on last price
+    star = " ⭐" if confidence >= 70 else ""
+    rsi_txt = f" RSI `{float(snapshot['rsi14']):.0f}`" if snapshot.get("rsi14") and pd.notna(snapshot.get("rsi14")) else ""
+    mfi_txt = f" MFI `{float(snapshot['mfi14']):.0f}`" if snapshot.get("mfi14") and pd.notna(snapshot.get("mfi14")) else ""
+    # ATR-based stop/target when ATR data is available from the daily snapshot
+    risk_line = ""
     try:
         last_f = float(last_value)  # type: ignore[arg-type]
-        stop = round(last_f * 0.95, 2)
-        target = round(last_f * 1.10, 2)
-        rr = round((target - last_f) / max(last_f - stop, 0.01), 1)
-        risk_line = f"停損 `{stop}` | 目標 `{target}` | R:R `{rr}:1`"
+        atr_val = float(snapshot.get("atr14") or 0) or None
+        _, stop, target, rr = _entry_stop_target(last_f, atr_val)
+        risk_line = f"停損 `{stop}` | 目標 `{target}` | R:R `{rr}`"
     except (TypeError, ValueError):
-        risk_line = ""
+        pass
     parts = [
         f"{emoji} **即時警報｜{event['label']}**",
-        f"**{symbol}** {name}{price_note}  信心 `{confidence}/100`",
+        f"**{symbol}** {name}{price_note}{star}  信心 `{confidence}/100`",
         f"最新 `{last_value}` | 高點 `{high_value}` | 量 `{volume_value}` | 漲幅 {intraday_text}",
     ]
     if risk_line:
         parts.append(risk_line)
-    parts.append(f"技術: {reason_text}")
+    indicator_line = f"技術: {reason_text}"
+    if rsi_txt or mfi_txt:
+        indicator_line += f" |{rsi_txt}{mfi_txt}"
+    parts.append(indicator_line)
     parts.append(f"新聞: {news_text if news_text else '無近期消息'}")
     return "\n".join(parts)
 
@@ -1043,8 +1049,11 @@ def main() -> None:
     )
 
     if getattr(args, "clean_cache", False):
-        deleted = clean_cache(cache_dir, max_age_days=getattr(args, "clean_cache_days", 30))
-        _safe_print(f"[cache] Deleted {deleted} stale cache files from {cache_dir}")
+        max_age = getattr(args, "clean_cache_days", 30)
+        deleted = clean_cache(cache_dir, max_age_days=max_age)
+        news_cache_dir = Path(args.output) / "news_cache"
+        deleted += clean_cache(news_cache_dir, max_age_days=max_age)
+        _safe_print(f"[cache] Deleted {deleted} stale cache files (data + news)")
 
     if args.mode == "backtest":
         run_backtest_mode(args, client, config)
