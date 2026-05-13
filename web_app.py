@@ -145,17 +145,18 @@ def run_dashboard() -> str:
     try:
         with RUN_LOCK:
             if mode == "scan":
-                candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+                candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
                 report_path = save_scan_report(args.output, candidates, watchlist, universe)
                 if args.notify:
                     news_map_notify = _build_news_map(news_client, _frame_records(candidates)) if args.include_news else {}
-                    send_discord_messages(split_message(format_scan_message_rich(candidates, watchlist, args.end, news_map_notify)))
+                    send_discord_messages(split_message(format_scan_message_rich(candidates, watchlist, args.end, news_map_notify, breadth=breadth)))
                 context["scan"] = {
                     "report_path": str(report_path),
                     "report_url": _artifact_url(report_path),
                     "candidates": _frame_records(candidates),
                     "watchlist": _frame_records(watchlist),
                     "universe_size": len(universe),
+                    "breadth": breadth,
                     "news_map": _build_news_map(news_client, _frame_records(candidates) or _frame_records(watchlist)) if args.include_news else {},
                 }
             elif mode == "hybrid-monitor":
@@ -164,8 +165,9 @@ def run_dashboard() -> str:
                     candidates = pd.DataFrame(columns=["stock_id", "name"])
                     watchlist = universe.copy()
                     watch_pool = universe.copy()
+                    breadth = {}
                 else:
-                    candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+                    candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
                     watch_pool = candidates.copy()
                     if len(watch_pool) < args.watch_top:
                         extra = watchlist.head(args.watch_top - len(watch_pool))

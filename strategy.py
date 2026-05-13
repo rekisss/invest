@@ -257,6 +257,27 @@ def prepare_stock_signals(
     return merged
 
 
+def compute_market_breadth(snapshot: pd.DataFrame) -> dict[str, object]:
+    if snapshot.empty:
+        return {}
+    total = len(snapshot)
+    breadth_cols = [
+        "above_ema60", "ema60_gt_ema120", "market_above_ma60",
+        "macd_golden_cross", "volume_break", "rsi_strong", "breakout_20d",
+        "foreign_buy_3d", "adx_trending", "stronger_than_market",
+        "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
+    ]
+    result: dict[str, object] = {"total_stocks": total}
+    for col in breadth_cols:
+        if col in snapshot.columns:
+            pct = int(snapshot[col].fillna(False).sum() / total * 100)
+            result[col] = pct
+    entry_count = int(snapshot["entry_signal"].sum()) if "entry_signal" in snapshot.columns else 0
+    result["entry_signal_count"] = entry_count
+    result["entry_signal_pct"] = int(entry_count / total * 100)
+    return result
+
+
 def latest_signal_snapshot(signals_by_stock: dict[str, pd.DataFrame]) -> pd.DataFrame:
     rows: list[pd.Series] = []
     for frame in signals_by_stock.values():

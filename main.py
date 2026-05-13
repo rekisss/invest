@@ -28,6 +28,7 @@ from notifier import send_discord_messages, split_message
 from report import save_hybrid_report, save_reports, save_scan_report, save_sponsor_monitor_report
 from strategy import (
     StrategyConfig,
+    compute_market_breadth,
     latest_signal_snapshot,
     prepare_market_frame,
     prepare_stock_signals,
@@ -250,7 +251,9 @@ def collect_signals(
     return signals_by_stock, signal_frames
 
 
-def build_daily_snapshot(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def build_daily_snapshot(
+    args: argparse.Namespace, client: FinMindClient, config: StrategyConfig
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, object]]:
     end_date = pd.Timestamp(args.end)
     start_date = (end_date - pd.Timedelta(days=args.lookback_days)).strftime("%Y-%m-%d")
     end_date_text = end_date.strftime("%Y-%m-%d")
@@ -263,13 +266,30 @@ def build_daily_snapshot(args: argparse.Namespace, client: FinMindClient, config
     universe = load_universe(args, client)
     signals_by_stock, _ = collect_signals(universe, client, market, config, start_date, end_date_text, args.workers)
     snapshot = latest_signal_snapshot(signals_by_stock)
+    breadth = compute_market_breadth(snapshot)
     candidates, watchlist = rank_candidates(
         snapshot,
         args.top_n,
         max_price=args.max_price,
         prefer_lower_price=args.prefer_lower_price,
     )
-    return candidates, watchlist, universe
+    return candidates, watchlist, universe, breadth
+
+
+def _format_breadth_line(breadth: dict[str, object]) -> str:
+    total = int(breadth.get("total_stocks", 0))
+    if not total:
+        return ""
+    entry_pct = int(breadth.get("entry_signal_pct", 0))
+    above_ema = int(breadth.get("above_ema60", 0))
+    trend_up = int(breadth.get("ema60_gt_ema120", 0))
+    market_ok = int(breadth.get("market_above_ma60", 0))
+    momentum = int(breadth.get("macd_golden_cross", 0))
+    return (
+        f"📊 市場廣度（{total}支）｜全條件候選 `{entry_pct}%` | "
+        f"站EMA60 `{above_ema}%` | 趨勢向上 `{trend_up}%` | "
+        f"MACD交叉 `{momentum}%` | 大盤 `{'✅' if market_ok > 50 else '❌'}`"
+    )
 
 
 def format_scan_message_rich(
@@ -277,9 +297,15 @@ def format_scan_message_rich(
     watchlist: pd.DataFrame,
     latest_date: str,
     news_map: dict[str, dict[str, object]] | None = None,
+    breadth: dict[str, object] | None = None,
 ) -> str:
     news_map = news_map or {}
     lines = [f"🔍 **Taiwan MACD Scan** · {latest_date}", ""]
+    if breadth:
+        breadth_line = _format_breadth_line(breadth)
+        if breadth_line:
+            lines.append(breadth_line)
+            lines.append("")
     if candidates.empty:
         lines.extend(["今日無全條件候選。", "", "**近似觀察名單**"])
         for _, row in watchlist.head(8).iterrows():
@@ -600,14 +626,14 @@ def format_sponsor_message(
 
 
 def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
-    candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+    candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
     latest_date = args.end
     report_path = save_scan_report(args.output, candidates, watchlist, universe)
     news_map = {}
     if args.include_news:
         scan_rows = candidates.to_dict("records") if not candidates.empty else watchlist.to_dict("records")
         news_map = build_news_map(args.output, scan_rows, news_limit=args.news_limit)
-    message = format_scan_message_rich(candidates, watchlist, latest_date, news_map=news_map)
+    message = format_scan_message_rich(candidates, watchlist, latest_date, news_map=news_map, breadth=breadth)
     _safe_print(message)
     _safe_print("")
     _safe_print(f"Scan report: {report_path}")
@@ -623,8 +649,9 @@ def run_hybrid_monitor(args: argparse.Namespace, client: FinMindClient, config: 
         candidates = pd.DataFrame(columns=["stock_id", "name"])
         watchlist = universe.copy()
         watch_pool = universe.copy()
+        breadth: dict[str, object] = {}
     else:
-        candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+        candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
         watch_pool = candidates.copy()
         if len(watch_pool) < args.watch_top:
             extra = watchlist.head(args.watch_top - len(watch_pool))
@@ -658,7 +685,7 @@ def run_sponsor_monitor(args: argparse.Namespace, client: FinMindClient, config:
         watchlist = universe.copy()
         watch_pool = universe.copy()
     else:
-        candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+        candidates, watchlist, universe, _breadth = build_daily_snapshot(args, client, config)
         watch_pool = candidates.copy()
         if len(watch_pool) < args.watch_top:
             extra = watchlist.head(args.watch_top - len(watch_pool))
@@ -687,7 +714,7 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
         watchlist = universe.copy()
         watch_pool = universe.copy()
     else:
-        candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+        candidates, watchlist, universe, _breadth = build_daily_snapshot(args, client, config)
         watch_pool = candidates.copy()
         if len(watch_pool) < args.watch_top:
             extra = watchlist.head(args.watch_top - len(watch_pool))
@@ -776,7 +803,7 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
 
 
 def run_daily_report(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
-    candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+    candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
     watch_pool = candidates.head(args.watch_top).copy()
     if len(watch_pool) < args.watch_top:
         extra = watchlist.head(args.watch_top - len(watch_pool))
