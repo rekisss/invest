@@ -70,6 +70,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--wf-folds", type=int, default=4, help="Number of folds for walk-forward analysis (default 4).")
     parser.add_argument("--wf-overlap-days", type=int, default=0, help="Overlap days between walk-forward folds (default 0).")
     parser.add_argument("--watch-extra", default="", help="Comma-separated stock IDs to always include in event-monitor watch list.")
+    parser.add_argument("--min-confidence", type=int, default=0, help="Minimum confidence score (0-100) to include a candidate in notifications (default 0 = all).")
     return parser.parse_args()
 
 
@@ -371,8 +372,9 @@ def format_scan_message_rich(
         dealer_streak = int(row.get("dealer_buy_streak", 0) or 0)
         dealer_txt = f" | 自營 `{dealer_streak}d`" if dealer_streak >= 1 else ""
         ichi_txt = " | ☁雲上" if bool(row.get("above_ichimoku_cloud")) else ""
+        star = " ⭐" if confidence >= 70 else ""
         lines.append(f"━━━━━━━━━━━━━━━━━━━━")
-        lines.append(f"**{row['stock_id']}** {row['name']}{price_note}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`")
+        lines.append(f"**{row['stock_id']}** {row['name']}{price_note}{star}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`")
         lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
         lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ichi_txt}")
         lines.append(f"🏦 外資連買 `{int(row.get('foreign_buy_streak', 0))}d`{invest_txt}{dealer_txt}")
@@ -667,12 +669,20 @@ def format_sponsor_message(
 def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
     candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
     latest_date = args.end
+
+    # Apply minimum confidence filter for notifications
+    min_conf = getattr(args, "min_confidence", 0)
+    notify_candidates = candidates
+    if min_conf > 0 and not candidates.empty:
+        mask = candidates.apply(lambda r: _confidence_score(r) >= min_conf, axis=1)
+        notify_candidates = candidates[mask].copy()
+
     report_path = save_scan_report(args.output, candidates, watchlist, universe)
     news_map = {}
     if args.include_news:
-        scan_rows = candidates.to_dict("records") if not candidates.empty else watchlist.to_dict("records")
+        scan_rows = notify_candidates.to_dict("records") if not notify_candidates.empty else watchlist.to_dict("records")
         news_map = build_news_map(args.output, scan_rows, news_limit=args.news_limit)
-    message = format_scan_message_rich(candidates, watchlist, latest_date, news_map=news_map, breadth=breadth)
+    message = format_scan_message_rich(notify_candidates, watchlist, latest_date, news_map=news_map, breadth=breadth)
     _safe_print(message)
     _safe_print("")
     _safe_print(f"Scan report: {report_path}")
