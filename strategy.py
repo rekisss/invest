@@ -53,6 +53,7 @@ class StrategyConfig:
     use_atr_stop: bool = False            # Use ATR-based stop instead of fixed %
     atr_stop_multiplier: float = 2.0      # Stop at entry_price - N * ATR14
     max_holding_days: int = 0             # Force-exit after N calendar days (0 = disabled)
+    max_positions_per_sector: int = 2     # Max simultaneous positions per industry category
 
 
 def prepare_market_frame(market_df: pd.DataFrame, config: StrategyConfig) -> pd.DataFrame:

@@ -20,6 +20,7 @@ class Position:
     peak_price: float
     partial_taken: bool = False
     atr_at_entry: float = 0.0
+    industry_category: str = ""
 
 
 @dataclass
@@ -77,6 +78,9 @@ def run_backtest(
                 frame = prepared.get(stock_id)
                 if frame is None or date not in frame.index:
                     continue
+                sector = str(frame.loc[date, "industry_category"]) if "industry_category" in frame.columns else ""
+                if config.max_positions_per_sector > 0 and sector and _sector_count(positions, sector) >= config.max_positions_per_sector:
+                    continue
                 price = float(frame.loc[date, "open"])
                 effective_buy = price * (1 + config.slippage_pct)
                 risk_budget = portfolio_equity(cash, positions, prepared, date) * config.risk_per_trade
@@ -99,6 +103,7 @@ def run_backtest(
                     initial_quantity=quantity,
                     peak_price=effective_buy,
                     atr_at_entry=atr_val,
+                    industry_category=sector,
                 )
                 positions[stock_id] = position
                 cash -= quantity * effective_buy * (1 + config.brokerage_fee_pct)
@@ -180,6 +185,10 @@ def run_backtest(
                 if stock_id in positions:
                     continue
 
+                sector = str(row.get("industry_category") or "")
+                if config.max_positions_per_sector > 0 and sector and _sector_count(positions, sector) >= config.max_positions_per_sector:
+                    continue
+
                 price = float(row["close"])
                 effective_buy = price * (1 + config.slippage_pct)
                 risk_budget = portfolio_equity(cash, positions, prepared, date) * config.risk_per_trade
@@ -204,6 +213,7 @@ def run_backtest(
                     initial_quantity=quantity,
                     peak_price=effective_buy,
                     atr_at_entry=atr_val,
+                    industry_category=sector,
                 )
                 positions[stock_id] = position
                 cash -= quantity * effective_buy * (1 + config.brokerage_fee_pct)
@@ -278,6 +288,10 @@ def run_backtest(
         "yearly": yearly,
         "notes": notes,
     }
+
+
+def _sector_count(positions: dict[str, "Position"], sector: str) -> int:
+    return sum(1 for p in positions.values() if p.industry_category == sector)
 
 
 def _get_close_price(frame: pd.DataFrame, date: pd.Timestamp) -> float:
