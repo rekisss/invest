@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+import time
 from typing import Iterable
 from urllib.parse import quote
 import xml.etree.ElementTree as ET
@@ -30,6 +31,13 @@ POSITIVE_KEYWORDS = [
     "訂單",
     "買超",
     "獲利",
+    "營收創高",
+    "獲利大增",
+    "上調目標價",
+    "強勁需求",
+    "毛利率提升",
+    "拿下大單",
+    "法說會正面",
 ]
 
 NEGATIVE_KEYWORDS = [
@@ -44,6 +52,13 @@ NEGATIVE_KEYWORDS = [
     "訴訟",
     "違約",
     "風險",
+    "警示",
+    "停牌",
+    "掏空",
+    "弊案",
+    "庫存壓力",
+    "砍單",
+    "目標價下調",
 ]
 
 
@@ -51,6 +66,7 @@ NEGATIVE_KEYWORDS = [
 class NewsClient:
     cache_dir: Path
     timeout: int = 20
+    cache_ttl_hours: float = 4.0
 
     def __post_init__(self) -> None:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -68,13 +84,16 @@ class NewsClient:
         use_cache: bool = True,
     ) -> pd.DataFrame:
         cache_path = self._cache_path(stock_id, name, days, limit)
+        cache_ttl_secs = self.cache_ttl_hours * 3600
         if use_cache and cache_path.exists():
-            try:
-                frame = pd.read_csv(cache_path)
-                if not frame.empty:
-                    return frame.head(limit)
-            except Exception:
-                cache_path.unlink(missing_ok=True)
+            age_secs = time.time() - cache_path.stat().st_mtime
+            if age_secs < cache_ttl_secs:
+                try:
+                    frame = pd.read_csv(cache_path)
+                    if not frame.empty:
+                        return frame.head(limit)
+                except Exception:
+                    cache_path.unlink(missing_ok=True)
 
         query = quote(f"{stock_id} {name} 台股 when:{days}d")
         url = f"https://news.google.com/rss/search?q={query}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
@@ -171,10 +190,18 @@ def summarize_news(news_items: Iterable[dict[str, object]]) -> dict[str, object]
         for item in items[:3]
         if item.get("title")
     ]
+    recent_items = [item for item in items if _is_recent(item.get("published_at"))]
+    recent_sentiment = "neutral"
+    if recent_items:
+        r_pos = sum(1 for h in recent_items if h.get("sentiment") == "positive")
+        r_neg = sum(1 for h in recent_items if h.get("sentiment") == "negative")
+        recent_sentiment = "positive" if r_pos > r_neg else ("negative" if r_neg > r_pos else "neutral")
+
     return {
         "sentiment": summary,
+        "recent_sentiment": recent_sentiment,
         "counts": counts,
-        "has_recent_news": any(_is_recent(item.get("published_at")) for item in items),
+        "has_recent_news": bool(recent_items),
         "headline": str(items[0].get("title") or "") if items else "",
         "top_headlines": top_headlines,
     }

@@ -92,13 +92,15 @@ ENTRY_REASON_LABELS = {
     "kd_golden_cross": "KD黃金交叉",
     "obv_uptrend": "OBV趨勢向上",
     "invest_trust_buy_2d": "投信連買2天",
+    "bb_squeeze_breakout": "BB壓縮突破",
+    "breakout_volume_confirm": "突破量能確認",
 }
 
-_MAX_CONDITION_COUNT = 16
+_MAX_CONDITION_COUNT = 18
 
 
 def _confidence_score(row: object) -> int:
-    cond = min(int(float(row.get("condition_count", 0) or 0)) / _MAX_CONDITION_COUNT * 55, 55)  # type: ignore[union-attr]
+    cond = min(int(float(row.get("condition_count", 0) or 0)) / 18 * 55, 55)  # type: ignore[union-attr]
     adx_pts = min(float(row.get("adx14", 0) or 0) / 40 * 20, 20)  # type: ignore[union-attr]
     rs_pts = min(max(float(row.get("relative_strength_5d", 0) or 0) * 200, 0), 15)  # type: ignore[union-attr]
     vol_pts = min(max((float(row.get("volume_ratio", 0) or 0) - 1) / 2 * 10, 0), 10)  # type: ignore[union-attr]
@@ -362,7 +364,7 @@ def format_hybrid_message_rich(
             price_tag = _low_price_tag(close_value)
             price_note = f" `{price_tag}`" if price_tag else ""
             score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
-            score_text = f"`{int(score_value)}/16`" if score_value is not None else "manual"
+            score_text = f"`{int(score_value)}/18`" if score_value is not None else "manual"
             brief = _news_brief(str(row["stock_id"]), news_map)
             lines.append(
                 f"• **{row['stock_id']}** {row['name']} | 收 {close_text}{price_note} | {score_text} | {_reason_labels(row.get('entry_reason'))}{brief}"
@@ -583,7 +585,7 @@ def format_sponsor_message(
             close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
             score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
             close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
-            score_text = f"{int(score_value)}/16" if score_value is not None else "manual"
+            score_text = f"{int(score_value)}/18" if score_value is not None else "manual"
             lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
 
     if not watchlist.empty:
@@ -592,7 +594,7 @@ def format_sponsor_message(
             close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
             score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
             close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
-            score_text = f"{int(score_value)}/16" if score_value is not None else "manual"
+            score_text = f"{int(score_value)}/18" if score_value is not None else "manual"
             lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
 
     if not intraday_rows.empty:
@@ -804,6 +806,8 @@ def run_daily_report(args: argparse.Namespace, client: FinMindClient, config: St
     _safe_print(message)
     if args.notify:
         send_discord_messages(split_message(message))
+    if notion_enabled():
+        sync_scan_results(candidates, watchlist, args.end, news_map)
 
 
 def run_backtest_mode(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:

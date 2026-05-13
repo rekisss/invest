@@ -175,6 +175,15 @@ def prepare_stock_signals(
     if institutional_missing:
         merged["invest_trust_buy_2d"] = False
 
+    # BB squeeze breakout: bandwidth was narrow (< median) and now price breaks above upper band
+    bb_bandwidth_median = merged["bb_bandwidth"].rolling(window=60, min_periods=20).median()
+    merged["bb_squeeze_breakout"] = (
+        merged["bb_bandwidth"].shift(1) < bb_bandwidth_median.shift(1)
+    ) & (merged["close"] > merged["bb_upper"])
+
+    # Breakout confirmed with simultaneous volume surge (quality entry filter)
+    merged["breakout_volume_confirm"] = merged["breakout_20d"] & merged["volume_break"]
+
     # ── Candlestick filters ───────────────────────────────────────────────────
     body = (merged["close"] - merged["open"]).abs()
     upper_shadow = merged["high"] - merged[["open", "close"]].max(axis=1)
@@ -199,6 +208,7 @@ def prepare_stock_signals(
     soft_entry_columns = [
         "foreign_buy_3d", "adx_trending", "stronger_than_market",
         "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
+        "bb_squeeze_breakout", "breakout_volume_confirm",
     ]
     entry_columns = hard_entry_columns + soft_entry_columns
     merged["condition_count"] = merged[entry_columns].sum(axis=1)
@@ -219,6 +229,8 @@ def prepare_stock_signals(
         + merged["obv_uptrend"].astype(int) * 15
         + merged["adx_trending"].astype(int) * 15
         + merged["stronger_than_market"].astype(int) * 10
+        + merged["bb_squeeze_breakout"].astype(int) * 30
+        + merged["breakout_volume_confirm"].astype(int) * 20
     )
 
     merged["macd_death_cross"] = (
@@ -280,7 +292,9 @@ def rank_candidates(
         "condition_count", "entry_score", "rsi14", "adx14", "atr14",
         "volume_ratio", "volume_ma20", "return_5d", "relative_strength_5d",
         "foreign_buy_streak", "invest_trust_streak", "stoch_k", "stoch_d",
-        "bb_pct_b", "obv_uptrend", "entry_reason", "skip_reason",
+        "bb_pct_b", "bb_bandwidth", "obv_uptrend",
+        "bb_squeeze_breakout", "breakout_volume_confirm",
+        "entry_reason", "skip_reason",
     ]
     watch_columns = [
         "date", "stock_id", "name", "industry_category", "close",
