@@ -718,9 +718,10 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
     previous_state: dict[str, dict[str, float | str]] = {}
     last_notified: dict[str, float] = {}
     last_heartbeat_ts: float = 0.0
-    _safe_print(f"Event monitor started for {', '.join(watch_symbols)}")
-    if args.heartbeat_minutes > 0:
-        _safe_print(f"Heartbeat every {args.heartbeat_minutes} min")
+    start_msg = f"🟢 **事件監控啟動** · {pd.Timestamp.now().strftime('%H:%M')} (UTC)\n監控標的：{', '.join(watch_symbols)}\n觸發條件：急拉 ≥{args.event_rise_threshold*100:.1f}% ｜急跌 ≤{args.event_drop_threshold*100:.1f}% ｜量能 ≥{args.event_volume_multiplier}x"
+    _safe_print(start_msg)
+    if args.notify:
+        send_discord_messages(split_message(start_msg))
 
     for cycle in range(1, args.repeat_count + 1):
         quotes = fetch_watch_quotes(fugle, watch_symbols)

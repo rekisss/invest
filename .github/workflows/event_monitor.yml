@@ -26,6 +26,17 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Check market hours (CST 09:00–13:30 = UTC 01:00–05:30)
+        run: |
+          HOUR=$(date -u +%H)
+          MIN=$(date -u +%M)
+          TOTAL=$(( HOUR * 60 + MIN ))
+          if [ "$TOTAL" -lt 60 ] || [ "$TOTAL" -gt 330 ]; then
+            echo "Current UTC time is $(date -u +%H:%M), outside Taiwan market hours (01:00–05:30 UTC). Skipping."
+            exit 0
+          fi
+          echo "Market is open. Proceeding."
+
       - name: Run event monitor
         env:
           FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
@@ -48,7 +59,7 @@ jobs:
             --event-drop-threshold -0.035 \
             --event-volume-multiplier 2.5 \
             --event-cooldown-seconds 600 \
-            --heartbeat-minutes 30 \
+            --heartbeat-minutes 0 \
             --output output \
             --notify
 
