@@ -142,10 +142,15 @@ def _plot_equity_curve(equity_curve: pd.DataFrame, output_path: Path) -> None:
     frame["drawdown_pct"] = frame["equity"] / frame["equity"].cummax() - 1
     worst = frame.loc[frame["drawdown_pct"].idxmin()]
 
+    has_benchmark = "benchmark_equity" in frame.columns and frame["benchmark_equity"].notna().any()
+
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(13, 8), sharex=True, gridspec_kw={"height_ratios": [3, 1]})
-    ax1.plot(frame["date"], frame["equity"], color="#0f6cbd", linewidth=2, label="Equity")
-    ax1.scatter(worst["date"], worst["equity"], color="#c50f1f", s=60, label="Max drawdown")
-    ax1.set_title("Portfolio Equity Curve")
+    ax1.plot(frame["date"], frame["equity"], color="#0f6cbd", linewidth=2, label="Strategy")
+    if has_benchmark:
+        ax1.plot(frame["date"], frame["benchmark_equity"], color="#767676", linewidth=1.5,
+                 linestyle="--", alpha=0.8, label="TAIEX (buy & hold)")
+    ax1.scatter(worst["date"], worst["equity"], color="#c50f1f", s=60, zorder=5, label="Max drawdown")
+    ax1.set_title("Portfolio Equity Curve vs TAIEX")
     ax1.set_ylabel("Equity")
     ax1.grid(alpha=0.3)
     ax1.legend()

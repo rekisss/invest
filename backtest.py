@@ -222,6 +222,36 @@ def run_backtest(
     trade_summary = summarize_trades(fill_frame)
     metrics = compute_performance_metrics(equity_curve, trade_summary, initial_capital)
     yearly = compute_yearly_performance(equity_curve)
+    benchmark_return: float | None = None
+
+    # Compute TAIEX benchmark for comparison
+    market_aligned = (
+        pd.to_datetime(market_df["date"])
+        .reset_index(drop=True)
+        .rename("date")
+        .to_frame()
+        .assign(market_close=pd.to_numeric(market_df["close"].values, errors="coerce"))
+        .dropna(subset=["market_close"])
+        .set_index("date")
+    )
+    if not equity_curve.empty and not market_aligned.empty:
+        eq_dates = pd.to_datetime(equity_curve["date"])
+        first_date = eq_dates.iloc[0]
+        last_date = eq_dates.iloc[-1]
+        mkt_window = market_aligned.loc[first_date:last_date, "market_close"]
+        if not mkt_window.empty:
+            mkt_start = float(mkt_window.iloc[0])
+            mkt_end = float(mkt_window.iloc[-1])
+            benchmark_return = (mkt_end / mkt_start - 1) * 100
+            benchmark_equity = mkt_window.reset_index()
+            benchmark_equity.columns = ["date", "market_close"]
+            benchmark_equity["benchmark_equity"] = initial_capital * benchmark_equity["market_close"] / mkt_start
+            equity_curve = equity_curve.merge(
+                benchmark_equity[["date", "benchmark_equity"]], on="date", how="left"
+            )
+    if benchmark_return is not None:
+        metrics["benchmark_return_pct"] = benchmark_return
+        metrics["alpha_pct"] = metrics.get("total_return_pct", 0) - benchmark_return
 
     return {
         "equity_curve": equity_curve,
