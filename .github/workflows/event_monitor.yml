@@ -27,17 +27,21 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Check market hours (CST 08:50–13:30 = UTC 00:50–05:30)
+        id: market_check
         run: |
           HOUR=$(date -u +%H)
           MIN=$(date -u +%M)
           TOTAL=$(( HOUR * 60 + MIN ))
           if [ "$TOTAL" -lt 50 ] || [ "$TOTAL" -gt 330 ]; then
             echo "Current UTC time is $(date -u +%H:%M), outside Taiwan market hours. Skipping."
-            exit 0
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Market is open. Proceeding."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "Market is open. Proceeding."
 
       - name: Run event monitor
+        if: steps.market_check.outputs.skip != 'true'
         env:
           FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}

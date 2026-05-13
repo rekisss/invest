@@ -6,6 +6,7 @@ import pandas as pd
 
 
 THEME_KEYWORDS = [
+    # Core tech themes
     "AI",
     "人工智慧",
     "半導體",
@@ -20,8 +21,24 @@ THEME_KEYWORDS = [
     "晶片",
     "ASIC",
     "CCL",
-    "ETF",
-    "指數股票型",
+    # Advanced packaging / HBM
+    "CoWoS",
+    "HBM",
+    "先進封裝",
+    "封測",
+    # EV / green energy
+    "車用",
+    "電動車",
+    "綠能",
+    "太陽能",
+    "儲能",
+    # Data center
+    "資料中心",
+    "機櫃",
+    "液冷",
+    # Optical / connectivity
+    "矽光子",
+    "光通訊",
 ]
 
 EXCLUDE_NAME_KEYWORDS = [
@@ -62,7 +79,7 @@ def build_auto_universe(stock_info: pd.DataFrame, max_symbols: int = 120) -> pd.
 
     frame["theme_score"] = 0
     frame.loc[frame["is_theme"], "theme_score"] += 4
-    frame.loc[frame["industry_category"].str.contains("半導體|電腦及週邊|電子|光電|通信|網路", case=False, na=False), "theme_score"] += 3
+    frame.loc[frame["industry_category"].str.contains("半導體|電腦及週邊|電子|光電|通信|網路|封測|車用|綠能|儲能", case=False, na=False), "theme_score"] += 3
     frame.loc[frame["is_listed"], "theme_score"] += 2
     frame.loc[frame["is_otc"], "theme_score"] += 1
 

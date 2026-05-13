@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
 import pandas as pd
@@ -78,14 +79,18 @@ def normalize_quote(symbol: str, payload: dict[str, object]) -> dict[str, object
     }
 
 
-def fetch_watch_quotes(client: FugleClient, symbols: list[str]) -> pd.DataFrame:
-    rows: list[dict[str, object]] = []
-    for symbol in symbols:
+def fetch_watch_quotes(client: FugleClient, symbols: list[str], workers: int = 5) -> pd.DataFrame:
+    def _fetch_one(symbol: str) -> dict[str, object]:
         try:
-            payload = client.fetch_quote(symbol)
-            rows.append(normalize_quote(symbol, payload))
+            return normalize_quote(symbol, client.fetch_quote(symbol))
         except Exception as error:
-            rows.append({"symbol": symbol, "error": str(error)})
+            return {"symbol": symbol, "error": str(error)}
+
+    rows: list[dict[str, object]] = [None] * len(symbols)  # type: ignore[list-item]
+    with ThreadPoolExecutor(max_workers=min(workers, len(symbols) or 1)) as pool:
+        future_to_idx = {pool.submit(_fetch_one, sym): i for i, sym in enumerate(symbols)}
+        for future in as_completed(future_to_idx):
+            rows[future_to_idx[future]] = future.result()
     frame = pd.DataFrame(rows)
     if frame.empty:
         return frame
