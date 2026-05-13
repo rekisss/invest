@@ -143,7 +143,7 @@ def sync_scan_results(
             "收盤價": {"number": round(close, 2)},
             "RSI": {"number": round(rsi, 1)},
             "ADX": {"number": round(adx, 1)},
-            "條件達成": {"rich_text": _rt(f"{condition_count}/13")},
+            "條件達成": {"rich_text": _rt(f"{condition_count}/16")},
             "產業別": {"rich_text": _rt(industry)},
             "外資連買天數": {"number": foreign_streak},
             "5日漲幅%": {"number": round(return_5d * 100, 2)},

@@ -14,7 +14,7 @@ from backtest import run_backtest
 from data_loader import (
     FinMindClient,
     fetch_financial_statement_dates,
-    fetch_foreign_investor_data,
+    fetch_institutional_data,
     fetch_market_index,
     fetch_stock_info,
     fetch_stock_kbar,
@@ -86,7 +86,28 @@ ENTRY_REASON_LABELS = {
     "avoid_chase": "未過度追價",
     "liquidity_ok": "流動性合格",
     "stronger_than_market": "強於大盤",
+    "kd_golden_cross": "KD黃金交叉",
+    "obv_uptrend": "OBV趨勢向上",
+    "invest_trust_buy_2d": "投信連買2天",
 }
+
+_MAX_CONDITION_COUNT = 16
+
+
+def _confidence_score(row: object) -> int:
+    cond = min(int(float(row.get("condition_count", 0) or 0)) / _MAX_CONDITION_COUNT * 55, 55)  # type: ignore[union-attr]
+    adx_pts = min(float(row.get("adx14", 0) or 0) / 40 * 20, 20)  # type: ignore[union-attr]
+    rs_pts = min(max(float(row.get("relative_strength_5d", 0) or 0) * 200, 0), 15)  # type: ignore[union-attr]
+    vol_pts = min(max((float(row.get("volume_ratio", 0) or 0) - 1) / 2 * 10, 0), 10)  # type: ignore[union-attr]
+    return max(0, min(100, int(cond + adx_pts + rs_pts + vol_pts)))
+
+
+def _entry_stop_target(close: float, atr: float | None, stop_pct: float = 0.05, target_pct: float = 0.10) -> tuple[str, str, str, str]:
+    stop = round(close * (1 - stop_pct), 2)
+    target = round(close * (1 + target_pct), 2)
+    rr = round((target - close) / max(close - stop, 0.01), 1)
+    entry_hi = round(close * 1.015, 2)
+    return f"{close:.2f}–{entry_hi:.2f}", f"{stop:.2f}", f"{target:.2f}", f"{rr}:1"
 
 
 def _safe_print(message: str = "") -> None:
@@ -189,11 +210,11 @@ def collect_signals(
             prices = fetch_stock_prices(client, stock["stock_id"], start_date, end_date)
             if prices.empty:
                 return None
-            foreign = fetch_foreign_investor_data(client, stock["stock_id"], start_date, end_date)
+            institutional = fetch_institutional_data(client, stock["stock_id"], start_date, end_date)
             earnings = pd.DataFrame(columns=["date"])
             if config.use_earnings_filter:
                 earnings = fetch_financial_statement_dates(client, stock["stock_id"], start_date, end_date)
-            frame = prepare_stock_signals(stock, prices, market, foreign, config, earnings_dates=earnings)
+            frame = prepare_stock_signals(stock, prices, market, institutional, config, earnings_dates=earnings)
             return stock["stock_id"], frame
         except Exception as error:
             print(f"[warn] skipped {stock['stock_id']}: {error}", file=sys.stderr)
@@ -271,31 +292,43 @@ def format_scan_message_rich(
             price_note = f" `{price_tag}`" if price_tag else ""
             brief = _news_brief(str(row["stock_id"]), news_map)
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/13` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
             )
         return "\n".join(lines)
 
     lines.append("**每日候選**")
-    for _, row in candidates.head(8).iterrows():
+    for _, row in candidates.head(6).iterrows():
+        close = float(row["close"])
+        atr = float(row["atr14"]) if "atr14" in row and pd.notna(row.get("atr14")) else None
+        entry_zone, stop, target, rr = _entry_stop_target(close, atr)
+        confidence = _confidence_score(row)
+        cond_count = int(row["condition_count"])
         price_tag = _low_price_tag(row.get("close"))
         price_note = f" `{price_tag}`" if price_tag else ""
         brief = _news_brief(str(row["stock_id"]), news_map)
         obs = recommend_observation_period(row, is_candidate=True)
-        lines.append(
-            f"• **{row['stock_id']}** {row['name']} | 收 `{row['close']:.2f}`{price_note} | RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}` | {_reason_labels(row.get('entry_reason'))}{brief}"
-        )
-        lines.append(f"  ⏱ {obs}")
+        stoch_k = float(row["stoch_k"]) if "stoch_k" in row and pd.notna(row.get("stoch_k")) else None
+        kd_txt = f" | KD `{stoch_k:.0f}`" if stoch_k is not None else ""
+        invest_streak = int(row.get("invest_trust_streak", 0) or 0)
+        invest_txt = f" | 投信連買 `{invest_streak}d`" if invest_streak >= 1 else ""
+        lines.append(f"━━━━━━━━━━━━━━━━━━━━")
+        lines.append(f"**{row['stock_id']}** {row['name']}{price_note}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`")
+        lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
+        lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`")
+        lines.append(f"🏦 外資連買 `{int(row.get('foreign_buy_streak', 0))}d`{invest_txt}")
+        lines.append(f"🔍 {_reason_labels(row.get('entry_reason'), max_items=5)}")
+        if brief:
+            lines.append(f"  {brief.strip()}")
+        lines.append(f"⏱ {obs}")
     if not watchlist.empty:
-        lines.extend(["", "**近似觀察名單**"])
+        lines.extend(["", "━━━━━━━━━━━━━━━━━━━━", "**近似觀察名單**"])
         for _, row in watchlist.head(5).iterrows():
             price_tag = _low_price_tag(row.get("close"))
             price_note = f" `{price_tag}`" if price_tag else ""
             brief = _news_brief(str(row["stock_id"]), news_map)
-            obs = recommend_observation_period(row, is_candidate=False)
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/13` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
             )
-            lines.append(f"  ⏱ {obs}")
     return "\n".join(lines)
 
 
@@ -326,7 +359,7 @@ def format_hybrid_message_rich(
             price_tag = _low_price_tag(close_value)
             price_note = f" `{price_tag}`" if price_tag else ""
             score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
-            score_text = f"`{int(score_value)}/13`" if score_value is not None else "manual"
+            score_text = f"`{int(score_value)}/16`" if score_value is not None else "manual"
             brief = _news_brief(str(row["stock_id"]), news_map)
             lines.append(
                 f"• **{row['stock_id']}** {row['name']} | 收 {close_text}{price_note} | {score_text} | {_reason_labels(row.get('entry_reason'))}{brief}"
@@ -422,14 +455,26 @@ def format_event_message(
     reason_text = _reason_labels(snapshot.get("entry_reason"))
     emoji = _EVENT_EMOJI.get(str(event["event_key"]), "⚠️")
     news_text = _news_brief(symbol, news_map).strip()
-    return "\n".join(
-        [
-            f"{emoji} **即時警報｜{event['label']}**",
-            f"**{symbol}** {name}{price_note} | 最新 `{last_value}` | 高點 `{high_value}` | 量 `{volume_value}` | 漲幅 {intraday_text}",
-            f"技術: {reason_text}",
-            f"新聞: {news_text if news_text else '無近期消息'}",
-        ]
-    )
+    confidence = _confidence_score(snapshot) if snapshot else 0
+    # Stop / target based on last price
+    try:
+        last_f = float(last_value)  # type: ignore[arg-type]
+        stop = round(last_f * 0.95, 2)
+        target = round(last_f * 1.10, 2)
+        rr = round((target - last_f) / max(last_f - stop, 0.01), 1)
+        risk_line = f"停損 `{stop}` | 目標 `{target}` | R:R `{rr}:1`"
+    except (TypeError, ValueError):
+        risk_line = ""
+    parts = [
+        f"{emoji} **即時警報｜{event['label']}**",
+        f"**{symbol}** {name}{price_note}  信心 `{confidence}/100`",
+        f"最新 `{last_value}` | 高點 `{high_value}` | 量 `{volume_value}` | 漲幅 {intraday_text}",
+    ]
+    if risk_line:
+        parts.append(risk_line)
+    parts.append(f"技術: {reason_text}")
+    parts.append(f"新聞: {news_text if news_text else '無近期消息'}")
+    return "\n".join(parts)
 
 
 def format_heartbeat_message(quotes: pd.DataFrame, date: str) -> str:
@@ -495,7 +540,7 @@ def format_daily_report_message(
         lines.extend(["", "**近似名單（今日未達全條件）**"])
         for _, row in watchlist.head(5).iterrows():
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/13` | 收 `{row['close']:.2f}`"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`"
             )
     return "\n".join(lines)
 
@@ -535,7 +580,7 @@ def format_sponsor_message(
             close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
             score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
             close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
-            score_text = f"{int(score_value)}/13" if score_value is not None else "manual"
+            score_text = f"{int(score_value)}/16" if score_value is not None else "manual"
             lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
 
     if not watchlist.empty:
@@ -544,7 +589,7 @@ def format_sponsor_message(
             close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
             score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
             close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
-            score_text = f"{int(score_value)}/13" if score_value is not None else "manual"
+            score_text = f"{int(score_value)}/16" if score_value is not None else "manual"
             lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
 
     if not intraday_rows.empty:

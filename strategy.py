@@ -4,7 +4,10 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from indicators import add_adx, add_ema, add_macd, add_rsi, add_sma, consecutive_positive
+from indicators import (
+    add_adx, add_atr, add_bollinger_bands, add_ema, add_macd,
+    add_obv, add_rsi, add_sma, add_stochastic, consecutive_positive,
+)
 
 
 @dataclass
@@ -21,6 +24,12 @@ class StrategyConfig:
     rsi_threshold: float = 55.0
     adx_period: int = 14
     adx_threshold: float = 20.0
+    bb_period: int = 20
+    bb_std: float = 2.0
+    kd_k_period: int = 9
+    kd_d_period: int = 3
+    obv_ma_window: int = 20
+    invest_trust_buy_streak: int = 2
     breakout_window: int = 20
     swing_low_window: int = 10
     max_recent_rise_pct: float = 0.05
@@ -39,6 +48,7 @@ class StrategyConfig:
     next_day_fill: bool = False
     brokerage_fee_pct: float = 0.001425   # 0.1425% 手續費（買賣各收）
     transaction_tax_pct: float = 0.003    # 0.3% 證交稅（賣出時收）
+    slippage_pct: float = 0.001           # 0.1% 滑點（買賣各收）
 
 
 def prepare_market_frame(market_df: pd.DataFrame, config: StrategyConfig) -> pd.DataFrame:
@@ -54,17 +64,14 @@ def _build_earnings_blocker(index: pd.Index, earnings_dates: pd.DataFrame | None
     blocked = pd.Series(False, index=index)
     if not config.use_earnings_filter or earnings_dates is None or earnings_dates.empty:
         return blocked
-
     event_dates = pd.to_datetime(earnings_dates["date"], errors="coerce").dropna().sort_values()
     if event_dates.empty:
         return blocked
-
     for event_date in event_dates:
         prior_index = index[index < event_date]
         if len(prior_index) == 0:
             continue
-        blocked_dates = prior_index[-config.earnings_lookback_days:]
-        blocked.loc[blocked_dates] = True
+        blocked.loc[prior_index[-config.earnings_lookback_days:]] = True
     return blocked
 
 
@@ -72,7 +79,7 @@ def prepare_stock_signals(
     stock_info: dict[str, str],
     stock_df: pd.DataFrame,
     market_df: pd.DataFrame,
-    foreign_df: pd.DataFrame,
+    institutional_df: pd.DataFrame,
     config: StrategyConfig,
     earnings_dates: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
@@ -89,6 +96,7 @@ def prepare_stock_signals(
     frame["ema120"] = add_ema(frame["close"], config.ema_trend)
     frame["rsi14"] = add_rsi(frame["close"], config.rsi_period)
     frame["adx14"] = add_adx(frame["high"], frame["low"], frame["close"], config.adx_period)
+    frame["atr14"] = add_atr(frame["high"], frame["low"], frame["close"], config.adx_period)
     frame["volume_ma20"] = add_sma(frame["volume"], config.volume_ma_window)
     frame["amount_ma20"] = add_sma(frame["amount"], 20)
     frame["close_20d_high"] = frame["close"].rolling(config.breakout_window).max().shift(1)
@@ -98,27 +106,41 @@ def prepare_stock_signals(
     frame["prev_close"] = frame["close"].shift(1)
     frame["prev_volume_ratio"] = (frame["volume"] / frame["volume_ma20"]).shift(1)
 
-    foreign_data_missing = foreign_df.empty
-    foreign = foreign_df.copy()
-    if foreign.empty:
-        foreign = pd.DataFrame({"date": frame["date"], "foreign_net": 0})
-    foreign = foreign.sort_values("date").drop_duplicates(subset=["date"])
-    foreign["foreign_buy_streak"] = consecutive_positive(foreign["foreign_net"])
+    bb = add_bollinger_bands(frame["close"], config.bb_period, config.bb_std)
+    frame = pd.concat([frame, bb], axis=1)
+    kd = add_stochastic(frame["high"], frame["low"], frame["close"], config.kd_k_period, config.kd_d_period)
+    frame = pd.concat([frame, kd], axis=1)
+    frame["obv"] = add_obv(frame["close"], frame["volume"])
+    frame["obv_ma"] = add_sma(frame["obv"], config.obv_ma_window)
+
+    institutional_missing = institutional_df.empty
+    inst = institutional_df.copy()
+    if inst.empty:
+        inst = pd.DataFrame({"date": frame["date"], "foreign_net": 0, "invest_trust_net": 0, "dealer_net": 0})
+    inst = inst.sort_values("date").drop_duplicates(subset=["date"])
+    inst["foreign_buy_streak"] = consecutive_positive(inst["foreign_net"])
+    inst["invest_trust_streak"] = consecutive_positive(inst["invest_trust_net"])
+
+    merge_inst_cols = ["date", "foreign_net", "foreign_buy_streak",
+                       "invest_trust_net", "invest_trust_streak", "dealer_net"]
+    merge_inst_cols = [c for c in merge_inst_cols if c in inst.columns]
 
     merged = frame.merge(
         market_df[["date", "market_ma60", "market_above_ma60", "market_return_5d"]],
-        on="date",
-        how="left",
-    ).merge(
-        foreign[["date", "foreign_net", "foreign_buy_streak"]],
-        on="date",
-        how="left",
-    )
+        on="date", how="left",
+    ).merge(inst[merge_inst_cols], on="date", how="left")
 
+    for col in ["foreign_net", "foreign_buy_streak", "invest_trust_net", "invest_trust_streak", "dealer_net"]:
+        if col not in merged.columns:
+            merged[col] = 0
     merged["foreign_net"] = merged["foreign_net"].fillna(0)
     merged["foreign_buy_streak"] = merged["foreign_buy_streak"].fillna(0)
+    merged["invest_trust_net"] = merged["invest_trust_net"].fillna(0)
+    merged["invest_trust_streak"] = merged["invest_trust_streak"].fillna(0)
+    merged["dealer_net"] = merged["dealer_net"].fillna(0)
     merged["relative_strength_5d"] = merged["return_5d"] - merged["market_return_5d"]
 
+    # ── Core signals ──────────────────────────────────────────────────────────
     merged["macd_golden_cross"] = (
         (merged["macd"].shift(1) <= merged["macd_signal"].shift(1))
         & (merged["macd"] > merged["macd_signal"])
@@ -131,13 +153,29 @@ def prepare_stock_signals(
     merged["rsi_strong"] = merged["rsi14"] > config.rsi_threshold
     merged["adx_trending"] = merged["adx14"] > config.adx_threshold
     merged["breakout_20d"] = merged["close"] > merged["close_20d_high"]
-    merged["foreign_buy_3d"] = merged["foreign_buy_streak"] >= config.foreign_buy_streak
-    if foreign_data_missing:
-        merged["foreign_buy_3d"] = False
     merged["avoid_chase"] = merged["return_5d"] < config.max_recent_rise_pct
     merged["liquidity_ok"] = merged["amount_ma20"] > config.min_amount_ma20
+
+    # ── Soft signals (籌碼 + 技術) ────────────────────────────────────────────
+    merged["foreign_buy_3d"] = merged["foreign_buy_streak"] >= config.foreign_buy_streak
+    if institutional_missing:
+        merged["foreign_buy_3d"] = False
+
     merged["stronger_than_market"] = merged["relative_strength_5d"] > 0
 
+    merged["kd_golden_cross"] = (
+        (merged["stoch_k"].shift(1) <= merged["stoch_d"].shift(1))
+        & (merged["stoch_k"] > merged["stoch_d"])
+        & (merged["stoch_k"] < 80)
+    )
+
+    merged["obv_uptrend"] = merged["obv"] > merged["obv_ma"]
+
+    merged["invest_trust_buy_2d"] = merged["invest_trust_streak"] >= config.invest_trust_buy_streak
+    if institutional_missing:
+        merged["invest_trust_buy_2d"] = False
+
+    # ── Candlestick filters ───────────────────────────────────────────────────
     body = (merged["close"] - merged["open"]).abs()
     upper_shadow = merged["high"] - merged[["open", "close"]].max(axis=1)
     merged["long_upper_shadow"] = (body > 0) & (upper_shadow > body * 2)
@@ -149,38 +187,25 @@ def prepare_stock_signals(
         (merged["prev_volume_ratio"] > config.volume_multiplier)
         & ((merged["open"] / merged["prev_close"]) - 1 > 0.03)
     )
-
     merged["earnings_blocked"] = _build_earnings_blocker(
-        merged.set_index("date").index,
-        earnings_dates,
-        config,
+        merged.set_index("date").index, earnings_dates, config,
     ).values
 
     hard_entry_columns = [
-        "macd_golden_cross",
-        "hist_turn_positive",
-        "above_ema60",
-        "ema60_gt_ema120",
-        "volume_break",
-        "rsi_strong",
-        "breakout_20d",
-        "market_above_ma60",
-        "avoid_chase",
-        "liquidity_ok",
+        "macd_golden_cross", "hist_turn_positive", "above_ema60", "ema60_gt_ema120",
+        "volume_break", "rsi_strong", "breakout_20d", "market_above_ma60",
+        "avoid_chase", "liquidity_ok",
     ]
     soft_entry_columns = [
-        "foreign_buy_3d",
-        "adx_trending",
-        "stronger_than_market",
+        "foreign_buy_3d", "adx_trending", "stronger_than_market",
+        "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
     ]
     entry_columns = hard_entry_columns + soft_entry_columns
     merged["condition_count"] = merged[entry_columns].sum(axis=1)
 
     merged["skip_trade"] = (
-        merged["long_upper_shadow"]
-        | merged["open_high_close_low"]
-        | merged["gap_chase_after_blowout"]
-        | merged["earnings_blocked"]
+        merged["long_upper_shadow"] | merged["open_high_close_low"]
+        | merged["gap_chase_after_blowout"] | merged["earnings_blocked"]
     )
     merged["entry_signal"] = merged[hard_entry_columns].all(axis=1) & ~merged["skip_trade"]
     merged["entry_score"] = (
@@ -189,8 +214,11 @@ def prepare_stock_signals(
         + merged["volume_ratio"].fillna(0) * 10
         + merged["adx14"].fillna(0)
         + merged["foreign_buy_3d"].astype(int) * 25
-        + merged["adx_trending"].astype(int) * 20
-        + merged["stronger_than_market"].astype(int) * 15
+        + merged["invest_trust_buy_2d"].astype(int) * 20
+        + merged["kd_golden_cross"].astype(int) * 20
+        + merged["obv_uptrend"].astype(int) * 15
+        + merged["adx_trending"].astype(int) * 15
+        + merged["stronger_than_market"].astype(int) * 10
     )
 
     merged["macd_death_cross"] = (
@@ -214,7 +242,6 @@ def prepare_stock_signals(
         })
 
     merged[["entry_reason", "skip_reason", "base_exit_reason"]] = merged.apply(_build_all_reasons, axis=1)
-
     return merged
 
 
@@ -249,45 +276,24 @@ def rank_candidates(
         watchlist = watchlist[pd.to_numeric(watchlist["close"], errors="coerce") <= max_price].copy()
 
     candidate_columns = [
-        "date",
-        "stock_id",
-        "name",
-        "industry_category",
-        "close",
-        "condition_count",
-        "entry_score",
-        "rsi14",
-        "adx14",
-        "volume_ratio",
-        "volume_ma20",
-        "return_5d",
-        "relative_strength_5d",
-        "foreign_buy_streak",
-        "entry_reason",
-        "skip_reason",
+        "date", "stock_id", "name", "industry_category", "close",
+        "condition_count", "entry_score", "rsi14", "adx14", "atr14",
+        "volume_ratio", "volume_ma20", "return_5d", "relative_strength_5d",
+        "foreign_buy_streak", "invest_trust_streak", "stoch_k", "stoch_d",
+        "bb_pct_b", "obv_uptrend", "entry_reason", "skip_reason",
     ]
     watch_columns = [
-        "date",
-        "stock_id",
-        "name",
-        "industry_category",
-        "close",
-        "condition_count",
-        "entry_score",
-        "volume_ma20",
-        "skip_reason",
-        "entry_reason",
+        "date", "stock_id", "name", "industry_category", "close",
+        "condition_count", "entry_score", "volume_ma20", "skip_reason", "entry_reason",
     ]
 
+    # Only keep columns that exist
+    candidate_columns = [c for c in candidate_columns if c in snapshot.columns]
+    watch_columns = [c for c in watch_columns if c in snapshot.columns]
+
     if prefer_lower_price:
-        candidates = candidates.sort_values(
-            ["condition_count", "close", "entry_score"],
-            ascending=[False, True, False],
-        ).head(top_n)
-        watchlist = watchlist.sort_values(
-            ["condition_count", "close", "entry_score"],
-            ascending=[False, True, False],
-        ).head(top_n)
+        candidates = candidates.sort_values(["condition_count", "close", "entry_score"], ascending=[False, True, False]).head(top_n)
+        watchlist = watchlist.sort_values(["condition_count", "close", "entry_score"], ascending=[False, True, False]).head(top_n)
     else:
         candidates = candidates.sort_values(["entry_score", "condition_count"], ascending=[False, False]).head(top_n)
         watchlist = watchlist.sort_values(["condition_count", "entry_score"], ascending=[False, False]).head(top_n)

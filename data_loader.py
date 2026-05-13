@@ -192,33 +192,60 @@ def fetch_market_index(
     return market
 
 
-def fetch_foreign_investor_data(
+_INSTITUTION_PATTERNS: dict[str, list[str]] = {
+    "foreign_net": ["Foreign", "外資"],
+    "invest_trust_net": ["Investment_Trust", "投信"],
+    "dealer_net": ["Dealer", "自營"],
+}
+
+
+def fetch_institutional_data(
     client: FinMindClient,
     stock_id: str,
     start_date: str,
     end_date: str,
 ) -> pd.DataFrame:
+    """Return daily net buy/sell for 外資, 投信, 自營商."""
     frame = client.fetch_dataset(
         "TaiwanStockInstitutionalInvestorsBuySell",
         data_id=stock_id,
         start_date=start_date,
         end_date=end_date,
     )
+    empty = pd.DataFrame(columns=["date", "foreign_net", "invest_trust_net", "dealer_net"])
     if frame.empty:
-        return pd.DataFrame(columns=["date", "foreign_net"])
+        return empty
 
-    mask = frame["name"].astype(str).str.contains("Foreign", case=False, na=False)
-    filtered = frame.loc[mask].copy()
-    if filtered.empty:
-        return pd.DataFrame(columns=["date", "foreign_net"])
+    frame["date"] = pd.to_datetime(frame["date"])
+    frame["buy"] = pd.to_numeric(frame["buy"], errors="coerce").fillna(0)
+    frame["sell"] = pd.to_numeric(frame["sell"], errors="coerce").fillna(0)
+    frame["net"] = frame["buy"] - frame["sell"]
+    name_col = frame["name"].astype(str)
 
-    filtered["date"] = pd.to_datetime(filtered["date"])
-    filtered["buy"] = pd.to_numeric(filtered["buy"], errors="coerce").fillna(0)
-    filtered["sell"] = pd.to_numeric(filtered["sell"], errors="coerce").fillna(0)
-    filtered["foreign_net"] = filtered["buy"] - filtered["sell"]
-    grouped = filtered.groupby("date", as_index=False)["foreign_net"].sum()
-    grouped = grouped.sort_values("date").reset_index(drop=True)
-    return grouped
+    result = frame[["date"]].drop_duplicates().sort_values("date").copy()
+    for col, patterns in _INSTITUTION_PATTERNS.items():
+        mask = name_col.str.contains("|".join(patterns), case=False, na=False)
+        if mask.any():
+            grouped = frame.loc[mask].groupby("date", as_index=False)["net"].sum().rename(columns={"net": col})
+            result = result.merge(grouped, on="date", how="left")
+        else:
+            result[col] = 0.0
+    for col in ["foreign_net", "invest_trust_net", "dealer_net"]:
+        result[col] = result[col].fillna(0)
+    return result.sort_values("date").reset_index(drop=True)
+
+
+def fetch_foreign_investor_data(
+    client: FinMindClient,
+    stock_id: str,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    """Deprecated: use fetch_institutional_data instead."""
+    df = fetch_institutional_data(client, stock_id, start_date, end_date)
+    if df.empty:
+        return pd.DataFrame(columns=["date", "foreign_net"])
+    return df[["date", "foreign_net"]]
 
 
 def fetch_financial_statement_dates(

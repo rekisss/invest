@@ -77,12 +77,13 @@ def run_backtest(
                 if frame is None or date not in frame.index:
                     continue
                 price = float(frame.loc[date, "open"])
+                effective_buy = price * (1 + config.slippage_pct)
                 risk_budget = portfolio_equity(cash, positions, prepared, date) * config.risk_per_trade
-                risk_per_share = price * config.stop_loss_pct
+                risk_per_share = effective_buy * config.stop_loss_pct
                 if risk_per_share <= 0:
                     continue
                 shares_by_risk = math.floor(risk_budget / risk_per_share)
-                shares_by_cash = math.floor(cash / price)
+                shares_by_cash = math.floor(cash / effective_buy)
                 quantity = int(min(shares_by_risk, shares_by_cash))
                 if quantity <= 0:
                     continue
@@ -91,13 +92,13 @@ def run_backtest(
                     stock_id=stock_id,
                     name=name,
                     entry_date=date,
-                    entry_price=price,
+                    entry_price=effective_buy,
                     quantity=quantity,
                     initial_quantity=quantity,
-                    peak_price=price,
+                    peak_price=effective_buy,
                 )
                 positions[stock_id] = position
-                cash -= quantity * price * (1 + config.brokerage_fee_pct)
+                cash -= quantity * effective_buy * (1 + config.brokerage_fee_pct)
                 next_position_id += 1
                 opened_today += 1
             pending_entries.clear()
@@ -126,9 +127,10 @@ def run_backtest(
 
                 if not position.partial_taken and close_price >= position.entry_price * (1 + config.take_profit_pct):
                     sell_qty = max(1, position.quantity // 2)
-                    fill = _close_quantity(position, sell_qty, close_price, date, "take_profit_10pct_partial")
+                    effective_sell = close_price * (1 - config.slippage_pct)
+                    fill = _close_quantity(position, sell_qty, effective_sell, date, "take_profit_10pct_partial")
                     fills.append(fill)
-                    cash += sell_qty * close_price * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
+                    cash += sell_qty * effective_sell * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
                     position.quantity -= sell_qty
                     position.partial_taken = True
 
@@ -137,9 +139,10 @@ def run_backtest(
 
                 if exit_reasons:
                     sell_qty = position.quantity
-                    fill = _close_quantity(position, sell_qty, close_price, date, "|".join(exit_reasons))
+                    effective_sell = close_price * (1 - config.slippage_pct)
+                    fill = _close_quantity(position, sell_qty, effective_sell, date, "|".join(exit_reasons))
                     fills.append(fill)
-                    cash += sell_qty * close_price * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
+                    cash += sell_qty * effective_sell * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
                     del positions[stock_id]
                     continue
 
@@ -163,13 +166,14 @@ def run_backtest(
                     continue
 
                 price = float(row["close"])
+                effective_buy = price * (1 + config.slippage_pct)
                 risk_budget = portfolio_equity(cash, positions, prepared, date) * config.risk_per_trade
-                risk_per_share = price * config.stop_loss_pct
+                risk_per_share = effective_buy * config.stop_loss_pct
                 if risk_per_share <= 0:
                     continue
 
                 shares_by_risk = math.floor(risk_budget / risk_per_share)
-                shares_by_cash = math.floor(cash / price)
+                shares_by_cash = math.floor(cash / effective_buy)
                 quantity = int(min(shares_by_risk, shares_by_cash))
                 if quantity <= 0:
                     continue
@@ -179,13 +183,13 @@ def run_backtest(
                     stock_id=stock_id,
                     name=str(row["name"]),
                     entry_date=date,
-                    entry_price=price,
+                    entry_price=effective_buy,
                     quantity=quantity,
                     initial_quantity=quantity,
-                    peak_price=price,
+                    peak_price=effective_buy,
                 )
                 positions[stock_id] = position
-                cash -= quantity * price * (1 + config.brokerage_fee_pct)
+                cash -= quantity * effective_buy * (1 + config.brokerage_fee_pct)
                 next_position_id += 1
                 opened_today += 1
 
@@ -203,9 +207,10 @@ def run_backtest(
         final_date = master_dates[-1]
         for stock_id, position in list(positions.items()):
             close_price = _get_close_price(prepared[stock_id], final_date)
-            fill = _close_quantity(position, position.quantity, close_price, final_date, "final_liquidation")
+            effective_sell = close_price * (1 - config.slippage_pct)
+            fill = _close_quantity(position, position.quantity, effective_sell, final_date, "final_liquidation")
             fills.append(fill)
-            cash += position.quantity * close_price * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
+            cash += position.quantity * effective_sell * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
             del positions[stock_id]
         equity_rows[-1]["cash"] = cash
         equity_rows[-1]["market_value"] = 0.0
