@@ -8,7 +8,7 @@ import requests
 
 
 def _confidence_score(row: Any) -> int:
-    cond = min(int(float(row.get("condition_count", 0) or 0)) / 22 * 55, 55)
+    cond = min(int(float(row.get("condition_count", 0) or 0)) / 23 * 55, 55)
     adx_pts = min(float(row.get("adx14", 0) or 0) / 40 * 20, 20)
     rs_pts = min(max(float(row.get("relative_strength_5d", 0) or 0) * 200, 0), 15)
     vol_pts = min(max((float(row.get("volume_ratio", 0) or 0) - 1) / 2 * 10, 0), 10)
@@ -59,6 +59,7 @@ def _setup_database(database_id: str) -> None:
         "產業別": {"rich_text": {}},
         "外資連買天數": {"number": {"format": "number"}},
         "投信連買天數": {"number": {"format": "number"}},
+        "自營連買天數": {"number": {"format": "number"}},
         "5日漲幅%": {"number": {"format": "number"}},
         "相對強度": {"number": {"format": "number"}},
         "成交量比": {"number": {"format": "number"}},
@@ -140,6 +141,7 @@ def sync_scan_results(
         industry = str(row.get("industry_category", "") or "")
         foreign_streak = int(row.get("foreign_buy_streak", 0) or 0)
         invest_trust_streak = int(row.get("invest_trust_streak", 0) or 0)
+        dealer_streak = int(row.get("dealer_buy_streak", 0) or 0)
         return_5d = float(row.get("return_5d", 0) or 0)
         rs5d = float(row.get("relative_strength_5d", 0) or 0)
         vol_ratio = float(row.get("volume_ratio", 0) or 0)
@@ -160,10 +162,11 @@ def sync_scan_results(
             "RSI": {"number": round(rsi, 1)},
             "ADX": {"number": round(adx, 1)},
             "KD值": {"number": round(stoch_k, 1)},
-            "條件達成": {"rich_text": _rt(f"{condition_count}/22")},
+            "條件達成": {"rich_text": _rt(f"{condition_count}/23")},
             "產業別": {"rich_text": _rt(industry)},
             "外資連買天數": {"number": foreign_streak},
             "投信連買天數": {"number": invest_trust_streak},
+            "自營連買天數": {"number": dealer_streak},
             "5日漲幅%": {"number": round(return_5d * 100, 2)},
             "相對強度": {"number": round(rs5d * 100, 2)},
             "成交量比": {"number": round(vol_ratio, 2)},

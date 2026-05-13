@@ -102,13 +102,14 @@ ENTRY_REASON_LABELS = {
     "cci_momentum": "CCI動能強勁",
     "mfi_strong": "MFI資金流入",
     "above_ichimoku_cloud": "站上一目雲",
+    "dealer_buy_3d": "自營連買3天",
 }
 
-_MAX_CONDITION_COUNT = 22
+_MAX_CONDITION_COUNT = 23
 
 
 def _confidence_score(row: object) -> int:
-    cond = min(int(float(row.get("condition_count", 0) or 0)) / 22 * 55, 55)  # type: ignore[union-attr]
+    cond = min(int(float(row.get("condition_count", 0) or 0)) / 23 * 55, 55)  # type: ignore[union-attr]
     adx_pts = min(float(row.get("adx14", 0) or 0) / 40 * 20, 20)  # type: ignore[union-attr]
     rs_pts = min(max(float(row.get("relative_strength_5d", 0) or 0) * 200, 0), 15)  # type: ignore[union-attr]
     vol_pts = min(max((float(row.get("volume_ratio", 0) or 0) - 1) / 2 * 10, 0), 10)  # type: ignore[union-attr]
@@ -258,6 +259,8 @@ def collect_signals(
                 "foreign_buy_streak", "invest_trust_streak",
                 "stoch_k", "stoch_d", "bb_pct_b", "bb_bandwidth",
                 "obv_uptrend", "bb_squeeze_breakout", "breakout_volume_confirm",
+                "dealer_buy_streak", "dealer_buy_3d",
+                "williams_r", "cci20", "mfi14", "mfi_strong", "above_ichimoku_cloud",
             ]
             _signal_cols_present = [c for c in _signal_cols if c in signal_frame.columns]
             signal_frames.append(signal_frame[_signal_cols_present].copy())
@@ -343,13 +346,18 @@ def format_scan_message_rich(
         obs = recommend_observation_period(row, is_candidate=True)
         stoch_k = float(row["stoch_k"]) if "stoch_k" in row and pd.notna(row.get("stoch_k")) else None
         kd_txt = f" | KD `{stoch_k:.0f}`" if stoch_k is not None else ""
+        mfi_val = float(row["mfi14"]) if "mfi14" in row and pd.notna(row.get("mfi14")) else None
+        mfi_txt = f" | MFI `{mfi_val:.0f}`" if mfi_val is not None else ""
         invest_streak = int(row.get("invest_trust_streak", 0) or 0)
-        invest_txt = f" | 投信連買 `{invest_streak}d`" if invest_streak >= 1 else ""
+        invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
+        dealer_streak = int(row.get("dealer_buy_streak", 0) or 0)
+        dealer_txt = f" | 自營 `{dealer_streak}d`" if dealer_streak >= 1 else ""
+        ichi_txt = " | ☁雲上" if bool(row.get("above_ichimoku_cloud")) else ""
         lines.append(f"━━━━━━━━━━━━━━━━━━━━")
         lines.append(f"**{row['stock_id']}** {row['name']}{price_note}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`")
         lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
-        lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`")
-        lines.append(f"🏦 外資連買 `{int(row.get('foreign_buy_streak', 0))}d`{invest_txt}")
+        lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ichi_txt}")
+        lines.append(f"🏦 外資連買 `{int(row.get('foreign_buy_streak', 0))}d`{invest_txt}{dealer_txt}")
         lines.append(f"🔍 {_reason_labels(row.get('entry_reason'), max_items=5)}")
         if brief:
             lines.append(f"  {brief.strip()}")
@@ -393,7 +401,7 @@ def format_hybrid_message_rich(
             price_tag = _low_price_tag(close_value)
             price_note = f" `{price_tag}`" if price_tag else ""
             score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
-            score_text = f"`{int(score_value)}/22`" if score_value is not None else "manual"
+            score_text = f"`{int(score_value)}/23`" if score_value is not None else "manual"
             brief = _news_brief(str(row["stock_id"]), news_map)
             lines.append(
                 f"• **{row['stock_id']}** {row['name']} | 收 {close_text}{price_note} | {score_text} | {_reason_labels(row.get('entry_reason'))}{brief}"
@@ -614,7 +622,7 @@ def format_sponsor_message(
             close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
             score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
             close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
-            score_text = f"{int(score_value)}/22" if score_value is not None else "manual"
+            score_text = f"{int(score_value)}/23" if score_value is not None else "manual"
             lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
 
     if not watchlist.empty:
@@ -623,7 +631,7 @@ def format_sponsor_message(
             close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
             score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
             close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
-            score_text = f"{int(score_value)}/22" if score_value is not None else "manual"
+            score_text = f"{int(score_value)}/23" if score_value is not None else "manual"
             lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
 
     if not intraday_rows.empty:

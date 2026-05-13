@@ -131,9 +131,11 @@ def prepare_stock_signals(
     inst = inst.sort_values("date").drop_duplicates(subset=["date"])
     inst["foreign_buy_streak"] = consecutive_positive(inst["foreign_net"])
     inst["invest_trust_streak"] = consecutive_positive(inst["invest_trust_net"])
+    inst["dealer_buy_streak"] = consecutive_positive(inst["dealer_net"])
 
     merge_inst_cols = ["date", "foreign_net", "foreign_buy_streak",
-                       "invest_trust_net", "invest_trust_streak", "dealer_net"]
+                       "invest_trust_net", "invest_trust_streak",
+                       "dealer_net", "dealer_buy_streak"]
     merge_inst_cols = [c for c in merge_inst_cols if c in inst.columns]
 
     merged = frame.merge(
@@ -141,7 +143,7 @@ def prepare_stock_signals(
         on="date", how="left",
     ).merge(inst[merge_inst_cols], on="date", how="left")
 
-    for col in ["foreign_net", "foreign_buy_streak", "invest_trust_net", "invest_trust_streak", "dealer_net"]:
+    for col in ["foreign_net", "foreign_buy_streak", "invest_trust_net", "invest_trust_streak", "dealer_net", "dealer_buy_streak"]:
         if col not in merged.columns:
             merged[col] = 0
     merged["foreign_net"] = merged["foreign_net"].fillna(0)
@@ -149,6 +151,7 @@ def prepare_stock_signals(
     merged["invest_trust_net"] = merged["invest_trust_net"].fillna(0)
     merged["invest_trust_streak"] = merged["invest_trust_streak"].fillna(0)
     merged["dealer_net"] = merged["dealer_net"].fillna(0)
+    merged["dealer_buy_streak"] = merged["dealer_buy_streak"].fillna(0)
     merged["relative_strength_5d"] = merged["return_5d"] - merged["market_return_5d"]
 
     # ── Core signals ──────────────────────────────────────────────────────────
@@ -185,6 +188,10 @@ def prepare_stock_signals(
     merged["invest_trust_buy_2d"] = merged["invest_trust_streak"] >= config.invest_trust_buy_streak
     if institutional_missing:
         merged["invest_trust_buy_2d"] = False
+
+    merged["dealer_buy_3d"] = merged["dealer_buy_streak"] >= 3
+    if institutional_missing:
+        merged["dealer_buy_3d"] = False
 
     # BB squeeze breakout: bandwidth was narrow (< median) and now price breaks above upper band
     bb_bandwidth_median = merged["bb_bandwidth"].rolling(window=60, min_periods=20).median()
@@ -238,7 +245,7 @@ def prepare_stock_signals(
     soft_entry_columns = [
         "foreign_buy_3d", "adx_trending", "stronger_than_market",
         "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
-        "bb_squeeze_breakout", "breakout_volume_confirm",
+        "dealer_buy_3d", "bb_squeeze_breakout", "breakout_volume_confirm",
         "williams_r_recovery", "cci_momentum",
         "mfi_strong", "above_ichimoku_cloud",
     ]
@@ -257,6 +264,7 @@ def prepare_stock_signals(
         + merged["adx14"].fillna(0)
         + merged["foreign_buy_3d"].astype(int) * 25
         + merged["invest_trust_buy_2d"].astype(int) * 20
+        + merged["dealer_buy_3d"].astype(int) * 15
         + merged["kd_golden_cross"].astype(int) * 20
         + merged["obv_uptrend"].astype(int) * 15
         + merged["adx_trending"].astype(int) * 15
@@ -302,7 +310,7 @@ def compute_market_breadth(snapshot: pd.DataFrame) -> dict[str, object]:
         "macd_golden_cross", "volume_break", "rsi_strong", "breakout_20d",
         "foreign_buy_3d", "adx_trending", "stronger_than_market",
         "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
-        "mfi_strong", "above_ichimoku_cloud",
+        "dealer_buy_3d", "mfi_strong", "above_ichimoku_cloud",
     ]
     result: dict[str, object] = {"total_stocks": total}
     for col in breadth_cols:
@@ -349,7 +357,8 @@ def rank_candidates(
         "date", "stock_id", "name", "industry_category", "close",
         "condition_count", "entry_score", "rsi14", "adx14", "atr14",
         "volume_ratio", "volume_ma20", "return_5d", "relative_strength_5d",
-        "foreign_buy_streak", "invest_trust_streak", "stoch_k", "stoch_d",
+        "foreign_buy_streak", "invest_trust_streak", "dealer_buy_streak",
+        "stoch_k", "stoch_d",
         "bb_pct_b", "bb_bandwidth", "obv_uptrend",
         "bb_squeeze_breakout", "breakout_volume_confirm",
         "mfi14", "mfi_strong", "above_ichimoku_cloud",
