@@ -19,6 +19,7 @@ class Position:
     initial_quantity: int
     peak_price: float
     partial_taken: bool = False
+    atr_at_entry: float = 0.0
 
 
 @dataclass
@@ -87,6 +88,7 @@ def run_backtest(
                 quantity = int(min(shares_by_risk, shares_by_cash))
                 if quantity <= 0:
                     continue
+                atr_val = float(frame.loc[date, "atr14"]) if "atr14" in frame.columns and date in frame.index and pd.notna(frame.loc[date, "atr14"]) else 0.0
                 position = Position(
                     position_id=next_position_id,
                     stock_id=stock_id,
@@ -96,6 +98,7 @@ def run_backtest(
                     quantity=quantity,
                     initial_quantity=quantity,
                     peak_price=effective_buy,
+                    atr_at_entry=atr_val,
                 )
                 positions[stock_id] = position
                 cash -= quantity * effective_buy * (1 + config.brokerage_fee_pct)
@@ -122,8 +125,20 @@ def run_backtest(
                     exit_reasons.append("close_below_ema20")
                 if bool(row["close_below_swing_low"]):
                     exit_reasons.append("close_below_swing_low")
-                if close_price <= position.entry_price * (1 - config.stop_loss_pct):
+
+                # Stop loss: ATR-based or fixed pct
+                if config.use_atr_stop and position.atr_at_entry > 0:
+                    stop_level = position.entry_price - config.atr_stop_multiplier * position.atr_at_entry
+                    if close_price <= stop_level:
+                        exit_reasons.append("atr_stop")
+                elif close_price <= position.entry_price * (1 - config.stop_loss_pct):
                     exit_reasons.append("stop_loss_5pct")
+
+                # Max holding period
+                if config.max_holding_days > 0:
+                    days_held = (date - position.entry_date).days
+                    if days_held >= config.max_holding_days:
+                        exit_reasons.append("max_holding_period")
 
                 if not position.partial_taken and close_price >= position.entry_price * (1 + config.take_profit_pct):
                     sell_qty = max(1, position.quantity // 2)
@@ -178,6 +193,7 @@ def run_backtest(
                 if quantity <= 0:
                     continue
 
+                atr_val = float(row["atr14"]) if "atr14" in row.index and pd.notna(row.get("atr14")) else 0.0
                 position = Position(
                     position_id=next_position_id,
                     stock_id=stock_id,
@@ -187,6 +203,7 @@ def run_backtest(
                     quantity=quantity,
                     initial_quantity=quantity,
                     peak_price=effective_buy,
+                    atr_at_entry=atr_val,
                 )
                 positions[stock_id] = position
                 cash -= quantity * effective_buy * (1 + config.brokerage_fee_pct)

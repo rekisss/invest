@@ -49,6 +49,9 @@ class StrategyConfig:
     brokerage_fee_pct: float = 0.001425   # 0.1425% 手續費（買賣各收）
     transaction_tax_pct: float = 0.003    # 0.3% 證交稅（賣出時收）
     slippage_pct: float = 0.001           # 0.1% 滑點（買賣各收）
+    use_atr_stop: bool = False            # Use ATR-based stop instead of fixed %
+    atr_stop_multiplier: float = 2.0      # Stop at entry_price - N * ATR14
+    max_holding_days: int = 0             # Force-exit after N calendar days (0 = disabled)
 
 
 def prepare_market_frame(market_df: pd.DataFrame, config: StrategyConfig) -> pd.DataFrame:
