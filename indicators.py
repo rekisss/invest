@@ -85,6 +85,33 @@ def consecutive_positive(series: pd.Series) -> pd.Series:
     return pd.Series(streaks, index=series.index, dtype="int64")
 
 
+def add_mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int = 14) -> pd.Series:
+    typical_price = (high + low + close) / 3
+    raw_money_flow = typical_price * volume
+    tp_change = typical_price.diff()
+    positive_mf = raw_money_flow.where(tp_change > 0, 0.0)
+    negative_mf = raw_money_flow.where(tp_change < 0, 0.0)
+    pos_sum = positive_mf.rolling(window=period, min_periods=period).sum()
+    neg_sum = negative_mf.rolling(window=period, min_periods=period).sum().abs()
+    mfi = 100 - (100 / (1 + pos_sum / neg_sum.replace(0, np.nan)))
+    return mfi.fillna(50)
+
+
+def add_ichimoku(high: pd.Series, low: pd.Series, tenkan_period: int = 9, kijun_period: int = 26, senkou_b_period: int = 52) -> pd.DataFrame:
+    tenkan = (high.rolling(tenkan_period).max() + low.rolling(tenkan_period).min()) / 2
+    kijun = (high.rolling(kijun_period).max() + low.rolling(kijun_period).min()) / 2
+    senkou_a = ((tenkan + kijun) / 2).shift(kijun_period)
+    senkou_b = ((high.rolling(senkou_b_period).max() + low.rolling(senkou_b_period).min()) / 2).shift(kijun_period)
+    chikou = high.shift(-kijun_period)
+    return pd.DataFrame({
+        "ichi_tenkan": tenkan,
+        "ichi_kijun": kijun,
+        "ichi_senkou_a": senkou_a,
+        "ichi_senkou_b": senkou_b,
+        "ichi_chikou": chikou,
+    })
+
+
 def add_williams_r(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
     highest_high = high.rolling(window=period, min_periods=period).max()
     lowest_low = low.rolling(window=period, min_periods=period).min()

@@ -8,7 +8,7 @@ import requests
 
 
 def _confidence_score(row: Any) -> int:
-    cond = min(int(float(row.get("condition_count", 0) or 0)) / 20 * 55, 55)
+    cond = min(int(float(row.get("condition_count", 0) or 0)) / 22 * 55, 55)
     adx_pts = min(float(row.get("adx14", 0) or 0) / 40 * 20, 20)
     rs_pts = min(max(float(row.get("relative_strength_5d", 0) or 0) * 200, 0), 15)
     vol_pts = min(max((float(row.get("volume_ratio", 0) or 0) - 1) / 2 * 10, 0), 10)
@@ -160,7 +160,7 @@ def sync_scan_results(
             "RSI": {"number": round(rsi, 1)},
             "ADX": {"number": round(adx, 1)},
             "KD值": {"number": round(stoch_k, 1)},
-            "條件達成": {"rich_text": _rt(f"{condition_count}/20")},
+            "條件達成": {"rich_text": _rt(f"{condition_count}/22")},
             "產業別": {"rich_text": _rt(industry)},
             "外資連買天數": {"number": foreign_streak},
             "投信連買天數": {"number": invest_trust_streak},

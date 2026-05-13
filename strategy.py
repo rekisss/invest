@@ -6,8 +6,8 @@ import pandas as pd
 
 from indicators import (
     add_adx, add_atr, add_bollinger_bands, add_cci, add_donchian_channel,
-    add_ema, add_macd, add_obv, add_rsi, add_sma, add_stochastic,
-    add_williams_r, consecutive_positive,
+    add_ema, add_ichimoku, add_macd, add_mfi, add_obv, add_rsi, add_sma,
+    add_stochastic, add_williams_r, consecutive_positive,
 )
 
 
@@ -120,6 +120,9 @@ def prepare_stock_signals(
     frame["cci20"] = add_cci(frame["high"], frame["low"], frame["close"])
     dc = add_donchian_channel(frame["high"], frame["low"])
     frame = pd.concat([frame, dc], axis=1)
+    frame["mfi14"] = add_mfi(frame["high"], frame["low"], frame["close"], frame["volume"])
+    ichi = add_ichimoku(frame["high"], frame["low"])
+    frame = pd.concat([frame, ichi], axis=1)
 
     institutional_missing = institutional_df.empty
     inst = institutional_df.copy()
@@ -204,6 +207,13 @@ def prepare_stock_signals(
         & (merged["cci20"] >= 100)
     )
 
+    # MFI > 50: money is flowing into the stock (volume-weighted buying pressure)
+    merged["mfi_strong"] = merged["mfi14"] > 50
+
+    # Price above Ichimoku cloud: bullish cloud confirmation (close > both senkou spans)
+    cloud_top = merged[["ichi_senkou_a", "ichi_senkou_b"]].max(axis=1)
+    merged["above_ichimoku_cloud"] = merged["close"] > cloud_top
+
     # ── Candlestick filters ───────────────────────────────────────────────────
     body = (merged["close"] - merged["open"]).abs()
     upper_shadow = merged["high"] - merged[["open", "close"]].max(axis=1)
@@ -230,6 +240,7 @@ def prepare_stock_signals(
         "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
         "bb_squeeze_breakout", "breakout_volume_confirm",
         "williams_r_recovery", "cci_momentum",
+        "mfi_strong", "above_ichimoku_cloud",
     ]
     entry_columns = hard_entry_columns + soft_entry_columns
     merged["condition_count"] = merged[entry_columns].sum(axis=1)
@@ -254,6 +265,8 @@ def prepare_stock_signals(
         + merged["breakout_volume_confirm"].astype(int) * 20
         + merged["williams_r_recovery"].astype(int) * 15
         + merged["cci_momentum"].astype(int) * 15
+        + merged["mfi_strong"].astype(int) * 10
+        + merged["above_ichimoku_cloud"].astype(int) * 20
     )
 
     merged["macd_death_cross"] = (
@@ -289,6 +302,7 @@ def compute_market_breadth(snapshot: pd.DataFrame) -> dict[str, object]:
         "macd_golden_cross", "volume_break", "rsi_strong", "breakout_20d",
         "foreign_buy_3d", "adx_trending", "stronger_than_market",
         "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
+        "mfi_strong", "above_ichimoku_cloud",
     ]
     result: dict[str, object] = {"total_stocks": total}
     for col in breadth_cols:
@@ -338,6 +352,7 @@ def rank_candidates(
         "foreign_buy_streak", "invest_trust_streak", "stoch_k", "stoch_d",
         "bb_pct_b", "bb_bandwidth", "obv_uptrend",
         "bb_squeeze_breakout", "breakout_volume_confirm",
+        "mfi14", "mfi_strong", "above_ichimoku_cloud",
         "entry_reason", "skip_reason",
     ]
     watch_columns = [
