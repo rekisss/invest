@@ -16,8 +16,11 @@ import requests
 from requests.adapters import HTTPAdapter
 
 
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
 def _clean_html(text: str) -> str:
-    return re.sub(r"<[^>]+>", "", text).strip()
+    return _HTML_TAG_RE.sub("", text).strip()
 
 
 POSITIVE_KEYWORDS = [
@@ -206,18 +209,6 @@ def _count_hits(pattern: re.Pattern, text: str) -> int:
         if not any(c in _NEGATION_CHARS for c in preceding):
             count += 1
     return count
-
-
-def _keyword_hit(text: str, keyword: str) -> bool:
-    idx = 0
-    while True:
-        pos = text.find(keyword, idx)
-        if pos < 0:
-            return False
-        preceding = text[max(0, pos - 2):pos]
-        if not any(c in _NEGATION_CHARS for c in preceding):
-            return True
-        idx = pos + 1
 
 
 def _classify_sentiment(title: str) -> str:

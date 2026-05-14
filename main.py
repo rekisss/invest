@@ -412,7 +412,7 @@ def collect_signals(
             signals_by_stock[stock_id] = signal_frame
             if not _signal_cols_present:
                 _signal_cols_present = [c for c in _signal_cols if c in signal_frame.columns]
-            signal_frames.append(signal_frame[_signal_cols_present].copy())
+            signal_frames.append(signal_frame[_signal_cols_present])
     return signals_by_stock, signal_frames
 
 

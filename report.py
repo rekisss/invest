@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from pathlib import Path
 
 import matplotlib
@@ -134,7 +135,6 @@ def _write_excel(
         notes_frame.to_excel(writer, sheet_name="notes", index=False)
         if config is not None:
             try:
-                from dataclasses import asdict
                 config_dict = asdict(config)  # type: ignore[arg-type]
                 config_frame = pd.DataFrame(
                     [{"parameter": k, "value": v} for k, v in config_dict.items()]

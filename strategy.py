@@ -198,15 +198,11 @@ def prepare_stock_signals(
         on="date", how="left",
     ).merge(inst[merge_inst_cols], on="date", how="left")
 
-    for col in ["foreign_net", "foreign_buy_streak", "invest_trust_net", "invest_trust_streak", "dealer_net", "dealer_buy_streak"]:
+    _inst_fill_cols = ["foreign_net", "foreign_buy_streak", "invest_trust_net", "invest_trust_streak", "dealer_net", "dealer_buy_streak"]
+    for col in _inst_fill_cols:
         if col not in merged.columns:
-            merged[col] = 0
-    merged["foreign_net"] = merged["foreign_net"].fillna(0)
-    merged["foreign_buy_streak"] = merged["foreign_buy_streak"].fillna(0)
-    merged["invest_trust_net"] = merged["invest_trust_net"].fillna(0)
-    merged["invest_trust_streak"] = merged["invest_trust_streak"].fillna(0)
-    merged["dealer_net"] = merged["dealer_net"].fillna(0)
-    merged["dealer_buy_streak"] = merged["dealer_buy_streak"].fillna(0)
+            merged[col] = 0.0
+    merged[_inst_fill_cols] = merged[_inst_fill_cols].fillna(0)
     merged["relative_strength_5d"] = merged["return_5d"] - merged["market_return_5d"]
 
     # ── Core signals ──────────────────────────────────────────────────────────
@@ -273,12 +269,14 @@ def prepare_stock_signals(
     merged["mfi_strong"] = merged["mfi14"] > 50
 
     # Price above Ichimoku cloud: bullish cloud confirmation (close > both senkou spans)
-    cloud_top = merged[["ichi_senkou_a", "ichi_senkou_b"]].max(axis=1)
-    merged["above_ichimoku_cloud"] = merged["close"] > cloud_top
+    cloud_top = np.fmax(merged["ichi_senkou_a"].to_numpy(), merged["ichi_senkou_b"].to_numpy())
+    merged["above_ichimoku_cloud"] = merged["close"].to_numpy() > cloud_top
 
     # ── Candlestick filters ───────────────────────────────────────────────────
-    body = (merged["close"] - merged["open"]).abs()
-    upper_shadow = merged["high"] - merged[["open", "close"]].max(axis=1)
+    _close_arr = merged["close"].to_numpy()
+    _open_arr = merged["open"].to_numpy()
+    body = np.abs(_close_arr - _open_arr)
+    upper_shadow = merged["high"].to_numpy() - np.maximum(_close_arr, _open_arr)
     merged["long_upper_shadow"] = (body > 0) & (upper_shadow > body * 2)
     merged["open_high_close_low"] = (
         (merged["open"] > merged["prev_close"] * 1.02)

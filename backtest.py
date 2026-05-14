@@ -255,15 +255,10 @@ def run_backtest(
     benchmark_return: float | None = None
 
     # Compute TAIEX benchmark for comparison
-    market_aligned = (
-        pd.to_datetime(market_df["date"])
-        .reset_index(drop=True)
-        .rename("date")
-        .to_frame()
-        .assign(market_close=pd.to_numeric(market_df["close"].values, errors="coerce"))
-        .dropna(subset=["market_close"])
-        .set_index("date")
-    )
+    market_aligned = pd.DataFrame({
+        "date": pd.to_datetime(market_df["date"].values),
+        "market_close": pd.to_numeric(market_df["close"].values, errors="coerce"),
+    }).dropna(subset=["market_close"]).set_index("date")
     if not equity_curve.empty and not market_aligned.empty:
         eq_dates = pd.to_datetime(equity_curve["date"])
         first_date = eq_dates.iloc[0]
@@ -369,7 +364,8 @@ def summarize_trades(fill_frame: pd.DataFrame) -> pd.DataFrame:
             ]
         )
 
-    grouped = fill_frame.groupby("position_id", as_index=False).agg(
+    fill_frame2 = fill_frame.assign(weighted_exit=fill_frame["exit_price"] * fill_frame["quantity"])
+    grouped = fill_frame2.groupby("position_id", as_index=False).agg(
         stock_id=("stock_id", "first"),
         name=("name", "first"),
         entry_date=("entry_date", "first"),
@@ -377,18 +373,14 @@ def summarize_trades(fill_frame: pd.DataFrame) -> pd.DataFrame:
         entry_price=("entry_price", "first"),
         quantity=("quantity", "sum"),
         pnl=("pnl", "sum"),
-    )
-    weighted_exit = (
-        fill_frame.assign(weighted_exit=fill_frame["exit_price"] * fill_frame["quantity"])
-        .groupby("position_id", as_index=False)
-        .agg(weighted_exit=("weighted_exit", "sum"), quantity=("quantity", "sum"))
+        weighted_exit=("weighted_exit", "sum"),
     )
     reasons = (
         fill_frame.groupby("position_id")["reason"]
         .apply(lambda values: " | ".join(values.astype(str)))
         .reset_index(name="exit_reasons")
     )
-    summary = grouped.merge(weighted_exit, on=["position_id", "quantity"]).merge(reasons, on="position_id")
+    summary = grouped.merge(reasons, on="position_id")
     summary["avg_exit_price"] = summary["weighted_exit"] / summary["quantity"]
     summary["return_pct"] = summary["avg_exit_price"] / summary["entry_price"] - 1
     summary = summary.drop(columns=["weighted_exit"])
