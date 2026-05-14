@@ -38,6 +38,18 @@ POSITIVE_KEYWORDS = [
     "毛利率提升",
     "拿下大單",
     "法說會正面",
+    "轉盈",
+    "超預期",
+    "大客戶",
+    "庫藏股",
+    "回購",
+    "股利",
+    "營收成長",
+    "毛利提升",
+    "市佔提升",
+    "供貨穩定",
+    "能見度高",
+    "產能滿載",
 ]
 
 NEGATIVE_KEYWORDS = [
@@ -59,6 +71,18 @@ NEGATIVE_KEYWORDS = [
     "庫存壓力",
     "砍單",
     "目標價下調",
+    "下滑",
+    "縮水",
+    "下修財測",
+    "罰款",
+    "查帳",
+    "債務",
+    "延遲出貨",
+    "毛利下滑",
+    "需求疲軟",
+    "價格競爭",
+    "跌停",
+    "連跌",
 ]
 
 
@@ -109,7 +133,8 @@ class NewsClient:
             pub_date_text = (item.findtext("pubDate") or "").strip()
             published_at = _parse_pub_date(pub_date_text)
             raw_desc = (item.findtext("description") or "").strip()
-            snippet = _clean_html(raw_desc)[:120] + ("…" if len(_clean_html(raw_desc)) > 120 else "")
+            clean_desc = _clean_html(raw_desc)
+            snippet = clean_desc[:120] + ("…" if len(clean_desc) > 120 else "")
             rows.append(
                 {
                     "stock_id": stock_id,

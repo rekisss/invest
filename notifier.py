@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import random
 import time
 from typing import Iterable
 
@@ -36,7 +37,7 @@ def _post_with_retry(url: str, payload: dict, max_attempts: int = 3) -> None:
         except requests.exceptions.RequestException:
             if attempt == max_attempts - 1:
                 raise
-            time.sleep(2 ** attempt)
+            time.sleep(2 ** attempt + random.uniform(0, 0.5))
 
 
 def send_discord_messages(messages: Iterable[str], webhook_url: str | None = None) -> None:
@@ -44,5 +45,7 @@ def send_discord_messages(messages: Iterable[str], webhook_url: str | None = Non
     if not url:
         return
 
-    for message in messages:
+    for i, message in enumerate(messages):
+        if i > 0:
+            time.sleep(0.6)
         _post_with_retry(url, {"content": message})

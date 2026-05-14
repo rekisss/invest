@@ -214,7 +214,9 @@ def _plot_monthly_returns(equity_curve: pd.DataFrame, output_path: Path) -> None
     monthly["return_pct"] = (monthly["equity"] / monthly["prev_equity"] - 1) * 100
 
     pivot = monthly.pivot(index="year", columns="month", values="return_pct")
-    pivot.columns = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][: len(pivot.columns)]
+    _month_names = {1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
+                    7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"}
+    pivot.columns = [_month_names.get(int(m), str(m)) for m in pivot.columns]
 
     fig, ax = plt.subplots(figsize=(14, max(3, len(pivot) * 0.6 + 1)))
     vmax = max(abs(pivot.values[np.isfinite(pivot.values)]).max(), 1) if pivot.size > 0 else 10

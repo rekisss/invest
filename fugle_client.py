@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import random
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -17,7 +18,7 @@ def _retry(func, max_attempts: int = 3, backoff: float = 2.0):
         except Exception as exc:
             last_error = exc
             if attempt < max_attempts - 1:
-                time.sleep(backoff * (2 ** attempt))
+                time.sleep(backoff * (2 ** attempt) + random.uniform(0, 0.5))
     raise last_error  # type: ignore[misc]
 
 
@@ -105,5 +106,6 @@ def fetch_watch_quotes(client: FugleClient, symbols: list[str], workers: int = 5
         frame["error"] = pd.NA
 
     frame["sort_intraday"] = pd.to_numeric(frame["intraday_pct"], errors="coerce").fillna(-999)
-    frame = frame.sort_values(["error", "sort_intraday"], ascending=[True, False], na_position="last").drop(columns=["sort_intraday"])
+    frame["has_error"] = frame["error"].notna() & (frame["error"].astype(str) != "nan")
+    frame = frame.sort_values(["has_error", "sort_intraday"], ascending=[True, False]).drop(columns=["sort_intraday", "has_error"])
     return frame.reset_index(drop=True)
