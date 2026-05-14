@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import os
 import random
+import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
@@ -19,6 +20,7 @@ FINMIND_API_URL = "https://api.finmindtrade.com/api/v4/data"
 class FinMindClient:
     cache_dir: Path = Path("cache")
     timeout: int = 90
+    _session: requests.Session = field(default_factory=requests.Session, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -46,12 +48,12 @@ class FinMindClient:
             ]
         )
         cache_fresh = False
-        if use_cache and cache_path.exists():
-            if cache_ttl_days <= 0:
-                cache_fresh = True
-            else:
-                age_days = (time.time() - cache_path.stat().st_mtime) / 86400
-                cache_fresh = age_days < cache_ttl_days
+        if use_cache:
+            try:
+                mtime = cache_path.stat().st_mtime
+                cache_fresh = cache_ttl_days <= 0 or (time.time() - mtime) / 86400 < cache_ttl_days
+            except FileNotFoundError:
+                pass
         if cache_fresh:
             try:
                 return pd.read_csv(cache_path)
@@ -64,7 +66,7 @@ class FinMindClient:
         last_error: Exception | None = None
         for attempt in range(3):
             try:
-                response = requests.get(
+                response = self._session.get(
                     FINMIND_API_URL,
                     headers=self._auth_headers(),
                     params=request_params,
@@ -163,8 +165,7 @@ def fetch_stock_kbar(
     frame["date"] = pd.to_datetime(frame["date"])
     frame["minute"] = frame["minute"].astype(str)
     numeric_columns = ["open", "high", "low", "close", "volume"]
-    for column in numeric_columns:
-        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    frame[numeric_columns] = frame[numeric_columns].apply(pd.to_numeric, errors="coerce")
     frame = frame.sort_values(["date", "minute"]).reset_index(drop=True)
     return frame
 
@@ -198,6 +199,10 @@ _INSTITUTION_PATTERNS: dict[str, list[str]] = {
     "invest_trust_net": ["Investment_Trust", "投信"],
     "dealer_net": ["Dealer", "自營"],
 }
+_INSTITUTION_REGEXES: dict[str, re.Pattern[str]] = {
+    col: re.compile("|".join(pats), re.IGNORECASE)
+    for col, pats in _INSTITUTION_PATTERNS.items()
+}
 
 
 def fetch_institutional_data(
@@ -224,8 +229,8 @@ def fetch_institutional_data(
     name_col = frame["name"].astype(str)
 
     result = frame[["date"]].drop_duplicates().sort_values("date").copy()
-    for col, patterns in _INSTITUTION_PATTERNS.items():
-        mask = name_col.str.contains("|".join(patterns), case=False, na=False)
+    for col, regex in _INSTITUTION_REGEXES.items():
+        mask = name_col.str.contains(regex, na=False)
         if mask.any():
             grouped = frame.loc[mask].groupby("date", as_index=False)["net"].sum().rename(columns={"net": col})
             result = result.merge(grouped, on="date", how="left")

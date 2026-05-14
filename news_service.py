@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -114,6 +114,7 @@ class NewsClient:
 
     def __post_init__(self) -> None:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._session: requests.Session = requests.Session()
 
     def _cache_path(self, stock_id: str, name: str, days: int, limit: int) -> Path:
         return self.cache_dir / f"news_{stock_id}_{days}_{limit}.csv"
@@ -128,19 +129,22 @@ class NewsClient:
     ) -> pd.DataFrame:
         cache_path = self._cache_path(stock_id, name, days, limit)
         cache_ttl_secs = self.cache_ttl_hours * 3600
-        if use_cache and cache_path.exists():
-            age_secs = time.time() - cache_path.stat().st_mtime
-            if age_secs < cache_ttl_secs:
-                try:
-                    frame = pd.read_csv(cache_path)
-                    if not frame.empty:
-                        return frame.head(limit)
-                except Exception:
-                    cache_path.unlink(missing_ok=True)
+        if use_cache:
+            try:
+                age_secs = time.time() - cache_path.stat().st_mtime
+                if age_secs < cache_ttl_secs:
+                    try:
+                        frame = pd.read_csv(cache_path)
+                        if not frame.empty:
+                            return frame.head(limit)
+                    except Exception:
+                        cache_path.unlink(missing_ok=True)
+            except FileNotFoundError:
+                pass
 
         query = quote(f"{stock_id} {name} 台股 when:{days}d")
         url = f"https://news.google.com/rss/search?q={query}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
-        response = requests.get(url, timeout=self.timeout)
+        response = self._session.get(url, timeout=self.timeout)
         response.raise_for_status()
         root = ET.fromstring(response.content)
 
