@@ -86,6 +86,8 @@ _SECTOR_RE = re.compile(
 )
 _ETF_RE = re.compile(r"ETF|指數股票型|元大|富邦.*TW|國泰.*TW", re.IGNORECASE)
 _NUMERIC_ID_RE = re.compile(r"\d{4,6}")
+_LISTED_RE = re.compile(r"twse|tse|上市", re.IGNORECASE)
+_OTC_RE = re.compile(r"otc|tpex|上櫃", re.IGNORECASE)
 
 
 def _is_numeric_stock_id(stock_id: str) -> bool:
@@ -107,18 +109,19 @@ def build_auto_universe(stock_info: pd.DataFrame, max_symbols: int = 120) -> pd.
     frame = frame[~frame["stock_name"].str.contains(_ETF_RE, na=False)]
     frame = frame[~(frame["stock_id"].str.len() == 6)].copy()  # copy before column assignment below
 
-    frame["is_theme"] = (
+    _is_theme = (
         frame["stock_name"].str.contains(_THEME_RE, na=False)
         | frame["industry_category"].str.contains(_THEME_RE, na=False)
     )
-    frame["is_listed"] = frame["type"].str.contains("twse|tse|上市", case=False, na=False)
-    frame["is_otc"] = frame["type"].str.contains("otc|tpex|上櫃", case=False, na=False)
-
-    frame["theme_score"] = 0
-    frame.loc[frame["is_theme"], "theme_score"] += 4
-    frame.loc[frame["industry_category"].str.contains(_SECTOR_RE, na=False), "theme_score"] += 3
-    frame.loc[frame["is_listed"], "theme_score"] += 2
-    frame.loc[frame["is_otc"], "theme_score"] += 1
+    _is_sector = frame["industry_category"].str.contains(_SECTOR_RE, na=False)
+    _is_listed = frame["type"].str.contains(_LISTED_RE, na=False)
+    _is_otc = frame["type"].str.contains(_OTC_RE, na=False)
+    frame["theme_score"] = (
+        _is_theme.astype("int8") * 4
+        + _is_sector.astype("int8") * 3
+        + _is_listed.astype("int8") * 2
+        + _is_otc.astype("int8")
+    )
 
     ranked = frame.sort_values(
         ["theme_score", "is_theme", "stock_id"],

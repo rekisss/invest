@@ -485,9 +485,9 @@ def compute_yearly_performance(equity_curve: pd.DataFrame) -> pd.DataFrame:
     if equity_curve.empty:
         return pd.DataFrame(columns=["year", "starting_equity", "ending_equity", "pnl", "return_pct"])
 
-    frame = equity_curve.copy()
-    frame["year"] = pd.to_datetime(frame["date"]).dt.year
-    yearly = frame.groupby("year", as_index=False).agg(
+    yearly = equity_curve.groupby(
+        pd.to_datetime(equity_curve["date"]).dt.year.rename("year"), as_index=False
+    ).agg(
         starting_equity=("equity", "first"),
         ending_equity=("equity", "last"),
     )

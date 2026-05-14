@@ -36,6 +36,7 @@ class FugleClient:
         _adapter = HTTPAdapter(pool_connections=2, pool_maxsize=16)
         self._session.mount("https://", _adapter)
         self._session.mount("http://", _adapter)
+        self._headers_cache: dict[str, str] = {"X-API-KEY": self.api_key} if self.api_key else {}
 
     @property
     def enabled(self) -> bool:
@@ -44,7 +45,7 @@ class FugleClient:
     def _headers(self) -> dict[str, str]:
         if not self.api_key:
             raise RuntimeError("FUGLE_API_KEY is not configured.")
-        return {"X-API-KEY": self.api_key}
+        return self._headers_cache
 
     def fetch_quote(self, symbol: str) -> dict[str, object]:
         def _do() -> dict[str, object]:

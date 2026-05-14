@@ -174,8 +174,8 @@ def prepare_stock_signals(
     frame["name"] = stock_info["name"]
     frame["industry_category"] = stock_info.get("industry_category", "")
 
-    for col, series in add_macd(frame["close"], config.macd_fast, config.macd_slow, config.macd_signal).items():
-        frame[col] = series
+    _macd = add_macd(frame["close"], config.macd_fast, config.macd_slow, config.macd_signal)
+    frame[_macd.columns] = _macd.values
     frame["ema20"] = add_ema(frame["close"], config.ema_exit)
     frame["ema60"] = add_ema(frame["close"], config.ema_entry)
     frame["ema120"] = add_ema(frame["close"], config.ema_trend)
@@ -193,17 +193,17 @@ def prepare_stock_signals(
     frame["prev_close"] = frame["close"].shift(1)
     frame["prev_volume_ratio"] = (frame["volume"] / frame["volume_ma20"]).shift(1)
 
-    for col, series in add_bollinger_bands(frame["close"], config.bb_period, config.bb_std).items():
-        frame[col] = series
-    for col, series in add_stochastic(frame["high"], frame["low"], frame["close"], config.kd_k_period, config.kd_d_period).items():
-        frame[col] = series
+    _bb = add_bollinger_bands(frame["close"], config.bb_period, config.bb_std)
+    frame[_bb.columns] = _bb.values
+    _stoch = add_stochastic(frame["high"], frame["low"], frame["close"], config.kd_k_period, config.kd_d_period)
+    frame[_stoch.columns] = _stoch.values
     frame["obv"] = add_obv(frame["close"], frame["volume"])
     frame["obv_ma"] = add_sma(frame["obv"], config.obv_ma_window)
     frame["williams_r"] = add_williams_r(frame["high"], frame["low"], frame["close"])
     frame["cci20"] = add_cci(frame["high"], frame["low"], frame["close"])
     frame["mfi14"] = add_mfi(frame["high"], frame["low"], frame["close"], frame["volume"])
-    for col, series in add_ichimoku(frame["high"], frame["low"]).items():
-        frame[col] = series
+    _ichi = add_ichimoku(frame["high"], frame["low"])
+    frame[_ichi.columns] = _ichi.values
 
     institutional_missing = institutional_df.empty
     if institutional_missing:
@@ -232,11 +232,12 @@ def prepare_stock_signals(
     merged["relative_strength_5d"] = merged["return_5d"] - merged["market_return_5d"]
 
     # ── Core signals ──────────────────────────────────────────────────────────
+    _prev = merged[["macd", "macd_signal", "macd_hist", "stoch_k", "stoch_d", "bb_bandwidth", "williams_r", "cci20"]].shift(1)
     merged["macd_golden_cross"] = (
-        (merged["macd"].shift(1) <= merged["macd_signal"].shift(1))
+        (_prev["macd"] <= _prev["macd_signal"])
         & (merged["macd"] > merged["macd_signal"])
     )
-    merged["hist_turn_positive"] = (merged["macd_hist"].shift(1) <= 0) & (merged["macd_hist"] > 0)
+    merged["hist_turn_positive"] = (_prev["macd_hist"] <= 0) & (merged["macd_hist"] > 0)
     merged["above_ema60"] = merged["close"] > merged["ema60"]
     merged["ema60_gt_ema120"] = merged["ema60"] > merged["ema120"]
     merged["volume_ratio"] = merged["volume"] / merged["volume_ma20"]
@@ -255,7 +256,7 @@ def prepare_stock_signals(
     merged["stronger_than_market"] = merged["relative_strength_5d"] > 0
 
     merged["kd_golden_cross"] = (
-        (merged["stoch_k"].shift(1) <= merged["stoch_d"].shift(1))
+        (_prev["stoch_k"] <= _prev["stoch_d"])
         & (merged["stoch_k"] > merged["stoch_d"])
         & (merged["stoch_k"] < 80)
     )
@@ -273,7 +274,7 @@ def prepare_stock_signals(
     # BB squeeze breakout: bandwidth was narrow (< median) and now price breaks above upper band
     bb_bandwidth_median = merged["bb_bandwidth"].rolling(window=60, min_periods=20).median()
     merged["bb_squeeze_breakout"] = (
-        merged["bb_bandwidth"].shift(1) < bb_bandwidth_median.shift(1)
+        _prev["bb_bandwidth"] < bb_bandwidth_median.shift(1)
     ) & (merged["close"] > merged["bb_upper"])
 
     # Breakout confirmed with simultaneous volume surge (quality entry filter)
@@ -281,13 +282,13 @@ def prepare_stock_signals(
 
     # Williams %R recovering from oversold (was below -80, now above -50)
     merged["williams_r_recovery"] = (
-        (merged["williams_r"].shift(1) < -80)
+        (_prev["williams_r"] < -80)
         & (merged["williams_r"] > -50)
     )
 
     # CCI momentum: CCI crossed above +100 from below (strong bullish momentum)
     merged["cci_momentum"] = (
-        (merged["cci20"].shift(1) < 100)
+        (_prev["cci20"] < 100)
         & (merged["cci20"] >= 100)
     )
 
@@ -334,7 +335,7 @@ def prepare_stock_signals(
     )
 
     merged["macd_death_cross"] = (
-        (merged["macd"].shift(1) >= merged["macd_signal"].shift(1))
+        (_prev["macd"] >= _prev["macd_signal"])
         & (merged["macd"] < merged["macd_signal"])
     )
     merged["close_below_ema20"] = merged["close"] < merged["ema20"]
