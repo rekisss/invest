@@ -42,22 +42,25 @@ def _query_existing_for_date(database_id: str, date: str) -> dict[str, str]:
         "page_size": 100,
     }
     result: dict[str, str] = {}
-    while True:
-        resp = requests.post(url, headers=_headers(), json=payload, timeout=30)
-        if not resp.ok:
-            return result
-        data = resp.json()
-        for page in data.get("results", []):
-            page_id = page.get("id", "")
-            props = page.get("properties", {})
-            rich = props.get("股票代號", {}).get("rich_text", [])
-            if rich:
-                sid = rich[0].get("text", {}).get("content", "")
-                if sid:
-                    result[sid] = page_id
-        if not data.get("has_more"):
-            break
-        payload["start_cursor"] = data["next_cursor"]
+    try:
+        while True:
+            resp = requests.post(url, headers=_headers(), json=payload, timeout=30)
+            if not resp.ok:
+                return result
+            data = resp.json()
+            for page in data.get("results", []):
+                page_id = page.get("id", "")
+                props = page.get("properties", {})
+                rich = props.get("股票代號", {}).get("rich_text", [])
+                if rich:
+                    sid = rich[0].get("text", {}).get("content", "")
+                    if sid:
+                        result[sid] = page_id
+            if not data.get("has_more"):
+                break
+            payload["start_cursor"] = data["next_cursor"]
+    except Exception as exc:
+        print(f"[Notion] dedup query failed (will create new pages): {exc}")
     return result
 
 

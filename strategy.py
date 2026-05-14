@@ -60,10 +60,33 @@ class StrategyConfig:
 def prepare_market_frame(market_df: pd.DataFrame, config: StrategyConfig) -> pd.DataFrame:
     market = market_df.copy()
     market = market.sort_values("date").reset_index(drop=True)
+    market["market_ma20"] = add_sma(market["close"], 20)
     market["market_ma60"] = add_sma(market["close"], config.market_ma_window)
+    market["market_ma120"] = add_sma(market["close"], 120)
     market["market_above_ma60"] = market["close"] > market["market_ma60"]
     market["market_return_5d"] = market["close"].pct_change(config.relative_strength_window)
     return market
+
+
+def compute_market_regime(market: pd.DataFrame) -> str:
+    """Return '牛市', '盤整', or '熊市' based on the latest market MA alignment."""
+    if market.empty:
+        return "未知"
+    last = market.iloc[-1]
+    close = float(last.get("close") or 0)
+    ma20 = float(last.get("market_ma20") or 0)
+    ma60 = float(last.get("market_ma60") or 0)
+    ma120 = float(last.get("market_ma120") or 0)
+    if close <= 0 or ma60 <= 0:
+        return "未知"
+    above_ma60 = close > ma60
+    ma_bullish = ma20 > ma60 and (ma120 <= 0 or ma60 > ma120)
+    ma_bearish = ma20 < ma60 and (ma120 <= 0 or ma60 < ma120)
+    if above_ma60 and ma_bullish:
+        return "牛市"
+    if not above_ma60 and ma_bearish:
+        return "熊市"
+    return "盤整"
 
 
 def _build_earnings_blocker(index: pd.Index, earnings_dates: pd.DataFrame | None, config: StrategyConfig) -> pd.Series:

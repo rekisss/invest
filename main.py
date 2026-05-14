@@ -31,6 +31,7 @@ from report import save_hybrid_report, save_reports, save_scan_report, save_spon
 from strategy import (
     StrategyConfig,
     compute_market_breadth,
+    compute_market_regime,
     latest_signal_snapshot,
     prepare_market_frame,
     prepare_stock_signals,
@@ -325,6 +326,7 @@ def build_daily_snapshot(
     signals_by_stock, _ = collect_signals(universe, client, market, config, start_date, end_date_text, args.workers)
     snapshot = latest_signal_snapshot(signals_by_stock)
     breadth = compute_market_breadth(snapshot)
+    breadth["market_regime"] = compute_market_regime(market)
     candidates, watchlist = rank_candidates(
         snapshot,
         args.top_n,
@@ -332,6 +334,9 @@ def build_daily_snapshot(
         prefer_lower_price=args.prefer_lower_price,
     )
     return candidates, watchlist, universe, breadth
+
+
+_REGIME_EMOJI: dict[str, str] = {"牛市": "🐂", "盤整": "🦀", "熊市": "🐻", "未知": "❓"}
 
 
 def _format_breadth_line(breadth: dict[str, object]) -> str:
@@ -345,13 +350,15 @@ def _format_breadth_line(breadth: dict[str, object]) -> str:
     momentum = int(breadth.get("macd_golden_cross", 0))
     mfi_pct = int(breadth.get("mfi_strong", 0))
     ichi_pct = int(breadth.get("above_ichimoku_cloud", 0))
-    market_tag = "✅" if market_ok > 50 else "⚠️熊市"
+    regime = str(breadth.get("market_regime") or "未知")
+    regime_emoji = _REGIME_EMOJI.get(regime, "❓")
+    market_tag = "✅" if market_ok > 50 else "⚠️"
     line = (
-        f"📊 市場廣度（{total}支）｜全條件候選 `{entry_pct}%` | "
+        f"📊 市場廣度（{total}支）{regime_emoji}`{regime}`｜全條件候選 `{entry_pct}%` | "
         f"站EMA60 `{above_ema}%` | 趨勢 `{trend_up}%` | "
         f"MACD `{momentum}%` | MFI `{mfi_pct}%` | 雲上 `{ichi_pct}%` | 大盤 `{market_tag}`"
     )
-    if market_ok <= 50 and above_ema < 30:
+    if regime == "熊市" or (market_ok <= 50 and above_ema < 30):
         line += "\n⚠️ **市場偏弱，候選訊號謹慎看待，注意風險控管**"
     return line
 
