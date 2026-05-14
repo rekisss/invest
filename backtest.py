@@ -468,11 +468,10 @@ def compute_performance_metrics(
 
 
 def _max_consecutive(mask: pd.Series) -> int:
-    best = current = 0
-    for val in mask:
-        current = current + 1 if val else 0
-        best = max(best, current)
-    return best
+    positive = mask.astype(int)
+    groups = (~mask).cumsum()
+    streak_lengths = positive.groupby(groups).cumsum()
+    return int(streak_lengths.max()) if len(streak_lengths) else 0
 
 
 def compute_yearly_performance(equity_curve: pd.DataFrame) -> pd.DataFrame:

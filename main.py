@@ -385,8 +385,15 @@ def format_scan_message_rich(
             brief = _news_brief(str(row["stock_id"]), news_map)
             missing = _missing_hard_labels(row.get("entry_reason"))
             missing_txt = f" | 缺: {missing}" if missing else f" | {_reason_labels(row.get('entry_reason'))}"
+            close_val = float(row.get("close") or 0)
+            high20 = row.get("close_20d_high")
+            gap_txt = ""
+            if high20 and pd.notna(high20) and close_val > 0:
+                gap_pct = (float(high20) - close_val) / close_val * 100
+                if 0 < gap_pct < 5:
+                    gap_txt = f" | 距突破 `{gap_pct:.1f}%`"
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{brief}"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{brief}"
             )
         return "\n".join(lines)
 
@@ -443,8 +450,15 @@ def format_scan_message_rich(
             brief = _news_brief(str(row["stock_id"]), news_map)
             missing = _missing_hard_labels(row.get("entry_reason"))
             missing_txt = f" | 缺: {missing}" if missing else f" | {_reason_labels(row.get('entry_reason'))}"
+            close_val = float(row.get("close") or 0)
+            high20 = row.get("close_20d_high")
+            gap_txt = ""
+            if high20 and pd.notna(high20) and close_val > 0:
+                gap_pct = (float(high20) - close_val) / close_val * 100
+                if 0 < gap_pct < 5:
+                    gap_txt = f" | 距突破 `{gap_pct:.1f}%`"
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{brief}"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{brief}"
             )
     return "\n".join(lines)
 

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from indicators import (
-    add_adx, add_atr, add_bollinger_bands, add_cci, add_donchian_channel,
+    add_adx, add_atr, add_bollinger_bands, add_cci,
     add_ema, add_ichimoku, add_macd, add_mfi, add_obv, add_rsi, add_sma,
     add_stochastic, add_williams_r, consecutive_positive,
 )
@@ -143,8 +143,6 @@ def prepare_stock_signals(
     frame["obv_ma"] = add_sma(frame["obv"], config.obv_ma_window)
     frame["williams_r"] = add_williams_r(frame["high"], frame["low"], frame["close"])
     frame["cci20"] = add_cci(frame["high"], frame["low"], frame["close"])
-    dc = add_donchian_channel(frame["high"], frame["low"])
-    frame = pd.concat([frame, dc], axis=1)
     frame["mfi14"] = add_mfi(frame["high"], frame["low"], frame["close"], frame["volume"])
     ichi = add_ichimoku(frame["high"], frame["low"])
     frame = pd.concat([frame, ichi], axis=1)
@@ -393,7 +391,8 @@ def rank_candidates(
     ]
     watch_columns = [
         "date", "stock_id", "name", "industry_category", "close",
-        "condition_count", "entry_score", "volume_ma20", "skip_reason", "entry_reason",
+        "condition_count", "entry_score", "volume_ma20", "close_20d_high",
+        "skip_reason", "entry_reason",
     ]
 
     # Only keep columns that exist
