@@ -127,6 +127,19 @@ ENTRY_REASON_LABELS = {
 
 _MAX_CONDITION_COUNT = 23
 
+_HARD_CONDITIONS = frozenset([
+    "macd_golden_cross", "hist_turn_positive", "above_ema60", "ema60_gt_ema120",
+    "volume_break", "rsi_strong", "breakout_20d", "market_above_ma60",
+    "avoid_chase", "liquidity_ok",
+])
+
+
+def _missing_hard_labels(entry_reason: object, max_items: int = 3) -> str:
+    met = {p.strip() for p in str(entry_reason or "").split(",") if p.strip()}
+    missing = _HARD_CONDITIONS - met
+    labels = [ENTRY_REASON_LABELS.get(c, c) for c in sorted(missing)]
+    return " / ".join(labels[:max_items]) if labels else ""
+
 
 def _confidence_score(row: object) -> int:
     cond = min(int(float(row.get("condition_count", 0) or 0)) / 23 * 55, 55)  # type: ignore[union-attr]
@@ -363,8 +376,10 @@ def format_scan_message_rich(
             price_tag = _low_price_tag(row.get("close"))
             price_note = f" `{price_tag}`" if price_tag else ""
             brief = _news_brief(str(row["stock_id"]), news_map)
+            missing = _missing_hard_labels(row.get("entry_reason"))
+            missing_txt = f" | 缺: {missing}" if missing else f" | {_reason_labels(row.get('entry_reason'))}"
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{brief}"
             )
         return "\n".join(lines)
 
@@ -398,10 +413,14 @@ def format_scan_message_rich(
         dealer_txt = f" | 自營 `{dealer_streak}d`" if dealer_streak >= 1 else ""
         ichi_txt = " | ☁雲上" if bool(row.get("above_ichimoku_cloud")) else ""
         star = " ⭐" if confidence >= 70 else ""
+        ret5d = float(row.get("return_5d") or 0)
+        ret5d_txt = f" | 5d `{ret5d*100:+.1f}%`" if ret5d != 0 else ""
+        industry = str(row.get("industry_category") or "")
+        industry_txt = f" 〔{industry}〕" if industry else ""
         lines.append(f"━━━━━━━━━━━━━━━━━━━━")
-        lines.append(f"**{row['stock_id']}** {row['name']}{price_note}{star}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`")
+        lines.append(f"**{row['stock_id']}** {row['name']}{industry_txt}{price_note}{star}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`")
         lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
-        lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ichi_txt}")
+        lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ret5d_txt}{ichi_txt}")
         lines.append(f"🏦 外資連買 `{int(row.get('foreign_buy_streak', 0))}d`{invest_txt}{dealer_txt}")
         lines.append(f"🔍 {_reason_labels(row.get('entry_reason'), max_items=5)}")
         if brief:
@@ -413,8 +432,10 @@ def format_scan_message_rich(
             price_tag = _low_price_tag(row.get("close"))
             price_note = f" `{price_tag}`" if price_tag else ""
             brief = _news_brief(str(row["stock_id"]), news_map)
+            missing = _missing_hard_labels(row.get("entry_reason"))
+            missing_txt = f" | 缺: {missing}" if missing else f" | {_reason_labels(row.get('entry_reason'))}"
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{brief}"
             )
     return "\n".join(lines)
 
