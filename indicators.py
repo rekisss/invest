@@ -123,6 +123,19 @@ def add_cci(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 20)
     return (typical_price - sma_tp) / (0.015 * mean_dev.replace(0, np.nan))
 
 
+def add_lr_slope(close: pd.Series, window: int = 20) -> pd.Series:
+    """Linear regression slope on log-price, returned as % per day."""
+    log_close = np.log(close.clip(lower=1e-9))
+    x = np.arange(window, dtype=float)
+
+    def _slope(arr: np.ndarray) -> float:
+        if np.isnan(arr).any():
+            return np.nan
+        return float(np.polyfit(x, arr, 1)[0] * 100)
+
+    return log_close.rolling(window, min_periods=window).apply(_slope, raw=True)
+
+
 def add_donchian_channel(high: pd.Series, low: pd.Series, period: int = 20) -> pd.DataFrame:
     upper = high.rolling(window=period, min_periods=period).max()
     lower = low.rolling(window=period, min_periods=period).min()

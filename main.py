@@ -236,6 +236,32 @@ def _news_brief(stock_id: str, news_map: dict[str, dict[str, object]]) -> str:
     return f"\n  {emoji}{freshness} {' / '.join(parts)}"
 
 
+def _trend_label(row: Any) -> str:
+    """Return trend arrow + slope for a stock row."""
+    try:
+        s20 = float(row.get("lr_slope_20") or 0)
+    except (TypeError, ValueError):
+        return ""
+    if pd.isna(s20):
+        return ""
+    if s20 > 0.30:
+        arrow = "📈"
+    elif s20 > 0.05:
+        arrow = "↗"
+    elif s20 >= -0.05:
+        arrow = "→"
+    elif s20 >= -0.30:
+        arrow = "↘"
+    else:
+        arrow = "📉"
+    try:
+        s60 = float(row.get("lr_slope_60") or 0)
+        s60_txt = f"/60d`{s60:+.2f}%`" if not pd.isna(s60) else ""
+    except (TypeError, ValueError):
+        s60_txt = ""
+    return f" | {arrow} `{s20:+.2f}%/d`{s60_txt}"
+
+
 def load_universe(args: argparse.Namespace, client: FinMindClient) -> pd.DataFrame:
     if args.stocks != "auto":
         return load_stock_list(args.stocks)
@@ -394,8 +420,9 @@ def format_scan_message_rich(
                 gap_pct = (float(high20) - close_val) / close_val * 100
                 if 0 < gap_pct < 5:
                     gap_txt = f" | 距突破 `{gap_pct:.1f}%`"
+            trend_txt = _trend_label(row)
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{brief}"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{trend_txt}{brief}"
             )
         return "\n".join(lines)
 
@@ -438,7 +465,8 @@ def format_scan_message_rich(
         lines.append(f"━━━━━━━━━━━━━━━━━━━━")
         lines.append(f"**{row['stock_id']}** {row['name']}{industry_txt}{price_note}{star}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`")
         lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`{swing_txt}")
-        lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ret5d_txt}{ichi_txt}")
+        trend_txt = _trend_label(row)
+        lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ret5d_txt}{ichi_txt}{trend_txt}")
         lines.append(f"🏦 外資連買 `{int(row.get('foreign_buy_streak', 0))}d`{invest_txt}{dealer_txt}")
         lines.append(f"🔍 {_reason_labels(row.get('entry_reason'), max_items=5)}")
         if brief:
@@ -459,8 +487,9 @@ def format_scan_message_rich(
                 gap_pct = (float(high20) - close_val) / close_val * 100
                 if 0 < gap_pct < 5:
                     gap_txt = f" | 距突破 `{gap_pct:.1f}%`"
+            trend_txt = _trend_label(row)
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{brief}"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{trend_txt}{brief}"
             )
     return "\n".join(lines)
 
