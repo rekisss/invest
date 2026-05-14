@@ -6,6 +6,11 @@ import time
 from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
+
+_session = requests.Session()
+_session.mount("https://", HTTPAdapter(pool_connections=1, pool_maxsize=4))
+_session.mount("http://", HTTPAdapter(pool_connections=1, pool_maxsize=4))
 
 
 def confidence_score(row: Any) -> int:
@@ -45,7 +50,7 @@ def _query_existing_for_date(database_id: str, date: str) -> dict[str, str]:
     result: dict[str, str] = {}
     try:
         while True:
-            resp = requests.post(url, headers=_headers(), json=payload, timeout=30)
+            resp = _session.post(url, headers=_headers(), json=payload, timeout=30)
             if not resp.ok:
                 return result
             data = resp.json()
@@ -66,7 +71,7 @@ def _query_existing_for_date(database_id: str, date: str) -> dict[str, str]:
 
 
 def _get_title_property_name(database_id: str) -> str:
-    resp = requests.get(f"{NOTION_API}/databases/{database_id}", headers=_headers(), timeout=30)
+    resp = _session.get(f"{NOTION_API}/databases/{database_id}", headers=_headers(), timeout=30)
     if not resp.ok:
         return "股票名稱"
     for name, prop in resp.json().get("properties", {}).items():
@@ -107,7 +112,7 @@ def _setup_database(database_id: str) -> None:
         "日線趨勢%": {"number": {"format": "number"}},
         "月線趨勢%": {"number": {"format": "number"}},
     }
-    requests.patch(
+    _session.patch(
         f"{NOTION_API}/databases/{database_id}",
         headers=_headers(),
         json={"properties": props},
@@ -247,14 +252,14 @@ def sync_scan_results(
         for attempt in range(3):
             try:
                 if page_id:
-                    resp = requests.patch(
+                    resp = _session.patch(
                         f"{NOTION_API}/pages/{page_id}",
                         headers=_headers(),
                         json={"properties": properties},
                         timeout=30,
                     )
                 else:
-                    resp = requests.post(
+                    resp = _session.post(
                         f"{NOTION_API}/pages",
                         headers=_headers(),
                         json={"parent": {"database_id": database_id}, "properties": properties},
