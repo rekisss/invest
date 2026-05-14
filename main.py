@@ -260,6 +260,27 @@ def _slope_label(slope: float, strong: float = 0.30, mild: float = 0.05) -> str:
     return "強勢下跌"
 
 
+def _watchlist_line(row: Any, news_map: dict[str, dict[str, object]]) -> str:
+    """Single bullet line for watchlist / near-candidate entries."""
+    price_tag = _low_price_tag(row.get("close"))
+    price_note = f" `{price_tag}`" if price_tag else ""
+    brief = _news_brief(str(row["stock_id"]), news_map)
+    missing = _missing_hard_labels(row.get("entry_reason"))
+    missing_txt = f" | 缺: {missing}" if missing else ""
+    close_val = float(row.get("close") or 0)
+    high20 = row.get("close_20d_high")
+    gap_txt = ""
+    if high20 and pd.notna(high20) and close_val > 0:
+        gap_pct = (float(high20) - close_val) / close_val * 100
+        if 0 < gap_pct < 5:
+            gap_txt = f" | 距突破 `{gap_pct:.1f}%`"
+    trend_txt = _trend_label(row)
+    return (
+        f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | "
+        f"收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{trend_txt}{brief}"
+    )
+
+
 def _trend_block(row: Any) -> str:
     """Full trend analysis line for candidate cards: daily + monthly slope + observation estimate."""
     try:
@@ -473,22 +494,7 @@ def format_scan_message_rich(
     if candidates.empty:
         lines.extend(["今日無全條件候選。", "", "**近似觀察名單**"])
         for _, row in watchlist.head(8).iterrows():
-            price_tag = _low_price_tag(row.get("close"))
-            price_note = f" `{price_tag}`" if price_tag else ""
-            brief = _news_brief(str(row["stock_id"]), news_map)
-            missing = _missing_hard_labels(row.get("entry_reason"))
-            missing_txt = f" | 缺: {missing}" if missing else f" | {_reason_labels(row.get('entry_reason'))}"
-            close_val = float(row.get("close") or 0)
-            high20 = row.get("close_20d_high")
-            gap_txt = ""
-            if high20 and pd.notna(high20) and close_val > 0:
-                gap_pct = (float(high20) - close_val) / close_val * 100
-                if 0 < gap_pct < 5:
-                    gap_txt = f" | 距突破 `{gap_pct:.1f}%`"
-            trend_txt = _trend_label(row)
-            lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{trend_txt}{brief}"
-            )
+            lines.append(_watchlist_line(row, news_map))
         return "\n".join(lines)
 
     # Sector concentration warning
@@ -540,22 +546,7 @@ def format_scan_message_rich(
     if not watchlist.empty:
         lines.extend(["", "━━━━━━━━━━━━━━━━━━━━", "**近似觀察名單**"])
         for _, row in watchlist.head(5).iterrows():
-            price_tag = _low_price_tag(row.get("close"))
-            price_note = f" `{price_tag}`" if price_tag else ""
-            brief = _news_brief(str(row["stock_id"]), news_map)
-            missing = _missing_hard_labels(row.get("entry_reason"))
-            missing_txt = f" | 缺: {missing}" if missing else f" | {_reason_labels(row.get('entry_reason'))}"
-            close_val = float(row.get("close") or 0)
-            high20 = row.get("close_20d_high")
-            gap_txt = ""
-            if high20 and pd.notna(high20) and close_val > 0:
-                gap_pct = (float(high20) - close_val) / close_val * 100
-                if 0 < gap_pct < 5:
-                    gap_txt = f" | 距突破 `{gap_pct:.1f}%`"
-            trend_txt = _trend_label(row)
-            lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{trend_txt}{brief}"
-            )
+            lines.append(_watchlist_line(row, news_map))
     return "\n".join(lines)
 
 
@@ -780,22 +771,8 @@ def format_daily_report_message(
     if not watchlist.empty:
         lines.extend(["", "**近似名單（今日未達全條件）**"])
         for _, row in watchlist.head(5).iterrows():
-            price_tag = _low_price_tag(row.get("close"))
-            price_note = f" `{price_tag}`" if price_tag else ""
-            brief = _news_brief(str(row["stock_id"]), news_map)
-            missing = _missing_hard_labels(row.get("entry_reason"))
-            missing_txt = f" | 缺: {missing}" if missing else ""
-            close_val = float(row.get("close") or 0)
-            high20 = row.get("close_20d_high")
-            gap_txt = ""
-            if high20 and pd.notna(high20) and close_val > 0:
-                gap_pct = (float(high20) - close_val) / close_val * 100
-                if 0 < gap_pct < 5:
-                    gap_txt = f" | 距突破 `{gap_pct:.1f}%`"
-            trend_txt = _trend_label(row)
-            lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{trend_txt}{brief}"
-            )
+            lines.append(_watchlist_line(row, news_map))
+    return "\n".join(lines)
 
 
 def collect_intraday_snapshot(

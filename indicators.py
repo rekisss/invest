@@ -124,16 +124,36 @@ def add_cci(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 20)
 
 
 def add_lr_slope(close: pd.Series, window: int = 20) -> pd.Series:
-    """Linear regression slope on log-price, returned as % per day."""
-    log_close = np.log(close.clip(lower=1e-9))
-    x = np.arange(window, dtype=float)
+    """Linear regression slope on log-price, returned as % per day.
 
-    def _slope(arr: np.ndarray) -> float:
-        if np.isnan(arr).any():
-            return np.nan
-        return float(np.polyfit(x, arr, 1)[0] * 100)
+    Fully vectorized via cumsum — no Python loop per window.
+    For x=[0..n-1]: slope = (n*Sxy - Sx*Sy) / (n*Sxx - Sx^2)
+    """
+    n = window
+    log_c = np.log(close.clip(lower=1e-9).to_numpy(dtype=float))
+    nan_mask = np.isnan(log_c)
+    safe = np.where(nan_mask, 0.0, log_c)
+    pos = np.arange(len(log_c), dtype=float)
 
-    return log_close.rolling(window, min_periods=window).apply(_slope, raw=True)
+    # Precomputed x statistics (constant for fixed window)
+    Sx: float = n * (n - 1) / 2
+    Sxx: float = n * (n - 1) * (2 * n - 1) / 6
+    denom: float = n * Sxx - Sx ** 2
+
+    cum_y = np.concatenate([[0.0], np.cumsum(safe)])
+    cum_py = np.concatenate([[0.0], np.cumsum(pos * safe)])
+    cum_nan = np.concatenate([[0], np.cumsum(nan_mask.astype(int))])
+
+    t = np.arange(n - 1, len(log_c))
+    s = t - n + 1
+    has_nan = (cum_nan[t + 1] - cum_nan[s]) > 0
+    Sy = cum_y[t + 1] - cum_y[s]
+    Sxy = (cum_py[t + 1] - cum_py[s]) - s * Sy
+    slope = np.where(has_nan, np.nan, (n * Sxy - Sx * Sy) / denom * 100)
+
+    result = np.full(len(log_c), np.nan)
+    result[n - 1:] = slope
+    return pd.Series(result, index=close.index)
 
 
 def add_donchian_channel(high: pd.Series, low: pd.Series, period: int = 20) -> pd.DataFrame:
