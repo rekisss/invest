@@ -188,7 +188,8 @@ def sync_scan_results(
         return_5d = float(row.get("return_5d", 0) or 0)
         rs5d = float(row.get("relative_strength_5d", 0) or 0)
         vol_ratio = float(row.get("volume_ratio", 0) or 0)
-        stop_loss = round(close * 0.95, 2) if close > 0 else 0.0
+        atr = float(row.get("atr14", 0) or 0)
+        stop_loss = round(close - 2 * atr, 2) if atr > 0 and close > 0 else (round(close * 0.95, 2) if close > 0 else 0.0)
         confidence = confidence_score(row)
         obs = recommend_observation_period(row, is_candidate=(row_type == "候選"))
         news_info = news_map.get(stock_id, {})
