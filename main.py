@@ -236,30 +236,95 @@ def _news_brief(stock_id: str, news_map: dict[str, dict[str, object]]) -> str:
     return f"\n  {emoji}{freshness} {' / '.join(parts)}"
 
 
-def _trend_label(row: Any) -> str:
-    """Return trend arrow + slope for a stock row."""
+def _slope_arrow(slope: float, strong: float = 0.30, mild: float = 0.05) -> str:
+    if slope > strong:
+        return "📈"
+    if slope > mild:
+        return "↗"
+    if slope >= -mild:
+        return "→"
+    if slope >= -strong:
+        return "↘"
+    return "📉"
+
+
+def _slope_label(slope: float, strong: float = 0.30, mild: float = 0.05) -> str:
+    if slope > strong:
+        return "強勢上升"
+    if slope > mild:
+        return "緩步上升"
+    if slope >= -mild:
+        return "橫盤"
+    if slope >= -strong:
+        return "緩步下跌"
+    return "強勢下跌"
+
+
+def _trend_block(row: Any) -> str:
+    """Full trend analysis line for candidate cards: daily + monthly slope + observation estimate."""
     try:
         s20 = float(row.get("lr_slope_20") or 0)
+        if pd.isna(s20):
+            return ""
     except (TypeError, ValueError):
         return ""
-    if pd.isna(s20):
-        return ""
-    if s20 > 0.30:
-        arrow = "📈"
-    elif s20 > 0.05:
-        arrow = "↗"
-    elif s20 >= -0.05:
-        arrow = "→"
-    elif s20 >= -0.30:
-        arrow = "↘"
-    else:
-        arrow = "📉"
     try:
         s60 = float(row.get("lr_slope_60") or 0)
-        s60_txt = f"/60d`{s60:+.2f}%`" if not pd.isna(s60) else ""
+        s60_ok = not pd.isna(s60)
+    except (TypeError, ValueError):
+        s60, s60_ok = 0.0, False
+    adx = 0.0
+    try:
+        adx = float(row.get("adx14") or 0)
+        if pd.isna(adx):
+            adx = 0.0
+    except (TypeError, ValueError):
+        pass
+
+    d_arrow = _slope_arrow(s20)
+    d_desc = _slope_label(s20)
+    m_part = f"月線 `{s60:+.2f}%/d` {_slope_arrow(s60, 0.15, 0.03)} {_slope_label(s60, 0.15, 0.03)}" if s60_ok else "月線資料不足"
+
+    both_up = s20 > 0.05 and s60_ok and s60 > 0.03
+    both_dn = s20 < -0.05 and s60_ok and s60 < -0.03
+    diverging = s60_ok and ((s20 > 0.05 and s60 < -0.03) or (s20 < -0.05 and s60 > 0.03))
+
+    if both_up and adx >= 25:
+        obs = "日月線同向強勢，可觀察 **3–4 週**"
+    elif both_up and adx >= 20:
+        obs = "日月線同向穩定，可觀察 **2–3 週**"
+    elif both_up:
+        obs = "日月線同向，可觀察 **2 週**"
+    elif s20 > 0.05 and not s60_ok:
+        obs = "短線上升，可觀察 **1–2 週**"
+    elif s20 > 0.05 and not both_up and not diverging:
+        obs = "短線反彈但月線偏弱，謹慎 **1–2 週**"
+    elif diverging:
+        obs = "日月線分歧，趨勢轉折可能，觀察 **1 週**"
+    elif both_dn:
+        obs = "日月線同向下跌，暫不建議進場"
+    elif abs(s20) <= 0.05:
+        obs = "橫盤整理，等待突破方向"
+    else:
+        obs = "觀察 **1–2 週**"
+
+    return f"📉 日線 `{s20:+.2f}%/d` {d_arrow} {d_desc} ｜ {m_part}\n⏳ {obs}"
+
+
+def _trend_label(row: Any) -> str:
+    """Short inline trend for watchlist bullets."""
+    try:
+        s20 = float(row.get("lr_slope_20") or 0)
+        if pd.isna(s20):
+            return ""
+    except (TypeError, ValueError):
+        return ""
+    try:
+        s60 = float(row.get("lr_slope_60") or 0)
+        s60_txt = f"/月`{s60:+.2f}%`" if not pd.isna(s60) else ""
     except (TypeError, ValueError):
         s60_txt = ""
-    return f" | {arrow} `{s20:+.2f}%/d`{s60_txt}"
+    return f" | {_slope_arrow(s20)} 日`{s20:+.2f}%`{s60_txt}"
 
 
 def load_universe(args: argparse.Namespace, client: FinMindClient) -> pd.DataFrame:
@@ -445,7 +510,6 @@ def format_scan_message_rich(
         price_tag = _low_price_tag(row.get("close"))
         price_note = f" `{price_tag}`" if price_tag else ""
         brief = _news_brief(str(row["stock_id"]), news_map)
-        obs = recommend_observation_period(row, is_candidate=True)
         stoch_k = float(row["stoch_k"]) if "stoch_k" in row and pd.notna(row.get("stoch_k")) else None
         kd_txt = f" | KD `{stoch_k:.0f}`" if stoch_k is not None else ""
         mfi_val = float(row["mfi14"]) if "mfi14" in row and pd.notna(row.get("mfi14")) else None
@@ -462,16 +526,17 @@ def format_scan_message_rich(
         industry_txt = f" 〔{industry}〕" if industry else ""
         swing_low = row.get("close_10d_low")
         swing_txt = f" | 支撐 `{float(swing_low):.2f}`" if swing_low and pd.notna(swing_low) else ""
+        trend_block = _trend_block(row)
         lines.append(f"━━━━━━━━━━━━━━━━━━━━")
         lines.append(f"**{row['stock_id']}** {row['name']}{industry_txt}{price_note}{star}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`")
         lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`{swing_txt}")
-        trend_txt = _trend_label(row)
-        lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ret5d_txt}{ichi_txt}{trend_txt}")
+        lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ret5d_txt}{ichi_txt}")
         lines.append(f"🏦 外資連買 `{int(row.get('foreign_buy_streak', 0))}d`{invest_txt}{dealer_txt}")
+        if trend_block:
+            lines.append(trend_block)
         lines.append(f"🔍 {_reason_labels(row.get('entry_reason'), max_items=5)}")
         if brief:
             lines.append(f"  {brief.strip()}")
-        lines.append(f"⏱ {obs}")
     if not watchlist.empty:
         lines.extend(["", "━━━━━━━━━━━━━━━━━━━━", "**近似觀察名單**"])
         for _, row in watchlist.head(5).iterrows():
