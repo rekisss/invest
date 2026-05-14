@@ -295,35 +295,39 @@ def prepare_stock_signals(
     # MFI > 50: money is flowing into the stock (volume-weighted buying pressure)
     merged["mfi_strong"] = merged["mfi14"] > 50
 
-    # Price above Ichimoku cloud: bullish cloud confirmation (close > both senkou spans)
-    cloud_top = np.fmax(merged["ichi_senkou_a"].to_numpy(), merged["ichi_senkou_b"].to_numpy())
-    merged["above_ichimoku_cloud"] = merged["close"].to_numpy() > cloud_top
-
-    # ── Candlestick filters ───────────────────────────────────────────────────
+    # ── Candlestick filters (compute numpy arrays once; reuse for ichimoku) ──
     _close_arr = merged["close"].to_numpy()
     _open_arr = merged["open"].to_numpy()
     body = np.abs(_close_arr - _open_arr)
     upper_shadow = merged["high"].to_numpy() - np.maximum(_close_arr, _open_arr)
+
+    # Price above Ichimoku cloud: bullish cloud confirmation (close > both senkou spans)
+    cloud_top = np.fmax(merged["ichi_senkou_a"].to_numpy(), merged["ichi_senkou_b"].to_numpy())
+    merged["above_ichimoku_cloud"] = _close_arr > cloud_top
+    _prev_close_arr = merged["prev_close"].to_numpy()
     merged["long_upper_shadow"] = (body > 0) & (upper_shadow > body * 2)
     merged["open_high_close_low"] = (
-        (merged["open"] > merged["prev_close"] * 1.02)
-        & (merged["close"] < merged["open"])
+        (_open_arr > _prev_close_arr * 1.02)
+        & (_close_arr < _open_arr)
     )
     merged["gap_chase_after_blowout"] = (
         (merged["prev_volume_ratio"] > config.volume_multiplier)
-        & ((merged["open"] / merged["prev_close"]) - 1 > 0.03)
+        & ((_open_arr / _prev_close_arr) - 1 > 0.03)
     )
     merged["earnings_blocked"] = _build_earnings_blocker(
         pd.DatetimeIndex(merged["date"]), earnings_dates, config,
     ).values
 
-    merged["condition_count"] = merged[_ENTRY_COLS].sum(axis=1)
+    # Compute entry condition array once — shared for condition_count, entry_signal, and reason labels
+    _entry_arr = merged[_ENTRY_COLS].to_numpy(dtype=bool)
+    merged["condition_count"] = _entry_arr.sum(axis=1)
 
     merged["skip_trade"] = (
         merged["long_upper_shadow"] | merged["open_high_close_low"]
         | merged["gap_chase_after_blowout"] | merged["earnings_blocked"]
     )
-    merged["entry_signal"] = merged[_HARD_ENTRY_COLS].all(axis=1) & ~merged["skip_trade"]
+    _n_hard = len(_HARD_ENTRY_COLS)
+    merged["entry_signal"] = _entry_arr[:, :_n_hard].all(axis=1) & ~merged["skip_trade"].to_numpy(dtype=bool)
 
     _soft_matrix = merged[_SOFT_SCORE_COLS].to_numpy(dtype=np.float64)
     merged["entry_score"] = (
@@ -344,12 +348,18 @@ def prepare_stock_signals(
         merged["macd_death_cross"] | merged["close_below_ema20"] | merged["close_below_swing_low"]
     )
 
-    _entry_arr = merged[_ENTRY_COLS].to_numpy(dtype=bool)
     _skip_arr = merged[_SKIP_COLS].to_numpy(dtype=bool)
     _exit_arr = merged[_EXIT_COLS].to_numpy(dtype=bool)
-    merged["entry_reason"] = [", ".join(_ENTRY_COLS_ARR[row]) for row in _entry_arr]
-    merged["skip_reason"] = [", ".join(_SKIP_COLS_ARR[row]) for row in _skip_arr]
-    merged["base_exit_reason"] = [", ".join(_EXIT_COLS_ARR[row]) for row in _exit_arr]
+
+    def _sparse_reasons(arr: np.ndarray, labels: np.ndarray) -> list[str]:
+        result = [""] * len(arr)
+        for i in np.where(arr.any(axis=1))[0]:
+            result[i] = ", ".join(labels[arr[i]])
+        return result
+
+    merged["entry_reason"] = _sparse_reasons(_entry_arr, _ENTRY_COLS_ARR)
+    merged["skip_reason"] = _sparse_reasons(_skip_arr, _SKIP_COLS_ARR)
+    merged["base_exit_reason"] = _sparse_reasons(_exit_arr, _EXIT_COLS_ARR)
     return merged
 
 
