@@ -137,6 +137,15 @@ def add_ichimoku(high: pd.Series, low: pd.Series, tenkan_period: int = 9, kijun_
     })
 
 
+def add_ichimoku_cloud(high: pd.Series, low: pd.Series, tenkan_period: int = 9, kijun_period: int = 26, senkou_b_period: int = 52) -> pd.DataFrame:
+    """Return only the two cloud boundary spans (senkou A and B), skipping tenkan/kijun/chikou."""
+    tenkan = (high.rolling(tenkan_period).max() + low.rolling(tenkan_period).min()) / 2
+    kijun = (high.rolling(kijun_period).max() + low.rolling(kijun_period).min()) / 2
+    senkou_a = ((tenkan + kijun) / 2).shift(kijun_period)
+    senkou_b = ((high.rolling(senkou_b_period).max() + low.rolling(senkou_b_period).min()) / 2).shift(kijun_period)
+    return pd.DataFrame({"ichi_senkou_a": senkou_a, "ichi_senkou_b": senkou_b})
+
+
 def add_williams_r(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
     highest_high = high.rolling(window=period, min_periods=period).max()
     lowest_low = low.rolling(window=period, min_periods=period).min()

@@ -85,10 +85,10 @@ def run_backtest(
                 frame = prepared.get(stock_id)
                 if frame is None or date not in frame.index:
                     continue
-                sector = str(frame.loc[date, "industry_category"]) if "industry_category" in frame.columns else ""
+                sector = str(frame.at[date, "industry_category"]) if "industry_category" in frame.columns else ""
                 if config.max_positions_per_sector > 0 and sector and _sector_count(positions, sector) >= config.max_positions_per_sector:
                     continue
-                price = float(frame.loc[date, "open"])
+                price = float(frame.at[date, "open"])
                 effective_buy = price * _buy_slip
                 risk_budget = current_equity * config.risk_per_trade
                 risk_per_share = effective_buy * config.stop_loss_pct
@@ -99,7 +99,7 @@ def run_backtest(
                 quantity = int(min(shares_by_risk, shares_by_cash))
                 if quantity <= 0:
                     continue
-                atr_val = float(frame.loc[date, "atr14"]) if "atr14" in frame.columns and date in frame.index and pd.notna(frame.loc[date, "atr14"]) else 0.0
+                atr_val = float(frame.at[date, "atr14"]) if "atr14" in frame.columns and pd.notna(frame.at[date, "atr14"]) else 0.0
                 position = Position(
                     position_id=next_position_id,
                     stock_id=stock_id,
@@ -123,9 +123,9 @@ def run_backtest(
         for stock_id, frame in prepared.items():
             if date not in frame.index:
                 continue
-            row = frame.loc[date]
 
             if stock_id in positions:
+                row = frame.loc[date]
                 position = positions[stock_id]
                 close_price = float(row["close"])
                 position.peak_price = max(position.peak_price, close_price)
@@ -173,8 +173,8 @@ def run_backtest(
                     del positions[stock_id]
                     continue
 
-            if stock_id not in positions and bool(row["entry_signal"]):
-                daily_candidates.append((float(row["entry_score"]), stock_id, row))
+            elif bool(frame.at[date, "entry_signal"]):
+                daily_candidates.append((float(frame.at[date, "entry_score"]), stock_id, frame.loc[date]))
 
         if config.next_day_fill:
             for score, stock_id, row in daily_candidates:
@@ -300,7 +300,7 @@ def _sector_count(positions: dict[str, "Position"], sector: str) -> int:
 
 def _get_close_price(frame: pd.DataFrame, date: pd.Timestamp) -> float:
     if date in frame.index:
-        return float(frame.loc[date, "close"])
+        return float(frame.at[date, "close"])
     prior = frame.loc[:date]
     if prior.empty:
         raise KeyError(f"No close price for {date}")

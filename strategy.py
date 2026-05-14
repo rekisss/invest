@@ -7,7 +7,7 @@ import pandas as pd
 
 from indicators import (
     add_adx_atr, add_bollinger_bands, add_cci,
-    add_ema, add_ichimoku, add_lr_slopes, add_macd, add_mfi, add_obv, add_rsi, add_sma,
+    add_ema, add_ichimoku_cloud, add_lr_slopes, add_macd, add_mfi, add_obv, add_rsi, add_sma,
     add_stochastic, add_williams_r, consecutive_positive,
 )
 
@@ -202,7 +202,7 @@ def prepare_stock_signals(
     frame["williams_r"] = add_williams_r(frame["high"], frame["low"], frame["close"])
     frame["cci20"] = add_cci(frame["high"], frame["low"], frame["close"])
     frame["mfi14"] = add_mfi(frame["high"], frame["low"], frame["close"], frame["volume"])
-    _ichi = add_ichimoku(frame["high"], frame["low"])
+    _ichi = add_ichimoku_cloud(frame["high"], frame["low"])
     frame[_ichi.columns] = _ichi.values
 
     institutional_missing = institutional_df.empty
