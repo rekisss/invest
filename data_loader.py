@@ -28,13 +28,13 @@ class FinMindClient:
         _adapter = HTTPAdapter(pool_connections=4, pool_maxsize=16)
         self._session.mount("https://", _adapter)
         self._session.mount("http://", _adapter)
+        token = os.getenv("FINMIND_TOKEN", "").strip()
+        self._auth_headers_cache: dict[str, str] = (
+            {"Authorization": f"Bearer {token}"} if token else {}
+        )
 
     def _auth_headers(self) -> dict[str, str]:
-        headers: dict[str, str] = {}
-        token = os.getenv("FINMIND_TOKEN", "").strip()
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-        return headers
+        return self._auth_headers_cache
 
     def _cache_path(self, dataset: str, key_parts: Iterable[str]) -> Path:
         safe_name = "_".join(str(part).replace("/", "-") for part in key_parts if str(part))
@@ -65,7 +65,9 @@ class FinMindClient:
                 cache_path.unlink(missing_ok=True)
 
         request_params: dict[str, str] = {"dataset": dataset}
-        request_params.update({key: value for key, value in params.items() if value is not None})
+        for key, value in params.items():
+            if value is not None:
+                request_params[key] = value
 
         last_error: Exception | None = None
         for attempt in range(3):
