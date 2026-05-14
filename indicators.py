@@ -37,7 +37,11 @@ def add_adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14)
     down_move = -low.diff()
     plus_dm = pd.Series(np.where((up_move > down_move) & (up_move > 0), up_move, 0.0), index=high.index)
     minus_dm = pd.Series(np.where((down_move > up_move) & (down_move > 0), down_move, 0.0), index=high.index)
-    tr = pd.concat([high - low, (high - close.shift(1)).abs(), (low - close.shift(1)).abs()], axis=1).max(axis=1)
+    _pc = close.shift(1)
+    tr = pd.Series(
+        np.fmax(np.fmax((high - low).to_numpy(), (high - _pc).abs().to_numpy()), (low - _pc).abs().to_numpy()),
+        index=high.index,
+    )
     atr = tr.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
     plus_di = 100 * plus_dm.ewm(alpha=1 / period, min_periods=period, adjust=False).mean() / atr
     minus_di = 100 * minus_dm.ewm(alpha=1 / period, min_periods=period, adjust=False).mean() / atr
@@ -50,8 +54,9 @@ def add_bollinger_bands(close: pd.Series, window: int = 20, num_std: float = 2.0
     std = close.rolling(window=window, min_periods=window).std(ddof=0)
     upper = sma + num_std * std
     lower = sma - num_std * std
-    pct_b = (close - lower) / (upper - lower).replace(0, np.nan)
-    bandwidth = (upper - lower) / sma.replace(0, np.nan)
+    band_width = (upper - lower).replace(0, np.nan)
+    pct_b = (close - lower) / band_width
+    bandwidth = band_width / sma.replace(0, np.nan)
     return pd.DataFrame({"bb_upper": upper, "bb_mid": sma, "bb_lower": lower, "bb_pct_b": pct_b, "bb_bandwidth": bandwidth})
 
 
@@ -69,7 +74,11 @@ def add_obv(close: pd.Series, volume: pd.Series) -> pd.Series:
 
 
 def add_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
-    tr = pd.concat([high - low, (high - close.shift(1)).abs(), (low - close.shift(1)).abs()], axis=1).max(axis=1)
+    _pc = close.shift(1)
+    tr = pd.Series(
+        np.fmax(np.fmax((high - low).to_numpy(), (high - _pc).abs().to_numpy()), (low - _pc).abs().to_numpy()),
+        index=high.index,
+    )
     return tr.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
 
 
