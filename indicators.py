@@ -63,7 +63,8 @@ def add_bollinger_bands(close: pd.Series, window: int = 20, num_std: float = 2.0
 def add_stochastic(high: pd.Series, low: pd.Series, close: pd.Series, k_period: int = 9, d_period: int = 3) -> pd.DataFrame:
     lowest_low = low.rolling(window=k_period, min_periods=k_period).min()
     highest_high = high.rolling(window=k_period, min_periods=k_period).max()
-    k = 100 * (close - lowest_low) / (highest_high - lowest_low).replace(0, np.nan)
+    hh_ll = (highest_high - lowest_low).replace(0, np.nan)
+    k = 100 * (close - lowest_low) / hh_ll
     d = k.rolling(window=d_period, min_periods=d_period).mean()
     return pd.DataFrame({"stoch_k": k, "stoch_d": d})
 
@@ -96,7 +97,7 @@ def add_mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series
     positive_mf = raw_money_flow.where(tp_change > 0, 0.0)
     negative_mf = raw_money_flow.where(tp_change < 0, 0.0)
     pos_sum = positive_mf.rolling(window=period, min_periods=period).sum()
-    neg_sum = negative_mf.rolling(window=period, min_periods=period).sum().abs()
+    neg_sum = negative_mf.rolling(window=period, min_periods=period).sum()
     mfi = 100 - (100 / (1 + pos_sum / neg_sum.replace(0, np.nan)))
     return mfi.fillna(50)
 
