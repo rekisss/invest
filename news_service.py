@@ -116,8 +116,7 @@ class NewsClient:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _cache_path(self, stock_id: str, name: str, days: int, limit: int) -> Path:
-        safe_name = "".join(char for char in name if char.isalnum()) or stock_id
-        return self.cache_dir / f"news_{stock_id}_{safe_name}_{days}_{limit}.csv"
+        return self.cache_dir / f"news_{stock_id}_{days}_{limit}.csv"
 
     def fetch_stock_news(
         self,
@@ -187,6 +186,19 @@ def _parse_pub_date(value: str) -> datetime | None:
 
 _NEGATION_CHARS = frozenset("不未沒無非")
 
+# Precompiled patterns — longest keywords first to avoid partial overlaps
+_POS_RE = re.compile("|".join(re.escape(kw) for kw in sorted(POSITIVE_KEYWORDS, key=len, reverse=True)))
+_NEG_RE = re.compile("|".join(re.escape(kw) for kw in sorted(NEGATIVE_KEYWORDS, key=len, reverse=True)))
+
+
+def _count_hits(pattern: re.Pattern, text: str) -> int:
+    count = 0
+    for m in pattern.finditer(text):
+        preceding = text[max(0, m.start() - 2):m.start()]
+        if not any(c in _NEGATION_CHARS for c in preceding):
+            count += 1
+    return count
+
 
 def _keyword_hit(text: str, keyword: str) -> bool:
     idx = 0
@@ -201,41 +213,44 @@ def _keyword_hit(text: str, keyword: str) -> bool:
 
 
 def _classify_sentiment(title: str) -> str:
-    positive_hits = sum(_keyword_hit(title, kw) for kw in POSITIVE_KEYWORDS)
-    negative_hits = sum(_keyword_hit(title, kw) for kw in NEGATIVE_KEYWORDS)
-    if positive_hits > negative_hits:
+    pos = _count_hits(_POS_RE, title)
+    neg = _count_hits(_NEG_RE, title)
+    if pos > neg:
         return "positive"
-    if negative_hits > positive_hits:
+    if neg > pos:
         return "negative"
     return "neutral"
 
 
 def summarize_news(news_items: Iterable[dict[str, object]]) -> dict[str, object]:
     items = list(news_items)
-    counts = {"positive": 0, "neutral": 0, "negative": 0}
+    counts: dict[str, int] = {"positive": 0, "neutral": 0, "negative": 0}
+    top_headlines: list[dict[str, object]] = []
+    recent_items: list[dict[str, object]] = []
+
     for item in items:
         sentiment = str(item.get("sentiment") or "neutral")
         if sentiment not in counts:
             sentiment = "neutral"
         counts[sentiment] += 1
+        if len(top_headlines) < 3 and item.get("title"):
+            top_headlines.append({
+                "title": str(item.get("title") or ""),
+                "snippet": str(item.get("snippet") or ""),
+                "sentiment": str(item.get("sentiment") or "neutral"),
+                "source": str(item.get("source") or ""),
+                "published_at": str(item.get("published_at") or ""),
+                "link": str(item.get("link") or ""),
+            })
+        if _is_recent(item.get("published_at")):
+            recent_items.append(item)
+
     summary = "neutral"
     if counts["positive"] > counts["negative"]:
         summary = "positive"
     elif counts["negative"] > counts["positive"]:
         summary = "negative"
-    top_headlines = [
-        {
-            "title": str(item.get("title") or ""),
-            "snippet": str(item.get("snippet") or ""),
-            "sentiment": str(item.get("sentiment") or "neutral"),
-            "source": str(item.get("source") or ""),
-            "published_at": str(item.get("published_at") or ""),
-            "link": str(item.get("link") or ""),
-        }
-        for item in items[:3]
-        if item.get("title")
-    ]
-    recent_items = [item for item in items if _is_recent(item.get("published_at"))]
+
     recent_sentiment = "neutral"
     if recent_items:
         r_pos = sum(1 for h in recent_items if h.get("sentiment") == "positive")

@@ -354,7 +354,7 @@ def latest_signal_snapshot(signals_by_stock: dict[str, pd.DataFrame]) -> pd.Data
     for frame in signals_by_stock.values():
         if frame.empty:
             continue
-        rows.append(frame.sort_values("date").iloc[-1])
+        rows.append(frame.iloc[-1])
     if not rows:
         return pd.DataFrame()
     return pd.DataFrame(rows).sort_values(

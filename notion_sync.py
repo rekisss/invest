@@ -103,6 +103,8 @@ def _setup_database(database_id: str) -> None:
         "狀態": {"select": {}},
         "優先度": {"select": {}},
         "市場氛圍": {"select": {}},
+        "日線趨勢%": {"number": {"format": "number"}},
+        "月線趨勢%": {"number": {"format": "number"}},
     }
     requests.patch(
         f"{NOTION_API}/databases/{database_id}",
@@ -190,6 +192,8 @@ def sync_scan_results(
         vol_ratio = float(row.get("volume_ratio", 0) or 0)
         atr = float(row.get("atr14", 0) or 0)
         stop_loss = round(close - 2 * atr, 2) if atr > 0 and close > 0 else (round(close * 0.95, 2) if close > 0 else 0.0)
+        lr20 = round(float(row.get("lr_slope_20") or 0), 3)
+        lr60 = round(float(row.get("lr_slope_60") or 0), 3)
         confidence = confidence_score(row)
         obs = recommend_observation_period(row, is_candidate=(row_type == "候選"))
         news_info = news_map.get(stock_id, {})
@@ -218,6 +222,8 @@ def sync_scan_results(
             "相對強度": {"number": round(rs5d * 100, 2)},
             "成交量比": {"number": round(vol_ratio, 2)},
             "參考停損價": {"number": stop_loss},
+            "日線趨勢%": {"number": lr20},
+            "月線趨勢%": {"number": lr60},
             "觀察建議": {"rich_text": _rt(obs)},
             "新聞情緒": {"select": {"name": sentiment_label}},
             "新聞摘要": {"rich_text": _rt(news_summary)},
