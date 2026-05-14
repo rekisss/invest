@@ -41,6 +41,33 @@ _SOFT_SCORE_COLS = [
 ]
 _SOFT_SCORE_WEIGHTS = np.array([25, 20, 15, 20, 15, 15, 10, 30, 20, 15, 15, 10, 20], dtype=np.float64)
 
+_BREADTH_COLS = [
+    "above_ema60", "ema60_gt_ema120", "market_above_ma60",
+    "macd_golden_cross", "volume_break", "rsi_strong", "breakout_20d",
+    "foreign_buy_3d", "adx_trending", "stronger_than_market",
+    "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
+    "dealer_buy_3d", "mfi_strong", "above_ichimoku_cloud",
+]
+_CANDIDATE_COLS = [
+    "date", "stock_id", "name", "industry_category", "close",
+    "condition_count", "entry_score", "rsi14", "adx14", "atr14",
+    "volume_ratio", "volume_ma20", "return_5d", "relative_strength_5d",
+    "foreign_buy_streak", "invest_trust_streak", "dealer_buy_streak",
+    "stoch_k", "stoch_d",
+    "bb_pct_b", "bb_bandwidth", "obv_uptrend",
+    "bb_squeeze_breakout", "breakout_volume_confirm",
+    "mfi14", "mfi_strong", "above_ichimoku_cloud",
+    "close_10d_low",
+    "lr_slope_20", "lr_slope_60",
+    "entry_reason", "skip_reason",
+]
+_WATCH_COLS = [
+    "date", "stock_id", "name", "industry_category", "close",
+    "condition_count", "entry_score", "volume_ma20", "close_20d_high",
+    "lr_slope_20", "lr_slope_60",
+    "skip_reason", "entry_reason",
+]
+
 
 @dataclass
 class StrategyConfig:
@@ -330,19 +357,11 @@ def compute_market_breadth(snapshot: pd.DataFrame) -> dict[str, object]:
     if snapshot.empty:
         return {}
     total = len(snapshot)
-    breadth_cols = [
-        "above_ema60", "ema60_gt_ema120", "market_above_ma60",
-        "macd_golden_cross", "volume_break", "rsi_strong", "breakout_20d",
-        "foreign_buy_3d", "adx_trending", "stronger_than_market",
-        "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
-        "dealer_buy_3d", "mfi_strong", "above_ichimoku_cloud",
-    ]
     result: dict[str, object] = {"total_stocks": total}
-    available = [c for c in breadth_cols if c in snapshot.columns]
+    available = [c for c in _BREADTH_COLS if c in snapshot.columns]
     if available:
-        sums = snapshot[available].fillna(False).sum()
-        for col in available:
-            result[col] = int(sums[col] / total * 100)
+        pcts = (snapshot[available].fillna(False).sum() / total * 100).astype(int)
+        result.update(pcts.to_dict())
     entry_count = int(snapshot["entry_signal"].sum()) if "entry_signal" in snapshot.columns else 0
     result["entry_signal_count"] = entry_count
     result["entry_signal_pct"] = int(entry_count / total * 100)
@@ -350,14 +369,10 @@ def compute_market_breadth(snapshot: pd.DataFrame) -> dict[str, object]:
 
 
 def latest_signal_snapshot(signals_by_stock: dict[str, pd.DataFrame]) -> pd.DataFrame:
-    rows: list[pd.Series] = []
-    for frame in signals_by_stock.values():
-        if frame.empty:
-            continue
-        rows.append(frame.iloc[-1])
-    if not rows:
+    last_rows = [frame.iloc[[-1]] for frame in signals_by_stock.values() if not frame.empty]
+    if not last_rows:
         return pd.DataFrame()
-    return pd.DataFrame(rows).sort_values(
+    return pd.concat(last_rows, ignore_index=True).sort_values(
         ["entry_signal", "condition_count", "entry_score"],
         ascending=[False, False, False],
     ).reset_index(drop=True)
@@ -379,29 +394,8 @@ def rank_candidates(
         candidates = candidates[pd.to_numeric(candidates["close"], errors="coerce") <= max_price].copy()
         watchlist = watchlist[pd.to_numeric(watchlist["close"], errors="coerce") <= max_price].copy()
 
-    candidate_columns = [
-        "date", "stock_id", "name", "industry_category", "close",
-        "condition_count", "entry_score", "rsi14", "adx14", "atr14",
-        "volume_ratio", "volume_ma20", "return_5d", "relative_strength_5d",
-        "foreign_buy_streak", "invest_trust_streak", "dealer_buy_streak",
-        "stoch_k", "stoch_d",
-        "bb_pct_b", "bb_bandwidth", "obv_uptrend",
-        "bb_squeeze_breakout", "breakout_volume_confirm",
-        "mfi14", "mfi_strong", "above_ichimoku_cloud",
-        "close_10d_low",
-        "lr_slope_20", "lr_slope_60",
-        "entry_reason", "skip_reason",
-    ]
-    watch_columns = [
-        "date", "stock_id", "name", "industry_category", "close",
-        "condition_count", "entry_score", "volume_ma20", "close_20d_high",
-        "lr_slope_20", "lr_slope_60",
-        "skip_reason", "entry_reason",
-    ]
-
-    # Only keep columns that exist
-    candidate_columns = [c for c in candidate_columns if c in snapshot.columns]
-    watch_columns = [c for c in watch_columns if c in snapshot.columns]
+    candidate_columns = [c for c in _CANDIDATE_COLS if c in snapshot.columns]
+    watch_columns = [c for c in _WATCH_COLS if c in snapshot.columns]
 
     if prefer_lower_price:
         candidates = candidates.sort_values(["condition_count", "close", "entry_score"], ascending=[False, True, False]).head(top_n)
