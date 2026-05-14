@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from threading import Lock
 from types import SimpleNamespace
@@ -23,6 +24,13 @@ from notifier import send_discord_messages, split_message
 from report import save_hybrid_report, save_reports, save_scan_report
 from strategy import StrategyConfig, prepare_market_frame
 from data_loader import fetch_market_index
+
+
+_CST = timezone(timedelta(hours=8))
+
+
+def _cst_today() -> str:
+    return datetime.now(_CST).strftime("%Y-%m-%d")
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -55,7 +63,7 @@ def _build_args(mode: str) -> SimpleNamespace:
         mode=mode,
         stocks=request.form.get("stocks", "auto").strip() or "auto",
         start=request.form.get("start", "2020-01-01").strip() or "2020-01-01",
-        end=request.form.get("end", pd.Timestamp.today().strftime("%Y-%m-%d")).strip() or pd.Timestamp.today().strftime("%Y-%m-%d"),
+        end=request.form.get("end", _cst_today()).strip() or _cst_today(),
         capital=_float_from_form("capital", 1_000_000) or 1_000_000,
         output=str(OUTPUT_DIR),
         lookback_days=_int_from_form("lookback_days", 420),
@@ -109,7 +117,7 @@ def _artifact_url(path: Path | None) -> str | None:
 
 
 def _default_context() -> dict[str, object]:
-    today = pd.Timestamp.today().strftime("%Y-%m-%d")
+    today = _cst_today()
     return {
         "today": today,
         "errors": [],
@@ -120,7 +128,7 @@ def _default_context() -> dict[str, object]:
 
 
 def _build_news_map(news_client: NewsClient, rows: list[dict[str, object]], limit: int = 3) -> dict[str, dict[str, object]]:
-    targets = [(str(row.get("stock_id") or ""), str(row.get("name") or row.get("stock_id") or "")) for row in rows[:5]]
+    targets = [(str(row.get("stock_id") or ""), str(row.get("name") or row.get("stock_id") or "")) for row in rows[:10]]
     targets = [(sid, name) for sid, name in targets if sid]
 
     def _fetch_one(stock_id: str, name: str) -> tuple[str, dict[str, object]]:
@@ -156,6 +164,10 @@ def run_dashboard() -> str:
     config = StrategyConfig(
         use_earnings_filter=args.use_earnings_filter,
         next_day_fill=args.next_day_fill,
+        use_atr_stop=getattr(args, "use_atr_stop", False),
+        atr_stop_multiplier=getattr(args, "atr_stop_multiplier", 2.0),
+        max_holding_days=getattr(args, "max_holding_days", 0),
+        max_positions_per_sector=getattr(args, "max_positions_per_sector", 2),
     )
 
     try:
