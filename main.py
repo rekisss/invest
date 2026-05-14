@@ -38,7 +38,7 @@ from strategy import (
     rank_candidates,
 )
 from universe import build_auto_universe
-from notion_sync import notion_enabled, recommend_observation_period, sync_scan_results
+from notion_sync import confidence_score as _confidence_score, notion_enabled, recommend_observation_period, sync_scan_results
 
 _CST = timezone(timedelta(hours=8))
 
@@ -141,13 +141,6 @@ def _missing_hard_labels(entry_reason: object, max_items: int = 3) -> str:
     labels = [ENTRY_REASON_LABELS.get(c, c) for c in sorted(missing)]
     return " / ".join(labels[:max_items]) if labels else ""
 
-
-def _confidence_score(row: object) -> int:
-    cond = min(int(float(row.get("condition_count", 0) or 0)) / 23 * 55, 55)  # type: ignore[union-attr]
-    adx_pts = min(float(row.get("adx14", 0) or 0) / 40 * 20, 20)  # type: ignore[union-attr]
-    rs_pts = min(max(float(row.get("relative_strength_5d", 0) or 0) * 200, 0), 15)  # type: ignore[union-attr]
-    vol_pts = min(max((float(row.get("volume_ratio", 0) or 0) - 1) / 2 * 10, 0), 10)  # type: ignore[union-attr]
-    return max(0, min(100, int(cond + adx_pts + rs_pts + vol_pts)))
 
 
 def _entry_stop_target(close: float, atr: float | None, stop_pct: float = 0.05, target_pct: float = 0.10) -> tuple[str, str, str, str]:

@@ -7,7 +7,7 @@ from typing import Any
 import requests
 
 
-def _confidence_score(row: Any) -> int:
+def confidence_score(row: Any) -> int:
     cond = min(int(float(row.get("condition_count", 0) or 0)) / 23 * 55, 55)
     adx_pts = min(float(row.get("adx14", 0) or 0) / 40 * 20, 20)
     rs_pts = min(max(float(row.get("relative_strength_5d", 0) or 0) * 200, 0), 15)
@@ -189,7 +189,7 @@ def sync_scan_results(
         rs5d = float(row.get("relative_strength_5d", 0) or 0)
         vol_ratio = float(row.get("volume_ratio", 0) or 0)
         stop_loss = round(close * 0.95, 2) if close > 0 else 0.0
-        confidence = _confidence_score(row)
+        confidence = confidence_score(row)
         obs = recommend_observation_period(row, is_candidate=(row_type == "候選"))
         news_info = news_map.get(stock_id, {})
         sentiment_label, news_summary = _news_sentiment(news_info.get("summary", {}))
