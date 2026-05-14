@@ -102,6 +102,7 @@ def _setup_database(database_id: str) -> None:
         "新聞摘要": {"rich_text": {}},
         "狀態": {"select": {}},
         "優先度": {"select": {}},
+        "市場氛圍": {"select": {}},
     }
     requests.patch(
         f"{NOTION_API}/databases/{database_id}",
@@ -147,6 +148,7 @@ def sync_scan_results(
     watchlist: Any,
     date: str,
     news_map: dict[str, Any] | None = None,
+    market_regime: str = "",
 ) -> None:
     database_id = os.getenv("NOTION_DATABASE_ID", "").strip()
     if not database_id:
@@ -220,6 +222,7 @@ def sync_scan_results(
             "新聞摘要": {"rich_text": _rt(news_summary)},
             "狀態": {"select": {"name": "候選進場" if row_type == "候選" else "觀察中"}},
             "優先度": {"select": {"name": "高" if confidence >= 80 else ("中" if confidence >= 50 else "低")}},
+            **({"市場氛圍": {"select": {"name": market_regime}}} if market_regime else {}),
         }
 
         page_id = existing.get(stock_id)

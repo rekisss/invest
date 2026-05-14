@@ -388,6 +388,7 @@ def rank_candidates(
         "bb_pct_b", "bb_bandwidth", "obv_uptrend",
         "bb_squeeze_breakout", "breakout_volume_confirm",
         "mfi14", "mfi_strong", "above_ichimoku_cloud",
+        "close_10d_low",
         "entry_reason", "skip_reason",
     ]
     watch_columns = [

@@ -424,9 +424,11 @@ def format_scan_message_rich(
         ret5d_txt = f" | 5d `{ret5d*100:+.1f}%`" if ret5d != 0 else ""
         industry = str(row.get("industry_category") or "")
         industry_txt = f" 〔{industry}〕" if industry else ""
+        swing_low = row.get("close_10d_low")
+        swing_txt = f" | 支撐 `{float(swing_low):.2f}`" if swing_low and pd.notna(swing_low) else ""
         lines.append(f"━━━━━━━━━━━━━━━━━━━━")
         lines.append(f"**{row['stock_id']}** {row['name']}{industry_txt}{price_note}{star}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`")
-        lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
+        lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`{swing_txt}")
         lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ret5d_txt}{ichi_txt}")
         lines.append(f"🏦 外資連買 `{int(row.get('foreign_buy_streak', 0))}d`{invest_txt}{dealer_txt}")
         lines.append(f"🔍 {_reason_labels(row.get('entry_reason'), max_items=5)}")
@@ -627,9 +629,15 @@ def format_daily_report_message(
     closing_quotes: pd.DataFrame,
     date: str,
     news_map: dict[str, dict[str, object]] | None = None,
+    breadth: dict[str, object] | None = None,
 ) -> str:
     news_map = news_map or {}
     lines = [f"📋 **盤後總結** · {date}", ""]
+    if breadth:
+        breadth_line = _format_breadth_line(breadth)
+        if breadth_line:
+            lines.append(breadth_line)
+            lines.append("")
     lines.append("**今日候選（篩選時收盤）**")
     if candidates.empty:
         lines.append("今日無全條件候選。")
@@ -750,7 +758,7 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
     if args.notify:
         send_discord_messages(split_message(message))
     if notion_enabled():
-        sync_scan_results(candidates, watchlist, latest_date, news_map)
+        sync_scan_results(candidates, watchlist, latest_date, news_map, market_regime=str(breadth.get("market_regime") or ""))
 
 
 def run_hybrid_monitor(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
@@ -937,12 +945,12 @@ def run_daily_report(args: argparse.Namespace, client: FinMindClient, config: St
         )
 
     news_map = build_news_map(args.output, watch_pool.to_dict("records"), news_limit=args.news_limit) if args.include_news else {}
-    message = format_daily_report_message(candidates, watchlist, closing_quotes, args.end, news_map=news_map)
+    message = format_daily_report_message(candidates, watchlist, closing_quotes, args.end, news_map=news_map, breadth=breadth)
     _safe_print(message)
     if args.notify:
         send_discord_messages(split_message(message))
     if notion_enabled():
-        sync_scan_results(candidates, watchlist, args.end, news_map)
+        sync_scan_results(candidates, watchlist, args.end, news_map, market_regime=str(breadth.get("market_regime") or ""))
 
 
 def run_backtest_mode(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
