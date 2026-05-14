@@ -60,6 +60,12 @@ def run_backtest(
     next_position_id = 1
     pending_entries: list[tuple[float, str, str]] = []  # (score, stock_id, name) — filled next-day open
 
+    # Precompute constant fee factors (avoids repeated arithmetic in hot loop)
+    _buy_slip = 1.0 + config.slippage_pct
+    _sell_slip = 1.0 - config.slippage_pct
+    _brokerage = 1.0 + config.brokerage_fee_pct
+    _sell_factor = 1.0 - config.brokerage_fee_pct - config.transaction_tax_pct
+
     if config.next_day_fill:
         notes.append("next_day_fill=True: entries are filled at the next trading day's open price, not signal-day close.")
 
@@ -83,7 +89,7 @@ def run_backtest(
                 if config.max_positions_per_sector > 0 and sector and _sector_count(positions, sector) >= config.max_positions_per_sector:
                     continue
                 price = float(frame.loc[date, "open"])
-                effective_buy = price * (1 + config.slippage_pct)
+                effective_buy = price * _buy_slip
                 risk_budget = current_equity * config.risk_per_trade
                 risk_per_share = effective_buy * config.stop_loss_pct
                 if risk_per_share <= 0:
@@ -107,7 +113,7 @@ def run_backtest(
                     industry_category=sector,
                 )
                 positions[stock_id] = position
-                cash -= quantity * effective_buy * (1 + config.brokerage_fee_pct)
+                cash -= quantity * effective_buy * _brokerage
                 next_position_id += 1
                 opened_today += 1
             pending_entries.clear()
@@ -148,10 +154,10 @@ def run_backtest(
 
                 if not position.partial_taken and close_price >= position.entry_price * (1 + config.take_profit_pct):
                     sell_qty = max(1, position.quantity // 2)
-                    effective_sell = close_price * (1 - config.slippage_pct)
+                    effective_sell = close_price * _sell_slip
                     fill = _close_quantity(position, sell_qty, effective_sell, date, "take_profit_10pct_partial")
                     fills.append(fill)
-                    cash += sell_qty * effective_sell * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
+                    cash += sell_qty * effective_sell * _sell_factor
                     position.quantity -= sell_qty
                     position.partial_taken = True
 
@@ -160,10 +166,10 @@ def run_backtest(
 
                 if exit_reasons:
                     sell_qty = position.quantity
-                    effective_sell = close_price * (1 - config.slippage_pct)
+                    effective_sell = close_price * _sell_slip
                     fill = _close_quantity(position, sell_qty, effective_sell, date, "|".join(exit_reasons))
                     fills.append(fill)
-                    cash += sell_qty * effective_sell * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
+                    cash += sell_qty * effective_sell * _sell_factor
                     del positions[stock_id]
                     continue
 
@@ -192,7 +198,7 @@ def run_backtest(
                     continue
 
                 price = float(row["close"])
-                effective_buy = price * (1 + config.slippage_pct)
+                effective_buy = price * _buy_slip
                 risk_budget = current_equity * config.risk_per_trade
                 risk_per_share = effective_buy * config.stop_loss_pct
                 if risk_per_share <= 0:
@@ -218,7 +224,7 @@ def run_backtest(
                     industry_category=sector,
                 )
                 positions[stock_id] = position
-                cash -= quantity * effective_buy * (1 + config.brokerage_fee_pct)
+                cash -= quantity * effective_buy * _brokerage
                 next_position_id += 1
                 opened_today += 1
 
@@ -237,10 +243,10 @@ def run_backtest(
         final_date = master_dates[-1]
         for stock_id, position in list(positions.items()):
             close_price = _get_close_price(prepared[stock_id], final_date)
-            effective_sell = close_price * (1 - config.slippage_pct)
+            effective_sell = close_price * _sell_slip
             fill = _close_quantity(position, position.quantity, effective_sell, final_date, "final_liquidation")
             fills.append(fill)
-            cash += position.quantity * effective_sell * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
+            cash += position.quantity * effective_sell * _sell_factor
             del positions[stock_id]
         equity_rows[-1]["cash"] = cash
         equity_rows[-1]["market_value"] = 0.0
