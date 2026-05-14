@@ -760,28 +760,42 @@ def format_daily_report_message(
                 f"• **{row['stock_id']}** {row['name']} | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
             )
     if not closing_quotes.empty:
-        lines.extend(["", "**盤後報價對比**"])
-        for _, row in closing_quotes.iterrows():
-            if pd.notna(row.get("error")):
-                lines.append(f"• **{row['symbol']}** — {row['error']}")
-                continue
-            intraday = row.get("intraday_pct")
-            if pd.notna(intraday):
-                pct = float(intraday) * 100
-                arrow = "📈" if pct > 1 else ("📉" if pct < -1 else "➡️")
-                pct_text = f"**{pct:+.2f}%**"
-            else:
-                arrow, pct_text = "➡️", "N/A"
-            lines.append(
-                f"• **{row['symbol']}** {row.get('name') or ''} | {arrow} {pct_text} | 收 `{row.get('last')}` | 量 `{row.get('volume')}`"
-            )
+        ok_rows = closing_quotes[closing_quotes["error"].isna()] if "error" in closing_quotes.columns else closing_quotes
+        err_rows = closing_quotes[closing_quotes["error"].notna()] if "error" in closing_quotes.columns else pd.DataFrame()
+        if ok_rows.empty and not err_rows.empty:
+            lines.extend(["", "**盤後報價對比**", "⚠️ Fugle API 無法取得報價（金鑰無效或未設定）"])
+        elif not ok_rows.empty:
+            lines.extend(["", "**盤後報價對比**"])
+            for _, row in ok_rows.iterrows():
+                intraday = row.get("intraday_pct")
+                if pd.notna(intraday):
+                    pct = float(intraday) * 100
+                    arrow = "📈" if pct > 1 else ("📉" if pct < -1 else "➡️")
+                    pct_text = f"**{pct:+.2f}%**"
+                else:
+                    arrow, pct_text = "➡️", "N/A"
+                lines.append(
+                    f"• **{row['symbol']}** {row.get('name') or ''} | {arrow} {pct_text} | 收 `{row.get('last')}` | 量 `{row.get('volume')}`"
+                )
     if not watchlist.empty:
         lines.extend(["", "**近似名單（今日未達全條件）**"])
         for _, row in watchlist.head(5).iterrows():
+            price_tag = _low_price_tag(row.get("close"))
+            price_note = f" `{price_tag}`" if price_tag else ""
+            brief = _news_brief(str(row["stock_id"]), news_map)
+            missing = _missing_hard_labels(row.get("entry_reason"))
+            missing_txt = f" | 缺: {missing}" if missing else ""
+            close_val = float(row.get("close") or 0)
+            high20 = row.get("close_20d_high")
+            gap_txt = ""
+            if high20 and pd.notna(high20) and close_val > 0:
+                gap_pct = (float(high20) - close_val) / close_val * 100
+                if 0 < gap_pct < 5:
+                    gap_txt = f" | 距突破 `{gap_pct:.1f}%`"
+            trend_txt = _trend_label(row)
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{trend_txt}{brief}"
             )
-    return "\n".join(lines)
 
 
 def collect_intraday_snapshot(
