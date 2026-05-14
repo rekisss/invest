@@ -135,15 +135,15 @@ def fetch_stock_prices(
     if frame.empty:
         return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume", "amount"])
 
-    renamed = frame.rename(
-        columns={
-            "max": "high",
-            "min": "low",
-            "Trading_Volume": "volume",
-            "Trading_money": "amount",
-        }
-    )
+    _src_cols = [c for c in ["date", "open", "max", "min", "close", "Trading_Volume", "Trading_money"] if c in frame.columns]
+    renamed = frame[_src_cols].rename(columns={
+        "max": "high", "min": "low",
+        "Trading_Volume": "volume", "Trading_money": "amount",
+    })
     keep_columns = ["date", "open", "high", "low", "close", "volume", "amount"]
+    missing = [c for c in keep_columns if c not in renamed.columns]
+    if missing:
+        return pd.DataFrame(columns=keep_columns)
     renamed = renamed[keep_columns].copy()
     renamed["date"] = pd.to_datetime(renamed["date"])
     numeric_cols = ["open", "high", "low", "close", "volume", "amount"]
@@ -235,7 +235,7 @@ def fetch_institutional_data(
     frame["net"] = frame["buy"] - frame["sell"]
     name_col = frame["name"].astype(str)
 
-    result = frame[["date"]].drop_duplicates().sort_values("date").copy()
+    result = frame["date"].drop_duplicates().sort_values().rename("date").to_frame(index=False)
     for col, regex in _INSTITUTION_REGEXES.items():
         mask = name_col.str.contains(regex, na=False)
         if mask.any():
@@ -243,8 +243,8 @@ def fetch_institutional_data(
             result = result.merge(grouped, on="date", how="left")
         else:
             result[col] = 0.0
-    for col in ["foreign_net", "invest_trust_net", "dealer_net"]:
-        result[col] = result[col].fillna(0)
+    _net_cols = ["foreign_net", "invest_trust_net", "dealer_net"]
+    result[_net_cols] = result[_net_cols].fillna(0)
     return result.sort_values("date").reset_index(drop=True)
 
 
