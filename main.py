@@ -965,13 +965,14 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
         if sym not in watch_symbols:
             watch_symbols.append(sym)
 
-    snapshot_lookup = {str(row["stock_id"]): row for row in watch_pool.to_dict("records")}
+    watch_records = watch_pool.to_dict("records")
+    snapshot_lookup = {str(row["stock_id"]): row for row in watch_records}
     daily_volume_lookup: dict[str, float] = {
         str(row.get("stock_id") or ""): float(row["volume_ma20"])
-        for row in watch_pool.to_dict("records")
+        for row in watch_records
         if row.get("volume_ma20") and float(row.get("volume_ma20") or 0) > 0
     }
-    news_map = build_news_map(args.output, watch_pool.to_dict("records"), news_limit=args.news_limit) if args.include_news else {}
+    news_map = build_news_map(args.output, watch_records, news_limit=args.news_limit) if args.include_news else {}
 
     fugle = FugleClient()
     if not fugle.enabled:
@@ -1136,6 +1137,8 @@ def run_walk_forward(args: argparse.Namespace, client: FinMindClient, config: St
         raise RuntimeError("No signal data loaded.")
 
     fold_rows: list[dict[str, object]] = []
+    _market_dates = pd.to_datetime(market_full["date"])
+    _signal_dates = {sid: pd.to_datetime(frame["date"]) for sid, frame in signals_by_stock.items()}
     for fold_idx in range(folds):
         fold_start = full_start + pd.Timedelta(days=fold_idx * fold_days - overlap)
         fold_end = full_start + pd.Timedelta(days=(fold_idx + 1) * fold_days)
@@ -1144,15 +1147,9 @@ def run_walk_forward(args: argparse.Namespace, client: FinMindClient, config: St
         fold_start = max(fold_start, full_start)
         fold_label = f"{fold_start.date()} → {fold_end.date()}"
 
-        market_slice = market_full[
-            (pd.to_datetime(market_full["date"]) >= fold_start)
-            & (pd.to_datetime(market_full["date"]) <= fold_end)
-        ].copy()
+        market_slice = market_full[(_market_dates >= fold_start) & (_market_dates <= fold_end)].copy()
         signals_slice = {
-            sid: frame[
-                (pd.to_datetime(frame["date"]) >= fold_start)
-                & (pd.to_datetime(frame["date"]) <= fold_end)
-            ].copy()
+            sid: frame[(_signal_dates[sid] >= fold_start) & (_signal_dates[sid] <= fold_end)].copy()
             for sid, frame in signals_by_stock.items()
         }
         signals_slice = {sid: f for sid, f in signals_slice.items() if not f.empty}
