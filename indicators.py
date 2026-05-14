@@ -74,15 +74,10 @@ def add_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14)
 
 
 def consecutive_positive(series: pd.Series) -> pd.Series:
-    streaks: list[int] = []
-    streak = 0
-    for value in series.fillna(0):
-        if value > 0:
-            streak += 1
-        else:
-            streak = 0
-        streaks.append(streak)
-    return pd.Series(streaks, index=series.index, dtype="int64")
+    positive = (series.fillna(0) > 0)
+    # Each run of non-positive values starts a new group; cumsum within group counts the streak
+    group_id = (~positive).cumsum()
+    return positive.astype("int64").groupby(group_id).cumsum()
 
 
 def add_mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int = 14) -> pd.Series:

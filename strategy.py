@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from indicators import (
@@ -291,14 +292,15 @@ def prepare_stock_signals(
     _skip_cols = ["long_upper_shadow", "open_high_close_low", "gap_chase_after_blowout", "earnings_blocked"]
     _exit_cols = ["macd_death_cross", "close_below_ema20", "close_below_swing_low"]
 
-    def _build_all_reasons(row: pd.Series) -> pd.Series:
-        return pd.Series({
-            "entry_reason": ", ".join(c for c in entry_columns if bool(row[c])),
-            "skip_reason": ", ".join(c for c in _skip_cols if bool(row[c])),
-            "base_exit_reason": ", ".join(c for c in _exit_cols if bool(row[c])),
-        })
-
-    merged[["entry_reason", "skip_reason", "base_exit_reason"]] = merged.apply(_build_all_reasons, axis=1)
+    _entry_arr = merged[entry_columns].astype(bool).to_numpy()
+    _skip_arr = merged[_skip_cols].astype(bool).to_numpy()
+    _exit_arr = merged[_exit_cols].astype(bool).to_numpy()
+    _ec = np.array(entry_columns)
+    _sc = np.array(_skip_cols)
+    _xc = np.array(_exit_cols)
+    merged["entry_reason"] = [", ".join(_ec[row]) for row in _entry_arr]
+    merged["skip_reason"] = [", ".join(_sc[row]) for row in _skip_arr]
+    merged["base_exit_reason"] = [", ".join(_xc[row]) for row in _exit_arr]
     return merged
 
 

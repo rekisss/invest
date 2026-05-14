@@ -198,7 +198,7 @@ def build_news_map(
             return None
 
     with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(_fetch_one, row) for row in rows[:5]]
+        futures = [executor.submit(_fetch_one, row) for row in rows[:10]]
         for future in as_completed(futures):
             result = future.result()
             if result:

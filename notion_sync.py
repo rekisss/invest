@@ -34,6 +34,33 @@ def _rt(content: str) -> list[dict]:
     return [{"text": {"content": str(content)[:2000]}}]
 
 
+def _query_existing_for_date(database_id: str, date: str) -> dict[str, str]:
+    """Return {stock_id: page_id} for existing pages matching the given date."""
+    url = f"{NOTION_API}/databases/{database_id}/query"
+    payload: dict[str, Any] = {
+        "filter": {"property": "日期", "date": {"equals": date}},
+        "page_size": 100,
+    }
+    result: dict[str, str] = {}
+    while True:
+        resp = requests.post(url, headers=_headers(), json=payload, timeout=30)
+        if not resp.ok:
+            return result
+        data = resp.json()
+        for page in data.get("results", []):
+            page_id = page.get("id", "")
+            props = page.get("properties", {})
+            rich = props.get("股票代號", {}).get("rich_text", [])
+            if rich:
+                sid = rich[0].get("text", {}).get("content", "")
+                if sid:
+                    result[sid] = page_id
+        if not data.get("has_more"):
+            break
+        payload["start_cursor"] = data["next_cursor"]
+    return result
+
+
 def _get_title_property_name(database_id: str) -> str:
     resp = requests.get(f"{NOTION_API}/databases/{database_id}", headers=_headers(), timeout=30)
     if not resp.ok:
@@ -71,6 +98,7 @@ def _setup_database(database_id: str) -> None:
         "新聞情緒": {"select": {}},
         "新聞摘要": {"rich_text": {}},
         "狀態": {"select": {}},
+        "優先度": {"select": {}},
     }
     requests.patch(
         f"{NOTION_API}/databases/{database_id}",
@@ -127,6 +155,8 @@ def sync_scan_results(
         _setup_database(database_id)
     except Exception as exc:
         print(f"[Notion] schema setup warning: {exc}")
+
+    existing = _query_existing_for_date(database_id, date)
 
     rows: list[tuple[Any, str]] = []
     for _, row in candidates.iterrows():
@@ -185,17 +215,27 @@ def sync_scan_results(
             "觀察建議": {"rich_text": _rt(obs)},
             "新聞情緒": {"select": {"name": sentiment_label}},
             "新聞摘要": {"rich_text": _rt(news_summary)},
-            "狀態": {"select": {"name": "新增"}},
+            "狀態": {"select": {"name": "候選進場" if row_type == "候選" else "觀察中"}},
+            "優先度": {"select": {"name": "高" if confidence >= 80 else ("中" if confidence >= 50 else "低")}},
         }
 
+        page_id = existing.get(stock_id)
         for attempt in range(3):
             try:
-                resp = requests.post(
-                    f"{NOTION_API}/pages",
-                    headers=_headers(),
-                    json={"parent": {"database_id": database_id}, "properties": properties},
-                    timeout=30,
-                )
+                if page_id:
+                    resp = requests.patch(
+                        f"{NOTION_API}/pages/{page_id}",
+                        headers=_headers(),
+                        json={"properties": properties},
+                        timeout=30,
+                    )
+                else:
+                    resp = requests.post(
+                        f"{NOTION_API}/pages",
+                        headers=_headers(),
+                        json={"parent": {"database_id": database_id}, "properties": properties},
+                        timeout=30,
+                    )
                 if resp.status_code == 429:
                     retry_after = float(resp.json().get("retry_after", 1))
                     time.sleep(retry_after)
