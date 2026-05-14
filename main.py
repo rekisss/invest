@@ -31,13 +31,14 @@ from report import save_hybrid_report, save_reports, save_scan_report, save_spon
 from strategy import (
     StrategyConfig,
     compute_market_breadth,
+    compute_market_regime,
     latest_signal_snapshot,
     prepare_market_frame,
     prepare_stock_signals,
     rank_candidates,
 )
 from universe import build_auto_universe
-from notion_sync import notion_enabled, recommend_observation_period, sync_scan_results
+from notion_sync import confidence_score as _confidence_score, notion_enabled, recommend_observation_period, sync_scan_results
 
 _CST = timezone(timedelta(hours=8))
 
@@ -127,13 +128,19 @@ ENTRY_REASON_LABELS = {
 
 _MAX_CONDITION_COUNT = 23
 
+_HARD_CONDITIONS = frozenset([
+    "macd_golden_cross", "hist_turn_positive", "above_ema60", "ema60_gt_ema120",
+    "volume_break", "rsi_strong", "breakout_20d", "market_above_ma60",
+    "avoid_chase", "liquidity_ok",
+])
 
-def _confidence_score(row: object) -> int:
-    cond = min(int(float(row.get("condition_count", 0) or 0)) / 23 * 55, 55)  # type: ignore[union-attr]
-    adx_pts = min(float(row.get("adx14", 0) or 0) / 40 * 20, 20)  # type: ignore[union-attr]
-    rs_pts = min(max(float(row.get("relative_strength_5d", 0) or 0) * 200, 0), 15)  # type: ignore[union-attr]
-    vol_pts = min(max((float(row.get("volume_ratio", 0) or 0) - 1) / 2 * 10, 0), 10)  # type: ignore[union-attr]
-    return max(0, min(100, int(cond + adx_pts + rs_pts + vol_pts)))
+
+def _missing_hard_labels(entry_reason: object, max_items: int = 3) -> str:
+    met = {p.strip() for p in str(entry_reason or "").split(",") if p.strip()}
+    missing = _HARD_CONDITIONS - met
+    labels = [ENTRY_REASON_LABELS.get(c, c) for c in sorted(missing)]
+    return " / ".join(labels[:max_items]) if labels else ""
+
 
 
 def _entry_stop_target(close: float, atr: float | None, stop_pct: float = 0.05, target_pct: float = 0.10) -> tuple[str, str, str, str]:
@@ -198,7 +205,7 @@ def build_news_map(
             return None
 
     with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(_fetch_one, row) for row in rows[:5]]
+        futures = [executor.submit(_fetch_one, row) for row in rows[:10]]
         for future in as_completed(futures):
             result = future.result()
             if result:
@@ -312,6 +319,7 @@ def build_daily_snapshot(
     signals_by_stock, _ = collect_signals(universe, client, market, config, start_date, end_date_text, args.workers)
     snapshot = latest_signal_snapshot(signals_by_stock)
     breadth = compute_market_breadth(snapshot)
+    breadth["market_regime"] = compute_market_regime(market)
     candidates, watchlist = rank_candidates(
         snapshot,
         args.top_n,
@@ -319,6 +327,9 @@ def build_daily_snapshot(
         prefer_lower_price=args.prefer_lower_price,
     )
     return candidates, watchlist, universe, breadth
+
+
+_REGIME_EMOJI: dict[str, str] = {"牛市": "🐂", "盤整": "🦀", "熊市": "🐻", "未知": "❓"}
 
 
 def _format_breadth_line(breadth: dict[str, object]) -> str:
@@ -332,13 +343,15 @@ def _format_breadth_line(breadth: dict[str, object]) -> str:
     momentum = int(breadth.get("macd_golden_cross", 0))
     mfi_pct = int(breadth.get("mfi_strong", 0))
     ichi_pct = int(breadth.get("above_ichimoku_cloud", 0))
-    market_tag = "✅" if market_ok > 50 else "⚠️熊市"
+    regime = str(breadth.get("market_regime") or "未知")
+    regime_emoji = _REGIME_EMOJI.get(regime, "❓")
+    market_tag = "✅" if market_ok > 50 else "⚠️"
     line = (
-        f"📊 市場廣度（{total}支）｜全條件候選 `{entry_pct}%` | "
+        f"📊 市場廣度（{total}支）{regime_emoji}`{regime}`｜全條件候選 `{entry_pct}%` | "
         f"站EMA60 `{above_ema}%` | 趨勢 `{trend_up}%` | "
         f"MACD `{momentum}%` | MFI `{mfi_pct}%` | 雲上 `{ichi_pct}%` | 大盤 `{market_tag}`"
     )
-    if market_ok <= 50 and above_ema < 30:
+    if regime == "熊市" or (market_ok <= 50 and above_ema < 30):
         line += "\n⚠️ **市場偏弱，候選訊號謹慎看待，注意風險控管**"
     return line
 
@@ -363,8 +376,17 @@ def format_scan_message_rich(
             price_tag = _low_price_tag(row.get("close"))
             price_note = f" `{price_tag}`" if price_tag else ""
             brief = _news_brief(str(row["stock_id"]), news_map)
+            missing = _missing_hard_labels(row.get("entry_reason"))
+            missing_txt = f" | 缺: {missing}" if missing else f" | {_reason_labels(row.get('entry_reason'))}"
+            close_val = float(row.get("close") or 0)
+            high20 = row.get("close_20d_high")
+            gap_txt = ""
+            if high20 and pd.notna(high20) and close_val > 0:
+                gap_pct = (float(high20) - close_val) / close_val * 100
+                if 0 < gap_pct < 5:
+                    gap_txt = f" | 距突破 `{gap_pct:.1f}%`"
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{brief}"
             )
         return "\n".join(lines)
 
@@ -398,10 +420,16 @@ def format_scan_message_rich(
         dealer_txt = f" | 自營 `{dealer_streak}d`" if dealer_streak >= 1 else ""
         ichi_txt = " | ☁雲上" if bool(row.get("above_ichimoku_cloud")) else ""
         star = " ⭐" if confidence >= 70 else ""
+        ret5d = float(row.get("return_5d") or 0)
+        ret5d_txt = f" | 5d `{ret5d*100:+.1f}%`" if ret5d != 0 else ""
+        industry = str(row.get("industry_category") or "")
+        industry_txt = f" 〔{industry}〕" if industry else ""
+        swing_low = row.get("close_10d_low")
+        swing_txt = f" | 支撐 `{float(swing_low):.2f}`" if swing_low and pd.notna(swing_low) else ""
         lines.append(f"━━━━━━━━━━━━━━━━━━━━")
-        lines.append(f"**{row['stock_id']}** {row['name']}{price_note}{star}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`")
-        lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
-        lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ichi_txt}")
+        lines.append(f"**{row['stock_id']}** {row['name']}{industry_txt}{price_note}{star}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`")
+        lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`{swing_txt}")
+        lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ret5d_txt}{ichi_txt}")
         lines.append(f"🏦 外資連買 `{int(row.get('foreign_buy_streak', 0))}d`{invest_txt}{dealer_txt}")
         lines.append(f"🔍 {_reason_labels(row.get('entry_reason'), max_items=5)}")
         if brief:
@@ -413,8 +441,17 @@ def format_scan_message_rich(
             price_tag = _low_price_tag(row.get("close"))
             price_note = f" `{price_tag}`" if price_tag else ""
             brief = _news_brief(str(row["stock_id"]), news_map)
+            missing = _missing_hard_labels(row.get("entry_reason"))
+            missing_txt = f" | 缺: {missing}" if missing else f" | {_reason_labels(row.get('entry_reason'))}"
+            close_val = float(row.get("close") or 0)
+            high20 = row.get("close_20d_high")
+            gap_txt = ""
+            if high20 and pd.notna(high20) and close_val > 0:
+                gap_pct = (float(high20) - close_val) / close_val * 100
+                if 0 < gap_pct < 5:
+                    gap_txt = f" | 距突破 `{gap_pct:.1f}%`"
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{brief}"
             )
     return "\n".join(lines)
 
@@ -599,9 +636,15 @@ def format_daily_report_message(
     closing_quotes: pd.DataFrame,
     date: str,
     news_map: dict[str, dict[str, object]] | None = None,
+    breadth: dict[str, object] | None = None,
 ) -> str:
     news_map = news_map or {}
     lines = [f"📋 **盤後總結** · {date}", ""]
+    if breadth:
+        breadth_line = _format_breadth_line(breadth)
+        if breadth_line:
+            lines.append(breadth_line)
+            lines.append("")
     lines.append("**今日候選（篩選時收盤）**")
     if candidates.empty:
         lines.append("今日無全條件候選。")
@@ -722,7 +765,7 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
     if args.notify:
         send_discord_messages(split_message(message))
     if notion_enabled():
-        sync_scan_results(candidates, watchlist, latest_date, news_map)
+        sync_scan_results(candidates, watchlist, latest_date, news_map, market_regime=str(breadth.get("market_regime") or ""))
 
 
 def run_hybrid_monitor(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
@@ -909,12 +952,12 @@ def run_daily_report(args: argparse.Namespace, client: FinMindClient, config: St
         )
 
     news_map = build_news_map(args.output, watch_pool.to_dict("records"), news_limit=args.news_limit) if args.include_news else {}
-    message = format_daily_report_message(candidates, watchlist, closing_quotes, args.end, news_map=news_map)
+    message = format_daily_report_message(candidates, watchlist, closing_quotes, args.end, news_map=news_map, breadth=breadth)
     _safe_print(message)
     if args.notify:
         send_discord_messages(split_message(message))
     if notion_enabled():
-        sync_scan_results(candidates, watchlist, args.end, news_map)
+        sync_scan_results(candidates, watchlist, args.end, news_map, market_regime=str(breadth.get("market_regime") or ""))
 
 
 def run_backtest_mode(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:

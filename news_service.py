@@ -50,6 +50,17 @@ POSITIVE_KEYWORDS = [
     "供貨穩定",
     "能見度高",
     "產能滿載",
+    "新產品",
+    "量產",
+    "客戶認證",
+    "入選",
+    "獲選",
+    "拿到",
+    "旺季",
+    "滿載",
+    "買進",
+    "增持",
+    "升評",
 ]
 
 NEGATIVE_KEYWORDS = [
@@ -83,6 +94,15 @@ NEGATIVE_KEYWORDS = [
     "價格競爭",
     "跌停",
     "連跌",
+    "減持",
+    "調降評等",
+    "降評",
+    "虧損擴大",
+    "停工",
+    "火災",
+    "產能閒置",
+    "客戶流失",
+    "被取代",
 ]
 
 
@@ -240,4 +260,4 @@ def _is_recent(value: object) -> bool:
     except ValueError:
         return False
     now = datetime.now(published_at.tzinfo) if published_at.tzinfo else datetime.now()
-    return published_at >= now - timedelta(days=3)
+    return published_at >= now - timedelta(days=5)

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from indicators import (
-    add_adx, add_atr, add_bollinger_bands, add_cci, add_donchian_channel,
+    add_adx, add_atr, add_bollinger_bands, add_cci,
     add_ema, add_ichimoku, add_macd, add_mfi, add_obv, add_rsi, add_sma,
     add_stochastic, add_williams_r, consecutive_positive,
 )
@@ -59,10 +60,33 @@ class StrategyConfig:
 def prepare_market_frame(market_df: pd.DataFrame, config: StrategyConfig) -> pd.DataFrame:
     market = market_df.copy()
     market = market.sort_values("date").reset_index(drop=True)
+    market["market_ma20"] = add_sma(market["close"], 20)
     market["market_ma60"] = add_sma(market["close"], config.market_ma_window)
+    market["market_ma120"] = add_sma(market["close"], 120)
     market["market_above_ma60"] = market["close"] > market["market_ma60"]
     market["market_return_5d"] = market["close"].pct_change(config.relative_strength_window)
     return market
+
+
+def compute_market_regime(market: pd.DataFrame) -> str:
+    """Return '牛市', '盤整', or '熊市' based on the latest market MA alignment."""
+    if market.empty:
+        return "未知"
+    last = market.iloc[-1]
+    close = float(last.get("close") or 0)
+    ma20 = float(last.get("market_ma20") or 0)
+    ma60 = float(last.get("market_ma60") or 0)
+    ma120 = float(last.get("market_ma120") or 0)
+    if close <= 0 or ma60 <= 0:
+        return "未知"
+    above_ma60 = close > ma60
+    ma_bullish = ma20 > ma60 and (ma120 <= 0 or ma60 > ma120)
+    ma_bearish = ma20 < ma60 and (ma120 <= 0 or ma60 < ma120)
+    if above_ma60 and ma_bullish:
+        return "牛市"
+    if not above_ma60 and ma_bearish:
+        return "熊市"
+    return "盤整"
 
 
 def _build_earnings_blocker(index: pd.Index, earnings_dates: pd.DataFrame | None, config: StrategyConfig) -> pd.Series:
@@ -119,8 +143,6 @@ def prepare_stock_signals(
     frame["obv_ma"] = add_sma(frame["obv"], config.obv_ma_window)
     frame["williams_r"] = add_williams_r(frame["high"], frame["low"], frame["close"])
     frame["cci20"] = add_cci(frame["high"], frame["low"], frame["close"])
-    dc = add_donchian_channel(frame["high"], frame["low"])
-    frame = pd.concat([frame, dc], axis=1)
     frame["mfi14"] = add_mfi(frame["high"], frame["low"], frame["close"], frame["volume"])
     ichi = add_ichimoku(frame["high"], frame["low"])
     frame = pd.concat([frame, ichi], axis=1)
@@ -291,14 +313,15 @@ def prepare_stock_signals(
     _skip_cols = ["long_upper_shadow", "open_high_close_low", "gap_chase_after_blowout", "earnings_blocked"]
     _exit_cols = ["macd_death_cross", "close_below_ema20", "close_below_swing_low"]
 
-    def _build_all_reasons(row: pd.Series) -> pd.Series:
-        return pd.Series({
-            "entry_reason": ", ".join(c for c in entry_columns if bool(row[c])),
-            "skip_reason": ", ".join(c for c in _skip_cols if bool(row[c])),
-            "base_exit_reason": ", ".join(c for c in _exit_cols if bool(row[c])),
-        })
-
-    merged[["entry_reason", "skip_reason", "base_exit_reason"]] = merged.apply(_build_all_reasons, axis=1)
+    _entry_arr = merged[entry_columns].astype(bool).to_numpy()
+    _skip_arr = merged[_skip_cols].astype(bool).to_numpy()
+    _exit_arr = merged[_exit_cols].astype(bool).to_numpy()
+    _ec = np.array(entry_columns)
+    _sc = np.array(_skip_cols)
+    _xc = np.array(_exit_cols)
+    merged["entry_reason"] = [", ".join(_ec[row]) for row in _entry_arr]
+    merged["skip_reason"] = [", ".join(_sc[row]) for row in _skip_arr]
+    merged["base_exit_reason"] = [", ".join(_xc[row]) for row in _exit_arr]
     return merged
 
 
@@ -363,11 +386,13 @@ def rank_candidates(
         "bb_pct_b", "bb_bandwidth", "obv_uptrend",
         "bb_squeeze_breakout", "breakout_volume_confirm",
         "mfi14", "mfi_strong", "above_ichimoku_cloud",
+        "close_10d_low",
         "entry_reason", "skip_reason",
     ]
     watch_columns = [
         "date", "stock_id", "name", "industry_category", "close",
-        "condition_count", "entry_score", "volume_ma20", "skip_reason", "entry_reason",
+        "condition_count", "entry_score", "volume_ma20", "close_20d_high",
+        "skip_reason", "entry_reason",
     ]
 
     # Only keep columns that exist

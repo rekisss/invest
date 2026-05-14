@@ -39,7 +39,7 @@ jobs:
             --stocks auto \
             --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
             --lookback-days 420 \
-            --max-universe 50 \
+            --max-universe 70 \
             --top-n 15 \
             --max-price 120 \
             --prefer-lower-price \
