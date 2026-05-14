@@ -11,6 +11,36 @@ from indicators import (
     add_stochastic, add_williams_r, consecutive_positive,
 )
 
+# Module-level constants — column names never change, precomputed to avoid
+# rebuilding on every prepare_stock_signals call (once per stock, ~70 per scan).
+_HARD_ENTRY_COLS = [
+    "macd_golden_cross", "hist_turn_positive", "above_ema60", "ema60_gt_ema120",
+    "volume_break", "rsi_strong", "breakout_20d", "market_above_ma60",
+    "avoid_chase", "liquidity_ok",
+]
+_SOFT_ENTRY_COLS = [
+    "foreign_buy_3d", "adx_trending", "stronger_than_market",
+    "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
+    "dealer_buy_3d", "bb_squeeze_breakout", "breakout_volume_confirm",
+    "williams_r_recovery", "cci_momentum",
+    "mfi_strong", "above_ichimoku_cloud",
+]
+_ENTRY_COLS = _HARD_ENTRY_COLS + _SOFT_ENTRY_COLS
+_ENTRY_COLS_ARR = np.array(_ENTRY_COLS)
+_SKIP_COLS = ["long_upper_shadow", "open_high_close_low", "gap_chase_after_blowout", "earnings_blocked"]
+_SKIP_COLS_ARR = np.array(_SKIP_COLS)
+_EXIT_COLS = ["macd_death_cross", "close_below_ema20", "close_below_swing_low"]
+_EXIT_COLS_ARR = np.array(_EXIT_COLS)
+
+# Weights for the boolean part of entry_score (order matches _SOFT_ENTRY_COLS)
+_SOFT_SCORE_COLS = [
+    "foreign_buy_3d", "invest_trust_buy_2d", "dealer_buy_3d",
+    "kd_golden_cross", "obv_uptrend", "adx_trending", "stronger_than_market",
+    "bb_squeeze_breakout", "breakout_volume_confirm",
+    "williams_r_recovery", "cci_momentum", "mfi_strong", "above_ichimoku_cloud",
+]
+_SOFT_SCORE_WEIGHTS = np.array([25, 20, 15, 20, 15, 15, 10, 30, 20, 15, 15, 10, 20], dtype=np.float64)
+
 
 @dataclass
 class StrategyConfig:
@@ -262,44 +292,21 @@ def prepare_stock_signals(
         pd.DatetimeIndex(merged["date"]), earnings_dates, config,
     ).values
 
-    hard_entry_columns = [
-        "macd_golden_cross", "hist_turn_positive", "above_ema60", "ema60_gt_ema120",
-        "volume_break", "rsi_strong", "breakout_20d", "market_above_ma60",
-        "avoid_chase", "liquidity_ok",
-    ]
-    soft_entry_columns = [
-        "foreign_buy_3d", "adx_trending", "stronger_than_market",
-        "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
-        "dealer_buy_3d", "bb_squeeze_breakout", "breakout_volume_confirm",
-        "williams_r_recovery", "cci_momentum",
-        "mfi_strong", "above_ichimoku_cloud",
-    ]
-    entry_columns = hard_entry_columns + soft_entry_columns
-    merged["condition_count"] = merged[entry_columns].sum(axis=1)
+    merged["condition_count"] = merged[_ENTRY_COLS].sum(axis=1)
 
     merged["skip_trade"] = (
         merged["long_upper_shadow"] | merged["open_high_close_low"]
         | merged["gap_chase_after_blowout"] | merged["earnings_blocked"]
     )
-    merged["entry_signal"] = merged[hard_entry_columns].all(axis=1) & ~merged["skip_trade"]
+    merged["entry_signal"] = merged[_HARD_ENTRY_COLS].all(axis=1) & ~merged["skip_trade"]
+
+    _soft_matrix = merged[_SOFT_SCORE_COLS].to_numpy(dtype=np.float64)
     merged["entry_score"] = (
         merged["condition_count"] * 100
         + merged["relative_strength_5d"].fillna(-99) * 100
         + merged["volume_ratio"].fillna(0) * 10
         + merged["adx14"].fillna(0)
-        + merged["foreign_buy_3d"].astype(int) * 25
-        + merged["invest_trust_buy_2d"].astype(int) * 20
-        + merged["dealer_buy_3d"].astype(int) * 15
-        + merged["kd_golden_cross"].astype(int) * 20
-        + merged["obv_uptrend"].astype(int) * 15
-        + merged["adx_trending"].astype(int) * 15
-        + merged["stronger_than_market"].astype(int) * 10
-        + merged["bb_squeeze_breakout"].astype(int) * 30
-        + merged["breakout_volume_confirm"].astype(int) * 20
-        + merged["williams_r_recovery"].astype(int) * 15
-        + merged["cci_momentum"].astype(int) * 15
-        + merged["mfi_strong"].astype(int) * 10
-        + merged["above_ichimoku_cloud"].astype(int) * 20
+        + _soft_matrix @ _SOFT_SCORE_WEIGHTS
     )
 
     merged["macd_death_cross"] = (
@@ -312,18 +319,12 @@ def prepare_stock_signals(
         merged["macd_death_cross"] | merged["close_below_ema20"] | merged["close_below_swing_low"]
     )
 
-    _skip_cols = ["long_upper_shadow", "open_high_close_low", "gap_chase_after_blowout", "earnings_blocked"]
-    _exit_cols = ["macd_death_cross", "close_below_ema20", "close_below_swing_low"]
-
-    _entry_arr = merged[entry_columns].astype(bool).to_numpy()
-    _skip_arr = merged[_skip_cols].astype(bool).to_numpy()
-    _exit_arr = merged[_exit_cols].astype(bool).to_numpy()
-    _ec = np.array(entry_columns)
-    _sc = np.array(_skip_cols)
-    _xc = np.array(_exit_cols)
-    merged["entry_reason"] = [", ".join(_ec[row]) for row in _entry_arr]
-    merged["skip_reason"] = [", ".join(_sc[row]) for row in _skip_arr]
-    merged["base_exit_reason"] = [", ".join(_xc[row]) for row in _exit_arr]
+    _entry_arr = merged[_ENTRY_COLS].to_numpy(dtype=bool)
+    _skip_arr = merged[_SKIP_COLS].to_numpy(dtype=bool)
+    _exit_arr = merged[_EXIT_COLS].to_numpy(dtype=bool)
+    merged["entry_reason"] = [", ".join(_ENTRY_COLS_ARR[row]) for row in _entry_arr]
+    merged["skip_reason"] = [", ".join(_SKIP_COLS_ARR[row]) for row in _skip_arr]
+    merged["base_exit_reason"] = [", ".join(_EXIT_COLS_ARR[row]) for row in _exit_arr]
     return merged
 
 
