@@ -10,6 +10,7 @@ from typing import Iterable
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
 from pandas.errors import EmptyDataError, ParserError
 
 
@@ -24,6 +25,9 @@ class FinMindClient:
 
     def __post_init__(self) -> None:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        _adapter = HTTPAdapter(pool_connections=4, pool_maxsize=16)
+        self._session.mount("https://", _adapter)
+        self._session.mount("http://", _adapter)
 
     def _auth_headers(self) -> dict[str, str]:
         headers: dict[str, str] = {}
@@ -142,6 +146,9 @@ def fetch_stock_prices(
     keep_columns = ["date", "open", "high", "low", "close", "volume", "amount"]
     renamed = renamed[keep_columns].copy()
     renamed["date"] = pd.to_datetime(renamed["date"])
+    numeric_cols = ["open", "high", "low", "close", "volume", "amount"]
+    renamed[numeric_cols] = renamed[numeric_cols].apply(pd.to_numeric, errors="coerce")
+    renamed = renamed.dropna(subset=["close"])
     renamed = renamed.sort_values("date").drop_duplicates(subset=["date"]).reset_index(drop=True)
     return renamed
 

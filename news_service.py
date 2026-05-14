@@ -13,6 +13,7 @@ import re
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
 
 
 def _clean_html(text: str) -> str:
@@ -115,6 +116,9 @@ class NewsClient:
     def __post_init__(self) -> None:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._session: requests.Session = requests.Session()
+        _adapter = HTTPAdapter(pool_connections=2, pool_maxsize=8)
+        self._session.mount("https://", _adapter)
+        self._session.mount("http://", _adapter)
 
     def _cache_path(self, stock_id: str, name: str, days: int, limit: int) -> Path:
         return self.cache_dir / f"news_{stock_id}_{days}_{limit}.csv"
