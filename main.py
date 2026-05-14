@@ -8,6 +8,8 @@ import sys
 import time
 from typing import Any
 
+from datetime import timezone, timedelta
+
 import pandas as pd
 
 from backtest import run_backtest
@@ -37,13 +39,26 @@ from strategy import (
 from universe import build_auto_universe
 from notion_sync import notion_enabled, recommend_observation_period, sync_scan_results
 
+_CST = timezone(timedelta(hours=8))
+
+
+def _cst_now(fmt: str = "%H:%M") -> str:
+    """Return current time in CST (UTC+8) as a formatted string."""
+    from datetime import datetime
+    return datetime.now(_CST).strftime(fmt)
+
+
+def _cst_today() -> str:
+    """Return today's date in CST (UTC+8) as YYYY-MM-DD."""
+    return _cst_now("%Y-%m-%d")
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Taiwan MACD swing strategy backtester and scanner.")
     parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward"], default="scan")
     parser.add_argument("--stocks", default="auto", help="CSV file containing stock_id and optional name, or 'auto'.")
     parser.add_argument("--start", default="2020-01-01")
-    parser.add_argument("--end", default=pd.Timestamp.today().strftime("%Y-%m-%d"))
+    parser.add_argument("--end", default=_cst_today())
     parser.add_argument("--capital", type=float, default=1_000_000)
     parser.add_argument("--output", default="output")
     parser.add_argument("--lookback-days", type=int, default=420)
@@ -556,8 +571,8 @@ def format_event_message(
 
 
 def format_heartbeat_message(quotes: pd.DataFrame, date: str) -> str:
-    now = pd.Timestamp.now().strftime("%H:%M")
-    lines = [f"💓 **盤中快報** · {now} ({date})", ""]
+    now = _cst_now()
+    lines = [f"💓 **盤中快報** · {now} CST ({date})", ""]
     if quotes.empty:
         lines.append("無即時報價。")
         return "\n".join(lines)
@@ -683,6 +698,8 @@ def format_sponsor_message(
 
 
 def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
+    if args.notify:
+        send_discord_messages([f"🔄 **選股掃描開始** · {_cst_now()} CST · {args.end}"])
     candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
     latest_date = args.end
 
@@ -810,7 +827,7 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
     last_heartbeat_ts: float = 0.0
     consecutive_error_cycles = 0
     _MAX_ERROR_CYCLES = 10
-    start_msg = f"🟢 **事件監控啟動** · {pd.Timestamp.now().strftime('%H:%M')} (UTC)\n監控標的：{', '.join(watch_symbols)}\n觸發條件：急拉 ≥{args.event_rise_threshold*100:.1f}% ｜急跌 ≤{args.event_drop_threshold*100:.1f}% ｜量能 ≥{args.event_volume_multiplier}x"
+    start_msg = f"🟢 **事件監控啟動** · {_cst_now()} CST\n監控標的：{', '.join(watch_symbols)}\n觸發條件：急拉 ≥{args.event_rise_threshold*100:.1f}% ｜急跌 ≤{args.event_drop_threshold*100:.1f}% ｜量能 ≥{args.event_volume_multiplier}x"
     _safe_print(start_msg)
     if args.notify:
         send_discord_messages(split_message(start_msg))
@@ -874,6 +891,8 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
 
 
 def run_daily_report(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
+    if args.notify:
+        send_discord_messages([f"🔄 **盤後總結開始** · {_cst_now()} CST · {args.end}"])
     candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
     watch_pool = candidates.head(args.watch_top).copy()
     if len(watch_pool) < args.watch_top:

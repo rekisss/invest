@@ -37,7 +37,7 @@ jobs:
           python main.py \
             --mode scan \
             --stocks auto \
-            --end $(date +%Y-%m-%d) \
+            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
             --lookback-days 420 \
             --max-universe 50 \
             --top-n 15 \
