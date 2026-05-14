@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Lock
 from types import SimpleNamespace
@@ -14,8 +15,8 @@ from news_service import NewsClient, summarize_news
 from main import (
     build_daily_snapshot,
     collect_signals,
-    format_hybrid_message,
-    format_scan_message,
+    format_hybrid_message_rich,
+    format_scan_message_rich,
     load_universe,
 )
 from notifier import send_discord_messages, split_message
@@ -58,18 +59,34 @@ def _build_args(mode: str) -> SimpleNamespace:
         capital=_float_from_form("capital", 1_000_000) or 1_000_000,
         output=str(OUTPUT_DIR),
         lookback_days=_int_from_form("lookback_days", 420),
-        max_universe=_int_from_form("max_universe", 40),
+        max_universe=_int_from_form("max_universe", 50),
         top_n=_int_from_form("top_n", 15),
-        watch_top=_int_from_form("watch_top", 5),
+        watch_top=_int_from_form("watch_top", 8),
         interval_seconds=_int_from_form("interval_seconds", 120),
         repeat_count=_int_from_form("repeat_count", 1),
         workers=_int_from_form("workers", 2),
         max_price=_float_from_form("max_price"),
         prefer_lower_price=_bool_from_form("prefer_lower_price"),
         include_news=_bool_from_form("include_news"),
+        news_limit=_int_from_form("news_limit", 3),
+        min_confidence=_int_from_form("min_confidence", 0),
         notify=_bool_from_form("notify"),
         use_earnings_filter=_bool_from_form("use_earnings_filter"),
         next_day_fill=_bool_from_form("next_day_fill"),
+        use_atr_stop=_bool_from_form("use_atr_stop"),
+        atr_stop_multiplier=_float_from_form("atr_stop_multiplier") or 2.0,
+        max_holding_days=_int_from_form("max_holding_days", 0),
+        max_positions_per_sector=_int_from_form("max_positions_per_sector", 2),
+        clean_cache=False,
+        clean_cache_days=30,
+        watch_extra="",
+        wf_folds=4,
+        wf_overlap_days=0,
+        heartbeat_minutes=0,
+        event_rise_threshold=0.045,
+        event_drop_threshold=-0.035,
+        event_volume_multiplier=2.5,
+        event_cooldown_seconds=600,
     )
 
 
@@ -103,18 +120,23 @@ def _default_context() -> dict[str, object]:
 
 
 def _build_news_map(news_client: NewsClient, rows: list[dict[str, object]], limit: int = 3) -> dict[str, dict[str, object]]:
+    targets = [(str(row.get("stock_id") or ""), str(row.get("name") or row.get("stock_id") or "")) for row in rows[:5]]
+    targets = [(sid, name) for sid, name in targets if sid]
+
+    def _fetch_one(stock_id: str, name: str) -> tuple[str, dict[str, object]]:
+        try:
+            items = news_client.fetch_stock_news(stock_id, name, limit=limit)
+            item_records = _frame_records(items, limit=limit)
+            return stock_id, {"news_items": item_records, "summary": summarize_news(item_records)}
+        except Exception:
+            return stock_id, {"news_items": [], "summary": {}}
+
     news_map: dict[str, dict[str, object]] = {}
-    for row in rows[:5]:
-        stock_id = str(row.get("stock_id") or "")
-        name = str(row.get("name") or stock_id)
-        if not stock_id:
-            continue
-        items = news_client.fetch_stock_news(stock_id, name, limit=limit)
-        item_records = _frame_records(items, limit=limit)
-        news_map[stock_id] = {
-            "news_items": item_records,
-            "summary": summarize_news(item_records),
-        }
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = {pool.submit(_fetch_one, sid, name): sid for sid, name in targets}
+        for future in as_completed(futures):
+            sid, data = future.result()
+            news_map[sid] = data
     return news_map
 
 
@@ -139,16 +161,18 @@ def run_dashboard() -> str:
     try:
         with RUN_LOCK:
             if mode == "scan":
-                candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+                candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
                 report_path = save_scan_report(args.output, candidates, watchlist, universe)
                 if args.notify:
-                    send_discord_messages(split_message(format_scan_message(candidates, watchlist, args.end)))
+                    news_map_notify = _build_news_map(news_client, _frame_records(candidates)) if args.include_news else {}
+                    send_discord_messages(split_message(format_scan_message_rich(candidates, watchlist, args.end, news_map_notify, breadth=breadth)))
                 context["scan"] = {
                     "report_path": str(report_path),
                     "report_url": _artifact_url(report_path),
                     "candidates": _frame_records(candidates),
                     "watchlist": _frame_records(watchlist),
                     "universe_size": len(universe),
+                    "breadth": breadth,
                     "news_map": _build_news_map(news_client, _frame_records(candidates) or _frame_records(watchlist)) if args.include_news else {},
                 }
             elif mode == "hybrid-monitor":
@@ -157,8 +181,9 @@ def run_dashboard() -> str:
                     candidates = pd.DataFrame(columns=["stock_id", "name"])
                     watchlist = universe.copy()
                     watch_pool = universe.copy()
+                    breadth = {}
                 else:
-                    candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+                    candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
                     watch_pool = candidates.copy()
                     if len(watch_pool) < args.watch_top:
                         extra = watchlist.head(args.watch_top - len(watch_pool))
@@ -175,7 +200,8 @@ def run_dashboard() -> str:
 
                 report_path = save_hybrid_report(args.output, candidates, watchlist, live_quotes, universe)
                 if args.notify:
-                    send_discord_messages(split_message(format_hybrid_message(candidates, watchlist, live_quotes, args.end)))
+                    news_map_notify = _build_news_map(news_client, _frame_records(watch_pool)) if args.include_news else {}
+                    send_discord_messages(split_message(format_hybrid_message_rich(candidates, watchlist, live_quotes, args.end, news_map_notify)))
                 context["hybrid"] = {
                     "report_path": str(report_path),
                     "report_url": _artifact_url(report_path),
@@ -214,6 +240,7 @@ def run_dashboard() -> str:
                     equity_curve=backtest["equity_curve"],
                     signals=all_signals,
                     notes=backtest["notes"],
+                    config=config,
                 )
                 context["backtest"] = {
                     "metrics": backtest["metrics"],
@@ -222,6 +249,8 @@ def run_dashboard() -> str:
                     "excel_url": _artifact_url(reports["excel"]),
                     "equity_chart_url": _artifact_url(reports["equity_chart"]),
                     "yearly_chart_url": _artifact_url(reports["yearly_chart"]),
+                    "monthly_chart_url": _artifact_url(reports.get("monthly_chart")),
+                    "trade_dist_chart_url": _artifact_url(reports.get("trade_dist_chart")),
                 }
             else:
                 raise RuntimeError(f"Unsupported mode: {mode}")

@@ -32,19 +32,32 @@ jobs:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          NOTION_DATABASE_ID: dcf2e1db27fc4aa88dcb537f6e077505
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
         run: |
           python main.py \
             --mode scan \
             --stocks auto \
-            --end $(date +%Y-%m-%d) \
-            --max-universe 40 \
+            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
+            --lookback-days 420 \
+            --max-universe 50 \
             --top-n 15 \
             --max-price 120 \
             --prefer-lower-price \
             --include-news \
+            --news-limit 3 \
+            --clean-cache \
+            --clean-cache-days 14 \
             --output output \
             --notify
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"⚠️ **每日掃描執行失敗** · $(date -u +%Y-%m-%d) · 請檢查 GitHub Actions logs\"}" \
+            "$DISCORD_WEBHOOK_URL" || true
 
       - name: Upload scan report
         if: always()

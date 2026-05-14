@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Any
 
 import requests
+
+
+def _confidence_score(row: Any) -> int:
+    cond = min(int(float(row.get("condition_count", 0) or 0)) / 23 * 55, 55)
+    adx_pts = min(float(row.get("adx14", 0) or 0) / 40 * 20, 20)
+    rs_pts = min(max(float(row.get("relative_strength_5d", 0) or 0) * 200, 0), 15)
+    vol_pts = min(max((float(row.get("volume_ratio", 0) or 0) - 1) / 2 * 10, 0), 10)
+    return max(0, min(100, int(cond + adx_pts + rs_pts + vol_pts)))
 
 NOTION_API = "https://api.notion.com/v1"
 NOTION_VERSION = "2022-06-28"
@@ -25,16 +34,39 @@ def _rt(content: str) -> list[dict]:
     return [{"text": {"content": str(content)[:2000]}}]
 
 
+def _get_title_property_name(database_id: str) -> str:
+    resp = requests.get(f"{NOTION_API}/databases/{database_id}", headers=_headers(), timeout=30)
+    if not resp.ok:
+        return "股票名稱"
+    for name, prop in resp.json().get("properties", {}).items():
+        if prop.get("type") == "title":
+            return name
+    return "股票名稱"
+
+
 def _setup_database(database_id: str) -> None:
     props = {
         "股票代號": {"rich_text": {}},
         "日期": {"date": {}},
         "類型": {"select": {}},
+        "信心分數": {"number": {"format": "number"}},
         "分數": {"number": {"format": "number"}},
         "收盤價": {"number": {"format": "number"}},
         "RSI": {"number": {"format": "number"}},
         "ADX": {"number": {"format": "number"}},
+        "KD值": {"number": {"format": "number"}},
         "條件達成": {"rich_text": {}},
+        "產業別": {"rich_text": {}},
+        "外資連買天數": {"number": {"format": "number"}},
+        "投信連買天數": {"number": {"format": "number"}},
+        "自營連買天數": {"number": {"format": "number"}},
+        "MFI": {"number": {"format": "number"}},
+        "BB位置%": {"number": {"format": "number"}},
+        "一目雲上": {"checkbox": {}},
+        "5日漲幅%": {"number": {"format": "number"}},
+        "相對強度": {"number": {"format": "number"}},
+        "成交量比": {"number": {"format": "number"}},
+        "參考停損價": {"number": {"format": "number"}},
         "觀察建議": {"rich_text": {}},
         "新聞情緒": {"select": {}},
         "新聞摘要": {"rich_text": {}},
@@ -48,10 +80,17 @@ def _setup_database(database_id: str) -> None:
     ).raise_for_status()
 
 
-def _news_sentiment(news_info: dict[str, Any]) -> tuple[str, str]:
-    headlines = news_info.get("top_headlines") or []
+def _news_sentiment(summary: dict[str, Any]) -> tuple[str, str]:
+    headlines = summary.get("top_headlines") or []
     if not headlines:
-        return "無資料", ""
+        headline = str(summary.get("headline") or "")
+        if not headline:
+            return "無資料", ""
+        # Prefer recent_sentiment when fresh news exists
+        has_recent = bool(summary.get("has_recent_news"))
+        raw = str(summary.get("recent_sentiment" if has_recent else "sentiment") or "neutral")
+        label = {"positive": "正面", "negative": "負面"}.get(raw, "中性")
+        return label, headline[:500]
     pos = sum(1 for h in headlines if h.get("sentiment") == "positive")
     neg = sum(1 for h in headlines if h.get("sentiment") == "negative")
     label = "正面" if pos > neg else ("負面" if neg > pos else "中性")
@@ -83,6 +122,7 @@ def sync_scan_results(
         return
     news_map = news_map or {}
 
+    title_prop = _get_title_property_name(database_id)
     try:
         _setup_database(database_id)
     except Exception as exc:
@@ -101,28 +141,43 @@ def sync_scan_results(
         close = float(row.get("close", 0) or 0)
         rsi = float(row.get("rsi14", 0) or 0)
         adx = float(row.get("adx14", 0) or 0)
+        stoch_k = float(row.get("stoch_k", 0) or 0)
         condition_count = int(row.get("condition_count", 0) or 0)
         industry = str(row.get("industry_category", "") or "")
         foreign_streak = int(row.get("foreign_buy_streak", 0) or 0)
+        invest_trust_streak = int(row.get("invest_trust_streak", 0) or 0)
+        dealer_streak = int(row.get("dealer_buy_streak", 0) or 0)
+        mfi14 = round(float(row.get("mfi14", 50) or 50), 1)
+        bb_pct_b = round(float(row.get("bb_pct_b", 0) or 0) * 100, 1)
+        above_cloud = bool(row.get("above_ichimoku_cloud", False))
         return_5d = float(row.get("return_5d", 0) or 0)
         rs5d = float(row.get("relative_strength_5d", 0) or 0)
         vol_ratio = float(row.get("volume_ratio", 0) or 0)
         stop_loss = round(close * 0.95, 2) if close > 0 else 0.0
+        confidence = _confidence_score(row)
         obs = recommend_observation_period(row, is_candidate=(row_type == "候選"))
-        sentiment_label, news_summary = _news_sentiment(news_map.get(stock_id, {}))
+        news_info = news_map.get(stock_id, {})
+        sentiment_label, news_summary = _news_sentiment(news_info.get("summary", {}))
 
         properties = {
-            "股票名稱": {"title": _rt(f"{stock_id} {name}")},
+            title_prop: {"title": _rt(f"{stock_id} {name}")},
             "股票代號": {"rich_text": _rt(stock_id)},
             "日期": {"date": {"start": date}},
             "類型": {"select": {"name": row_type}},
+            "信心分數": {"number": confidence},
             "分數": {"number": round(score, 1)},
             "收盤價": {"number": round(close, 2)},
             "RSI": {"number": round(rsi, 1)},
             "ADX": {"number": round(adx, 1)},
-            "條件達成": {"rich_text": _rt(f"{condition_count}/13")},
+            "KD值": {"number": round(stoch_k, 1)},
+            "條件達成": {"rich_text": _rt(f"{condition_count}/23")},
             "產業別": {"rich_text": _rt(industry)},
             "外資連買天數": {"number": foreign_streak},
+            "投信連買天數": {"number": invest_trust_streak},
+            "自營連買天數": {"number": dealer_streak},
+            "MFI": {"number": mfi14},
+            "BB位置%": {"number": bb_pct_b},
+            "一目雲上": {"checkbox": above_cloud},
             "5日漲幅%": {"number": round(return_5d * 100, 2)},
             "相對強度": {"number": round(rs5d * 100, 2)},
             "成交量比": {"number": round(vol_ratio, 2)},
@@ -133,13 +188,23 @@ def sync_scan_results(
             "狀態": {"select": {"name": "新增"}},
         }
 
-        try:
-            requests.post(
-                f"{NOTION_API}/pages",
-                headers=_headers(),
-                json={"parent": {"database_id": database_id}, "properties": properties},
-                timeout=30,
-            ).raise_for_status()
-            print(f"[Notion] synced {stock_id} {name}")
-        except Exception as exc:
-            print(f"[Notion] failed {stock_id}: {exc}")
+        for attempt in range(3):
+            try:
+                resp = requests.post(
+                    f"{NOTION_API}/pages",
+                    headers=_headers(),
+                    json={"parent": {"database_id": database_id}, "properties": properties},
+                    timeout=30,
+                )
+                if resp.status_code == 429:
+                    retry_after = float(resp.json().get("retry_after", 1))
+                    time.sleep(retry_after)
+                    continue
+                resp.raise_for_status()
+                print(f"[Notion] synced {stock_id} {name}")
+                break
+            except Exception as exc:
+                if attempt == 2:
+                    print(f"[Notion] failed {stock_id}: {exc}")
+                else:
+                    time.sleep(2 ** attempt)

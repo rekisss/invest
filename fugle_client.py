@@ -1,10 +1,25 @@
 from __future__ import annotations
 
 import os
+import random
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
 import pandas as pd
 import requests
+
+
+def _retry(func, max_attempts: int = 3, backoff: float = 2.0):
+    last_error: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            return func()
+        except Exception as exc:
+            last_error = exc
+            if attempt < max_attempts - 1:
+                time.sleep(backoff * (2 ** attempt) + random.uniform(0, 0.5))
+    raise last_error  # type: ignore[misc]
 
 
 @dataclass
@@ -27,13 +42,15 @@ class FugleClient:
         return {"X-API-KEY": self.api_key}
 
     def fetch_quote(self, symbol: str) -> dict[str, object]:
-        response = requests.get(
-            f"{self.base_url}/stock/intraday/quote/{symbol}",
-            headers=self._headers(),
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        def _do() -> dict[str, object]:
+            response = requests.get(
+                f"{self.base_url}/stock/intraday/quote/{symbol}",
+                headers=self._headers(),
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            return response.json()
+        return _retry(_do)
 
 
 def normalize_quote(symbol: str, payload: dict[str, object]) -> dict[str, object]:
@@ -63,14 +80,18 @@ def normalize_quote(symbol: str, payload: dict[str, object]) -> dict[str, object
     }
 
 
-def fetch_watch_quotes(client: FugleClient, symbols: list[str]) -> pd.DataFrame:
-    rows: list[dict[str, object]] = []
-    for symbol in symbols:
+def fetch_watch_quotes(client: FugleClient, symbols: list[str], workers: int = 5) -> pd.DataFrame:
+    def _fetch_one(symbol: str) -> dict[str, object]:
         try:
-            payload = client.fetch_quote(symbol)
-            rows.append(normalize_quote(symbol, payload))
+            return normalize_quote(symbol, client.fetch_quote(symbol))
         except Exception as error:
-            rows.append({"symbol": symbol, "error": str(error)})
+            return {"symbol": symbol, "error": str(error)}
+
+    rows: list[dict[str, object]] = [None] * len(symbols)  # type: ignore[list-item]
+    with ThreadPoolExecutor(max_workers=min(workers, len(symbols) or 1)) as pool:
+        future_to_idx = {pool.submit(_fetch_one, sym): i for i, sym in enumerate(symbols)}
+        for future in as_completed(future_to_idx):
+            rows[future_to_idx[future]] = future.result()
     frame = pd.DataFrame(rows)
     if frame.empty:
         return frame
@@ -85,5 +106,6 @@ def fetch_watch_quotes(client: FugleClient, symbols: list[str]) -> pd.DataFrame:
         frame["error"] = pd.NA
 
     frame["sort_intraday"] = pd.to_numeric(frame["intraday_pct"], errors="coerce").fillna(-999)
-    frame = frame.sort_values(["error", "sort_intraday"], ascending=[True, False], na_position="last").drop(columns=["sort_intraday"])
+    frame["has_error"] = frame["error"].notna() & (frame["error"].astype(str) != "nan")
+    frame = frame.sort_values(["has_error", "sort_intraday"], ascending=[True, False]).drop(columns=["sort_intraday", "has_error"])
     return frame.reset_index(drop=True)

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import random
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -32,7 +34,7 @@ class FinMindClient:
         safe_name = "_".join(str(part).replace("/", "-") for part in key_parts if str(part))
         return self.cache_dir / f"{dataset}_{safe_name}.csv"
 
-    def fetch_dataset(self, dataset: str, use_cache: bool = True, **params: str) -> pd.DataFrame:
+    def fetch_dataset(self, dataset: str, use_cache: bool = True, cache_ttl_days: int = 0, **params: str) -> pd.DataFrame:
         cache_path = self._cache_path(
             dataset,
             [
@@ -43,24 +45,40 @@ class FinMindClient:
                 params.get("end_date", ""),
             ]
         )
+        cache_fresh = False
         if use_cache and cache_path.exists():
+            if cache_ttl_days <= 0:
+                cache_fresh = True
+            else:
+                age_days = (time.time() - cache_path.stat().st_mtime) / 86400
+                cache_fresh = age_days < cache_ttl_days
+        if cache_fresh:
             try:
                 return pd.read_csv(cache_path)
             except (EmptyDataError, ParserError):
-                # A partially written cache file should not break the entire scan.
                 cache_path.unlink(missing_ok=True)
 
-        request_params: dict[str, str] = {}
-        request_params["dataset"] = dataset
+        request_params: dict[str, str] = {"dataset": dataset}
         request_params.update({key: value for key, value in params.items() if value is not None})
 
-        response = requests.get(
-            FINMIND_API_URL,
-            headers=self._auth_headers(),
-            params=request_params,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                response = requests.get(
+                    FINMIND_API_URL,
+                    headers=self._auth_headers(),
+                    params=request_params,
+                    timeout=self.timeout,
+                )
+                response.raise_for_status()
+                break
+            except requests.exceptions.RequestException as exc:
+                last_error = exc
+                if attempt < 2:
+                    time.sleep(2 ** attempt * 2 + random.uniform(0, 1))
+        else:
+            raise last_error  # type: ignore[misc]
+
         payload = response.json()
         if "data" not in payload:
             raise RuntimeError(f"Unexpected FinMind payload for {dataset}: {payload}")
@@ -72,7 +90,7 @@ class FinMindClient:
 
 
 def fetch_stock_info(client: FinMindClient, use_cache: bool = True) -> pd.DataFrame:
-    frame = client.fetch_dataset("TaiwanStockInfo", use_cache=use_cache)
+    frame = client.fetch_dataset("TaiwanStockInfo", use_cache=use_cache, cache_ttl_days=1)
     if frame.empty:
         return pd.DataFrame(columns=["stock_id", "stock_name", "industry_category", "type", "date"])
     return frame
@@ -175,33 +193,77 @@ def fetch_market_index(
     return market
 
 
-def fetch_foreign_investor_data(
+_INSTITUTION_PATTERNS: dict[str, list[str]] = {
+    "foreign_net": ["Foreign", "外資"],
+    "invest_trust_net": ["Investment_Trust", "投信"],
+    "dealer_net": ["Dealer", "自營"],
+}
+
+
+def fetch_institutional_data(
     client: FinMindClient,
     stock_id: str,
     start_date: str,
     end_date: str,
 ) -> pd.DataFrame:
+    """Return daily net buy/sell for 外資, 投信, 自營商."""
     frame = client.fetch_dataset(
         "TaiwanStockInstitutionalInvestorsBuySell",
         data_id=stock_id,
         start_date=start_date,
         end_date=end_date,
     )
+    empty = pd.DataFrame(columns=["date", "foreign_net", "invest_trust_net", "dealer_net"])
     if frame.empty:
-        return pd.DataFrame(columns=["date", "foreign_net"])
+        return empty
 
-    mask = frame["name"].astype(str).str.contains("Foreign", case=False, na=False)
-    filtered = frame.loc[mask].copy()
-    if filtered.empty:
-        return pd.DataFrame(columns=["date", "foreign_net"])
+    frame["date"] = pd.to_datetime(frame["date"])
+    frame["buy"] = pd.to_numeric(frame["buy"], errors="coerce").fillna(0)
+    frame["sell"] = pd.to_numeric(frame["sell"], errors="coerce").fillna(0)
+    frame["net"] = frame["buy"] - frame["sell"]
+    name_col = frame["name"].astype(str)
 
-    filtered["date"] = pd.to_datetime(filtered["date"])
-    filtered["buy"] = pd.to_numeric(filtered["buy"], errors="coerce").fillna(0)
-    filtered["sell"] = pd.to_numeric(filtered["sell"], errors="coerce").fillna(0)
-    filtered["foreign_net"] = filtered["buy"] - filtered["sell"]
-    grouped = filtered.groupby("date", as_index=False)["foreign_net"].sum()
-    grouped = grouped.sort_values("date").reset_index(drop=True)
-    return grouped
+    result = frame[["date"]].drop_duplicates().sort_values("date").copy()
+    for col, patterns in _INSTITUTION_PATTERNS.items():
+        mask = name_col.str.contains("|".join(patterns), case=False, na=False)
+        if mask.any():
+            grouped = frame.loc[mask].groupby("date", as_index=False)["net"].sum().rename(columns={"net": col})
+            result = result.merge(grouped, on="date", how="left")
+        else:
+            result[col] = 0.0
+    for col in ["foreign_net", "invest_trust_net", "dealer_net"]:
+        result[col] = result[col].fillna(0)
+    return result.sort_values("date").reset_index(drop=True)
+
+
+def fetch_foreign_investor_data(
+    client: FinMindClient,
+    stock_id: str,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    """Deprecated: use fetch_institutional_data instead."""
+    df = fetch_institutional_data(client, stock_id, start_date, end_date)
+    if df.empty:
+        return pd.DataFrame(columns=["date", "foreign_net"])
+    return df[["date", "foreign_net"]]
+
+
+def clean_cache(cache_dir: Path | str, max_age_days: int = 30) -> int:
+    """Delete CSV cache files older than max_age_days. Returns count of deleted files."""
+    cache_path = Path(cache_dir)
+    if not cache_path.exists():
+        return 0
+    cutoff = time.time() - max_age_days * 86400
+    deleted = 0
+    for csv_file in cache_path.glob("*.csv"):
+        try:
+            if csv_file.stat().st_mtime < cutoff:
+                csv_file.unlink()
+                deleted += 1
+        except OSError:
+            pass
+    return deleted
 
 
 def fetch_financial_statement_dates(

@@ -8,13 +8,16 @@ import sys
 import time
 from typing import Any
 
+from datetime import timezone, timedelta
+
 import pandas as pd
 
 from backtest import run_backtest
 from data_loader import (
     FinMindClient,
+    clean_cache,
     fetch_financial_statement_dates,
-    fetch_foreign_investor_data,
+    fetch_institutional_data,
     fetch_market_index,
     fetch_stock_info,
     fetch_stock_kbar,
@@ -27,6 +30,7 @@ from notifier import send_discord_messages, split_message
 from report import save_hybrid_report, save_reports, save_scan_report, save_sponsor_monitor_report
 from strategy import (
     StrategyConfig,
+    compute_market_breadth,
     latest_signal_snapshot,
     prepare_market_frame,
     prepare_stock_signals,
@@ -35,13 +39,26 @@ from strategy import (
 from universe import build_auto_universe
 from notion_sync import notion_enabled, recommend_observation_period, sync_scan_results
 
+_CST = timezone(timedelta(hours=8))
+
+
+def _cst_now(fmt: str = "%H:%M") -> str:
+    """Return current time in CST (UTC+8) as a formatted string."""
+    from datetime import datetime
+    return datetime.now(_CST).strftime(fmt)
+
+
+def _cst_today() -> str:
+    """Return today's date in CST (UTC+8) as YYYY-MM-DD."""
+    return _cst_now("%Y-%m-%d")
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Taiwan MACD swing strategy backtester and scanner.")
-    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report"], default="scan")
+    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward"], default="scan")
     parser.add_argument("--stocks", default="auto", help="CSV file containing stock_id and optional name, or 'auto'.")
     parser.add_argument("--start", default="2020-01-01")
-    parser.add_argument("--end", default=pd.Timestamp.today().strftime("%Y-%m-%d"))
+    parser.add_argument("--end", default=_cst_today())
     parser.add_argument("--capital", type=float, default=1_000_000)
     parser.add_argument("--output", default="output")
     parser.add_argument("--lookback-days", type=int, default=420)
@@ -63,6 +80,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--use-earnings-filter", action="store_true")
     parser.add_argument("--next-day-fill", action="store_true", help="Fill backtest entries at next day open instead of signal-day close.")
     parser.add_argument("--heartbeat-minutes", type=int, default=0, help="Send a status snapshot every N minutes during event-monitor (0 = disabled).")
+    parser.add_argument("--clean-cache", action="store_true", help="Delete stale cache files before running.")
+    parser.add_argument("--clean-cache-days", type=int, default=30, help="Age threshold in days for --clean-cache (default 30).")
+    parser.add_argument("--wf-folds", type=int, default=4, help="Number of folds for walk-forward analysis (default 4).")
+    parser.add_argument("--wf-overlap-days", type=int, default=0, help="Overlap days between walk-forward folds (default 0).")
+    parser.add_argument("--watch-extra", default="", help="Comma-separated stock IDs to always include in event-monitor watch list.")
+    parser.add_argument("--min-confidence", type=int, default=0, help="Minimum confidence score (0-100) to include a candidate in notifications (default 0 = all).")
+    parser.add_argument("--use-atr-stop", action="store_true", help="Use ATR-based stop loss instead of fixed percentage in backtest.")
+    parser.add_argument("--atr-stop-multiplier", type=float, default=2.0, help="ATR multiplier for stop loss (default 2.0, used with --use-atr-stop).")
+    parser.add_argument("--max-holding-days", type=int, default=0, help="Force-exit positions after N calendar days in backtest (0 = disabled).")
+    parser.add_argument("--max-positions-per-sector", type=int, default=2, help="Max simultaneous positions per industry sector in backtest (default 2, 0 = unlimited).")
     return parser.parse_args()
 
 
@@ -86,7 +113,41 @@ ENTRY_REASON_LABELS = {
     "avoid_chase": "未過度追價",
     "liquidity_ok": "流動性合格",
     "stronger_than_market": "強於大盤",
+    "kd_golden_cross": "KD黃金交叉",
+    "obv_uptrend": "OBV趨勢向上",
+    "invest_trust_buy_2d": "投信連買2天",
+    "bb_squeeze_breakout": "BB壓縮突破",
+    "breakout_volume_confirm": "突破量能確認",
+    "williams_r_recovery": "W%R超賣回升",
+    "cci_momentum": "CCI動能強勁",
+    "mfi_strong": "MFI資金流入",
+    "above_ichimoku_cloud": "站上一目雲",
+    "dealer_buy_3d": "自營連買3天",
 }
+
+_MAX_CONDITION_COUNT = 23
+
+
+def _confidence_score(row: object) -> int:
+    cond = min(int(float(row.get("condition_count", 0) or 0)) / 23 * 55, 55)  # type: ignore[union-attr]
+    adx_pts = min(float(row.get("adx14", 0) or 0) / 40 * 20, 20)  # type: ignore[union-attr]
+    rs_pts = min(max(float(row.get("relative_strength_5d", 0) or 0) * 200, 0), 15)  # type: ignore[union-attr]
+    vol_pts = min(max((float(row.get("volume_ratio", 0) or 0) - 1) / 2 * 10, 0), 10)  # type: ignore[union-attr]
+    return max(0, min(100, int(cond + adx_pts + rs_pts + vol_pts)))
+
+
+def _entry_stop_target(close: float, atr: float | None, stop_pct: float = 0.05, target_pct: float = 0.10) -> tuple[str, str, str, str]:
+    if atr and atr > 0:
+        # ATR-based: entry within 0.5 ATR, stop 2 ATR below, target 3 ATR above
+        entry_hi = round(close + 0.5 * atr, 2)
+        stop = round(close - 2.0 * atr, 2)
+        target = round(close + 3.0 * atr, 2)
+    else:
+        entry_hi = round(close * 1.015, 2)
+        stop = round(close * (1 - stop_pct), 2)
+        target = round(close * (1 + target_pct), 2)
+    rr = round((target - close) / max(close - stop, 0.01), 1)
+    return f"{close:.2f}–{entry_hi:.2f}", f"{stop:.2f}", f"{target:.2f}", f"{rr}:1"
 
 
 def _safe_print(message: str = "") -> None:
@@ -122,17 +183,28 @@ def build_news_map(
 ) -> dict[str, dict[str, object]]:
     client = NewsClient(cache_dir=Path(output_dir) / "news_cache")
     news_map: dict[str, dict[str, object]] = {}
-    for row in rows[:5]:
+
+    def _fetch_one(row: dict[str, object]) -> tuple[str, dict[str, object]] | None:
         stock_id = str(row.get("stock_id") or "")
         name = str(row.get("name") or stock_id)
         if not stock_id:
-            continue
-        frame = client.fetch_stock_news(stock_id, name, limit=news_limit)
-        items = frame.to_dict(orient="records")
-        news_map[stock_id] = {
-            "items": items,
-            "summary": summarize_news(items),
-        }
+            return None
+        try:
+            frame = client.fetch_stock_news(stock_id, name, limit=news_limit)
+            items = frame.to_dict(orient="records")
+            return stock_id, {"items": items, "summary": summarize_news(items)}
+        except Exception as exc:
+            print(f"[news] {stock_id} 抓取失敗: {exc}", file=sys.stderr)
+            return None
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(_fetch_one, row) for row in rows[:5]]
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                stock_id, data = result
+                news_map[stock_id] = data
+
     return news_map
 
 
@@ -141,7 +213,9 @@ def _news_brief(stock_id: str, news_map: dict[str, dict[str, object]]) -> str:
     if not payload:
         return ""
     summary = payload.get("summary", {})
-    sentiment = str(summary.get("sentiment") or "neutral")
+    # Prefer recent_sentiment (3-day window) over overall sentiment when fresh news exists
+    has_recent = bool(summary.get("has_recent_news"))
+    sentiment = str(summary.get("recent_sentiment" if has_recent else "sentiment") or "neutral")
     emoji = _SENTIMENT_EMOJI.get(sentiment, "📰")
     top = summary.get("top_headlines") or []
     titles = [str(h.get("title") or "").replace("\n", " ").strip() for h in top[:2] if h.get("title")]
@@ -151,7 +225,8 @@ def _news_brief(stock_id: str, news_map: dict[str, dict[str, object]]) -> str:
             return ""
         titles = [headline]
     parts = [(t[:38] + "…") if len(t) > 38 else t for t in titles]
-    return f"\n  {emoji} {' / '.join(parts)}"
+    freshness = "" if has_recent else " (舊)"
+    return f"\n  {emoji}{freshness} {' / '.join(parts)}"
 
 
 def load_universe(args: argparse.Namespace, client: FinMindClient) -> pd.DataFrame:
@@ -178,52 +253,52 @@ def collect_signals(
             prices = fetch_stock_prices(client, stock["stock_id"], start_date, end_date)
             if prices.empty:
                 return None
-            foreign = fetch_foreign_investor_data(client, stock["stock_id"], start_date, end_date)
+            institutional = fetch_institutional_data(client, stock["stock_id"], start_date, end_date)
             earnings = pd.DataFrame(columns=["date"])
             if config.use_earnings_filter:
                 earnings = fetch_financial_statement_dates(client, stock["stock_id"], start_date, end_date)
-            frame = prepare_stock_signals(stock, prices, market, foreign, config, earnings_dates=earnings)
+            frame = prepare_stock_signals(stock, prices, market, institutional, config, earnings_dates=earnings)
             return stock["stock_id"], frame
         except Exception as error:
             print(f"[warn] skipped {stock['stock_id']}: {error}", file=sys.stderr)
             return None
 
+    stock_records = stock_list.to_dict("records")
+    total = len(stock_records)
+    done = 0
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(load_one, stock) for stock in stock_list.to_dict("records")]
+        futures = [executor.submit(load_one, stock) for stock in stock_records]
         for future in as_completed(futures):
+            done += 1
+            if done % 10 == 0 or done == total:
+                print(f"[collect_signals] {done}/{total} stocks loaded", file=sys.stderr)
             result = future.result()
             if result is None:
                 continue
             stock_id, signal_frame = result
             signals_by_stock[stock_id] = signal_frame
-            signal_frames.append(
-                signal_frame[
-                    [
-                        "date",
-                        "stock_id",
-                        "name",
-                        "industry_category",
-                        "entry_signal",
-                        "entry_reason",
-                        "skip_trade",
-                        "skip_reason",
-                        "base_exit_signal",
-                        "base_exit_reason",
-                        "condition_count",
-                        "entry_score",
-                        "relative_strength_5d",
-                        "volume_ratio",
-                        "rsi14",
-                        "adx14",
-                        "foreign_buy_streak",
-                        "close",
-                    ]
-                ].copy()
-            )
+            _signal_cols = [
+                "date", "stock_id", "name", "industry_category",
+                "open", "high", "low", "close",
+                "entry_signal", "entry_reason", "skip_trade", "skip_reason",
+                "base_exit_signal", "base_exit_reason",
+                "condition_count", "entry_score",
+                "relative_strength_5d", "volume_ratio",
+                "rsi14", "adx14", "atr14",
+                "foreign_buy_streak", "invest_trust_streak",
+                "stoch_k", "stoch_d", "bb_pct_b", "bb_bandwidth",
+                "obv_uptrend", "bb_squeeze_breakout", "breakout_volume_confirm",
+                "dealer_buy_streak", "dealer_buy_3d",
+                "williams_r", "cci20", "mfi14", "mfi_strong", "above_ichimoku_cloud",
+            ]
+            _signal_cols_present = [c for c in _signal_cols if c in signal_frame.columns]
+            signal_frames.append(signal_frame[_signal_cols_present].copy())
     return signals_by_stock, signal_frames
 
 
-def build_daily_snapshot(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def build_daily_snapshot(
+    args: argparse.Namespace, client: FinMindClient, config: StrategyConfig
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, object]]:
     end_date = pd.Timestamp(args.end)
     start_date = (end_date - pd.Timedelta(days=args.lookback_days)).strftime("%Y-%m-%d")
     end_date_text = end_date.strftime("%Y-%m-%d")
@@ -236,37 +311,36 @@ def build_daily_snapshot(args: argparse.Namespace, client: FinMindClient, config
     universe = load_universe(args, client)
     signals_by_stock, _ = collect_signals(universe, client, market, config, start_date, end_date_text, args.workers)
     snapshot = latest_signal_snapshot(signals_by_stock)
+    breadth = compute_market_breadth(snapshot)
     candidates, watchlist = rank_candidates(
         snapshot,
         args.top_n,
         max_price=args.max_price,
         prefer_lower_price=args.prefer_lower_price,
     )
-    return candidates, watchlist, universe
+    return candidates, watchlist, universe, breadth
 
 
-def format_scan_message(candidates: pd.DataFrame, watchlist: pd.DataFrame, latest_date: str) -> str:
-    lines = [f"🔍 **Taiwan MACD Scan** · {latest_date}", ""]
-    if candidates.empty:
-        lines.extend(["今日無全條件候選。", "", "**近似觀察名單**"])
-        for _, row in watchlist.head(10).iterrows():
-            lines.append(
-                f"• **{row['stock_id']}** {row['name']} | {row['industry_category']} | `{int(row['condition_count'])}/13` | 收 `{row['close']:.2f}`"
-            )
-        return "\n".join(lines)
-
-    lines.append("**每日候選**")
-    for _, row in candidates.iterrows():
-        lines.append(
-            f"• **{row['stock_id']}** {row['name']} | 收 `{row['close']:.2f}` | RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}` | RS5d `{row['relative_strength_5d']:.2%}` | 外資連買 `{int(row['foreign_buy_streak'])}d`"
-        )
-    if not watchlist.empty:
-        lines.extend(["", "**近似觀察名單**"])
-        for _, row in watchlist.head(8).iterrows():
-            lines.append(
-                f"• **{row['stock_id']}** {row['name']} | {row['industry_category']} | `{int(row['condition_count'])}/13` | 收 `{row['close']:.2f}`"
-            )
-    return "\n".join(lines)
+def _format_breadth_line(breadth: dict[str, object]) -> str:
+    total = int(breadth.get("total_stocks", 0))
+    if not total:
+        return ""
+    entry_pct = int(breadth.get("entry_signal_pct", 0))
+    above_ema = int(breadth.get("above_ema60", 0))
+    trend_up = int(breadth.get("ema60_gt_ema120", 0))
+    market_ok = int(breadth.get("market_above_ma60", 0))
+    momentum = int(breadth.get("macd_golden_cross", 0))
+    mfi_pct = int(breadth.get("mfi_strong", 0))
+    ichi_pct = int(breadth.get("above_ichimoku_cloud", 0))
+    market_tag = "✅" if market_ok > 50 else "⚠️熊市"
+    line = (
+        f"📊 市場廣度（{total}支）｜全條件候選 `{entry_pct}%` | "
+        f"站EMA60 `{above_ema}%` | 趨勢 `{trend_up}%` | "
+        f"MACD `{momentum}%` | MFI `{mfi_pct}%` | 雲上 `{ichi_pct}%` | 大盤 `{market_tag}`"
+    )
+    if market_ok <= 50 and above_ema < 30:
+        line += "\n⚠️ **市場偏弱，候選訊號謹慎看待，注意風險控管**"
+    return line
 
 
 def format_scan_message_rich(
@@ -274,9 +348,15 @@ def format_scan_message_rich(
     watchlist: pd.DataFrame,
     latest_date: str,
     news_map: dict[str, dict[str, object]] | None = None,
+    breadth: dict[str, object] | None = None,
 ) -> str:
     news_map = news_map or {}
     lines = [f"🔍 **Taiwan MACD Scan** · {latest_date}", ""]
+    if breadth:
+        breadth_line = _format_breadth_line(breadth)
+        if breadth_line:
+            lines.append(breadth_line)
+            lines.append("")
     if candidates.empty:
         lines.extend(["今日無全條件候選。", "", "**近似觀察名單**"])
         for _, row in watchlist.head(8).iterrows():
@@ -284,65 +364,57 @@ def format_scan_message_rich(
             price_note = f" `{price_tag}`" if price_tag else ""
             brief = _news_brief(str(row["stock_id"]), news_map)
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/13` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
             )
         return "\n".join(lines)
 
+    # Sector concentration warning
+    if "industry_category" in candidates.columns and len(candidates) >= 3:
+        top_sector = candidates["industry_category"].mode()
+        if not top_sector.empty:
+            top_count = int((candidates["industry_category"] == top_sector.iloc[0]).sum())
+            if top_count >= max(3, len(candidates) // 2):
+                lines.append(f"⚠️ 候選集中於 **{top_sector.iloc[0]}** ({top_count}/{len(candidates)})，注意分散")
+                lines.append("")
+
     lines.append("**每日候選**")
-    for _, row in candidates.head(8).iterrows():
+    for _, row in candidates.head(6).iterrows():
+        close = float(row["close"])
+        atr = float(row["atr14"]) if "atr14" in row and pd.notna(row.get("atr14")) else None
+        entry_zone, stop, target, rr = _entry_stop_target(close, atr)
+        confidence = _confidence_score(row)
+        cond_count = int(row["condition_count"])
         price_tag = _low_price_tag(row.get("close"))
         price_note = f" `{price_tag}`" if price_tag else ""
         brief = _news_brief(str(row["stock_id"]), news_map)
         obs = recommend_observation_period(row, is_candidate=True)
-        lines.append(
-            f"• **{row['stock_id']}** {row['name']} | 收 `{row['close']:.2f}`{price_note} | RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}` | {_reason_labels(row.get('entry_reason'))}{brief}"
-        )
-        lines.append(f"  ⏱ {obs}")
+        stoch_k = float(row["stoch_k"]) if "stoch_k" in row and pd.notna(row.get("stoch_k")) else None
+        kd_txt = f" | KD `{stoch_k:.0f}`" if stoch_k is not None else ""
+        mfi_val = float(row["mfi14"]) if "mfi14" in row and pd.notna(row.get("mfi14")) else None
+        mfi_txt = f" | MFI `{mfi_val:.0f}`" if mfi_val is not None else ""
+        invest_streak = int(row.get("invest_trust_streak", 0) or 0)
+        invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
+        dealer_streak = int(row.get("dealer_buy_streak", 0) or 0)
+        dealer_txt = f" | 自營 `{dealer_streak}d`" if dealer_streak >= 1 else ""
+        ichi_txt = " | ☁雲上" if bool(row.get("above_ichimoku_cloud")) else ""
+        star = " ⭐" if confidence >= 70 else ""
+        lines.append(f"━━━━━━━━━━━━━━━━━━━━")
+        lines.append(f"**{row['stock_id']}** {row['name']}{price_note}{star}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`")
+        lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
+        lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ichi_txt}")
+        lines.append(f"🏦 外資連買 `{int(row.get('foreign_buy_streak', 0))}d`{invest_txt}{dealer_txt}")
+        lines.append(f"🔍 {_reason_labels(row.get('entry_reason'), max_items=5)}")
+        if brief:
+            lines.append(f"  {brief.strip()}")
+        lines.append(f"⏱ {obs}")
     if not watchlist.empty:
-        lines.extend(["", "**近似觀察名單**"])
+        lines.extend(["", "━━━━━━━━━━━━━━━━━━━━", "**近似觀察名單**"])
         for _, row in watchlist.head(5).iterrows():
             price_tag = _low_price_tag(row.get("close"))
             price_note = f" `{price_tag}`" if price_tag else ""
             brief = _news_brief(str(row["stock_id"]), news_map)
-            obs = recommend_observation_period(row, is_candidate=False)
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/13` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
-            )
-            lines.append(f"  ⏱ {obs}")
-    return "\n".join(lines)
-
-
-def format_hybrid_message(candidates: pd.DataFrame, watchlist: pd.DataFrame, live_quotes: pd.DataFrame, latest_date: str) -> str:
-    lines = [f"📊 **Taiwan Hybrid Monitor** · {latest_date}", "", "**Step 1｜MACD 每日篩選**"]
-    if candidates.empty:
-        lines.append("今日無全條件候選。")
-    else:
-        for _, row in candidates.head(5).iterrows():
-            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
-            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
-            close_text = f"`{float(close_value):.2f}`" if close_value is not None else "N/A"
-            score_text = f"`{int(score_value)}/13`" if score_value is not None else "manual"
-            lines.append(f"• **{row['stock_id']}** {row['name']} | 收 {close_text} | {score_text}")
-
-    if not watchlist.empty:
-        lines.extend(["", "**Step 2｜近似觀察名單**"])
-        for _, row in watchlist.head(5).iterrows():
-            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
-            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
-            close_text = f"`{float(close_value):.2f}`" if close_value is not None else "N/A"
-            score_text = f"`{int(score_value)}/13`" if score_value is not None else "manual"
-            lines.append(f"• **{row['stock_id']}** {row['name']} | 收 {close_text} | {score_text}")
-
-    if not live_quotes.empty:
-        lines.extend(["", "**Step 3｜即時報價**"])
-        for _, row in live_quotes.iterrows():
-            if pd.notna(row.get("error")):
-                lines.append(f"• {row['symbol']} — 報價錯誤: {row['error']}")
-                continue
-            intraday = row.get("intraday_pct")
-            intraday_text = f"`{float(intraday) * 100:.2f}%`" if pd.notna(intraday) else "N/A"
-            lines.append(
-                f"• **{row['symbol']}** {row.get('name') or ''} | 最新 `{row.get('last')}` | 高 `{row.get('high')}` | 量 `{row.get('volume')}` | 漲幅 {intraday_text}"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`{price_note} | {_reason_labels(row.get('entry_reason'))}{brief}"
             )
     return "\n".join(lines)
 
@@ -374,7 +446,7 @@ def format_hybrid_message_rich(
             price_tag = _low_price_tag(close_value)
             price_note = f" `{price_tag}`" if price_tag else ""
             score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
-            score_text = f"`{int(score_value)}/13`" if score_value is not None else "manual"
+            score_text = f"`{int(score_value)}/23`" if score_value is not None else "manual"
             brief = _news_brief(str(row["stock_id"]), news_map)
             lines.append(
                 f"• **{row['stock_id']}** {row['name']} | 收 {close_text}{price_note} | {score_text} | {_reason_labels(row.get('entry_reason'))}{brief}"
@@ -407,10 +479,10 @@ def detect_quote_events(
         symbol = str(row.get("symbol") or "")
         if not symbol or pd.notna(row.get("error")):
             continue
-        last_value = pd.to_numeric(pd.Series([row.get("last")]), errors="coerce").iloc[0]
-        high_value = pd.to_numeric(pd.Series([row.get("high")]), errors="coerce").iloc[0]
-        volume_value = pd.to_numeric(pd.Series([row.get("volume")]), errors="coerce").iloc[0]
-        intraday_value = pd.to_numeric(pd.Series([row.get("intraday_pct")]), errors="coerce").iloc[0]
+        last_value = pd.to_numeric(row.get("last"), errors="coerce")
+        high_value = pd.to_numeric(row.get("high"), errors="coerce")
+        volume_value = pd.to_numeric(row.get("volume"), errors="coerce")
+        intraday_value = pd.to_numeric(row.get("intraday_pct"), errors="coerce")
         previous = next_state.get(symbol, {})
         previous_high = float(previous.get("high") or 0)
         previous_intraday = float(previous.get("intraday_pct") or 0)
@@ -470,19 +542,37 @@ def format_event_message(
     reason_text = _reason_labels(snapshot.get("entry_reason"))
     emoji = _EVENT_EMOJI.get(str(event["event_key"]), "⚠️")
     news_text = _news_brief(symbol, news_map).strip()
-    return "\n".join(
-        [
-            f"{emoji} **即時警報｜{event['label']}**",
-            f"**{symbol}** {name}{price_note} | 最新 `{last_value}` | 高點 `{high_value}` | 量 `{volume_value}` | 漲幅 {intraday_text}",
-            f"技術: {reason_text}",
-            f"新聞: {news_text if news_text else '無近期消息'}",
-        ]
-    )
+    confidence = _confidence_score(snapshot) if snapshot else 0
+    star = " ⭐" if confidence >= 70 else ""
+    rsi_txt = f" RSI `{float(snapshot['rsi14']):.0f}`" if snapshot.get("rsi14") and pd.notna(snapshot.get("rsi14")) else ""
+    mfi_txt = f" MFI `{float(snapshot['mfi14']):.0f}`" if snapshot.get("mfi14") and pd.notna(snapshot.get("mfi14")) else ""
+    # ATR-based stop/target when ATR data is available from the daily snapshot
+    risk_line = ""
+    try:
+        last_f = float(last_value)  # type: ignore[arg-type]
+        atr_val = float(snapshot.get("atr14") or 0) or None
+        _, stop, target, rr = _entry_stop_target(last_f, atr_val)
+        risk_line = f"停損 `{stop}` | 目標 `{target}` | R:R `{rr}`"
+    except (TypeError, ValueError):
+        pass
+    parts = [
+        f"{emoji} **即時警報｜{event['label']}**",
+        f"**{symbol}** {name}{price_note}{star}  信心 `{confidence}/100`",
+        f"最新 `{last_value}` | 高點 `{high_value}` | 量 `{volume_value}` | 漲幅 {intraday_text}",
+    ]
+    if risk_line:
+        parts.append(risk_line)
+    indicator_line = f"技術: {reason_text}"
+    if rsi_txt or mfi_txt:
+        indicator_line += f" |{rsi_txt}{mfi_txt}"
+    parts.append(indicator_line)
+    parts.append(f"新聞: {news_text if news_text else '無近期消息'}")
+    return "\n".join(parts)
 
 
 def format_heartbeat_message(quotes: pd.DataFrame, date: str) -> str:
-    now = pd.Timestamp.now().strftime("%H:%M")
-    lines = [f"💓 **盤中快報** · {now} ({date})", ""]
+    now = _cst_now()
+    lines = [f"💓 **盤中快報** · {now} CST ({date})", ""]
     if quotes.empty:
         lines.append("無即時報價。")
         return "\n".join(lines)
@@ -543,7 +633,7 @@ def format_daily_report_message(
         lines.extend(["", "**近似名單（今日未達全條件）**"])
         for _, row in watchlist.head(5).iterrows():
             lines.append(
-                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/13` | 收 `{row['close']:.2f}`"
+                f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{row['close']:.2f}`"
             )
     return "\n".join(lines)
 
@@ -583,7 +673,7 @@ def format_sponsor_message(
             close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
             score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
             close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
-            score_text = f"{int(score_value)}/13" if score_value is not None else "manual"
+            score_text = f"{int(score_value)}/23" if score_value is not None else "manual"
             lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
 
     if not watchlist.empty:
@@ -592,7 +682,7 @@ def format_sponsor_message(
             close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
             score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
             close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
-            score_text = f"{int(score_value)}/13" if score_value is not None else "manual"
+            score_text = f"{int(score_value)}/23" if score_value is not None else "manual"
             lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
 
     if not intraday_rows.empty:
@@ -608,14 +698,24 @@ def format_sponsor_message(
 
 
 def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
-    candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+    if args.notify:
+        send_discord_messages([f"🔄 **選股掃描開始** · {_cst_now()} CST · {args.end}"])
+    candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
     latest_date = args.end
+
+    # Apply minimum confidence filter for notifications
+    min_conf = getattr(args, "min_confidence", 0)
+    notify_candidates = candidates
+    if min_conf > 0 and not candidates.empty:
+        mask = candidates.apply(lambda r: _confidence_score(r) >= min_conf, axis=1)
+        notify_candidates = candidates[mask].copy()
+
     report_path = save_scan_report(args.output, candidates, watchlist, universe)
     news_map = {}
     if args.include_news:
-        scan_rows = candidates.to_dict("records") if not candidates.empty else watchlist.to_dict("records")
+        scan_rows = notify_candidates.to_dict("records") if not notify_candidates.empty else watchlist.to_dict("records")
         news_map = build_news_map(args.output, scan_rows, news_limit=args.news_limit)
-    message = format_scan_message_rich(candidates, watchlist, latest_date, news_map=news_map)
+    message = format_scan_message_rich(notify_candidates, watchlist, latest_date, news_map=news_map, breadth=breadth)
     _safe_print(message)
     _safe_print("")
     _safe_print(f"Scan report: {report_path}")
@@ -631,8 +731,9 @@ def run_hybrid_monitor(args: argparse.Namespace, client: FinMindClient, config: 
         candidates = pd.DataFrame(columns=["stock_id", "name"])
         watchlist = universe.copy()
         watch_pool = universe.copy()
+        breadth: dict[str, object] = {}
     else:
-        candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+        candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
         watch_pool = candidates.copy()
         if len(watch_pool) < args.watch_top:
             extra = watchlist.head(args.watch_top - len(watch_pool))
@@ -666,7 +767,7 @@ def run_sponsor_monitor(args: argparse.Namespace, client: FinMindClient, config:
         watchlist = universe.copy()
         watch_pool = universe.copy()
     else:
-        candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+        candidates, watchlist, universe, _breadth = build_daily_snapshot(args, client, config)
         watch_pool = candidates.copy()
         if len(watch_pool) < args.watch_top:
             extra = watchlist.head(args.watch_top - len(watch_pool))
@@ -695,7 +796,7 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
         watchlist = universe.copy()
         watch_pool = universe.copy()
     else:
-        candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+        candidates, watchlist, universe, _breadth = build_daily_snapshot(args, client, config)
         watch_pool = candidates.copy()
         if len(watch_pool) < args.watch_top:
             extra = watchlist.head(args.watch_top - len(watch_pool))
@@ -703,6 +804,12 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
 
     watch_pool = watch_pool.head(args.watch_top).copy()
     watch_symbols = watch_pool["stock_id"].astype(str).tolist()
+
+    extra_symbols = [s.strip() for s in getattr(args, "watch_extra", "").split(",") if s.strip()]
+    for sym in extra_symbols:
+        if sym not in watch_symbols:
+            watch_symbols.append(sym)
+
     snapshot_lookup = {str(row["stock_id"]): row for row in watch_pool.to_dict("records")}
     daily_volume_lookup: dict[str, float] = {
         str(row.get("stock_id") or ""): float(row["volume_ma20"])
@@ -718,12 +825,32 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
     previous_state: dict[str, dict[str, float | str]] = {}
     last_notified: dict[str, float] = {}
     last_heartbeat_ts: float = 0.0
-    _safe_print(f"Event monitor started for {', '.join(watch_symbols)}")
-    if args.heartbeat_minutes > 0:
-        _safe_print(f"Heartbeat every {args.heartbeat_minutes} min")
+    consecutive_error_cycles = 0
+    _MAX_ERROR_CYCLES = 10
+    start_msg = f"🟢 **事件監控啟動** · {_cst_now()} CST\n監控標的：{', '.join(watch_symbols)}\n觸發條件：急拉 ≥{args.event_rise_threshold*100:.1f}% ｜急跌 ≤{args.event_drop_threshold*100:.1f}% ｜量能 ≥{args.event_volume_multiplier}x"
+    _safe_print(start_msg)
+    if args.notify:
+        send_discord_messages(split_message(start_msg))
 
     for cycle in range(1, args.repeat_count + 1):
         quotes = fetch_watch_quotes(fugle, watch_symbols)
+
+        all_errors = (
+            not quotes.empty
+            and "error" in quotes.columns
+            and quotes["error"].notna().all()
+        )
+        if all_errors:
+            consecutive_error_cycles += 1
+            if consecutive_error_cycles >= _MAX_ERROR_CYCLES:
+                abort_msg = f"⚠️ **事件監控中止** · Fugle API 連續 {_MAX_ERROR_CYCLES} 個週期全部錯誤，已停止"
+                _safe_print(abort_msg)
+                if args.notify:
+                    send_discord_messages(split_message(abort_msg))
+                break
+        else:
+            consecutive_error_cycles = 0
+
         events, next_state = detect_quote_events(
             quotes,
             previous_state,
@@ -764,7 +891,9 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
 
 
 def run_daily_report(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
-    candidates, watchlist, universe = build_daily_snapshot(args, client, config)
+    if args.notify:
+        send_discord_messages([f"🔄 **盤後總結開始** · {_cst_now()} CST · {args.end}"])
+    candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
     watch_pool = candidates.head(args.watch_top).copy()
     if len(watch_pool) < args.watch_top:
         extra = watchlist.head(args.watch_top - len(watch_pool))
@@ -784,6 +913,8 @@ def run_daily_report(args: argparse.Namespace, client: FinMindClient, config: St
     _safe_print(message)
     if args.notify:
         send_discord_messages(split_message(message))
+    if notion_enabled():
+        sync_scan_results(candidates, watchlist, args.end, news_map)
 
 
 def run_backtest_mode(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
@@ -812,6 +943,7 @@ def run_backtest_mode(args: argparse.Namespace, client: FinMindClient, config: S
             "The earnings-date filter is optional because FinMind statement timing fields may vary by dataset.",
             "Position sizing uses integer shares and a 5% initial stop to cap risk at roughly 1% of portfolio equity.",
         ],
+        config=config,
     )
     _safe_print("Backtest complete.")
     _safe_print(f"Excel report: {reports['excel']}")
@@ -826,16 +958,126 @@ def run_backtest_mode(args: argparse.Namespace, client: FinMindClient, config: S
             _safe_print(f"- {key}: {value}")
 
 
+def run_walk_forward(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
+    """Run walk-forward validation: split the date range into folds and backtest each."""
+    folds = getattr(args, "wf_folds", 4)
+    overlap = getattr(args, "wf_overlap_days", 0)
+    full_start = pd.Timestamp(args.start)
+    full_end = pd.Timestamp(args.end)
+    total_days = (full_end - full_start).days
+    fold_days = total_days // folds
+
+    _safe_print(f"Walk-forward: {folds} folds × ~{fold_days}d, {full_start.date()} → {full_end.date()}")
+
+    market_raw = fetch_market_index(client, args.start, args.end)
+    if market_raw.empty:
+        raise RuntimeError("Unable to download TAIEX market data.")
+    market_full = prepare_market_frame(market_raw, config)
+
+    stock_list = load_universe(args, client)
+    signals_by_stock, _ = collect_signals(stock_list, client, market_full, config, args.start, args.end, args.workers)
+    if not signals_by_stock:
+        raise RuntimeError("No signal data loaded.")
+
+    fold_rows: list[dict[str, object]] = []
+    for fold_idx in range(folds):
+        fold_start = full_start + pd.Timedelta(days=fold_idx * fold_days - overlap)
+        fold_end = full_start + pd.Timedelta(days=(fold_idx + 1) * fold_days)
+        if fold_idx == folds - 1:
+            fold_end = full_end
+        fold_start = max(fold_start, full_start)
+        fold_label = f"{fold_start.date()} → {fold_end.date()}"
+
+        market_slice = market_full[
+            (pd.to_datetime(market_full["date"]) >= fold_start)
+            & (pd.to_datetime(market_full["date"]) <= fold_end)
+        ].copy()
+        signals_slice = {
+            sid: frame[
+                (pd.to_datetime(frame["date"]) >= fold_start)
+                & (pd.to_datetime(frame["date"]) <= fold_end)
+            ].copy()
+            for sid, frame in signals_by_stock.items()
+        }
+        signals_slice = {sid: f for sid, f in signals_slice.items() if not f.empty}
+        if not signals_slice or market_slice.empty:
+            _safe_print(f"  Fold {fold_idx + 1}: no data — skipping")
+            continue
+
+        try:
+            result = run_backtest(signals_slice, market_slice, config, args.capital)
+            m = result["metrics"]
+            fold_rows.append({
+                "fold": fold_idx + 1,
+                "period": fold_label,
+                "total_return_pct": m.get("total_return_pct", 0),
+                "annual_return_pct": m.get("annual_return_pct", 0),
+                "max_drawdown_pct": m.get("max_drawdown_pct", 0),
+                "sharpe_ratio": m.get("sharpe_ratio", 0),
+                "sortino_ratio": m.get("sortino_ratio", 0),
+                "calmar_ratio": m.get("calmar_ratio", 0),
+                "win_rate_pct": m.get("win_rate_pct", 0),
+                "profit_factor": m.get("profit_factor", 0),
+                "expectancy_pct": m.get("expectancy_pct", 0),
+                "total_trades": m.get("total_trades", 0),
+                "avg_holding_days": m.get("avg_holding_days", 0),
+                "benchmark_return_pct": m.get("benchmark_return_pct", None),
+                "alpha_pct": m.get("alpha_pct", None),
+            })
+            _safe_print(f"  Fold {fold_idx + 1} [{fold_label}]: "
+                        f"return={m.get('total_return_pct', 0):+.1f}% "
+                        f"DD={m.get('max_drawdown_pct', 0):.1f}% "
+                        f"Sharpe={m.get('sharpe_ratio', 0):.2f} "
+                        f"Sortino={m.get('sortino_ratio', 0):.2f} "
+                        f"trades={m.get('total_trades', 0)}")
+        except Exception as exc:
+            _safe_print(f"  Fold {fold_idx + 1} error: {exc}")
+
+    if fold_rows:
+        wf_frame = pd.DataFrame(fold_rows)
+        _safe_print("\nWalk-forward summary:")
+        _safe_print(wf_frame.to_string(index=False))
+
+        # Aggregate summary
+        numeric_cols = ["total_return_pct", "max_drawdown_pct", "sharpe_ratio",
+                        "sortino_ratio", "win_rate_pct", "profit_factor", "total_trades"]
+        agg = {col: wf_frame[col].mean() for col in numeric_cols if col in wf_frame.columns}
+        _safe_print("\nMean across folds:")
+        for k, v in agg.items():
+            _safe_print(f"  {k}: {v:.2f}")
+        consistency = int((wf_frame["total_return_pct"] > 0).sum())
+        _safe_print(f"  Positive folds: {consistency}/{len(fold_rows)}")
+
+        output_path = Path(args.output)
+        output_path.mkdir(parents=True, exist_ok=True)
+        wf_frame.to_csv(output_path / "walk_forward_results.csv", index=False)
+        _safe_print(f"\nSaved: {output_path / 'walk_forward_results.csv'}")
+
+
 def main() -> None:
     args = parse_args()
-    client = FinMindClient(cache_dir=Path(args.output) / "cache")
+    cache_dir = Path(args.output) / "cache"
+    client = FinMindClient(cache_dir=cache_dir)
     config = StrategyConfig(
         use_earnings_filter=args.use_earnings_filter,
         next_day_fill=args.next_day_fill,
+        use_atr_stop=getattr(args, "use_atr_stop", False),
+        atr_stop_multiplier=getattr(args, "atr_stop_multiplier", 2.0),
+        max_holding_days=getattr(args, "max_holding_days", 0),
+        max_positions_per_sector=getattr(args, "max_positions_per_sector", 2),
     )
+
+    if getattr(args, "clean_cache", False):
+        max_age = getattr(args, "clean_cache_days", 30)
+        deleted = clean_cache(cache_dir, max_age_days=max_age)
+        news_cache_dir = Path(args.output) / "news_cache"
+        deleted += clean_cache(news_cache_dir, max_age_days=max_age)
+        _safe_print(f"[cache] Deleted {deleted} stale cache files (data + news)")
 
     if args.mode == "backtest":
         run_backtest_mode(args, client, config)
+    elif args.mode == "walk-forward":
+        run_walk_forward(args, client, config)
     elif args.mode == "sponsor-monitor":
         run_sponsor_monitor(args, client, config)
     elif args.mode == "event-monitor":
