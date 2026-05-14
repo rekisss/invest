@@ -169,8 +169,7 @@ def prepare_stock_signals(
     config: StrategyConfig,
     earnings_dates: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    frame = stock_df.copy()
-    frame = frame.sort_values("date").reset_index(drop=True)
+    frame = stock_df.sort_values("date").reset_index(drop=True)
     frame["stock_id"] = stock_info["stock_id"]
     frame["name"] = stock_info["name"]
     frame["industry_category"] = stock_info.get("industry_category", "")
@@ -207,10 +206,10 @@ def prepare_stock_signals(
         frame[col] = series
 
     institutional_missing = institutional_df.empty
-    inst = institutional_df.copy()
-    if inst.empty:
+    if institutional_missing:
         inst = pd.DataFrame({"date": frame["date"], "foreign_net": 0, "invest_trust_net": 0, "dealer_net": 0})
-    inst = inst.sort_values("date").drop_duplicates(subset=["date"])
+    else:
+        inst = institutional_df.sort_values("date").drop_duplicates(subset=["date"])
     inst["foreign_buy_streak"] = consecutive_positive(inst["foreign_net"])
     inst["invest_trust_streak"] = consecutive_positive(inst["invest_trust_net"])
     inst["dealer_buy_streak"] = consecutive_positive(inst["dealer_net"])
