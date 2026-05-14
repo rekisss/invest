@@ -843,12 +843,21 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
     candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
     latest_date = str(breadth.get("actual_date") or args.end)
 
-    # Apply minimum confidence filter for notifications
+    # Apply minimum confidence filter for notifications (vectorized)
     min_conf = getattr(args, "min_confidence", 0)
     notify_candidates = candidates
     if min_conf > 0 and not candidates.empty:
-        mask = candidates.apply(lambda r: _confidence_score(r) >= min_conf, axis=1)
-        notify_candidates = candidates[mask].copy()
+        cond_v = pd.to_numeric(candidates.get("condition_count", 0), errors="coerce").fillna(0)
+        adx_v = pd.to_numeric(candidates.get("adx14", 0), errors="coerce").fillna(0)
+        rs_v = pd.to_numeric(candidates.get("relative_strength_5d", 0), errors="coerce").fillna(0)
+        vol_v = pd.to_numeric(candidates.get("volume_ratio", 0), errors="coerce").fillna(0)
+        scores = (
+            (cond_v / 23 * 55).clip(0, 55)
+            + (adx_v / 40 * 20).clip(0, 20)
+            + (rs_v * 200).clip(0, 15)
+            + ((vol_v - 1) / 2 * 10).clip(0, 10)
+        ).astype(int).clip(0, 100)
+        notify_candidates = candidates[scores >= min_conf].copy()
 
     report_path = save_scan_report(args.output, candidates, watchlist, universe)
     news_map = {}

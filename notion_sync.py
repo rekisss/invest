@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import time
 from typing import Any
@@ -135,14 +136,24 @@ def _news_sentiment(summary: dict[str, Any]) -> tuple[str, str]:
 def recommend_observation_period(row: Any, is_candidate: bool = True) -> str:
     if not is_candidate:
         return "訊號尚未完整，觀察 10–15 個交易日等待條件齊備"
-    score = float(row.get("entry_score", 0) or 0)
     adx = float(row.get("adx14", 0) or 0)
-    if score >= 900 and adx >= 25:
-        return "強勢訊號，3–5 個交易日內留意回測進場機會"
-    elif score >= 800:
-        return "訊號良好，5–7 個交易日確認支撐後進場"
+    s20 = float(row.get("lr_slope_20", 0) or 0)
+    s60 = float(row.get("lr_slope_60", 0) or 0)
+    if math.isnan(s20):
+        s20 = 0.0
+    if math.isnan(s60):
+        s60 = 0.0
+    both_up = s20 > 0.05 and s60 > 0.03
+    if both_up and adx >= 25:
+        return "日月線同向強勢，建議 3–5 個交易日內留意回測進場機會"
+    elif both_up and adx >= 20:
+        return "日月線同向上升，可觀察 5–7 個交易日確認支撐後進場"
+    elif s20 > 0.05 and adx >= 20:
+        return "短線上升但月線偏弱，謹慎觀察 5–7 個交易日"
+    elif s20 > 0 and s60 > 0:
+        return "緩步上升趨勢，可觀察 7–10 個交易日等待確認"
     else:
-        return "訊號普通，7–10 個交易日等待更明確方向"
+        return "趨勢不明確，觀察 10–15 個交易日等待方向確立"
 
 
 def sync_scan_results(
