@@ -248,19 +248,6 @@ def fetch_institutional_data(
     return result.sort_values("date").reset_index(drop=True)
 
 
-def fetch_foreign_investor_data(
-    client: FinMindClient,
-    stock_id: str,
-    start_date: str,
-    end_date: str,
-) -> pd.DataFrame:
-    """Deprecated: use fetch_institutional_data instead."""
-    df = fetch_institutional_data(client, stock_id, start_date, end_date)
-    if df.empty:
-        return pd.DataFrame(columns=["date", "foreign_net"])
-    return df[["date", "foreign_net"]]
-
-
 def clean_cache(cache_dir: Path | str, max_age_days: int = 30) -> int:
     """Delete CSV cache files older than max_age_days. Returns count of deleted files."""
     cache_path = Path(cache_dir)

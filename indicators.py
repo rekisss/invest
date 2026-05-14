@@ -154,10 +154,3 @@ def add_lr_slope(close: pd.Series, window: int = 20) -> pd.Series:
     result = np.full(len(log_c), np.nan)
     result[n - 1:] = slope
     return pd.Series(result, index=close.index)
-
-
-def add_donchian_channel(high: pd.Series, low: pd.Series, period: int = 20) -> pd.DataFrame:
-    upper = high.rolling(window=period, min_periods=period).max()
-    lower = low.rolling(window=period, min_periods=period).min()
-    mid = (upper + lower) / 2
-    return pd.DataFrame({"dc_upper": upper, "dc_lower": lower, "dc_mid": mid})

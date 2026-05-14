@@ -329,7 +329,7 @@ def _trend_block(row: Any) -> str:
     else:
         obs = "觀察 **1–2 週**"
 
-    return f"📉 日線 `{s20:+.2f}%/d` {d_arrow} {d_desc} ｜ {m_part}\n⏳ {obs}"
+    return f"📊 日線 `{s20:+.2f}%/d` {d_arrow} {d_desc} ｜ {m_part}\n⏳ {obs}"
 
 
 def _trend_label(row: Any) -> str:
