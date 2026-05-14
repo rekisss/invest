@@ -259,7 +259,7 @@ def prepare_stock_signals(
         & ((merged["open"] / merged["prev_close"]) - 1 > 0.03)
     )
     merged["earnings_blocked"] = _build_earnings_blocker(
-        merged.set_index("date").index, earnings_dates, config,
+        pd.DatetimeIndex(merged["date"]), earnings_dates, config,
     ).values
 
     hard_entry_columns = [

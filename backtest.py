@@ -222,12 +222,13 @@ def run_backtest(
                 next_position_id += 1
                 opened_today += 1
 
+        mkt_val = positions_market_value(positions, prepared, date)
         equity_rows.append(
             {
                 "date": date,
                 "cash": cash,
-                "market_value": positions_market_value(positions, prepared, date),
-                "equity": portfolio_equity(cash, positions, prepared, date),
+                "market_value": mkt_val,
+                "equity": cash + mkt_val,
                 "positions": len(positions),
             }
         )
