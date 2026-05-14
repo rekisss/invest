@@ -620,22 +620,29 @@ def detect_quote_events(
         previous_intraday = float(previous.get("intraday_pct") or 0)
         previous_volume = float(previous.get("volume") or 0)
 
+        row_dict: dict[str, object] | None = None  # lazy — only convert if an event fires
+
         if (pd.notna(high_value) and high_value > previous_high
                 and pd.notna(last_value) and last_value >= high_value * 0.998
                 and pd.notna(intraday_value) and intraday_value >= 0.015):
-            events.append({"symbol": symbol, "event_key": "breakout_high", "label": "突破盤中新高", "row": row.to_dict()})
+            row_dict = row_dict or row.to_dict()
+            events.append({"symbol": symbol, "event_key": "breakout_high", "label": "突破盤中新高", "row": row_dict})
         if pd.notna(intraday_value) and intraday_value >= rise_threshold and previous_intraday < rise_threshold:
-            events.append({"symbol": symbol, "event_key": "sharp_rise", "label": f"急拉 {intraday_value * 100:.2f}%", "row": row.to_dict()})
+            row_dict = row_dict or row.to_dict()
+            events.append({"symbol": symbol, "event_key": "sharp_rise", "label": f"急拉 {intraday_value * 100:.2f}%", "row": row_dict})
         if pd.notna(intraday_value) and intraday_value <= drop_threshold and previous_intraday > drop_threshold:
-            events.append({"symbol": symbol, "event_key": "sharp_drop", "label": f"急跌 {intraday_value * 100:.2f}%", "row": row.to_dict()})
+            row_dict = row_dict or row.to_dict()
+            events.append({"symbol": symbol, "event_key": "sharp_drop", "label": f"急跌 {intraday_value * 100:.2f}%", "row": row_dict})
 
         daily_baseline = (daily_volume_lookup or {}).get(symbol, 0)
         if daily_baseline > 0:
             if pd.notna(volume_value) and volume_value >= daily_baseline * volume_multiplier:
                 ratio = volume_value / daily_baseline
-                events.append({"symbol": symbol, "event_key": "volume_surge", "label": f"量能放大 x{ratio:.1f}（vs 日均）", "row": row.to_dict()})
+                row_dict = row_dict or row.to_dict()
+                events.append({"symbol": symbol, "event_key": "volume_surge", "label": f"量能放大 x{ratio:.1f}（vs 日均）", "row": row_dict})
         elif pd.notna(volume_value) and previous_volume > 0 and volume_value >= previous_volume * volume_multiplier:
-            events.append({"symbol": symbol, "event_key": "volume_surge", "label": f"量能放大 x{volume_value / previous_volume:.1f}", "row": row.to_dict()})
+            row_dict = row_dict or row.to_dict()
+            events.append({"symbol": symbol, "event_key": "volume_surge", "label": f"量能放大 x{volume_value / previous_volume:.1f}", "row": row_dict})
 
         next_state[symbol] = {
             "high": float(high_value) if pd.notna(high_value) else previous_high,
