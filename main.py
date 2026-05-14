@@ -326,6 +326,15 @@ def build_daily_snapshot(
         max_price=args.max_price,
         prefer_lower_price=args.prefer_lower_price,
     )
+    # Use the actual latest date present in the data, not the requested end date.
+    # FinMind may not have today's data yet when the scan runs intraday.
+    actual_date = end_date_text
+    if not snapshot.empty and "date" in snapshot.columns:
+        try:
+            actual_date = pd.Timestamp(snapshot["date"].max()).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    breadth["actual_date"] = actual_date
     return candidates, watchlist, universe, breadth
 
 
@@ -744,7 +753,7 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
     if args.notify:
         send_discord_messages([f"🔄 **選股掃描開始** · {_cst_now()} CST · {args.end}"])
     candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
-    latest_date = args.end
+    latest_date = str(breadth.get("actual_date") or args.end)
 
     # Apply minimum confidence filter for notifications
     min_conf = getattr(args, "min_confidence", 0)
@@ -795,7 +804,8 @@ def run_hybrid_monitor(args: argparse.Namespace, client: FinMindClient, config: 
     news_map = {}
     if args.include_news:
         news_map = build_news_map(args.output, watch_pool.to_dict("records"), news_limit=args.news_limit)
-    message = format_hybrid_message_rich(candidates, watchlist, live_quotes, args.end, news_map=news_map)
+    actual_date = str(breadth.get("actual_date") or args.end) if breadth else args.end
+    message = format_hybrid_message_rich(candidates, watchlist, live_quotes, actual_date, news_map=news_map)
     _safe_print(message)
     _safe_print("")
     _safe_print(f"Hybrid report: {report_path}")
@@ -937,6 +947,7 @@ def run_daily_report(args: argparse.Namespace, client: FinMindClient, config: St
     if args.notify:
         send_discord_messages([f"🔄 **盤後總結開始** · {_cst_now()} CST · {args.end}"])
     candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
+    actual_date = str(breadth.get("actual_date") or args.end)
     watch_pool = candidates.head(args.watch_top).copy()
     if len(watch_pool) < args.watch_top:
         extra = watchlist.head(args.watch_top - len(watch_pool))
@@ -952,12 +963,12 @@ def run_daily_report(args: argparse.Namespace, client: FinMindClient, config: St
         )
 
     news_map = build_news_map(args.output, watch_pool.to_dict("records"), news_limit=args.news_limit) if args.include_news else {}
-    message = format_daily_report_message(candidates, watchlist, closing_quotes, args.end, news_map=news_map, breadth=breadth)
+    message = format_daily_report_message(candidates, watchlist, closing_quotes, actual_date, news_map=news_map, breadth=breadth)
     _safe_print(message)
     if args.notify:
         send_discord_messages(split_message(message))
     if notion_enabled():
-        sync_scan_results(candidates, watchlist, args.end, news_map, market_regime=str(breadth.get("market_regime") or ""))
+        sync_scan_results(candidates, watchlist, actual_date, news_map, market_regime=str(breadth.get("market_regime") or ""))
 
 
 def run_backtest_mode(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
