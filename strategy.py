@@ -7,7 +7,7 @@ import pandas as pd
 
 from indicators import (
     add_adx, add_atr, add_bollinger_bands, add_cci,
-    add_ema, add_ichimoku, add_macd, add_mfi, add_obv, add_rsi, add_sma,
+    add_ema, add_ichimoku, add_lr_slope, add_macd, add_mfi, add_obv, add_rsi, add_sma,
     add_stochastic, add_williams_r, consecutive_positive,
 )
 
@@ -130,6 +130,8 @@ def prepare_stock_signals(
     frame["amount_ma20"] = add_sma(frame["amount"], 20)
     frame["close_20d_high"] = frame["close"].rolling(config.breakout_window).max().shift(1)
     frame["close_10d_low"] = frame["close"].rolling(config.swing_low_window).min().shift(1)
+    frame["lr_slope_20"] = add_lr_slope(frame["close"], window=20)
+    frame["lr_slope_60"] = add_lr_slope(frame["close"], window=60)
     frame["return_5d"] = frame["close"].pct_change(config.relative_strength_window)
     frame["day_return"] = frame["close"].pct_change(1)
     frame["prev_close"] = frame["close"].shift(1)
@@ -387,11 +389,13 @@ def rank_candidates(
         "bb_squeeze_breakout", "breakout_volume_confirm",
         "mfi14", "mfi_strong", "above_ichimoku_cloud",
         "close_10d_low",
+        "lr_slope_20", "lr_slope_60",
         "entry_reason", "skip_reason",
     ]
     watch_columns = [
         "date", "stock_id", "name", "industry_category", "close",
         "condition_count", "entry_score", "volume_ma20", "close_20d_high",
+        "lr_slope_20", "lr_slope_60",
         "skip_reason", "entry_reason",
     ]
 
