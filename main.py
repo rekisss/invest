@@ -8,7 +8,7 @@ import sys
 import time
 from typing import Any
 
-from datetime import timezone, timedelta
+from datetime import datetime, timezone, timedelta
 
 import pandas as pd
 
@@ -44,8 +44,6 @@ _CST = timezone(timedelta(hours=8))
 
 
 def _cst_now(fmt: str = "%H:%M") -> str:
-    """Return current time in CST (UTC+8) as a formatted string."""
-    from datetime import datetime
     return datetime.now(_CST).strftime(fmt)
 
 
@@ -512,16 +510,16 @@ def format_scan_message_rich(
     lines.append("**每日候選**")
     for _, row in candidates.head(6).iterrows():
         close = float(row["close"])
-        atr = float(row["atr14"]) if "atr14" in row and pd.notna(row.get("atr14")) else None
+        atr = float(row["atr14"]) if pd.notna(row.get("atr14")) else None
         entry_zone, stop, target, rr = _entry_stop_target(close, atr)
         confidence = _confidence_score(row)
         cond_count = int(row["condition_count"])
         price_tag = _low_price_tag(row.get("close"))
         price_note = f" `{price_tag}`" if price_tag else ""
         brief = _news_brief(str(row["stock_id"]), news_map)
-        stoch_k = float(row["stoch_k"]) if "stoch_k" in row and pd.notna(row.get("stoch_k")) else None
+        stoch_k = float(row["stoch_k"]) if pd.notna(row.get("stoch_k")) else None
         kd_txt = f" | KD `{stoch_k:.0f}`" if stoch_k is not None else ""
-        mfi_val = float(row["mfi14"]) if "mfi14" in row and pd.notna(row.get("mfi14")) else None
+        mfi_val = float(row["mfi14"]) if pd.notna(row.get("mfi14")) else None
         mfi_txt = f" | MFI `{mfi_val:.0f}`" if mfi_val is not None else ""
         invest_streak = int(row.get("invest_trust_streak", 0) or 0)
         invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
@@ -575,11 +573,11 @@ def format_hybrid_message_rich(
     if not watchlist.empty:
         lines.extend(["", "**Step 2｜近似觀察名單**"])
         for _, row in watchlist.head(5).iterrows():
-            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
+            close_value = row.get("close") if pd.notna(row.get("close")) else None
             close_text = f"`{float(close_value):.2f}`" if close_value is not None else "N/A"
             price_tag = _low_price_tag(close_value)
             price_note = f" `{price_tag}`" if price_tag else ""
-            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
+            score_value = row.get("condition_count") if pd.notna(row.get("condition_count")) else None
             score_text = f"`{int(score_value)}/23`" if score_value is not None else "manual"
             brief = _news_brief(str(row["stock_id"]), news_map)
             lines.append(
@@ -810,8 +808,8 @@ def format_sponsor_message(
         lines.append("No full-match candidates today.")
     else:
         for _, row in candidates.head(5).iterrows():
-            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
-            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
+            close_value = row.get("close") if pd.notna(row.get("close")) else None
+            score_value = row.get("condition_count") if pd.notna(row.get("condition_count")) else None
             close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
             score_text = f"{int(score_value)}/23" if score_value is not None else "manual"
             lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
@@ -819,8 +817,8 @@ def format_sponsor_message(
     if not watchlist.empty:
         lines.extend(["", "Step 2: tracked symbols"])
         for _, row in watchlist.head(5).iterrows():
-            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
-            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
+            close_value = row.get("close") if pd.notna(row.get("close")) else None
+            score_value = row.get("condition_count") if pd.notna(row.get("condition_count")) else None
             close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
             score_text = f"{int(score_value)}/23" if score_value is not None else "manual"
             lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
