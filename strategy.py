@@ -118,8 +118,8 @@ def prepare_stock_signals(
     frame["name"] = stock_info["name"]
     frame["industry_category"] = stock_info.get("industry_category", "")
 
-    macd = add_macd(frame["close"], config.macd_fast, config.macd_slow, config.macd_signal)
-    frame = pd.concat([frame, macd], axis=1)
+    for col, series in add_macd(frame["close"], config.macd_fast, config.macd_slow, config.macd_signal).items():
+        frame[col] = series
     frame["ema20"] = add_ema(frame["close"], config.ema_exit)
     frame["ema60"] = add_ema(frame["close"], config.ema_entry)
     frame["ema120"] = add_ema(frame["close"], config.ema_trend)
@@ -137,17 +137,17 @@ def prepare_stock_signals(
     frame["prev_close"] = frame["close"].shift(1)
     frame["prev_volume_ratio"] = (frame["volume"] / frame["volume_ma20"]).shift(1)
 
-    bb = add_bollinger_bands(frame["close"], config.bb_period, config.bb_std)
-    frame = pd.concat([frame, bb], axis=1)
-    kd = add_stochastic(frame["high"], frame["low"], frame["close"], config.kd_k_period, config.kd_d_period)
-    frame = pd.concat([frame, kd], axis=1)
+    for col, series in add_bollinger_bands(frame["close"], config.bb_period, config.bb_std).items():
+        frame[col] = series
+    for col, series in add_stochastic(frame["high"], frame["low"], frame["close"], config.kd_k_period, config.kd_d_period).items():
+        frame[col] = series
     frame["obv"] = add_obv(frame["close"], frame["volume"])
     frame["obv_ma"] = add_sma(frame["obv"], config.obv_ma_window)
     frame["williams_r"] = add_williams_r(frame["high"], frame["low"], frame["close"])
     frame["cci20"] = add_cci(frame["high"], frame["low"], frame["close"])
     frame["mfi14"] = add_mfi(frame["high"], frame["low"], frame["close"], frame["volume"])
-    ichi = add_ichimoku(frame["high"], frame["low"])
-    frame = pd.concat([frame, ichi], axis=1)
+    for col, series in add_ichimoku(frame["high"], frame["low"]).items():
+        frame[col] = series
 
     institutional_missing = institutional_df.empty
     inst = institutional_df.copy()
@@ -339,10 +339,11 @@ def compute_market_breadth(snapshot: pd.DataFrame) -> dict[str, object]:
         "dealer_buy_3d", "mfi_strong", "above_ichimoku_cloud",
     ]
     result: dict[str, object] = {"total_stocks": total}
-    for col in breadth_cols:
-        if col in snapshot.columns:
-            pct = int(snapshot[col].fillna(False).sum() / total * 100)
-            result[col] = pct
+    available = [c for c in breadth_cols if c in snapshot.columns]
+    if available:
+        sums = snapshot[available].fillna(False).sum()
+        for col in available:
+            result[col] = int(sums[col] / total * 100)
     entry_count = int(snapshot["entry_signal"].sum()) if "entry_signal" in snapshot.columns else 0
     result["entry_signal_count"] = entry_count
     result["entry_signal_pct"] = int(entry_count / total * 100)

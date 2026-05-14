@@ -382,6 +382,22 @@ def collect_signals(
             print(f"[warn] skipped {stock['stock_id']}: {error}", file=sys.stderr)
             return None
 
+    _signal_cols = [
+        "date", "stock_id", "name", "industry_category",
+        "open", "high", "low", "close",
+        "entry_signal", "entry_reason", "skip_trade", "skip_reason",
+        "base_exit_signal", "base_exit_reason",
+        "condition_count", "entry_score",
+        "relative_strength_5d", "volume_ratio", "volume_ma20",
+        "rsi14", "adx14", "atr14",
+        "foreign_buy_streak", "invest_trust_streak",
+        "stoch_k", "stoch_d", "bb_pct_b", "bb_bandwidth",
+        "obv_uptrend", "bb_squeeze_breakout", "breakout_volume_confirm",
+        "dealer_buy_streak", "dealer_buy_3d",
+        "williams_r", "cci20", "mfi14", "mfi_strong", "above_ichimoku_cloud",
+        "lr_slope_20", "lr_slope_60",
+    ]
+    _signal_cols_present: list[str] = []  # resolved on first result
     stock_records = stock_list.to_dict("records")
     total = len(stock_records)
     done = 0
@@ -396,21 +412,8 @@ def collect_signals(
                 continue
             stock_id, signal_frame = result
             signals_by_stock[stock_id] = signal_frame
-            _signal_cols = [
-                "date", "stock_id", "name", "industry_category",
-                "open", "high", "low", "close",
-                "entry_signal", "entry_reason", "skip_trade", "skip_reason",
-                "base_exit_signal", "base_exit_reason",
-                "condition_count", "entry_score",
-                "relative_strength_5d", "volume_ratio",
-                "rsi14", "adx14", "atr14",
-                "foreign_buy_streak", "invest_trust_streak",
-                "stoch_k", "stoch_d", "bb_pct_b", "bb_bandwidth",
-                "obv_uptrend", "bb_squeeze_breakout", "breakout_volume_confirm",
-                "dealer_buy_streak", "dealer_buy_3d",
-                "williams_r", "cci20", "mfi14", "mfi_strong", "above_ichimoku_cloud",
-            ]
-            _signal_cols_present = [c for c in _signal_cols if c in signal_frame.columns]
+            if not _signal_cols_present:
+                _signal_cols_present = [c for c in _signal_cols if c in signal_frame.columns]
             signal_frames.append(signal_frame[_signal_cols_present].copy())
     return signals_by_stock, signal_frames
 
