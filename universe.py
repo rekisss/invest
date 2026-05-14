@@ -52,6 +52,19 @@ THEME_KEYWORDS = [
     # Edge / cloud
     "邊緣運算",
     "雲端",
+    # 2025/2026 emerging themes
+    "AI PC",
+    "機器人",
+    "人形機器人",
+    "軍工",
+    "航太",
+    "資安",
+    "HPC",
+    "高速運算",
+    "高頻寬",
+    "銅箔",
+    "被動元件",
+    "電源管理",
 ]
 
 EXCLUDE_NAME_KEYWORDS = [
@@ -94,7 +107,7 @@ def build_auto_universe(stock_info: pd.DataFrame, max_symbols: int = 120) -> pd.
 
     frame["theme_score"] = 0
     frame.loc[frame["is_theme"], "theme_score"] += 4
-    frame.loc[frame["industry_category"].str.contains("半導體|電腦及週邊|電子|光電|通信|網路|封測|車用|綠能|儲能|PCB|工業電腦|記憶體", case=False, na=False), "theme_score"] += 3
+    frame.loc[frame["industry_category"].str.contains("半導體|電腦及週邊|電子|光電|通信|網路|封測|車用|綠能|儲能|PCB|工業電腦|記憶體|航太|資安|被動元件", case=False, na=False), "theme_score"] += 3
     frame.loc[frame["is_listed"], "theme_score"] += 2
     frame.loc[frame["is_otc"], "theme_score"] += 1
 
