@@ -68,6 +68,7 @@ def run_backtest(
         if config.next_day_fill and pending_entries and len(positions) < config.max_positions:
             pending_entries.sort(reverse=True)
             opened_today = 0
+            current_equity = portfolio_equity(cash, positions, prepared, date)
             for entry_score, stock_id, name in pending_entries:
                 if opened_today >= config.max_new_positions_per_day:
                     break
@@ -83,7 +84,7 @@ def run_backtest(
                     continue
                 price = float(frame.loc[date, "open"])
                 effective_buy = price * (1 + config.slippage_pct)
-                risk_budget = portfolio_equity(cash, positions, prepared, date) * config.risk_per_trade
+                risk_budget = current_equity * config.risk_per_trade
                 risk_per_share = effective_buy * config.stop_loss_pct
                 if risk_per_share <= 0:
                     continue
@@ -176,6 +177,7 @@ def run_backtest(
         elif daily_candidates and len(positions) < config.max_positions:
             daily_candidates.sort(key=lambda item: item[0], reverse=True)
             opened_today = 0
+            current_equity = portfolio_equity(cash, positions, prepared, date)
 
             for _, stock_id, row in daily_candidates:
                 if opened_today >= config.max_new_positions_per_day:
@@ -191,7 +193,7 @@ def run_backtest(
 
                 price = float(row["close"])
                 effective_buy = price * (1 + config.slippage_pct)
-                risk_budget = portfolio_equity(cash, positions, prepared, date) * config.risk_per_trade
+                risk_budget = current_equity * config.risk_per_trade
                 risk_per_share = effective_buy * config.stop_loss_pct
                 if risk_per_share <= 0:
                     continue
@@ -466,11 +468,10 @@ def compute_performance_metrics(
 
 
 def _max_consecutive(mask: pd.Series) -> int:
-    best = current = 0
-    for val in mask:
-        current = current + 1 if val else 0
-        best = max(best, current)
-    return best
+    positive = mask.astype(int)
+    groups = (~mask).cumsum()
+    streak_lengths = positive.groupby(groups).cumsum()
+    return int(streak_lengths.max()) if len(streak_lengths) else 0
 
 
 def compute_yearly_performance(equity_curve: pd.DataFrame) -> pd.DataFrame:
