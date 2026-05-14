@@ -411,28 +411,36 @@ def compute_performance_metrics(
     ending_value = float(equity.iloc[-1])
     cagr = (ending_value / initial_capital) ** (1 / years) - 1
 
-    sharpe = 0.0
-    if daily_returns.std(ddof=0) > 0:
-        sharpe = (daily_returns.mean() / daily_returns.std(ddof=0)) * (252 ** 0.5)
+    _mean_ret = float(daily_returns.mean())
+    _std_ret = float(daily_returns.std(ddof=0))
+    _sqrt252 = 252 ** 0.5
+    sharpe = (_mean_ret / _std_ret) * _sqrt252 if _std_ret > 0 else 0.0
 
     sortino = 0.0
     downside = daily_returns[daily_returns < 0]
-    if len(downside) > 0 and downside.std(ddof=0) > 0:
-        sortino = (daily_returns.mean() / downside.std(ddof=0)) * (252 ** 0.5)
+    if len(downside) > 0:
+        _down_std = float(downside.std(ddof=0))
+        if _down_std > 0:
+            sortino = (_mean_ret / _down_std) * _sqrt252
 
     calmar = (cagr / abs(max_dd)) if max_dd < 0 else float("inf")
 
-    gross_profit = float(trade_summary.loc[trade_summary["pnl"] > 0, "pnl"].sum()) if not trade_summary.empty else 0.0
-    gross_loss = float(trade_summary.loc[trade_summary["pnl"] < 0, "pnl"].sum()) if not trade_summary.empty else 0.0
+    if not trade_summary.empty:
+        _win_mask = trade_summary["pnl"] > 0
+        _loss_mask = trade_summary["pnl"] < 0
+        gross_profit = float(trade_summary.loc[_win_mask, "pnl"].sum())
+        gross_loss = float(trade_summary.loc[_loss_mask, "pnl"].sum())
+        trades = int(len(trade_summary))
+        wins = int(_win_mask.sum())
+        losses = trades - wins
+        avg_win_pct = float(trade_summary.loc[_win_mask, "return_pct"].mean() * 100) if wins > 0 else 0.0
+        avg_loss_pct = float(trade_summary.loc[_loss_mask, "return_pct"].mean() * 100) if losses > 0 else 0.0
+    else:
+        gross_profit = gross_loss = 0.0
+        trades = wins = losses = 0
+        avg_win_pct = avg_loss_pct = 0.0
     profit_factor = gross_profit / abs(gross_loss) if gross_loss != 0 else float("inf") if gross_profit > 0 else 0.0
-
-    trades = int(len(trade_summary))
-    wins = int((trade_summary["pnl"] > 0).sum()) if not trade_summary.empty else 0
-    losses = trades - wins
     win_rate = wins / trades if trades else 0.0
-
-    avg_win_pct = float(trade_summary.loc[trade_summary["pnl"] > 0, "return_pct"].mean() * 100) if wins > 0 else 0.0
-    avg_loss_pct = float(trade_summary.loc[trade_summary["pnl"] < 0, "return_pct"].mean() * 100) if losses > 0 else 0.0
     expectancy = (win_rate * avg_win_pct / 100 + (1 - win_rate) * avg_loss_pct / 100) if trades else 0.0
 
     avg_hold_days = 0.0
