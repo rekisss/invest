@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
 
 
 def _retry(func, max_attempts: int = 3, backoff: float = 2.0):
@@ -31,6 +32,10 @@ class FugleClient:
     def __post_init__(self) -> None:
         if self.api_key is None:
             self.api_key = os.getenv("FUGLE_API_KEY", "").strip() or None
+        self._session = requests.Session()
+        _adapter = HTTPAdapter(pool_connections=2, pool_maxsize=16)
+        self._session.mount("https://", _adapter)
+        self._session.mount("http://", _adapter)
 
     @property
     def enabled(self) -> bool:
@@ -43,7 +48,7 @@ class FugleClient:
 
     def fetch_quote(self, symbol: str) -> dict[str, object]:
         def _do() -> dict[str, object]:
-            response = requests.get(
+            response = self._session.get(
                 f"{self.base_url}/stock/intraday/quote/{symbol}",
                 headers=self._headers(),
                 timeout=self.timeout,
@@ -97,8 +102,10 @@ def fetch_watch_quotes(client: FugleClient, symbols: list[str], workers: int = 5
         return frame
 
     if "last" in frame.columns and "prev_close" in frame.columns:
-        frame["intraday_pct"] = pd.to_numeric(frame["last"], errors="coerce") / pd.to_numeric(frame["prev_close"], errors="coerce") - 1
-        frame.loc[pd.to_numeric(frame["prev_close"], errors="coerce") == 0, "intraday_pct"] = pd.NA
+        last_num = pd.to_numeric(frame["last"], errors="coerce")
+        prev_num = pd.to_numeric(frame["prev_close"], errors="coerce")
+        frame["intraday_pct"] = last_num / prev_num - 1
+        frame.loc[prev_num == 0, "intraday_pct"] = pd.NA
     else:
         frame["intraday_pct"] = pd.NA
 
