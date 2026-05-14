@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 
 from indicators import (
-    add_adx, add_atr, add_bollinger_bands, add_cci,
-    add_ema, add_ichimoku, add_lr_slope, add_macd, add_mfi, add_obv, add_rsi, add_sma,
+    add_adx_atr, add_bollinger_bands, add_cci,
+    add_ema, add_ichimoku, add_lr_slopes, add_macd, add_mfi, add_obv, add_rsi, add_sma,
     add_stochastic, add_williams_r, consecutive_positive,
 )
 
@@ -180,14 +180,14 @@ def prepare_stock_signals(
     frame["ema60"] = add_ema(frame["close"], config.ema_entry)
     frame["ema120"] = add_ema(frame["close"], config.ema_trend)
     frame["rsi14"] = add_rsi(frame["close"], config.rsi_period)
-    frame["adx14"] = add_adx(frame["high"], frame["low"], frame["close"], config.adx_period)
-    frame["atr14"] = add_atr(frame["high"], frame["low"], frame["close"], config.adx_period)
+    _adx_atr = add_adx_atr(frame["high"], frame["low"], frame["close"], config.adx_period)
+    frame[_adx_atr.columns] = _adx_atr.values
     frame["volume_ma20"] = add_sma(frame["volume"], config.volume_ma_window)
     frame["amount_ma20"] = add_sma(frame["amount"], 20)
     frame["close_20d_high"] = frame["close"].rolling(config.breakout_window).max().shift(1)
     frame["close_10d_low"] = frame["close"].rolling(config.swing_low_window).min().shift(1)
-    frame["lr_slope_20"] = add_lr_slope(frame["close"], window=20)
-    frame["lr_slope_60"] = add_lr_slope(frame["close"], window=60)
+    _lr = add_lr_slopes(frame["close"], windows=(20, 60))
+    frame[_lr.columns] = _lr.values
     frame["return_5d"] = frame["close"].pct_change(config.relative_strength_window)
     frame["day_return"] = frame["close"].pct_change(1)
     frame["prev_close"] = frame["close"].shift(1)

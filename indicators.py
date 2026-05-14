@@ -83,6 +83,26 @@ def add_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14)
     return tr.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
 
 
+def add_adx_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.DataFrame:
+    """Compute ADX and ATR together, sharing the True Range calculation."""
+    up_move = high.diff()
+    down_move = -low.diff()
+    plus_dm = pd.Series(np.where((up_move > down_move) & (up_move > 0), up_move, 0.0), index=high.index)
+    minus_dm = pd.Series(np.where((down_move > up_move) & (down_move > 0), down_move, 0.0), index=high.index)
+    _pc = close.shift(1)
+    tr = pd.Series(
+        np.fmax(np.fmax((high - low).to_numpy(), (high - _pc).abs().to_numpy()), (low - _pc).abs().to_numpy()),
+        index=high.index,
+    )
+    alpha = 1 / period
+    atr = tr.ewm(alpha=alpha, min_periods=period, adjust=False).mean()
+    plus_di = 100 * plus_dm.ewm(alpha=alpha, min_periods=period, adjust=False).mean() / atr
+    minus_di = 100 * minus_dm.ewm(alpha=alpha, min_periods=period, adjust=False).mean() / atr
+    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
+    adx = dx.ewm(alpha=alpha, min_periods=period, adjust=False).mean()
+    return pd.DataFrame({"adx14": adx, "atr14": atr})
+
+
 def consecutive_positive(series: pd.Series) -> pd.Series:
     positive = (series.fillna(0) > 0)
     # Each run of non-positive values starts a new group; cumsum within group counts the streak
@@ -164,3 +184,34 @@ def add_lr_slope(close: pd.Series, window: int = 20) -> pd.Series:
     result = np.full(len(log_c), np.nan)
     result[n - 1:] = slope
     return pd.Series(result, index=close.index)
+
+
+def add_lr_slopes(close: pd.Series, windows: tuple[int, ...] = (20, 60)) -> pd.DataFrame:
+    """Compute linear-regression slopes for multiple windows in one pass.
+
+    Shares the log/cumsum prefix computation across all requested windows.
+    """
+    log_c = np.log(close.clip(lower=1e-9).to_numpy(dtype=float))
+    nan_mask = np.isnan(log_c)
+    safe = np.where(nan_mask, 0.0, log_c)
+    pos = np.arange(len(log_c), dtype=float)
+
+    cum_y = np.concatenate([[0.0], np.cumsum(safe)])
+    cum_py = np.concatenate([[0.0], np.cumsum(pos * safe)])
+    cum_nan = np.concatenate([[0], np.cumsum(nan_mask.astype(int))])
+
+    cols: dict[str, np.ndarray] = {}
+    for n in windows:
+        Sx: float = n * (n - 1) / 2
+        Sxx: float = n * (n - 1) * (2 * n - 1) / 6
+        denom: float = n * Sxx - Sx ** 2
+        t = np.arange(n - 1, len(log_c))
+        s = t - n + 1
+        has_nan = (cum_nan[t + 1] - cum_nan[s]) > 0
+        Sy = cum_y[t + 1] - cum_y[s]
+        Sxy = (cum_py[t + 1] - cum_py[s]) - s * Sy
+        slope = np.where(has_nan, np.nan, (n * Sxy - Sx * Sy) / denom * 100)
+        result = np.full(len(log_c), np.nan)
+        result[n - 1:] = slope
+        cols[f"lr_slope_{n}"] = result
+    return pd.DataFrame(cols, index=close.index)
