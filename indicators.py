@@ -123,7 +123,8 @@ def add_obv(close: pd.Series, volume: pd.Series) -> pd.Series:
     direction = np.empty_like(c)
     direction[0] = 0.0
     np.sign(c[1:] - c[:-1], out=direction[1:])
-    return pd.Series(np.cumsum(direction * v), index=close.index)
+    np.multiply(direction, v, out=direction)
+    return pd.Series(np.cumsum(direction), index=close.index)
 
 
 def add_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
@@ -194,18 +195,31 @@ def add_mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series
 
 
 def add_ichimoku(high: pd.Series, low: pd.Series, tenkan_period: int = 9, kijun_period: int = 26, senkou_b_period: int = 52) -> pd.DataFrame:
-    tenkan = (high.rolling(tenkan_period).max() + low.rolling(tenkan_period).min()) / 2
-    kijun = (high.rolling(kijun_period).max() + low.rolling(kijun_period).min()) / 2
-    senkou_a = ((tenkan + kijun) / 2).shift(kijun_period)
-    senkou_b = ((high.rolling(senkou_b_period).max() + low.rolling(senkou_b_period).min()) / 2).shift(kijun_period)
-    chikou = high.shift(-kijun_period)
+    tk_h = high.rolling(tenkan_period).max().to_numpy(dtype=float)
+    tk_l = low.rolling(tenkan_period).min().to_numpy(dtype=float)
+    kj_h = high.rolling(kijun_period).max().to_numpy(dtype=float)
+    kj_l = low.rolling(kijun_period).min().to_numpy(dtype=float)
+    tenkan_arr = (tk_h + tk_l) / 2.0
+    kijun_arr = (kj_h + kj_l) / 2.0
+    sb_raw = (high.rolling(senkou_b_period).max().to_numpy(dtype=float) + low.rolling(senkou_b_period).min().to_numpy(dtype=float)) / 2.0
+    sa_raw = (tenkan_arr + kijun_arr) / 2.0
+    n = len(sa_raw)
+    k = kijun_period
+    senkou_a_arr = np.full(n, np.nan)
+    senkou_b_arr = np.full(n, np.nan)
+    if n > k:
+        senkou_a_arr[k:] = sa_raw[:-k]
+        senkou_b_arr[k:] = sb_raw[:-k]
+    chikou_arr = np.full(n, np.nan)
+    if n > k:
+        chikou_arr[:n - k] = high.to_numpy(dtype=float)[k:]
     return pd.DataFrame({
-        "ichi_tenkan": tenkan,
-        "ichi_kijun": kijun,
-        "ichi_senkou_a": senkou_a,
-        "ichi_senkou_b": senkou_b,
-        "ichi_chikou": chikou,
-    })
+        "ichi_tenkan": tenkan_arr,
+        "ichi_kijun": kijun_arr,
+        "ichi_senkou_a": senkou_a_arr,
+        "ichi_senkou_b": senkou_b_arr,
+        "ichi_chikou": chikou_arr,
+    }, index=high.index)
 
 
 def add_ichimoku_cloud(high: pd.Series, low: pd.Series, tenkan_period: int = 9, kijun_period: int = 26, senkou_b_period: int = 52) -> pd.DataFrame:
@@ -235,7 +249,7 @@ def add_williams_r(high: pd.Series, low: pd.Series, close: pd.Series, period: in
 
 
 def add_cci(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 20) -> pd.Series:
-    tp = ((high + low + close) / 3).to_numpy(dtype=float)
+    tp = (high.to_numpy(dtype=float) + low.to_numpy(dtype=float) + close.to_numpy(dtype=float)) / 3.0
     n = len(tp)
     result = np.full(n, np.nan)
     if n >= period:
@@ -254,19 +268,20 @@ def add_lr_slope(close: pd.Series, window: int = 20) -> pd.Series:
     For x=[0..n-1]: slope = (n*Sxy - Sx*Sy) / (n*Sxx - Sx^2)
     """
     n = window
-    log_c = np.log(close.clip(lower=1e-9).to_numpy(dtype=float))
+    raw = close.to_numpy(dtype=float)
+    log_c = np.log(np.where(np.isnan(raw) | (raw < 1e-9), np.nan, raw))
     nan_mask = np.isnan(log_c)
     safe = np.where(nan_mask, 0.0, log_c)
     pos = np.arange(len(log_c), dtype=float)
 
-    # Precomputed x statistics (constant for fixed window)
     Sx: float = n * (n - 1) / 2
     Sxx: float = n * (n - 1) * (2 * n - 1) / 6
     denom: float = n * Sxx - Sx ** 2
 
-    cum_y = np.concatenate([[0.0], np.cumsum(safe)])
-    cum_py = np.concatenate([[0.0], np.cumsum(pos * safe)])
-    cum_nan = np.concatenate([[0], np.cumsum(nan_mask.astype(int))])
+    m = len(safe)
+    cum_y = np.empty(m + 1); cum_y[0] = 0.0; np.cumsum(safe, out=cum_y[1:])
+    cum_py = np.empty(m + 1); cum_py[0] = 0.0; np.cumsum(pos * safe, out=cum_py[1:])
+    cum_nan = np.empty(m + 1, dtype=np.int32); cum_nan[0] = 0; np.cumsum(nan_mask.view(np.int8), out=cum_nan[1:])
 
     t = np.arange(n - 1, len(log_c))
     s = t - n + 1
