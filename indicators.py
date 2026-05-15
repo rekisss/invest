@@ -18,8 +18,12 @@ def add_macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) 
     ema_slow = add_ema(close, slow)
     macd_line = ema_fast - ema_slow
     signal_line = macd_line.ewm(span=signal, adjust=False).mean()
-    hist = macd_line - signal_line
-    return pd.DataFrame({"macd": macd_line, "macd_signal": signal_line, "macd_hist": hist})
+    macd_arr = macd_line.to_numpy(dtype=float)
+    sig_arr = signal_line.to_numpy(dtype=float)
+    return pd.DataFrame(
+        {"macd": macd_arr, "macd_signal": sig_arr, "macd_hist": macd_arr - sig_arr},
+        index=close.index,
+    )
 
 
 def add_rsi(close: pd.Series, period: int = 14) -> pd.Series:
@@ -156,10 +160,11 @@ def add_mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series
     tp_diff = np.diff(tp, prepend=np.nan)
     pos_mf = pd.Series(np.where(tp_diff > 0, rmf, 0.0), index=close.index)
     neg_mf = pd.Series(np.where(tp_diff < 0, rmf, 0.0), index=close.index)
-    pos_sum = pos_mf.rolling(window=period, min_periods=period).sum()
-    neg_sum = neg_mf.rolling(window=period, min_periods=period).sum()
-    mfi = 100 - (100 / (1 + pos_sum / neg_sum.replace(0, np.nan)))
-    return mfi.fillna(50)
+    pos_sum = pos_mf.rolling(window=period, min_periods=period).sum().to_numpy(dtype=float)
+    neg_sum = neg_mf.rolling(window=period, min_periods=period).sum().to_numpy(dtype=float)
+    safe_neg = np.where(neg_sum == 0, np.nan, neg_sum)
+    mfi = 100.0 - 100.0 / (1.0 + pos_sum / safe_neg)
+    return pd.Series(np.where(np.isnan(mfi), 50.0, mfi), index=close.index)
 
 
 def add_ichimoku(high: pd.Series, low: pd.Series, tenkan_period: int = 9, kijun_period: int = 26, senkou_b_period: int = 52) -> pd.DataFrame:
@@ -181,9 +186,16 @@ def add_ichimoku_cloud(high: pd.Series, low: pd.Series, tenkan_period: int = 9, 
     """Return only the two cloud boundary spans (senkou A and B), skipping tenkan/kijun/chikou."""
     tenkan = (high.rolling(tenkan_period).max() + low.rolling(tenkan_period).min()) / 2
     kijun = (high.rolling(kijun_period).max() + low.rolling(kijun_period).min()) / 2
-    senkou_a = ((tenkan + kijun) / 2).shift(kijun_period)
-    senkou_b = ((high.rolling(senkou_b_period).max() + low.rolling(senkou_b_period).min()) / 2).shift(kijun_period)
-    return pd.DataFrame({"ichi_senkou_a": senkou_a, "ichi_senkou_b": senkou_b})
+    sa_raw = ((tenkan + kijun) / 2).to_numpy(dtype=float)
+    sb_raw = ((high.rolling(senkou_b_period).max() + low.rolling(senkou_b_period).min()) / 2).to_numpy(dtype=float)
+    n = len(sa_raw)
+    k = kijun_period
+    senkou_a = np.full(n, np.nan)
+    senkou_b = np.full(n, np.nan)
+    if n > k:
+        senkou_a[k:] = sa_raw[:-k]
+        senkou_b[k:] = sb_raw[:-k]
+    return pd.DataFrame({"ichi_senkou_a": senkou_a, "ichi_senkou_b": senkou_b}, index=high.index)
 
 
 def add_williams_r(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
