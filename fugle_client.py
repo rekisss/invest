@@ -18,11 +18,14 @@ def _retry(func, max_attempts: int = 3, backoff: float = 2.0):
             return func()
         except requests.exceptions.HTTPError as exc:
             # 4xx 是用戶端錯誤（金鑰無效、無權限等），重試無意義
-            if exc.response is not None and exc.response.status_code < 500:
+            # 429 例外：速率限制是暫時性的，退避後重試有意義
+            status = exc.response.status_code if exc.response is not None else 0
+            if status != 429 and status < 500:
                 raise
             last_error = exc
             if attempt < max_attempts - 1:
-                time.sleep(backoff * (2 ** attempt) + random.uniform(0, 0.5))
+                wait = (30.0 if status == 429 else backoff * (2 ** attempt)) + random.uniform(0, 0.5)
+                time.sleep(wait)
         except Exception as exc:
             last_error = exc
             if attempt < max_attempts - 1:

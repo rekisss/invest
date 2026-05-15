@@ -1015,13 +1015,23 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
             and quotes["error"].notna().all()
         )
         if all_errors:
-            # 取得第一個錯誤訊息，判斷是否為認證問題（立即中止，無需等待）
+            # 取得第一個錯誤訊息，判斷錯誤類型
             sample_error = str(quotes["error"].iloc[0]) if not quotes.empty else ""
             is_auth_error = "401" in sample_error or "403" in sample_error or "金鑰" in sample_error
-            consecutive_error_cycles += 1
+            is_rate_limit = "429" in sample_error or "頻率" in sample_error
+            if is_rate_limit:
+                # 速率限制：不計入中止計數，等待後繼續
+                _safe_print(f"[cycle {cycle}] 速率限制，等待 60 秒後繼續…")
+                time.sleep(60)
+            else:
+                consecutive_error_cycles += 1
             if is_auth_error or consecutive_error_cycles >= _MAX_ERROR_CYCLES:
                 reason = sample_error[:80] if sample_error else f"連續 {_MAX_ERROR_CYCLES} 個週期全部錯誤"
-                abort_msg = f"⚠️ **事件監控中止** · {reason}"
+                abort_msg = (
+                    f"⚠️ **事件監控中止** · {_cst_now()} CST\n"
+                    f"原因：{reason}\n"
+                    f"請確認 FUGLE_API_KEY 是否有效，或手動重啟監控。"
+                )
                 _safe_print(abort_msg)
                 if args.notify:
                     send_discord_messages(split_message(abort_msg))
