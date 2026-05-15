@@ -762,7 +762,16 @@ def format_daily_report_message(
         ok_rows = closing_quotes[closing_quotes["error"].isna()] if "error" in closing_quotes.columns else closing_quotes
         err_rows = closing_quotes[closing_quotes["error"].notna()] if "error" in closing_quotes.columns else pd.DataFrame()
         if ok_rows.empty and not err_rows.empty:
-            lines.extend(["", "**盤後報價對比**", "⚠️ Fugle API 無法取得報價（金鑰無效或未設定）"])
+            sample_err = str(err_rows["error"].iloc[0]) if not err_rows.empty else ""
+            if "401" in sample_err or "金鑰" in sample_err:
+                err_hint = "金鑰無效或未授權，請確認 FUGLE_API_KEY"
+            elif "403" in sample_err:
+                err_hint = "金鑰無此 API 權限，請升級方案"
+            elif sample_err:
+                err_hint = sample_err[:60]
+            else:
+                err_hint = "金鑰無效或未設定"
+            lines.extend(["", "**盤後報價對比**", f"⚠️ Fugle API 無法取得報價（{err_hint}）"])
         elif not ok_rows.empty:
             lines.extend(["", "**盤後報價對比**"])
             for _, row in ok_rows.iterrows():
@@ -997,9 +1006,13 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
             and quotes["error"].notna().all()
         )
         if all_errors:
+            # 取得第一個錯誤訊息，判斷是否為認證問題（立即中止，無需等待）
+            sample_error = str(quotes["error"].iloc[0]) if not quotes.empty else ""
+            is_auth_error = "401" in sample_error or "403" in sample_error or "金鑰" in sample_error
             consecutive_error_cycles += 1
-            if consecutive_error_cycles >= _MAX_ERROR_CYCLES:
-                abort_msg = f"⚠️ **事件監控中止** · Fugle API 連續 {_MAX_ERROR_CYCLES} 個週期全部錯誤，已停止"
+            if is_auth_error or consecutive_error_cycles >= _MAX_ERROR_CYCLES:
+                reason = sample_error[:80] if sample_error else f"連續 {_MAX_ERROR_CYCLES} 個週期全部錯誤"
+                abort_msg = f"⚠️ **事件監控中止** · {reason}"
                 _safe_print(abort_msg)
                 if args.notify:
                     send_discord_messages(split_message(abort_msg))

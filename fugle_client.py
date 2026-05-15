@@ -16,6 +16,13 @@ def _retry(func, max_attempts: int = 3, backoff: float = 2.0):
     for attempt in range(max_attempts):
         try:
             return func()
+        except requests.exceptions.HTTPError as exc:
+            # 4xx 是用戶端錯誤（金鑰無效、無權限等），重試無意義
+            if exc.response is not None and exc.response.status_code < 500:
+                raise
+            last_error = exc
+            if attempt < max_attempts - 1:
+                time.sleep(backoff * (2 ** attempt) + random.uniform(0, 0.5))
         except Exception as exc:
             last_error = exc
             if attempt < max_attempts - 1:
@@ -54,6 +61,18 @@ class FugleClient:
                 headers=self._headers(),
                 timeout=self.timeout,
             )
+            if response.status_code == 401:
+                raise requests.exceptions.HTTPError(
+                    "401 金鑰無效或未授權，請確認 FUGLE_API_KEY 是否正確", response=response
+                )
+            if response.status_code == 403:
+                raise requests.exceptions.HTTPError(
+                    "403 金鑰無此 API 權限，請升級方案", response=response
+                )
+            if response.status_code == 429:
+                raise requests.exceptions.HTTPError(
+                    "429 請求頻率過高，請稍後再試", response=response
+                )
             response.raise_for_status()
             return response.json()
         return _retry(_do)
