@@ -735,8 +735,10 @@ def format_heartbeat_message(quotes: pd.DataFrame, date: str) -> str:
             pct_text = f"`{pct:+.2f}%`"
         else:
             arrow, pct_text = "➡️", "N/A"
+        vol = row.get("volume")
+        vol_part = f" | 量 `{vol}`" if vol is not None and str(vol) not in ("None", "nan", "") else ""
         lines.append(
-            f"• **{row['symbol']}** {row.get('name') or ''} | {arrow} {pct_text} | 最新 `{row.get('last')}` | 量 `{row.get('volume')}`"
+            f"• **{row['symbol']}** {row.get('name') or ''} | {arrow} {pct_text} | 收 `{row.get('last')}`{vol_part}"
         )
     return "\n".join(lines)
 
