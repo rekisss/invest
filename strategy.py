@@ -264,24 +264,48 @@ def prepare_stock_signals(
     _p_bb_bw = np.empty(_n, dtype=float); _p_bb_bw[0] = np.nan; _p_bb_bw[1:] = _bb_bw_arr[:-1]
     _p_wr = np.empty(_n, dtype=float); _p_wr[0] = np.nan; _p_wr[1:] = _wr_arr[:-1]
     _p_cci = np.empty(_n, dtype=float); _p_cci[0] = np.nan; _p_cci[1:] = _cci_arr[:-1]
+
+    # Pre-extract numpy arrays — avoids pandas index-alignment overhead on every comparison
+    _close_arr = merged["close"].to_numpy(dtype=float)
+    _ema20_arr = merged["ema20"].to_numpy(dtype=float)
+    _ema60_arr = merged["ema60"].to_numpy(dtype=float)
+    _ema120_arr = merged["ema120"].to_numpy(dtype=float)
+    _vol_arr = merged["volume"].to_numpy(dtype=float)
+    _vma20_arr = merged["volume_ma20"].to_numpy(dtype=float)
+    _rsi_arr = merged["rsi14"].to_numpy(dtype=float)
+    _adx_arr = merged["adx14"].to_numpy(dtype=float)
+    _h20_arr = merged["close_20d_high"].to_numpy(dtype=float)
+    _r5d_arr = merged["return_5d"].to_numpy(dtype=float)
+    _ama20_arr = merged["amount_ma20"].to_numpy(dtype=float)
+    _rs5d_arr = merged["relative_strength_5d"].to_numpy(dtype=float)
+    _obv_arr = merged["obv"].to_numpy(dtype=float)
+    _obv_ma_arr = merged["obv_ma"].to_numpy(dtype=float)
+    _mfi_arr = merged["mfi14"].to_numpy(dtype=float)
+    _fb_streak = merged["foreign_buy_streak"].to_numpy(dtype=float)
+    _it_streak = merged["invest_trust_streak"].to_numpy(dtype=float)
+    _dl_streak = merged["dealer_buy_streak"].to_numpy(dtype=float)
+    _s10d_arr = merged["close_10d_low"].to_numpy(dtype=float)
+    _bb_upper_arr = merged["bb_upper"].to_numpy(dtype=float)
+    _vr_arr = _vol_arr / _vma20_arr
+
     merged["macd_golden_cross"] = (_p_macd <= _p_macd_sig) & (_macd_arr > _macd_sig_arr)
     merged["hist_turn_positive"] = (_p_macd_hist <= 0) & (_macd_hist_arr > 0)
-    merged["above_ema60"] = merged["close"] > merged["ema60"]
-    merged["ema60_gt_ema120"] = merged["ema60"] > merged["ema120"]
-    merged["volume_ratio"] = merged["volume"] / merged["volume_ma20"]
-    merged["volume_break"] = merged["volume_ratio"] > config.volume_multiplier
-    merged["rsi_strong"] = merged["rsi14"] > config.rsi_threshold
-    merged["adx_trending"] = merged["adx14"] > config.adx_threshold
-    merged["breakout_20d"] = merged["close"] > merged["close_20d_high"]
-    merged["avoid_chase"] = merged["return_5d"] < config.max_recent_rise_pct
-    merged["liquidity_ok"] = merged["amount_ma20"] > config.min_amount_ma20
+    merged["above_ema60"] = _close_arr > _ema60_arr
+    merged["ema60_gt_ema120"] = _ema60_arr > _ema120_arr
+    merged["volume_ratio"] = _vr_arr
+    merged["volume_break"] = _vr_arr > config.volume_multiplier
+    merged["rsi_strong"] = _rsi_arr > config.rsi_threshold
+    merged["adx_trending"] = _adx_arr > config.adx_threshold
+    merged["breakout_20d"] = _close_arr > _h20_arr
+    merged["avoid_chase"] = _r5d_arr < config.max_recent_rise_pct
+    merged["liquidity_ok"] = _ama20_arr > config.min_amount_ma20
 
     # ── Soft signals (籌碼 + 技術) ────────────────────────────────────────────
-    merged["foreign_buy_3d"] = merged["foreign_buy_streak"] >= config.foreign_buy_streak
+    merged["foreign_buy_3d"] = _fb_streak >= config.foreign_buy_streak
     if institutional_missing:
         merged["foreign_buy_3d"] = False
 
-    merged["stronger_than_market"] = merged["relative_strength_5d"] > 0
+    merged["stronger_than_market"] = _rs5d_arr > 0
 
     merged["kd_golden_cross"] = (
         (_p_stoch_k <= _p_stoch_d)
@@ -289,13 +313,13 @@ def prepare_stock_signals(
         & (_stoch_k_arr < 80)
     )
 
-    merged["obv_uptrend"] = merged["obv"] > merged["obv_ma"]
+    merged["obv_uptrend"] = _obv_arr > _obv_ma_arr
 
-    merged["invest_trust_buy_2d"] = merged["invest_trust_streak"] >= config.invest_trust_buy_streak
+    merged["invest_trust_buy_2d"] = _it_streak >= config.invest_trust_buy_streak
     if institutional_missing:
         merged["invest_trust_buy_2d"] = False
 
-    merged["dealer_buy_3d"] = merged["dealer_buy_streak"] >= 3
+    merged["dealer_buy_3d"] = _dl_streak >= 3
     if institutional_missing:
         merged["dealer_buy_3d"] = False
 
@@ -303,7 +327,7 @@ def prepare_stock_signals(
     bb_bandwidth_median = merged["bb_bandwidth"].rolling(window=60, min_periods=20).median()
     _bbm = bb_bandwidth_median.to_numpy(dtype=float)
     _bbm_prev = np.empty(_n, dtype=float); _bbm_prev[0] = np.nan; _bbm_prev[1:] = _bbm[:-1]
-    merged["bb_squeeze_breakout"] = (_p_bb_bw < _bbm_prev) & (merged["close"] > merged["bb_upper"])
+    merged["bb_squeeze_breakout"] = (_p_bb_bw < _bbm_prev) & (_close_arr > _bb_upper_arr)
 
     # Breakout confirmed with simultaneous volume surge (quality entry filter)
     merged["breakout_volume_confirm"] = merged["breakout_20d"] & merged["volume_break"]
@@ -315,10 +339,9 @@ def prepare_stock_signals(
     merged["cci_momentum"] = (_p_cci < 100) & (_cci_arr >= 100)
 
     # MFI > 50: money is flowing into the stock (volume-weighted buying pressure)
-    merged["mfi_strong"] = merged["mfi14"] > 50
+    merged["mfi_strong"] = _mfi_arr > 50
 
     # ── Candlestick filters (compute numpy arrays once; reuse for ichimoku) ──
-    _close_arr = merged["close"].to_numpy(dtype=float)
     _open_arr = merged["open"].to_numpy(dtype=float)
     _high_arr = merged["high"].to_numpy(dtype=float)
     body = np.abs(_close_arr - _open_arr)
@@ -355,12 +378,9 @@ def prepare_stock_signals(
     merged["entry_signal"] = _entry_arr[:, :_n_hard].all(axis=1) & ~merged["skip_trade"].to_numpy(dtype=bool)
 
     _soft_matrix = merged[_SOFT_SCORE_COLS].to_numpy(dtype=np.float64)
-    _rs5d = merged["relative_strength_5d"].to_numpy(dtype=float, copy=True)
-    np.nan_to_num(_rs5d, nan=-99.0, copy=False)
-    _vol_ratio = merged["volume_ratio"].to_numpy(dtype=float, copy=True)
-    np.nan_to_num(_vol_ratio, nan=0.0, copy=False)
-    _adx14 = merged["adx14"].to_numpy(dtype=float, copy=True)
-    np.nan_to_num(_adx14, nan=0.0, copy=False)
+    _rs5d = _rs5d_arr.copy(); np.nan_to_num(_rs5d, nan=-99.0, copy=False)
+    _vol_ratio = _vr_arr.copy(); np.nan_to_num(_vol_ratio, nan=0.0, copy=False)
+    _adx14 = _adx_arr.copy(); np.nan_to_num(_adx14, nan=0.0, copy=False)
     merged["entry_score"] = (
         _cond_count.astype(np.float64) * 100
         + _rs5d * 100
@@ -373,8 +393,8 @@ def prepare_stock_signals(
         (_p_macd >= _p_macd_sig)
         & (_macd_arr < _macd_sig_arr)
     )
-    merged["close_below_ema20"] = merged["close"] < merged["ema20"]
-    merged["close_below_swing_low"] = merged["close"] < merged["close_10d_low"]
+    merged["close_below_ema20"] = _close_arr < _ema20_arr
+    merged["close_below_swing_low"] = _close_arr < _s10d_arr
     merged["base_exit_signal"] = (
         merged["macd_death_cross"] | merged["close_below_ema20"] | merged["close_below_swing_low"]
     )
