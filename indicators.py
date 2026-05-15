@@ -28,9 +28,13 @@ def add_rsi(close: pd.Series, period: int = 14) -> pd.Series:
     loss = pd.Series(np.maximum(-delta, 0.0), index=close.index)
     avg_gain = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    rsi = 100 - (100 / (1 + rs))
-    return rsi.fillna(100).where(avg_gain.notna() | avg_loss.notna())
+    ag = avg_gain.to_numpy(dtype=float)
+    al = avg_loss.to_numpy(dtype=float)
+    has_data = np.isfinite(ag) | np.isfinite(al)
+    safe_al = np.where(al == 0, np.nan, al)
+    rsi = 100.0 - 100.0 / (1.0 + ag / safe_al)
+    rsi = np.where(np.isnan(rsi) & has_data, 100.0, rsi)
+    return pd.Series(np.where(has_data, rsi, np.nan), index=close.index)
 
 
 def add_adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
@@ -49,7 +53,11 @@ def add_adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14)
     atr = tr.ewm(alpha=alpha, min_periods=period, adjust=False).mean()
     plus_di = 100 * plus_dm.ewm(alpha=alpha, min_periods=period, adjust=False).mean() / atr
     minus_di = 100 * minus_dm.ewm(alpha=alpha, min_periods=period, adjust=False).mean() / atr
-    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
+    pdi_arr = plus_di.to_numpy(dtype=float)
+    mdi_arr = minus_di.to_numpy(dtype=float)
+    sum_di = pdi_arr + mdi_arr
+    dx_arr = np.where(sum_di == 0, np.nan, 100 * np.abs(pdi_arr - mdi_arr) / sum_di)
+    dx = pd.Series(dx_arr, index=high.index)
     return dx.ewm(alpha=alpha, min_periods=period, adjust=False).mean()
 
 
@@ -59,17 +67,29 @@ def add_bollinger_bands(close: pd.Series, window: int = 20, num_std: float = 2.0
     std = roller.std(ddof=0)
     upper = sma + num_std * std
     lower = sma - num_std * std
-    band_width = (upper - lower).replace(0, np.nan)
-    pct_b = (close - lower) / band_width
-    bandwidth = band_width / sma.replace(0, np.nan)
-    return pd.DataFrame({"bb_upper": upper, "bb_mid": sma, "bb_lower": lower, "bb_pct_b": pct_b, "bb_bandwidth": bandwidth})
+    sma_arr = sma.to_numpy(dtype=float)
+    upper_arr = upper.to_numpy(dtype=float)
+    lower_arr = lower.to_numpy(dtype=float)
+    close_arr = close.to_numpy(dtype=float)
+    bw = upper_arr - lower_arr
+    safe_bw = np.where(bw == 0, np.nan, bw)
+    pct_b = (close_arr - lower_arr) / safe_bw
+    bandwidth = safe_bw / np.where(sma_arr == 0, np.nan, sma_arr)
+    return pd.DataFrame(
+        {"bb_upper": upper_arr, "bb_mid": sma_arr, "bb_lower": lower_arr,
+         "bb_pct_b": pct_b, "bb_bandwidth": bandwidth},
+        index=close.index,
+    )
 
 
 def add_stochastic(high: pd.Series, low: pd.Series, close: pd.Series, k_period: int = 9, d_period: int = 3) -> pd.DataFrame:
     lowest_low = low.rolling(window=k_period, min_periods=k_period).min()
     highest_high = high.rolling(window=k_period, min_periods=k_period).max()
-    hh_ll = (highest_high - lowest_low).replace(0, np.nan)
-    k = 100 * (close - lowest_low) / hh_ll
+    hh = highest_high.to_numpy(dtype=float)
+    ll = lowest_low.to_numpy(dtype=float)
+    c = close.to_numpy(dtype=float)
+    safe_range = np.where(hh - ll == 0, np.nan, hh - ll)
+    k = pd.Series(100 * (c - ll) / safe_range, index=close.index)
     d = k.rolling(window=d_period, min_periods=d_period).mean()
     return pd.DataFrame({"stoch_k": k, "stoch_d": d})
 
@@ -111,7 +131,13 @@ def add_adx_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int =
     atr = tr.ewm(alpha=alpha, min_periods=period, adjust=False).mean()
     plus_di = 100 * plus_dm.ewm(alpha=alpha, min_periods=period, adjust=False).mean() / atr
     minus_di = 100 * minus_dm.ewm(alpha=alpha, min_periods=period, adjust=False).mean() / atr
-    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
+    pdi_arr = plus_di.to_numpy(dtype=float)
+    mdi_arr = minus_di.to_numpy(dtype=float)
+    sum_di = pdi_arr + mdi_arr
+    dx = pd.Series(
+        np.where(sum_di == 0, np.nan, 100 * np.abs(pdi_arr - mdi_arr) / sum_di),
+        index=high.index,
+    )
     adx = dx.ewm(alpha=alpha, min_periods=period, adjust=False).mean()
     return pd.DataFrame({"adx14": adx, "atr14": atr})
 
@@ -161,10 +187,11 @@ def add_ichimoku_cloud(high: pd.Series, low: pd.Series, tenkan_period: int = 9, 
 
 
 def add_williams_r(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
-    highest_high = high.rolling(window=period, min_periods=period).max()
-    lowest_low = low.rolling(window=period, min_periods=period).min()
-    wr = -100 * (highest_high - close) / (highest_high - lowest_low).replace(0, np.nan)
-    return wr
+    hh = high.rolling(window=period, min_periods=period).max().to_numpy(dtype=float)
+    ll = low.rolling(window=period, min_periods=period).min().to_numpy(dtype=float)
+    c = close.to_numpy(dtype=float)
+    safe_range = np.where(hh - ll == 0, np.nan, hh - ll)
+    return pd.Series(-100 * (hh - c) / safe_range, index=close.index)
 
 
 def add_cci(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 20) -> pd.Series:
