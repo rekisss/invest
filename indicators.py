@@ -14,12 +14,11 @@ def add_sma(series: pd.Series, window: int) -> pd.Series:
 
 
 def add_macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:
-    ema_fast = add_ema(close, fast)
-    ema_slow = add_ema(close, slow)
-    macd_line = ema_fast - ema_slow
-    signal_line = macd_line.ewm(span=signal, adjust=False).mean()
-    macd_arr = macd_line.to_numpy(dtype=float)
-    sig_arr = signal_line.to_numpy(dtype=float)
+    macd_arr = (
+        close.ewm(span=fast, adjust=False).mean().to_numpy(dtype=float)
+        - close.ewm(span=slow, adjust=False).mean().to_numpy(dtype=float)
+    )
+    sig_arr = pd.Series(macd_arr).ewm(span=signal, adjust=False).mean().to_numpy(dtype=float)
     return pd.DataFrame(
         {"macd": macd_arr, "macd_signal": sig_arr, "macd_hist": macd_arr - sig_arr},
         index=close.index,
@@ -84,15 +83,13 @@ def add_bollinger_bands(close: pd.Series, window: int = 20, num_std: float = 2.0
 
 
 def add_stochastic(high: pd.Series, low: pd.Series, close: pd.Series, k_period: int = 9, d_period: int = 3) -> pd.DataFrame:
-    lowest_low = low.rolling(window=k_period, min_periods=k_period).min()
-    highest_high = high.rolling(window=k_period, min_periods=k_period).max()
-    hh = highest_high.to_numpy(dtype=float)
-    ll = lowest_low.to_numpy(dtype=float)
+    hh = high.rolling(window=k_period, min_periods=k_period).max().to_numpy(dtype=float)
+    ll = low.rolling(window=k_period, min_periods=k_period).min().to_numpy(dtype=float)
     c = close.to_numpy(dtype=float)
     safe_range = np.where(hh - ll == 0, np.nan, hh - ll)
-    k = pd.Series(100 * (c - ll) / safe_range, index=close.index)
-    d = k.rolling(window=d_period, min_periods=d_period).mean()
-    return pd.DataFrame({"stoch_k": k, "stoch_d": d})
+    k_arr = 100 * (c - ll) / safe_range
+    d_arr = pd.Series(k_arr).rolling(window=d_period, min_periods=d_period).mean().to_numpy(dtype=float)
+    return pd.DataFrame({"stoch_k": k_arr, "stoch_d": d_arr}, index=close.index)
 
 
 def add_obv(close: pd.Series, volume: pd.Series) -> pd.Series:
