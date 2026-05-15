@@ -14,11 +14,12 @@ from indicators import (
 # Module-level constants — column names never change, precomputed to avoid
 # rebuilding on every prepare_stock_signals call (once per stock, ~70 per scan).
 _HARD_ENTRY_COLS = [
-    "macd_golden_cross", "hist_turn_positive", "above_ema60", "ema60_gt_ema120",
+    "macd_golden_cross", "above_ema60", "ema60_gt_ema120",
     "volume_break", "rsi_strong", "breakout_20d", "market_above_ma60",
     "avoid_chase", "liquidity_ok",
 ]
 _SOFT_ENTRY_COLS = [
+    "hist_turn_positive",                                          # 原硬條件，降為軟條件
     "foreign_buy_3d", "adx_trending", "stronger_than_market",
     "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
     "dealer_buy_3d", "bb_squeeze_breakout", "breakout_volume_confirm",
@@ -35,15 +36,16 @@ _EXIT_COLS_ARR = np.array(_EXIT_COLS)
 # Weights for the boolean part of entry_score (order matches _SOFT_ENTRY_COLS)
 _SOFT_SCORE_COLS = [
     "foreign_buy_3d", "invest_trust_buy_2d", "dealer_buy_3d",
+    "hist_turn_positive",
     "kd_golden_cross", "obv_uptrend", "adx_trending", "stronger_than_market",
     "bb_squeeze_breakout", "breakout_volume_confirm",
     "williams_r_recovery", "cci_momentum", "mfi_strong", "above_ichimoku_cloud",
 ]
-_SOFT_SCORE_WEIGHTS = np.array([25, 20, 15, 20, 15, 15, 10, 30, 20, 15, 15, 10, 20], dtype=np.float64)
+_SOFT_SCORE_WEIGHTS = np.array([30, 35, 15, 25, 20, 15, 15, 10, 30, 20, 15, 15, 10, 20], dtype=np.float64)
 
 _BREADTH_COLS = [
     "above_ema60", "ema60_gt_ema120", "market_above_ma60",
-    "macd_golden_cross", "volume_break", "rsi_strong", "breakout_20d",
+    "macd_golden_cross", "hist_turn_positive", "volume_break", "rsi_strong", "breakout_20d",
     "foreign_buy_3d", "adx_trending", "stronger_than_market",
     "kd_golden_cross", "obv_uptrend", "invest_trust_buy_2d",
     "dealer_buy_3d", "mfi_strong", "above_ichimoku_cloud",

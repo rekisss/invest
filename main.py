@@ -471,7 +471,8 @@ def _format_breadth_line(breadth: dict[str, object]) -> str:
     above_ema = int(breadth.get("above_ema60", 0))
     trend_up = int(breadth.get("ema60_gt_ema120", 0))
     market_ok = int(breadth.get("market_above_ma60", 0))
-    momentum = int(breadth.get("macd_golden_cross", 0))
+    macd_cross = int(breadth.get("macd_golden_cross", 0))
+    hist_pos = int(breadth.get("hist_turn_positive", 0))
     mfi_pct = int(breadth.get("mfi_strong", 0))
     ichi_pct = int(breadth.get("above_ichimoku_cloud", 0))
     regime = str(breadth.get("market_regime") or "未知")
@@ -480,7 +481,7 @@ def _format_breadth_line(breadth: dict[str, object]) -> str:
     line = (
         f"📊 市場廣度（{total}支）{regime_emoji}`{regime}`｜全條件候選 `{entry_pct}%` | "
         f"站EMA60 `{above_ema}%` | 趨勢 `{trend_up}%` | "
-        f"MACD `{momentum}%` | MFI `{mfi_pct}%` | 雲上 `{ichi_pct}%` | 大盤 `{market_tag}`"
+        f"MACD交叉 `{macd_cross}%` | 柱翻正 `{hist_pos}%` | MFI `{mfi_pct}%` | 雲上 `{ichi_pct}%` | 大盤 `{market_tag}`"
     )
     if regime == "熊市" or (market_ok <= 50 and above_ema < 30):
         line += "\n⚠️ **市場偏弱，候選訊號謹慎看待，注意風險控管**"
