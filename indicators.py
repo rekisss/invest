@@ -67,13 +67,10 @@ def add_adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14)
 
 def add_bollinger_bands(close: pd.Series, window: int = 20, num_std: float = 2.0) -> pd.DataFrame:
     roller = close.rolling(window=window, min_periods=window)
-    sma = roller.mean()
-    std = roller.std(ddof=0)
-    upper = sma + num_std * std
-    lower = sma - num_std * std
-    sma_arr = sma.to_numpy(dtype=float)
-    upper_arr = upper.to_numpy(dtype=float)
-    lower_arr = lower.to_numpy(dtype=float)
+    sma_arr = roller.mean().to_numpy(dtype=float)
+    std_arr = roller.std(ddof=0).to_numpy(dtype=float)
+    upper_arr = sma_arr + num_std * std_arr
+    lower_arr = sma_arr - num_std * std_arr
     close_arr = close.to_numpy(dtype=float)
     bw = upper_arr - lower_arr
     safe_bw = np.where(bw == 0, np.nan, bw)
@@ -185,10 +182,12 @@ def add_ichimoku(high: pd.Series, low: pd.Series, tenkan_period: int = 9, kijun_
 
 def add_ichimoku_cloud(high: pd.Series, low: pd.Series, tenkan_period: int = 9, kijun_period: int = 26, senkou_b_period: int = 52) -> pd.DataFrame:
     """Return only the two cloud boundary spans (senkou A and B), skipping tenkan/kijun/chikou."""
-    tenkan = (high.rolling(tenkan_period).max() + low.rolling(tenkan_period).min()) / 2
-    kijun = (high.rolling(kijun_period).max() + low.rolling(kijun_period).min()) / 2
-    sa_raw = ((tenkan + kijun) / 2).to_numpy(dtype=float)
-    sb_raw = ((high.rolling(senkou_b_period).max() + low.rolling(senkou_b_period).min()) / 2).to_numpy(dtype=float)
+    tk_h = high.rolling(tenkan_period).max().to_numpy(dtype=float)
+    tk_l = low.rolling(tenkan_period).min().to_numpy(dtype=float)
+    kj_h = high.rolling(kijun_period).max().to_numpy(dtype=float)
+    kj_l = low.rolling(kijun_period).min().to_numpy(dtype=float)
+    sa_raw = (tk_h + tk_l + kj_h + kj_l) / 4.0
+    sb_raw = (high.rolling(senkou_b_period).max().to_numpy(dtype=float) + low.rolling(senkou_b_period).min().to_numpy(dtype=float)) / 2.0
     n = len(sa_raw)
     k = kijun_period
     senkou_a = np.full(n, np.nan)
