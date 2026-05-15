@@ -28,12 +28,19 @@ def notion_enabled() -> bool:
     return bool(os.getenv("NOTION_TOKEN") and os.getenv("NOTION_DATABASE_ID"))
 
 
+_notion_headers_cache: dict[str, str] = {}
+
+
 def _headers() -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {os.getenv('NOTION_TOKEN', '').strip()}",
-        "Content-Type": "application/json",
-        "Notion-Version": NOTION_VERSION,
-    }
+    if not _notion_headers_cache:
+        token = os.getenv("NOTION_TOKEN", "").strip()
+        if token:
+            _notion_headers_cache.update({
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Notion-Version": NOTION_VERSION,
+            })
+    return _notion_headers_cache
 
 
 def _rt(content: str) -> list[dict]:

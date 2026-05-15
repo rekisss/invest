@@ -296,22 +296,24 @@ def prepare_stock_signals(
     merged["mfi_strong"] = merged["mfi14"] > 50
 
     # ── Candlestick filters (compute numpy arrays once; reuse for ichimoku) ──
-    _close_arr = merged["close"].to_numpy()
-    _open_arr = merged["open"].to_numpy()
+    _close_arr = merged["close"].to_numpy(dtype=float)
+    _open_arr = merged["open"].to_numpy(dtype=float)
+    _high_arr = merged["high"].to_numpy(dtype=float)
     body = np.abs(_close_arr - _open_arr)
-    upper_shadow = merged["high"].to_numpy() - np.maximum(_close_arr, _open_arr)
+    upper_shadow = _high_arr - np.maximum(_close_arr, _open_arr)
 
     # Price above Ichimoku cloud: bullish cloud confirmation (close > both senkou spans)
     cloud_top = np.fmax(merged["ichi_senkou_a"].to_numpy(), merged["ichi_senkou_b"].to_numpy())
     merged["above_ichimoku_cloud"] = _close_arr > cloud_top
-    _prev_close_arr = merged["prev_close"].to_numpy()
+    _prev_close_arr = merged["prev_close"].to_numpy(dtype=float)
+    _prev_vol_ratio_arr = merged["prev_volume_ratio"].to_numpy(dtype=float)
     merged["long_upper_shadow"] = (body > 0) & (upper_shadow > body * 2)
     merged["open_high_close_low"] = (
         (_open_arr > _prev_close_arr * 1.02)
         & (_close_arr < _open_arr)
     )
     merged["gap_chase_after_blowout"] = (
-        (merged["prev_volume_ratio"] > config.volume_multiplier)
+        (_prev_vol_ratio_arr > config.volume_multiplier)
         & ((_open_arr / _prev_close_arr) - 1 > 0.03)
     )
     merged["earnings_blocked"] = _build_earnings_blocker(
@@ -320,7 +322,8 @@ def prepare_stock_signals(
 
     # Compute entry condition array once — shared for condition_count, entry_signal, and reason labels
     _entry_arr = merged[_ENTRY_COLS].to_numpy(dtype=bool)
-    merged["condition_count"] = _entry_arr.sum(axis=1)
+    _cond_count = _entry_arr.sum(axis=1)
+    merged["condition_count"] = _cond_count
 
     merged["skip_trade"] = (
         merged["long_upper_shadow"] | merged["open_high_close_low"]
@@ -330,11 +333,17 @@ def prepare_stock_signals(
     merged["entry_signal"] = _entry_arr[:, :_n_hard].all(axis=1) & ~merged["skip_trade"].to_numpy(dtype=bool)
 
     _soft_matrix = merged[_SOFT_SCORE_COLS].to_numpy(dtype=np.float64)
+    _rs5d = merged["relative_strength_5d"].to_numpy(dtype=float, copy=True)
+    np.nan_to_num(_rs5d, nan=-99.0, copy=False)
+    _vol_ratio = merged["volume_ratio"].to_numpy(dtype=float, copy=True)
+    np.nan_to_num(_vol_ratio, nan=0.0, copy=False)
+    _adx14 = merged["adx14"].to_numpy(dtype=float, copy=True)
+    np.nan_to_num(_adx14, nan=0.0, copy=False)
     merged["entry_score"] = (
-        merged["condition_count"] * 100
-        + merged["relative_strength_5d"].fillna(-99) * 100
-        + merged["volume_ratio"].fillna(0) * 10
-        + merged["adx14"].fillna(0)
+        _cond_count.astype(np.float64) * 100
+        + _rs5d * 100
+        + _vol_ratio * 10
+        + _adx14
         + _soft_matrix @ _SOFT_SCORE_WEIGHTS
     )
 
