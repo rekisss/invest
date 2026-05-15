@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import asdict, dataclass
 
+import numpy as np
 import pandas as pd
 
 from strategy import StrategyConfig
@@ -52,6 +53,17 @@ def run_backtest(
         if not frame.empty
     }
 
+    # Precompute frozensets of entry-signal dates and score dicts to avoid
+    # pandas .at[] calls in the inner hot loop (100 stocks × 420 days = 42k calls saved)
+    _entry_dates: dict[str, frozenset] = {
+        sid: frozenset(frame.index[frame["entry_signal"].to_numpy(dtype=bool)])
+        for sid, frame in prepared.items()
+    }
+    _entry_scores: dict[str, dict] = {
+        sid: frame["entry_score"].to_dict()
+        for sid, frame in prepared.items()
+    }
+
     cash = float(initial_capital)
     positions: dict[str, Position] = {}
     fills: list[FillRecord] = []
@@ -59,6 +71,12 @@ def run_backtest(
     notes: list[str] = []
     next_position_id = 1
     pending_entries: list[tuple[float, str, str]] = []  # (score, stock_id, name) — filled next-day open
+
+    # Precompute constant fee factors (avoids repeated arithmetic in hot loop)
+    _buy_slip = 1.0 + config.slippage_pct
+    _sell_slip = 1.0 - config.slippage_pct
+    _brokerage = 1.0 + config.brokerage_fee_pct
+    _sell_factor = 1.0 - config.brokerage_fee_pct - config.transaction_tax_pct
 
     if config.next_day_fill:
         notes.append("next_day_fill=True: entries are filled at the next trading day's open price, not signal-day close.")
@@ -79,11 +97,11 @@ def run_backtest(
                 frame = prepared.get(stock_id)
                 if frame is None or date not in frame.index:
                     continue
-                sector = str(frame.loc[date, "industry_category"]) if "industry_category" in frame.columns else ""
+                sector = str(frame.at[date, "industry_category"]) if "industry_category" in frame.columns else ""
                 if config.max_positions_per_sector > 0 and sector and _sector_count(positions, sector) >= config.max_positions_per_sector:
                     continue
-                price = float(frame.loc[date, "open"])
-                effective_buy = price * (1 + config.slippage_pct)
+                price = float(frame.at[date, "open"])
+                effective_buy = price * _buy_slip
                 risk_budget = current_equity * config.risk_per_trade
                 risk_per_share = effective_buy * config.stop_loss_pct
                 if risk_per_share <= 0:
@@ -93,7 +111,7 @@ def run_backtest(
                 quantity = int(min(shares_by_risk, shares_by_cash))
                 if quantity <= 0:
                     continue
-                atr_val = float(frame.loc[date, "atr14"]) if "atr14" in frame.columns and date in frame.index and pd.notna(frame.loc[date, "atr14"]) else 0.0
+                atr_val = float(frame.at[date, "atr14"]) if "atr14" in frame.columns and pd.notna(frame.at[date, "atr14"]) else 0.0
                 position = Position(
                     position_id=next_position_id,
                     stock_id=stock_id,
@@ -107,7 +125,7 @@ def run_backtest(
                     industry_category=sector,
                 )
                 positions[stock_id] = position
-                cash -= quantity * effective_buy * (1 + config.brokerage_fee_pct)
+                cash -= quantity * effective_buy * _brokerage
                 next_position_id += 1
                 opened_today += 1
             pending_entries.clear()
@@ -117,9 +135,9 @@ def run_backtest(
         for stock_id, frame in prepared.items():
             if date not in frame.index:
                 continue
-            row = frame.loc[date]
 
             if stock_id in positions:
+                row = frame.loc[date]
                 position = positions[stock_id]
                 close_price = float(row["close"])
                 position.peak_price = max(position.peak_price, close_price)
@@ -148,10 +166,10 @@ def run_backtest(
 
                 if not position.partial_taken and close_price >= position.entry_price * (1 + config.take_profit_pct):
                     sell_qty = max(1, position.quantity // 2)
-                    effective_sell = close_price * (1 - config.slippage_pct)
+                    effective_sell = close_price * _sell_slip
                     fill = _close_quantity(position, sell_qty, effective_sell, date, "take_profit_10pct_partial")
                     fills.append(fill)
-                    cash += sell_qty * effective_sell * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
+                    cash += sell_qty * effective_sell * _sell_factor
                     position.quantity -= sell_qty
                     position.partial_taken = True
 
@@ -160,15 +178,15 @@ def run_backtest(
 
                 if exit_reasons:
                     sell_qty = position.quantity
-                    effective_sell = close_price * (1 - config.slippage_pct)
+                    effective_sell = close_price * _sell_slip
                     fill = _close_quantity(position, sell_qty, effective_sell, date, "|".join(exit_reasons))
                     fills.append(fill)
-                    cash += sell_qty * effective_sell * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
+                    cash += sell_qty * effective_sell * _sell_factor
                     del positions[stock_id]
                     continue
 
-            if stock_id not in positions and bool(row["entry_signal"]):
-                daily_candidates.append((float(row["entry_score"]), stock_id, row))
+            elif date in _entry_dates[stock_id]:
+                daily_candidates.append((_entry_scores[stock_id][date], stock_id, frame.loc[date]))
 
         if config.next_day_fill:
             for score, stock_id, row in daily_candidates:
@@ -192,7 +210,7 @@ def run_backtest(
                     continue
 
                 price = float(row["close"])
-                effective_buy = price * (1 + config.slippage_pct)
+                effective_buy = price * _buy_slip
                 risk_budget = current_equity * config.risk_per_trade
                 risk_per_share = effective_buy * config.stop_loss_pct
                 if risk_per_share <= 0:
@@ -218,16 +236,17 @@ def run_backtest(
                     industry_category=sector,
                 )
                 positions[stock_id] = position
-                cash -= quantity * effective_buy * (1 + config.brokerage_fee_pct)
+                cash -= quantity * effective_buy * _brokerage
                 next_position_id += 1
                 opened_today += 1
 
+        mkt_val = positions_market_value(positions, prepared, date)
         equity_rows.append(
             {
                 "date": date,
                 "cash": cash,
-                "market_value": positions_market_value(positions, prepared, date),
-                "equity": portfolio_equity(cash, positions, prepared, date),
+                "market_value": mkt_val,
+                "equity": cash + mkt_val,
                 "positions": len(positions),
             }
         )
@@ -236,10 +255,10 @@ def run_backtest(
         final_date = master_dates[-1]
         for stock_id, position in list(positions.items()):
             close_price = _get_close_price(prepared[stock_id], final_date)
-            effective_sell = close_price * (1 - config.slippage_pct)
+            effective_sell = close_price * _sell_slip
             fill = _close_quantity(position, position.quantity, effective_sell, final_date, "final_liquidation")
             fills.append(fill)
-            cash += position.quantity * effective_sell * (1 - config.brokerage_fee_pct - config.transaction_tax_pct)
+            cash += position.quantity * effective_sell * _sell_factor
             del positions[stock_id]
         equity_rows[-1]["cash"] = cash
         equity_rows[-1]["market_value"] = 0.0
@@ -254,15 +273,10 @@ def run_backtest(
     benchmark_return: float | None = None
 
     # Compute TAIEX benchmark for comparison
-    market_aligned = (
-        pd.to_datetime(market_df["date"])
-        .reset_index(drop=True)
-        .rename("date")
-        .to_frame()
-        .assign(market_close=pd.to_numeric(market_df["close"].values, errors="coerce"))
-        .dropna(subset=["market_close"])
-        .set_index("date")
-    )
+    market_aligned = pd.DataFrame({
+        "date": pd.to_datetime(market_df["date"].values),
+        "market_close": pd.to_numeric(market_df["close"].values, errors="coerce"),
+    }).dropna(subset=["market_close"]).set_index("date")
     if not equity_curve.empty and not market_aligned.empty:
         eq_dates = pd.to_datetime(equity_curve["date"])
         first_date = eq_dates.iloc[0]
@@ -298,7 +312,7 @@ def _sector_count(positions: dict[str, "Position"], sector: str) -> int:
 
 def _get_close_price(frame: pd.DataFrame, date: pd.Timestamp) -> float:
     if date in frame.index:
-        return float(frame.loc[date, "close"])
+        return float(frame.at[date, "close"])
     prior = frame.loc[:date]
     if prior.empty:
         raise KeyError(f"No close price for {date}")
@@ -368,7 +382,8 @@ def summarize_trades(fill_frame: pd.DataFrame) -> pd.DataFrame:
             ]
         )
 
-    grouped = fill_frame.groupby("position_id", as_index=False).agg(
+    fill_frame2 = fill_frame.assign(weighted_exit=fill_frame["exit_price"] * fill_frame["quantity"])
+    grouped = fill_frame2.groupby("position_id", as_index=False).agg(
         stock_id=("stock_id", "first"),
         name=("name", "first"),
         entry_date=("entry_date", "first"),
@@ -376,18 +391,15 @@ def summarize_trades(fill_frame: pd.DataFrame) -> pd.DataFrame:
         entry_price=("entry_price", "first"),
         quantity=("quantity", "sum"),
         pnl=("pnl", "sum"),
-    )
-    weighted_exit = (
-        fill_frame.assign(weighted_exit=fill_frame["exit_price"] * fill_frame["quantity"])
-        .groupby("position_id", as_index=False)
-        .agg(weighted_exit=("weighted_exit", "sum"), quantity=("quantity", "sum"))
+        weighted_exit=("weighted_exit", "sum"),
     )
     reasons = (
         fill_frame.groupby("position_id")["reason"]
-        .apply(lambda values: " | ".join(values.astype(str)))
-        .reset_index(name="exit_reasons")
+        .agg(" | ".join)
+        .rename("exit_reasons")
+        .reset_index()
     )
-    summary = grouped.merge(weighted_exit, on=["position_id", "quantity"]).merge(reasons, on="position_id")
+    summary = grouped.merge(reasons, on="position_id")
     summary["avg_exit_price"] = summary["weighted_exit"] / summary["quantity"]
     summary["return_pct"] = summary["avg_exit_price"] / summary["entry_price"] - 1
     summary = summary.drop(columns=["weighted_exit"])
@@ -402,38 +414,46 @@ def compute_performance_metrics(
     if equity_curve.empty:
         return {}
 
-    equity = equity_curve["equity"].astype(float)
-    daily_returns = equity.pct_change().fillna(0)
-    running_max = equity.cummax()
-    drawdown = equity / running_max - 1
-    max_dd = float(drawdown.min())
+    equity_arr = equity_curve["equity"].to_numpy(dtype=float)
+    _prev_eq = np.empty_like(equity_arr); _prev_eq[0] = equity_arr[0]; _prev_eq[1:] = equity_arr[:-1]
+    dr_arr = np.where(_prev_eq != 0, equity_arr / _prev_eq - 1, 0.0)
+    running_max_arr = np.maximum.accumulate(equity_arr)
+    max_dd = float(np.min(np.where(running_max_arr != 0, equity_arr / running_max_arr - 1, 0.0)))
 
     years = max((equity_curve["date"].iloc[-1] - equity_curve["date"].iloc[0]).days / 365.25, 1 / 365.25)
-    ending_value = float(equity.iloc[-1])
+    ending_value = float(equity_arr[-1])
     cagr = (ending_value / initial_capital) ** (1 / years) - 1
 
-    sharpe = 0.0
-    if daily_returns.std(ddof=0) > 0:
-        sharpe = (daily_returns.mean() / daily_returns.std(ddof=0)) * (252 ** 0.5)
+    _mean_ret = float(dr_arr.mean())
+    _std_ret = float(dr_arr.std(ddof=0))
+    _sqrt252 = 252 ** 0.5
+    sharpe = (_mean_ret / _std_ret) * _sqrt252 if _std_ret > 0 else 0.0
 
     sortino = 0.0
-    downside = daily_returns[daily_returns < 0]
-    if len(downside) > 0 and downside.std(ddof=0) > 0:
-        sortino = (daily_returns.mean() / downside.std(ddof=0)) * (252 ** 0.5)
+    downside = dr_arr[dr_arr < 0]
+    if len(downside) > 0:
+        _down_std = float(downside.std(ddof=0))
+        if _down_std > 0:
+            sortino = (_mean_ret / _down_std) * _sqrt252
 
     calmar = (cagr / abs(max_dd)) if max_dd < 0 else float("inf")
 
-    gross_profit = float(trade_summary.loc[trade_summary["pnl"] > 0, "pnl"].sum()) if not trade_summary.empty else 0.0
-    gross_loss = float(trade_summary.loc[trade_summary["pnl"] < 0, "pnl"].sum()) if not trade_summary.empty else 0.0
+    if not trade_summary.empty:
+        _win_mask = trade_summary["pnl"] > 0
+        _loss_mask = trade_summary["pnl"] < 0
+        gross_profit = float(trade_summary.loc[_win_mask, "pnl"].sum())
+        gross_loss = float(trade_summary.loc[_loss_mask, "pnl"].sum())
+        trades = int(len(trade_summary))
+        wins = int(_win_mask.sum())
+        losses = trades - wins
+        avg_win_pct = float(trade_summary.loc[_win_mask, "return_pct"].mean() * 100) if wins > 0 else 0.0
+        avg_loss_pct = float(trade_summary.loc[_loss_mask, "return_pct"].mean() * 100) if losses > 0 else 0.0
+    else:
+        gross_profit = gross_loss = 0.0
+        trades = wins = losses = 0
+        avg_win_pct = avg_loss_pct = 0.0
     profit_factor = gross_profit / abs(gross_loss) if gross_loss != 0 else float("inf") if gross_profit > 0 else 0.0
-
-    trades = int(len(trade_summary))
-    wins = int((trade_summary["pnl"] > 0).sum()) if not trade_summary.empty else 0
-    losses = trades - wins
     win_rate = wins / trades if trades else 0.0
-
-    avg_win_pct = float(trade_summary.loc[trade_summary["pnl"] > 0, "return_pct"].mean() * 100) if wins > 0 else 0.0
-    avg_loss_pct = float(trade_summary.loc[trade_summary["pnl"] < 0, "return_pct"].mean() * 100) if losses > 0 else 0.0
     expectancy = (win_rate * avg_win_pct / 100 + (1 - win_rate) * avg_loss_pct / 100) if trades else 0.0
 
     avg_hold_days = 0.0
@@ -468,19 +488,23 @@ def compute_performance_metrics(
 
 
 def _max_consecutive(mask: pd.Series) -> int:
-    positive = mask.astype(int)
-    groups = (~mask).cumsum()
-    streak_lengths = positive.groupby(groups).cumsum()
-    return int(streak_lengths.max()) if len(streak_lengths) else 0
+    arr = mask.to_numpy(dtype=np.int8)
+    if not arr.any():
+        return 0
+    padded = np.concatenate([[0], arr, [0]])
+    d = np.diff(padded)
+    starts = np.where(d > 0)[0]
+    ends = np.where(d < 0)[0]
+    return int((ends - starts).max())
 
 
 def compute_yearly_performance(equity_curve: pd.DataFrame) -> pd.DataFrame:
     if equity_curve.empty:
         return pd.DataFrame(columns=["year", "starting_equity", "ending_equity", "pnl", "return_pct"])
 
-    frame = equity_curve.copy()
-    frame["year"] = pd.to_datetime(frame["date"]).dt.year
-    yearly = frame.groupby("year", as_index=False).agg(
+    yearly = equity_curve.groupby(
+        pd.to_datetime(equity_curve["date"]).dt.year.rename("year"), as_index=False
+    ).agg(
         starting_equity=("equity", "first"),
         ending_equity=("equity", "last"),
     )

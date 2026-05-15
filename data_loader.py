@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import os
 import random
+import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
 from pandas.errors import EmptyDataError, ParserError
 
 
@@ -19,16 +21,20 @@ FINMIND_API_URL = "https://api.finmindtrade.com/api/v4/data"
 class FinMindClient:
     cache_dir: Path = Path("cache")
     timeout: int = 90
+    _session: requests.Session = field(default_factory=requests.Session, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        _adapter = HTTPAdapter(pool_connections=4, pool_maxsize=16)
+        self._session.mount("https://", _adapter)
+        self._session.mount("http://", _adapter)
+        token = os.getenv("FINMIND_TOKEN", "").strip()
+        self._auth_headers_cache: dict[str, str] = (
+            {"Authorization": f"Bearer {token}"} if token else {}
+        )
 
     def _auth_headers(self) -> dict[str, str]:
-        headers: dict[str, str] = {}
-        token = os.getenv("FINMIND_TOKEN", "").strip()
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-        return headers
+        return self._auth_headers_cache
 
     def _cache_path(self, dataset: str, key_parts: Iterable[str]) -> Path:
         safe_name = "_".join(str(part).replace("/", "-") for part in key_parts if str(part))
@@ -46,12 +52,12 @@ class FinMindClient:
             ]
         )
         cache_fresh = False
-        if use_cache and cache_path.exists():
-            if cache_ttl_days <= 0:
-                cache_fresh = True
-            else:
-                age_days = (time.time() - cache_path.stat().st_mtime) / 86400
-                cache_fresh = age_days < cache_ttl_days
+        if use_cache:
+            try:
+                mtime = cache_path.stat().st_mtime
+                cache_fresh = cache_ttl_days <= 0 or (time.time() - mtime) / 86400 < cache_ttl_days
+            except FileNotFoundError:
+                pass
         if cache_fresh:
             try:
                 return pd.read_csv(cache_path)
@@ -59,12 +65,14 @@ class FinMindClient:
                 cache_path.unlink(missing_ok=True)
 
         request_params: dict[str, str] = {"dataset": dataset}
-        request_params.update({key: value for key, value in params.items() if value is not None})
+        for key, value in params.items():
+            if value is not None:
+                request_params[key] = value
 
         last_error: Exception | None = None
         for attempt in range(3):
             try:
-                response = requests.get(
+                response = self._session.get(
                     FINMIND_API_URL,
                     headers=self._auth_headers(),
                     params=request_params,
@@ -129,17 +137,20 @@ def fetch_stock_prices(
     if frame.empty:
         return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume", "amount"])
 
-    renamed = frame.rename(
-        columns={
-            "max": "high",
-            "min": "low",
-            "Trading_Volume": "volume",
-            "Trading_money": "amount",
-        }
-    )
+    _src_cols = [c for c in ["date", "open", "max", "min", "close", "Trading_Volume", "Trading_money"] if c in frame.columns]
+    renamed = frame[_src_cols].rename(columns={
+        "max": "high", "min": "low",
+        "Trading_Volume": "volume", "Trading_money": "amount",
+    })
     keep_columns = ["date", "open", "high", "low", "close", "volume", "amount"]
+    missing = [c for c in keep_columns if c not in renamed.columns]
+    if missing:
+        return pd.DataFrame(columns=keep_columns)
     renamed = renamed[keep_columns].copy()
     renamed["date"] = pd.to_datetime(renamed["date"])
+    numeric_cols = ["open", "high", "low", "close", "volume", "amount"]
+    renamed[numeric_cols] = renamed[numeric_cols].apply(pd.to_numeric, errors="coerce")
+    renamed = renamed.dropna(subset=["close"])
     renamed = renamed.sort_values("date").drop_duplicates(subset=["date"]).reset_index(drop=True)
     return renamed
 
@@ -163,8 +174,7 @@ def fetch_stock_kbar(
     frame["date"] = pd.to_datetime(frame["date"])
     frame["minute"] = frame["minute"].astype(str)
     numeric_columns = ["open", "high", "low", "close", "volume"]
-    for column in numeric_columns:
-        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    frame[numeric_columns] = frame[numeric_columns].apply(pd.to_numeric, errors="coerce")
     frame = frame.sort_values(["date", "minute"]).reset_index(drop=True)
     return frame
 
@@ -198,6 +208,10 @@ _INSTITUTION_PATTERNS: dict[str, list[str]] = {
     "invest_trust_net": ["Investment_Trust", "投信"],
     "dealer_net": ["Dealer", "自營"],
 }
+_INSTITUTION_REGEXES: dict[str, re.Pattern[str]] = {
+    col: re.compile("|".join(pats), re.IGNORECASE)
+    for col, pats in _INSTITUTION_PATTERNS.items()
+}
 
 
 def fetch_institutional_data(
@@ -223,30 +237,17 @@ def fetch_institutional_data(
     frame["net"] = frame["buy"] - frame["sell"]
     name_col = frame["name"].astype(str)
 
-    result = frame[["date"]].drop_duplicates().sort_values("date").copy()
-    for col, patterns in _INSTITUTION_PATTERNS.items():
-        mask = name_col.str.contains("|".join(patterns), case=False, na=False)
+    result = frame["date"].drop_duplicates().sort_values().rename("date").to_frame(index=False)
+    for col, regex in _INSTITUTION_REGEXES.items():
+        mask = name_col.str.contains(regex, na=False)
         if mask.any():
             grouped = frame.loc[mask].groupby("date", as_index=False)["net"].sum().rename(columns={"net": col})
             result = result.merge(grouped, on="date", how="left")
         else:
             result[col] = 0.0
-    for col in ["foreign_net", "invest_trust_net", "dealer_net"]:
-        result[col] = result[col].fillna(0)
+    _net_cols = ["foreign_net", "invest_trust_net", "dealer_net"]
+    result[_net_cols] = result[_net_cols].fillna(0)
     return result.sort_values("date").reset_index(drop=True)
-
-
-def fetch_foreign_investor_data(
-    client: FinMindClient,
-    stock_id: str,
-    start_date: str,
-    end_date: str,
-) -> pd.DataFrame:
-    """Deprecated: use fetch_institutional_data instead."""
-    df = fetch_institutional_data(client, stock_id, start_date, end_date)
-    if df.empty:
-        return pd.DataFrame(columns=["date", "foreign_net"])
-    return df[["date", "foreign_net"]]
 
 
 def clean_cache(cache_dir: Path | str, max_age_days: int = 30) -> int:

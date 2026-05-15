@@ -6,6 +6,11 @@ import time
 from typing import Iterable
 
 import requests
+from requests.adapters import HTTPAdapter
+
+_session = requests.Session()
+_session.mount("https://", HTTPAdapter(pool_connections=1, pool_maxsize=4))
+_session.mount("http://", HTTPAdapter(pool_connections=1, pool_maxsize=4))
 
 
 def split_message(message: str, max_length: int = 1800) -> list[str]:
@@ -27,7 +32,7 @@ def split_message(message: str, max_length: int = 1800) -> list[str]:
 def _post_with_retry(url: str, payload: dict, max_attempts: int = 3) -> None:
     for attempt in range(max_attempts):
         try:
-            resp = requests.post(url, json=payload, timeout=30)
+            resp = _session.post(url, json=payload, timeout=30)
             if resp.status_code == 429:
                 retry_after = float(resp.json().get("retry_after", 1))
                 time.sleep(retry_after)

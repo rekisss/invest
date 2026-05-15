@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import math
 import os
 import time
 from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
+
+_session = requests.Session()
+_session.mount("https://", HTTPAdapter(pool_connections=1, pool_maxsize=4))
+_session.mount("http://", HTTPAdapter(pool_connections=1, pool_maxsize=4))
 
 
 def confidence_score(row: Any) -> int:
@@ -22,12 +28,19 @@ def notion_enabled() -> bool:
     return bool(os.getenv("NOTION_TOKEN") and os.getenv("NOTION_DATABASE_ID"))
 
 
+_notion_headers_cache: dict[str, str] = {}
+
+
 def _headers() -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {os.getenv('NOTION_TOKEN', '').strip()}",
-        "Content-Type": "application/json",
-        "Notion-Version": NOTION_VERSION,
-    }
+    if not _notion_headers_cache:
+        token = os.getenv("NOTION_TOKEN", "").strip()
+        if token:
+            _notion_headers_cache.update({
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Notion-Version": NOTION_VERSION,
+            })
+    return _notion_headers_cache
 
 
 def _rt(content: str) -> list[dict]:
@@ -44,7 +57,7 @@ def _query_existing_for_date(database_id: str, date: str) -> dict[str, str]:
     result: dict[str, str] = {}
     try:
         while True:
-            resp = requests.post(url, headers=_headers(), json=payload, timeout=30)
+            resp = _session.post(url, headers=_headers(), json=payload, timeout=30)
             if not resp.ok:
                 return result
             data = resp.json()
@@ -65,7 +78,7 @@ def _query_existing_for_date(database_id: str, date: str) -> dict[str, str]:
 
 
 def _get_title_property_name(database_id: str) -> str:
-    resp = requests.get(f"{NOTION_API}/databases/{database_id}", headers=_headers(), timeout=30)
+    resp = _session.get(f"{NOTION_API}/databases/{database_id}", headers=_headers(), timeout=30)
     if not resp.ok:
         return "股票名稱"
     for name, prop in resp.json().get("properties", {}).items():
@@ -103,8 +116,10 @@ def _setup_database(database_id: str) -> None:
         "狀態": {"select": {}},
         "優先度": {"select": {}},
         "市場氛圍": {"select": {}},
+        "日線趨勢%": {"number": {"format": "number"}},
+        "月線趨勢%": {"number": {"format": "number"}},
     }
-    requests.patch(
+    _session.patch(
         f"{NOTION_API}/databases/{database_id}",
         headers=_headers(),
         json={"properties": props},
@@ -133,14 +148,24 @@ def _news_sentiment(summary: dict[str, Any]) -> tuple[str, str]:
 def recommend_observation_period(row: Any, is_candidate: bool = True) -> str:
     if not is_candidate:
         return "訊號尚未完整，觀察 10–15 個交易日等待條件齊備"
-    score = float(row.get("entry_score", 0) or 0)
     adx = float(row.get("adx14", 0) or 0)
-    if score >= 900 and adx >= 25:
-        return "強勢訊號，3–5 個交易日內留意回測進場機會"
-    elif score >= 800:
-        return "訊號良好，5–7 個交易日確認支撐後進場"
+    s20 = float(row.get("lr_slope_20", 0) or 0)
+    s60 = float(row.get("lr_slope_60", 0) or 0)
+    if math.isnan(s20):
+        s20 = 0.0
+    if math.isnan(s60):
+        s60 = 0.0
+    both_up = s20 > 0.05 and s60 > 0.03
+    if both_up and adx >= 25:
+        return "日月線同向強勢，建議 3–5 個交易日內留意回測進場機會"
+    elif both_up and adx >= 20:
+        return "日月線同向上升，可觀察 5–7 個交易日確認支撐後進場"
+    elif s20 > 0.05 and adx >= 20:
+        return "短線上升但月線偏弱，謹慎觀察 5–7 個交易日"
+    elif s20 > 0 and s60 > 0:
+        return "緩步上升趨勢，可觀察 7–10 個交易日等待確認"
     else:
-        return "訊號普通，7–10 個交易日等待更明確方向"
+        return "趨勢不明確，觀察 10–15 個交易日等待方向確立"
 
 
 def sync_scan_results(
@@ -190,6 +215,8 @@ def sync_scan_results(
         vol_ratio = float(row.get("volume_ratio", 0) or 0)
         atr = float(row.get("atr14", 0) or 0)
         stop_loss = round(close - 2 * atr, 2) if atr > 0 and close > 0 else (round(close * 0.95, 2) if close > 0 else 0.0)
+        lr20 = round(float(row.get("lr_slope_20") or 0), 3)
+        lr60 = round(float(row.get("lr_slope_60") or 0), 3)
         confidence = confidence_score(row)
         obs = recommend_observation_period(row, is_candidate=(row_type == "候選"))
         news_info = news_map.get(stock_id, {})
@@ -218,6 +245,8 @@ def sync_scan_results(
             "相對強度": {"number": round(rs5d * 100, 2)},
             "成交量比": {"number": round(vol_ratio, 2)},
             "參考停損價": {"number": stop_loss},
+            "日線趨勢%": {"number": lr20},
+            "月線趨勢%": {"number": lr60},
             "觀察建議": {"rich_text": _rt(obs)},
             "新聞情緒": {"select": {"name": sentiment_label}},
             "新聞摘要": {"rich_text": _rt(news_summary)},
@@ -230,14 +259,14 @@ def sync_scan_results(
         for attempt in range(3):
             try:
                 if page_id:
-                    resp = requests.patch(
+                    resp = _session.patch(
                         f"{NOTION_API}/pages/{page_id}",
                         headers=_headers(),
                         json={"properties": properties},
                         timeout=30,
                     )
                 else:
-                    resp = requests.post(
+                    resp = _session.post(
                         f"{NOTION_API}/pages",
                         headers=_headers(),
                         json={"parent": {"database_id": database_id}, "properties": properties},

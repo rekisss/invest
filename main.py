@@ -8,7 +8,16 @@ import sys
 import time
 from typing import Any
 
-from datetime import timezone, timedelta
+# 自動載入專案目錄的 .env 檔案（若存在）
+_env_path = Path(__file__).parent / ".env"
+if _env_path.exists():
+    for _line in _env_path.read_text(encoding="utf-8").splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _, _v = _line.partition("=")
+            os.environ.setdefault(_k.strip(), _v.strip())
+
+from datetime import datetime, timezone, timedelta
 
 import pandas as pd
 
@@ -44,8 +53,6 @@ _CST = timezone(timedelta(hours=8))
 
 
 def _cst_now(fmt: str = "%H:%M") -> str:
-    """Return current time in CST (UTC+8) as a formatted string."""
-    from datetime import datetime
     return datetime.now(_CST).strftime(fmt)
 
 
@@ -329,7 +336,7 @@ def _trend_block(row: Any) -> str:
     else:
         obs = "觀察 **1–2 週**"
 
-    return f"📉 日線 `{s20:+.2f}%/d` {d_arrow} {d_desc} ｜ {m_part}\n⏳ {obs}"
+    return f"📊 日線 `{s20:+.2f}%/d` {d_arrow} {d_desc} ｜ {m_part}\n⏳ {obs}"
 
 
 def _trend_label(row: Any) -> str:
@@ -382,6 +389,22 @@ def collect_signals(
             print(f"[warn] skipped {stock['stock_id']}: {error}", file=sys.stderr)
             return None
 
+    _signal_cols = [
+        "date", "stock_id", "name", "industry_category",
+        "open", "high", "low", "close",
+        "entry_signal", "entry_reason", "skip_trade", "skip_reason",
+        "base_exit_signal", "base_exit_reason",
+        "condition_count", "entry_score",
+        "relative_strength_5d", "volume_ratio", "volume_ma20",
+        "rsi14", "adx14", "atr14",
+        "foreign_buy_streak", "invest_trust_streak",
+        "stoch_k", "stoch_d", "bb_pct_b", "bb_bandwidth",
+        "obv_uptrend", "bb_squeeze_breakout", "breakout_volume_confirm",
+        "dealer_buy_streak", "dealer_buy_3d",
+        "williams_r", "cci20", "mfi14", "mfi_strong", "above_ichimoku_cloud",
+        "lr_slope_20", "lr_slope_60",
+    ]
+    _signal_cols_present: list[str] = []  # resolved on first result
     stock_records = stock_list.to_dict("records")
     total = len(stock_records)
     done = 0
@@ -396,22 +419,9 @@ def collect_signals(
                 continue
             stock_id, signal_frame = result
             signals_by_stock[stock_id] = signal_frame
-            _signal_cols = [
-                "date", "stock_id", "name", "industry_category",
-                "open", "high", "low", "close",
-                "entry_signal", "entry_reason", "skip_trade", "skip_reason",
-                "base_exit_signal", "base_exit_reason",
-                "condition_count", "entry_score",
-                "relative_strength_5d", "volume_ratio",
-                "rsi14", "adx14", "atr14",
-                "foreign_buy_streak", "invest_trust_streak",
-                "stoch_k", "stoch_d", "bb_pct_b", "bb_bandwidth",
-                "obv_uptrend", "bb_squeeze_breakout", "breakout_volume_confirm",
-                "dealer_buy_streak", "dealer_buy_3d",
-                "williams_r", "cci20", "mfi14", "mfi_strong", "above_ichimoku_cloud",
-            ]
-            _signal_cols_present = [c for c in _signal_cols if c in signal_frame.columns]
-            signal_frames.append(signal_frame[_signal_cols_present].copy())
+            if not _signal_cols_present:
+                _signal_cols_present = [c for c in _signal_cols if c in signal_frame.columns]
+            signal_frames.append(signal_frame[_signal_cols_present])
     return signals_by_stock, signal_frames
 
 
@@ -509,16 +519,16 @@ def format_scan_message_rich(
     lines.append("**每日候選**")
     for _, row in candidates.head(6).iterrows():
         close = float(row["close"])
-        atr = float(row["atr14"]) if "atr14" in row and pd.notna(row.get("atr14")) else None
+        atr = float(row["atr14"]) if pd.notna(row.get("atr14")) else None
         entry_zone, stop, target, rr = _entry_stop_target(close, atr)
         confidence = _confidence_score(row)
         cond_count = int(row["condition_count"])
         price_tag = _low_price_tag(row.get("close"))
         price_note = f" `{price_tag}`" if price_tag else ""
         brief = _news_brief(str(row["stock_id"]), news_map)
-        stoch_k = float(row["stoch_k"]) if "stoch_k" in row and pd.notna(row.get("stoch_k")) else None
+        stoch_k = float(row["stoch_k"]) if pd.notna(row.get("stoch_k")) else None
         kd_txt = f" | KD `{stoch_k:.0f}`" if stoch_k is not None else ""
-        mfi_val = float(row["mfi14"]) if "mfi14" in row and pd.notna(row.get("mfi14")) else None
+        mfi_val = float(row["mfi14"]) if pd.notna(row.get("mfi14")) else None
         mfi_txt = f" | MFI `{mfi_val:.0f}`" if mfi_val is not None else ""
         invest_streak = int(row.get("invest_trust_streak", 0) or 0)
         invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
@@ -572,11 +582,11 @@ def format_hybrid_message_rich(
     if not watchlist.empty:
         lines.extend(["", "**Step 2｜近似觀察名單**"])
         for _, row in watchlist.head(5).iterrows():
-            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
+            close_value = row.get("close") if pd.notna(row.get("close")) else None
             close_text = f"`{float(close_value):.2f}`" if close_value is not None else "N/A"
             price_tag = _low_price_tag(close_value)
             price_note = f" `{price_tag}`" if price_tag else ""
-            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
+            score_value = row.get("condition_count") if pd.notna(row.get("condition_count")) else None
             score_text = f"`{int(score_value)}/23`" if score_value is not None else "manual"
             brief = _news_brief(str(row["stock_id"]), news_map)
             lines.append(
@@ -619,22 +629,29 @@ def detect_quote_events(
         previous_intraday = float(previous.get("intraday_pct") or 0)
         previous_volume = float(previous.get("volume") or 0)
 
+        row_dict: dict[str, object] | None = None  # lazy — only convert if an event fires
+
         if (pd.notna(high_value) and high_value > previous_high
                 and pd.notna(last_value) and last_value >= high_value * 0.998
                 and pd.notna(intraday_value) and intraday_value >= 0.015):
-            events.append({"symbol": symbol, "event_key": "breakout_high", "label": "突破盤中新高", "row": row.to_dict()})
+            row_dict = row_dict or row.to_dict()
+            events.append({"symbol": symbol, "event_key": "breakout_high", "label": "突破盤中新高", "row": row_dict})
         if pd.notna(intraday_value) and intraday_value >= rise_threshold and previous_intraday < rise_threshold:
-            events.append({"symbol": symbol, "event_key": "sharp_rise", "label": f"急拉 {intraday_value * 100:.2f}%", "row": row.to_dict()})
+            row_dict = row_dict or row.to_dict()
+            events.append({"symbol": symbol, "event_key": "sharp_rise", "label": f"急拉 {intraday_value * 100:.2f}%", "row": row_dict})
         if pd.notna(intraday_value) and intraday_value <= drop_threshold and previous_intraday > drop_threshold:
-            events.append({"symbol": symbol, "event_key": "sharp_drop", "label": f"急跌 {intraday_value * 100:.2f}%", "row": row.to_dict()})
+            row_dict = row_dict or row.to_dict()
+            events.append({"symbol": symbol, "event_key": "sharp_drop", "label": f"急跌 {intraday_value * 100:.2f}%", "row": row_dict})
 
         daily_baseline = (daily_volume_lookup or {}).get(symbol, 0)
         if daily_baseline > 0:
             if pd.notna(volume_value) and volume_value >= daily_baseline * volume_multiplier:
                 ratio = volume_value / daily_baseline
-                events.append({"symbol": symbol, "event_key": "volume_surge", "label": f"量能放大 x{ratio:.1f}（vs 日均）", "row": row.to_dict()})
+                row_dict = row_dict or row.to_dict()
+                events.append({"symbol": symbol, "event_key": "volume_surge", "label": f"量能放大 x{ratio:.1f}（vs 日均）", "row": row_dict})
         elif pd.notna(volume_value) and previous_volume > 0 and volume_value >= previous_volume * volume_multiplier:
-            events.append({"symbol": symbol, "event_key": "volume_surge", "label": f"量能放大 x{volume_value / previous_volume:.1f}", "row": row.to_dict()})
+            row_dict = row_dict or row.to_dict()
+            events.append({"symbol": symbol, "event_key": "volume_surge", "label": f"量能放大 x{volume_value / previous_volume:.1f}", "row": row_dict})
 
         next_state[symbol] = {
             "high": float(high_value) if pd.notna(high_value) else previous_high,
@@ -754,7 +771,16 @@ def format_daily_report_message(
         ok_rows = closing_quotes[closing_quotes["error"].isna()] if "error" in closing_quotes.columns else closing_quotes
         err_rows = closing_quotes[closing_quotes["error"].notna()] if "error" in closing_quotes.columns else pd.DataFrame()
         if ok_rows.empty and not err_rows.empty:
-            lines.extend(["", "**盤後報價對比**", "⚠️ Fugle API 無法取得報價（金鑰無效或未設定）"])
+            sample_err = str(err_rows["error"].iloc[0]) if not err_rows.empty else ""
+            if "401" in sample_err or "金鑰" in sample_err:
+                err_hint = "金鑰無效或未授權，請確認 FUGLE_API_KEY"
+            elif "403" in sample_err:
+                err_hint = "金鑰無此 API 權限，請升級方案"
+            elif sample_err:
+                err_hint = sample_err[:60]
+            else:
+                err_hint = "金鑰無效或未設定"
+            lines.extend(["", "**盤後報價對比**", f"⚠️ Fugle API 無法取得報價（{err_hint}）"])
         elif not ok_rows.empty:
             lines.extend(["", "**盤後報價對比**"])
             for _, row in ok_rows.iterrows():
@@ -807,8 +833,8 @@ def format_sponsor_message(
         lines.append("No full-match candidates today.")
     else:
         for _, row in candidates.head(5).iterrows():
-            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
-            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
+            close_value = row.get("close") if pd.notna(row.get("close")) else None
+            score_value = row.get("condition_count") if pd.notna(row.get("condition_count")) else None
             close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
             score_text = f"{int(score_value)}/23" if score_value is not None else "manual"
             lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
@@ -816,8 +842,8 @@ def format_sponsor_message(
     if not watchlist.empty:
         lines.extend(["", "Step 2: tracked symbols"])
         for _, row in watchlist.head(5).iterrows():
-            close_value = row["close"] if "close" in row and pd.notna(row["close"]) else None
-            score_value = row["condition_count"] if "condition_count" in row and pd.notna(row["condition_count"]) else None
+            close_value = row.get("close") if pd.notna(row.get("close")) else None
+            score_value = row.get("condition_count") if pd.notna(row.get("condition_count")) else None
             close_text = f"{float(close_value):.2f}" if close_value is not None else "N/A"
             score_text = f"{int(score_value)}/23" if score_value is not None else "manual"
             lines.append(f"- {row['stock_id']} {row['name']} | close {close_text} | score {score_text}")
@@ -840,12 +866,21 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
     candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
     latest_date = str(breadth.get("actual_date") or args.end)
 
-    # Apply minimum confidence filter for notifications
+    # Apply minimum confidence filter for notifications (vectorized)
     min_conf = getattr(args, "min_confidence", 0)
     notify_candidates = candidates
     if min_conf > 0 and not candidates.empty:
-        mask = candidates.apply(lambda r: _confidence_score(r) >= min_conf, axis=1)
-        notify_candidates = candidates[mask].copy()
+        cond_v = pd.to_numeric(candidates.get("condition_count", 0), errors="coerce").fillna(0)
+        adx_v = pd.to_numeric(candidates.get("adx14", 0), errors="coerce").fillna(0)
+        rs_v = pd.to_numeric(candidates.get("relative_strength_5d", 0), errors="coerce").fillna(0)
+        vol_v = pd.to_numeric(candidates.get("volume_ratio", 0), errors="coerce").fillna(0)
+        scores = (
+            (cond_v / 23 * 55).clip(0, 55)
+            + (adx_v / 40 * 20).clip(0, 20)
+            + (rs_v * 200).clip(0, 15)
+            + ((vol_v - 1) / 2 * 10).clip(0, 10)
+        ).astype(int).clip(0, 100)
+        notify_candidates = candidates[scores >= min_conf].copy()
 
     report_path = save_scan_report(args.output, candidates, watchlist, universe)
     news_map = {}
@@ -948,13 +983,14 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
         if sym not in watch_symbols:
             watch_symbols.append(sym)
 
-    snapshot_lookup = {str(row["stock_id"]): row for row in watch_pool.to_dict("records")}
+    watch_records = watch_pool.to_dict("records")
+    snapshot_lookup = {str(row["stock_id"]): row for row in watch_records}
     daily_volume_lookup: dict[str, float] = {
         str(row.get("stock_id") or ""): float(row["volume_ma20"])
-        for row in watch_pool.to_dict("records")
+        for row in watch_records
         if row.get("volume_ma20") and float(row.get("volume_ma20") or 0) > 0
     }
-    news_map = build_news_map(args.output, watch_pool.to_dict("records"), news_limit=args.news_limit) if args.include_news else {}
+    news_map = build_news_map(args.output, watch_records, news_limit=args.news_limit) if args.include_news else {}
 
     fugle = FugleClient()
     if not fugle.enabled:
@@ -979,9 +1015,13 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
             and quotes["error"].notna().all()
         )
         if all_errors:
+            # 取得第一個錯誤訊息，判斷是否為認證問題（立即中止，無需等待）
+            sample_error = str(quotes["error"].iloc[0]) if not quotes.empty else ""
+            is_auth_error = "401" in sample_error or "403" in sample_error or "金鑰" in sample_error
             consecutive_error_cycles += 1
-            if consecutive_error_cycles >= _MAX_ERROR_CYCLES:
-                abort_msg = f"⚠️ **事件監控中止** · Fugle API 連續 {_MAX_ERROR_CYCLES} 個週期全部錯誤，已停止"
+            if is_auth_error or consecutive_error_cycles >= _MAX_ERROR_CYCLES:
+                reason = sample_error[:80] if sample_error else f"連續 {_MAX_ERROR_CYCLES} 個週期全部錯誤"
+                abort_msg = f"⚠️ **事件監控中止** · {reason}"
                 _safe_print(abort_msg)
                 if args.notify:
                     send_discord_messages(split_message(abort_msg))
@@ -1119,6 +1159,8 @@ def run_walk_forward(args: argparse.Namespace, client: FinMindClient, config: St
         raise RuntimeError("No signal data loaded.")
 
     fold_rows: list[dict[str, object]] = []
+    _market_dates = pd.to_datetime(market_full["date"])
+    _signal_dates = {sid: pd.to_datetime(frame["date"]) for sid, frame in signals_by_stock.items()}
     for fold_idx in range(folds):
         fold_start = full_start + pd.Timedelta(days=fold_idx * fold_days - overlap)
         fold_end = full_start + pd.Timedelta(days=(fold_idx + 1) * fold_days)
@@ -1127,15 +1169,9 @@ def run_walk_forward(args: argparse.Namespace, client: FinMindClient, config: St
         fold_start = max(fold_start, full_start)
         fold_label = f"{fold_start.date()} → {fold_end.date()}"
 
-        market_slice = market_full[
-            (pd.to_datetime(market_full["date"]) >= fold_start)
-            & (pd.to_datetime(market_full["date"]) <= fold_end)
-        ].copy()
+        market_slice = market_full[(_market_dates >= fold_start) & (_market_dates <= fold_end)].copy()
         signals_slice = {
-            sid: frame[
-                (pd.to_datetime(frame["date"]) >= fold_start)
-                & (pd.to_datetime(frame["date"]) <= fold_end)
-            ].copy()
+            sid: frame[(_signal_dates[sid] >= fold_start) & (_signal_dates[sid] <= fold_end)].copy()
             for sid, frame in signals_by_stock.items()
         }
         signals_slice = {sid: f for sid, f in signals_slice.items() if not f.empty}
