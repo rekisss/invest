@@ -269,15 +269,9 @@ def summarize_news(news_items: Iterable[dict[str, object]]) -> dict[str, object]
 def _is_recent(value: object) -> bool:
     if not value:
         return False
-    published_at = None
-    s = str(value)
-    for parser in (datetime.fromisoformat, parsedate_to_datetime):
-        try:
-            published_at = parser(s)
-            break
-        except Exception:
-            continue
-    if published_at is None:
+    try:
+        published_at = datetime.fromisoformat(str(value))
+    except (ValueError, TypeError):
         return False
     now = datetime.now(published_at.tzinfo) if published_at.tzinfo else datetime.now()
     return published_at >= now - timedelta(days=5)

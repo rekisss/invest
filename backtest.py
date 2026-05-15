@@ -53,6 +53,17 @@ def run_backtest(
         if not frame.empty
     }
 
+    # Precompute frozensets of entry-signal dates and score dicts to avoid
+    # pandas .at[] calls in the inner hot loop (100 stocks × 420 days = 42k calls saved)
+    _entry_dates: dict[str, frozenset] = {
+        sid: frozenset(frame.index[frame["entry_signal"].to_numpy(dtype=bool)])
+        for sid, frame in prepared.items()
+    }
+    _entry_scores: dict[str, dict] = {
+        sid: frame["entry_score"].to_dict()
+        for sid, frame in prepared.items()
+    }
+
     cash = float(initial_capital)
     positions: dict[str, Position] = {}
     fills: list[FillRecord] = []
@@ -174,8 +185,8 @@ def run_backtest(
                     del positions[stock_id]
                     continue
 
-            elif bool(frame.at[date, "entry_signal"]):
-                daily_candidates.append((float(frame.at[date, "entry_score"]), stock_id, frame.loc[date]))
+            elif date in _entry_dates[stock_id]:
+                daily_candidates.append((_entry_scores[stock_id][date], stock_id, frame.loc[date]))
 
         if config.next_day_fill:
             for score, stock_id, row in daily_candidates:
