@@ -188,10 +188,17 @@ def prepare_stock_signals(
     frame["close_10d_low"] = frame["close"].rolling(config.swing_low_window).min().shift(1)
     _lr = add_lr_slopes(frame["close"], windows=(20, 60))
     frame[_lr.columns] = _lr.values
-    frame["return_5d"] = frame["close"].pct_change(config.relative_strength_window)
-    frame["day_return"] = frame["close"].pct_change(1)
-    frame["prev_close"] = frame["close"].shift(1)
-    frame["prev_volume_ratio"] = (frame["volume"] / frame["volume_ma20"]).shift(1)
+    _c = frame["close"].to_numpy(dtype=float)
+    _w = config.relative_strength_window
+    _r5d = np.empty_like(_c); _r5d[:_w] = np.nan; _r5d[_w:] = _c[_w:] / _c[:-_w] - 1
+    _dr = np.empty_like(_c); _dr[0] = np.nan; _dr[1:] = _c[1:] / _c[:-1] - 1
+    _pc = np.empty_like(_c); _pc[0] = np.nan; _pc[1:] = _c[:-1]
+    _vr = frame["volume"].to_numpy(dtype=float) / frame["volume_ma20"].to_numpy(dtype=float)
+    _pvr = np.empty_like(_vr); _pvr[0] = np.nan; _pvr[1:] = _vr[:-1]
+    frame["return_5d"] = _r5d
+    frame["day_return"] = _dr
+    frame["prev_close"] = _pc
+    frame["prev_volume_ratio"] = _pvr
 
     _bb = add_bollinger_bands(frame["close"], config.bb_period, config.bb_std)
     frame[_bb.columns] = _bb.values
