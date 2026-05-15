@@ -772,14 +772,16 @@ def format_daily_report_message(
         err_rows = closing_quotes[closing_quotes["error"].notna()] if "error" in closing_quotes.columns else pd.DataFrame()
         if ok_rows.empty and not err_rows.empty:
             sample_err = str(err_rows["error"].iloc[0]) if not err_rows.empty else ""
-            if "401" in sample_err or "金鑰" in sample_err:
-                err_hint = "金鑰無效或未授權，請確認 FUGLE_API_KEY"
+            if "not configured" in sample_err or not sample_err:
+                err_hint = "FUGLE_API_KEY 未設定，請至 GitHub Secrets 加入金鑰"
+            elif "401" in sample_err or "金鑰" in sample_err:
+                err_hint = "金鑰無效或未授權，請確認 FUGLE_API_KEY 是否正確"
             elif "403" in sample_err:
-                err_hint = "金鑰無此 API 權限，請升級方案"
-            elif sample_err:
-                err_hint = sample_err[:60]
+                err_hint = "金鑰無此 API 權限，請升級 Fugle 方案"
+            elif "429" in sample_err or "頻率" in sample_err:
+                err_hint = "請求頻率過高，稍後重試"
             else:
-                err_hint = "金鑰無效或未設定"
+                err_hint = sample_err[:60]
             lines.extend(["", "**盤後報價對比**", f"⚠️ Fugle API 無法取得報價（{err_hint}）"])
         elif not ok_rows.empty:
             lines.extend(["", "**盤後報價對比**"])
