@@ -124,8 +124,8 @@ def build_auto_universe(stock_info: pd.DataFrame, max_symbols: int = 120) -> pd.
     )
 
     ranked = frame.sort_values(
-        ["theme_score", "is_theme", "stock_id"],
-        ascending=[False, False, True],
+        ["theme_score", "stock_id"],
+        ascending=[False, True],
     ).drop_duplicates(subset=["stock_id"])
 
     selected = ranked.head(max_symbols).copy()

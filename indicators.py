@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from numpy.lib.stride_tricks import sliding_window_view
 
 
 def add_ema(series: pd.Series, span: int) -> pd.Series:
@@ -50,8 +51,9 @@ def add_adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14)
 
 
 def add_bollinger_bands(close: pd.Series, window: int = 20, num_std: float = 2.0) -> pd.DataFrame:
-    sma = close.rolling(window=window, min_periods=window).mean()
-    std = close.rolling(window=window, min_periods=window).std(ddof=0)
+    roller = close.rolling(window=window, min_periods=window)
+    sma = roller.mean()
+    std = roller.std(ddof=0)
     upper = sma + num_std * std
     lower = sma - num_std * std
     band_width = (upper - lower).replace(0, np.nan)
@@ -70,8 +72,12 @@ def add_stochastic(high: pd.Series, low: pd.Series, close: pd.Series, k_period: 
 
 
 def add_obv(close: pd.Series, volume: pd.Series) -> pd.Series:
-    direction = np.sign(close.diff()).fillna(0)
-    return (direction * volume).cumsum()
+    c = close.to_numpy(dtype=float)
+    v = volume.to_numpy(dtype=float)
+    direction = np.empty_like(c)
+    direction[0] = 0.0
+    np.sign(c[1:] - c[:-1], out=direction[1:])
+    return pd.Series(np.cumsum(direction * v), index=close.index)
 
 
 def add_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
@@ -114,12 +120,13 @@ def consecutive_positive(series: pd.Series) -> pd.Series:
 
 def add_mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int = 14) -> pd.Series:
     typical_price = (high + low + close) / 3
-    raw_money_flow = typical_price * volume
-    tp_change = typical_price.diff()
-    positive_mf = raw_money_flow.where(tp_change > 0, 0.0)
-    negative_mf = raw_money_flow.where(tp_change < 0, 0.0)
-    pos_sum = positive_mf.rolling(window=period, min_periods=period).sum()
-    neg_sum = negative_mf.rolling(window=period, min_periods=period).sum()
+    tp = typical_price.to_numpy(dtype=float)
+    rmf = (typical_price * volume).to_numpy(dtype=float)
+    tp_diff = np.diff(tp, prepend=np.nan)
+    pos_mf = pd.Series(np.where(tp_diff > 0, rmf, 0.0), index=close.index)
+    neg_mf = pd.Series(np.where(tp_diff < 0, rmf, 0.0), index=close.index)
+    pos_sum = pos_mf.rolling(window=period, min_periods=period).sum()
+    neg_sum = neg_mf.rolling(window=period, min_periods=period).sum()
     mfi = 100 - (100 / (1 + pos_sum / neg_sum.replace(0, np.nan)))
     return mfi.fillna(50)
 
@@ -156,12 +163,16 @@ def add_williams_r(high: pd.Series, low: pd.Series, close: pd.Series, period: in
 
 
 def add_cci(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 20) -> pd.Series:
-    typical_price = (high + low + close) / 3
-    sma_tp = typical_price.rolling(window=period, min_periods=period).mean()
-    mean_dev = typical_price.rolling(window=period, min_periods=period).apply(
-        lambda x: np.mean(np.abs(x - x.mean())), raw=True
-    )
-    return (typical_price - sma_tp) / (0.015 * mean_dev.replace(0, np.nan))
+    tp = ((high + low + close) / 3).to_numpy(dtype=float)
+    n = len(tp)
+    result = np.full(n, np.nan)
+    if n >= period:
+        wins = sliding_window_view(tp, period)
+        means = wins.mean(axis=1)
+        mad = np.abs(wins - means[:, np.newaxis]).mean(axis=1)
+        denom = 0.015 * np.where(mad == 0, np.nan, mad)
+        result[period - 1:] = (tp[period - 1:] - means) / denom
+    return pd.Series(result, index=close.index)
 
 
 def add_lr_slope(close: pd.Series, window: int = 20) -> pd.Series:

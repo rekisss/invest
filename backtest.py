@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import asdict, dataclass
 
+import numpy as np
 import pandas as pd
 
 from strategy import StrategyConfig
@@ -476,10 +477,14 @@ def compute_performance_metrics(
 
 
 def _max_consecutive(mask: pd.Series) -> int:
-    positive = mask.astype(int)
-    groups = (~mask).cumsum()
-    streak_lengths = positive.groupby(groups).cumsum()
-    return int(streak_lengths.max()) if len(streak_lengths) else 0
+    arr = mask.to_numpy(dtype=np.int8)
+    if not arr.any():
+        return 0
+    padded = np.concatenate([[0], arr, [0]])
+    d = np.diff(padded)
+    starts = np.where(d > 0)[0]
+    ends = np.where(d < 0)[0]
+    return int((ends - starts).max())
 
 
 def compute_yearly_performance(equity_curve: pd.DataFrame) -> pd.DataFrame:
