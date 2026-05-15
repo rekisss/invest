@@ -414,23 +414,23 @@ def compute_performance_metrics(
     if equity_curve.empty:
         return {}
 
-    equity = equity_curve["equity"].astype(float)
-    daily_returns = equity.pct_change().fillna(0)
-    running_max = equity.cummax()
-    drawdown = equity / running_max - 1
-    max_dd = float(drawdown.min())
+    equity_arr = equity_curve["equity"].to_numpy(dtype=float)
+    _prev_eq = np.empty_like(equity_arr); _prev_eq[0] = equity_arr[0]; _prev_eq[1:] = equity_arr[:-1]
+    dr_arr = np.where(_prev_eq != 0, equity_arr / _prev_eq - 1, 0.0)
+    running_max_arr = np.maximum.accumulate(equity_arr)
+    max_dd = float(np.min(np.where(running_max_arr != 0, equity_arr / running_max_arr - 1, 0.0)))
 
     years = max((equity_curve["date"].iloc[-1] - equity_curve["date"].iloc[0]).days / 365.25, 1 / 365.25)
-    ending_value = float(equity.iloc[-1])
+    ending_value = float(equity_arr[-1])
     cagr = (ending_value / initial_capital) ** (1 / years) - 1
 
-    _mean_ret = float(daily_returns.mean())
-    _std_ret = float(daily_returns.std(ddof=0))
+    _mean_ret = float(dr_arr.mean())
+    _std_ret = float(dr_arr.std(ddof=0))
     _sqrt252 = 252 ** 0.5
     sharpe = (_mean_ret / _std_ret) * _sqrt252 if _std_ret > 0 else 0.0
 
     sortino = 0.0
-    downside = daily_returns[daily_returns < 0]
+    downside = dr_arr[dr_arr < 0]
     if len(downside) > 0:
         _down_std = float(downside.std(ddof=0))
         if _down_std > 0:

@@ -147,10 +147,11 @@ def add_adx_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int =
 
 
 def consecutive_positive(series: pd.Series) -> pd.Series:
-    positive = (series.fillna(0) > 0)
-    # Each run of non-positive values starts a new group; cumsum within group counts the streak
-    group_id = (~positive).cumsum()
-    return positive.astype("int64").groupby(group_id).cumsum()
+    raw = series.to_numpy(dtype=float)
+    arr = np.where(np.isnan(raw) | (raw <= 0), np.int64(0), np.int64(1))
+    cumsum = np.cumsum(arr)
+    running_max_reset = np.maximum.accumulate(np.where(arr == 0, cumsum, np.int64(0)))
+    return pd.Series(arr * (cumsum - running_max_reset), index=series.index)
 
 
 def add_mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int = 14) -> pd.Series:

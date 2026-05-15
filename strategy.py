@@ -121,7 +121,10 @@ def prepare_market_frame(market_df: pd.DataFrame, config: StrategyConfig) -> pd.
     market["market_ma60"] = add_sma(market["close"], config.market_ma_window)
     market["market_ma120"] = add_sma(market["close"], 120)
     market["market_above_ma60"] = market["close"] > market["market_ma60"]
-    market["market_return_5d"] = market["close"].pct_change(config.relative_strength_window)
+    _mc = market["close"].to_numpy(dtype=float)
+    _w5 = config.relative_strength_window
+    _mr5 = np.empty_like(_mc); _mr5[:_w5] = np.nan; _mr5[_w5:] = _mc[_w5:] / _mc[:-_w5] - 1
+    market["market_return_5d"] = _mr5
     return market
 
 
@@ -184,8 +187,13 @@ def prepare_stock_signals(
     frame[_adx_atr.columns] = _adx_atr.values
     frame["volume_ma20"] = add_sma(frame["volume"], config.volume_ma_window)
     frame["amount_ma20"] = add_sma(frame["amount"], 20)
-    frame["close_20d_high"] = frame["close"].rolling(config.breakout_window).max().shift(1)
-    frame["close_10d_low"] = frame["close"].rolling(config.swing_low_window).min().shift(1)
+    _n_fr = len(frame)
+    _max20 = frame["close"].rolling(config.breakout_window).max().to_numpy(dtype=float)
+    _min10 = frame["close"].rolling(config.swing_low_window).min().to_numpy(dtype=float)
+    _s_max20 = np.empty(_n_fr, dtype=float); _s_max20[0] = np.nan; _s_max20[1:] = _max20[:-1]
+    _s_min10 = np.empty(_n_fr, dtype=float); _s_min10[0] = np.nan; _s_min10[1:] = _min10[:-1]
+    frame["close_20d_high"] = _s_max20
+    frame["close_10d_low"] = _s_min10
     _lr = add_lr_slopes(frame["close"], windows=(20, 60))
     frame[_lr.columns] = _lr.values
     _c = frame["close"].to_numpy(dtype=float)
@@ -239,12 +247,25 @@ def prepare_stock_signals(
     merged["relative_strength_5d"] = merged["return_5d"] - merged["market_return_5d"]
 
     # ── Core signals ──────────────────────────────────────────────────────────
-    _prev = merged[["macd", "macd_signal", "macd_hist", "stoch_k", "stoch_d", "bb_bandwidth", "williams_r", "cci20"]].shift(1)
-    merged["macd_golden_cross"] = (
-        (_prev["macd"] <= _prev["macd_signal"])
-        & (merged["macd"] > merged["macd_signal"])
-    )
-    merged["hist_turn_positive"] = (_prev["macd_hist"] <= 0) & (merged["macd_hist"] > 0)
+    _n = len(merged)
+    _macd_arr = merged["macd"].to_numpy(dtype=float)
+    _macd_sig_arr = merged["macd_signal"].to_numpy(dtype=float)
+    _macd_hist_arr = merged["macd_hist"].to_numpy(dtype=float)
+    _stoch_k_arr = merged["stoch_k"].to_numpy(dtype=float)
+    _stoch_d_arr = merged["stoch_d"].to_numpy(dtype=float)
+    _bb_bw_arr = merged["bb_bandwidth"].to_numpy(dtype=float)
+    _wr_arr = merged["williams_r"].to_numpy(dtype=float)
+    _cci_arr = merged["cci20"].to_numpy(dtype=float)
+    _p_macd = np.empty(_n, dtype=float); _p_macd[0] = np.nan; _p_macd[1:] = _macd_arr[:-1]
+    _p_macd_sig = np.empty(_n, dtype=float); _p_macd_sig[0] = np.nan; _p_macd_sig[1:] = _macd_sig_arr[:-1]
+    _p_macd_hist = np.empty(_n, dtype=float); _p_macd_hist[0] = np.nan; _p_macd_hist[1:] = _macd_hist_arr[:-1]
+    _p_stoch_k = np.empty(_n, dtype=float); _p_stoch_k[0] = np.nan; _p_stoch_k[1:] = _stoch_k_arr[:-1]
+    _p_stoch_d = np.empty(_n, dtype=float); _p_stoch_d[0] = np.nan; _p_stoch_d[1:] = _stoch_d_arr[:-1]
+    _p_bb_bw = np.empty(_n, dtype=float); _p_bb_bw[0] = np.nan; _p_bb_bw[1:] = _bb_bw_arr[:-1]
+    _p_wr = np.empty(_n, dtype=float); _p_wr[0] = np.nan; _p_wr[1:] = _wr_arr[:-1]
+    _p_cci = np.empty(_n, dtype=float); _p_cci[0] = np.nan; _p_cci[1:] = _cci_arr[:-1]
+    merged["macd_golden_cross"] = (_p_macd <= _p_macd_sig) & (_macd_arr > _macd_sig_arr)
+    merged["hist_turn_positive"] = (_p_macd_hist <= 0) & (_macd_hist_arr > 0)
     merged["above_ema60"] = merged["close"] > merged["ema60"]
     merged["ema60_gt_ema120"] = merged["ema60"] > merged["ema120"]
     merged["volume_ratio"] = merged["volume"] / merged["volume_ma20"]
@@ -263,9 +284,9 @@ def prepare_stock_signals(
     merged["stronger_than_market"] = merged["relative_strength_5d"] > 0
 
     merged["kd_golden_cross"] = (
-        (_prev["stoch_k"] <= _prev["stoch_d"])
-        & (merged["stoch_k"] > merged["stoch_d"])
-        & (merged["stoch_k"] < 80)
+        (_p_stoch_k <= _p_stoch_d)
+        & (_stoch_k_arr > _stoch_d_arr)
+        & (_stoch_k_arr < 80)
     )
 
     merged["obv_uptrend"] = merged["obv"] > merged["obv_ma"]
@@ -280,24 +301,18 @@ def prepare_stock_signals(
 
     # BB squeeze breakout: bandwidth was narrow (< median) and now price breaks above upper band
     bb_bandwidth_median = merged["bb_bandwidth"].rolling(window=60, min_periods=20).median()
-    merged["bb_squeeze_breakout"] = (
-        _prev["bb_bandwidth"] < bb_bandwidth_median.shift(1)
-    ) & (merged["close"] > merged["bb_upper"])
+    _bbm = bb_bandwidth_median.to_numpy(dtype=float)
+    _bbm_prev = np.empty(_n, dtype=float); _bbm_prev[0] = np.nan; _bbm_prev[1:] = _bbm[:-1]
+    merged["bb_squeeze_breakout"] = (_p_bb_bw < _bbm_prev) & (merged["close"] > merged["bb_upper"])
 
     # Breakout confirmed with simultaneous volume surge (quality entry filter)
     merged["breakout_volume_confirm"] = merged["breakout_20d"] & merged["volume_break"]
 
     # Williams %R recovering from oversold (was below -80, now above -50)
-    merged["williams_r_recovery"] = (
-        (_prev["williams_r"] < -80)
-        & (merged["williams_r"] > -50)
-    )
+    merged["williams_r_recovery"] = (_p_wr < -80) & (_wr_arr > -50)
 
     # CCI momentum: CCI crossed above +100 from below (strong bullish momentum)
-    merged["cci_momentum"] = (
-        (_prev["cci20"] < 100)
-        & (merged["cci20"] >= 100)
-    )
+    merged["cci_momentum"] = (_p_cci < 100) & (_cci_arr >= 100)
 
     # MFI > 50: money is flowing into the stock (volume-weighted buying pressure)
     merged["mfi_strong"] = merged["mfi14"] > 50
@@ -355,8 +370,8 @@ def prepare_stock_signals(
     )
 
     merged["macd_death_cross"] = (
-        (_prev["macd"] >= _prev["macd_signal"])
-        & (merged["macd"] < merged["macd_signal"])
+        (_p_macd >= _p_macd_sig)
+        & (_macd_arr < _macd_sig_arr)
     )
     merged["close_below_ema20"] = merged["close"] < merged["ema20"]
     merged["close_below_swing_low"] = merged["close"] < merged["close_10d_low"]
