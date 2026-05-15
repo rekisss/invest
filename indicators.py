@@ -108,8 +108,11 @@ def add_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14)
     _pc = np.empty_like(c)
     _pc[0] = np.nan
     _pc[1:] = c[:-1]
-    tr = pd.Series(np.fmax(np.fmax(h - l, np.abs(h - _pc)), np.abs(l - _pc)), index=high.index)
-    return tr.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    tr_arr = np.fmax(np.fmax(h - l, np.abs(h - _pc)), np.abs(l - _pc))
+    return pd.Series(
+        pd.Series(tr_arr).ewm(alpha=1 / period, min_periods=period, adjust=False).mean().to_numpy(dtype=float),
+        index=high.index,
+    )
 
 
 def add_adx_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.DataFrame:
@@ -250,14 +253,15 @@ def add_lr_slopes(close: pd.Series, windows: tuple[int, ...] = (20, 60)) -> pd.D
 
     Shares the log/cumsum prefix computation across all requested windows.
     """
-    log_c = np.log(close.clip(lower=1e-9).to_numpy(dtype=float))
+    raw = close.to_numpy(dtype=float)
+    log_c = np.log(np.where(np.isnan(raw) | (raw < 1e-9), np.nan, raw))
     nan_mask = np.isnan(log_c)
     safe = np.where(nan_mask, 0.0, log_c)
     pos = np.arange(len(log_c), dtype=float)
 
-    cum_y = np.concatenate([[0.0], np.cumsum(safe)])
-    cum_py = np.concatenate([[0.0], np.cumsum(pos * safe)])
-    cum_nan = np.concatenate([[0], np.cumsum(nan_mask.astype(int))])
+    cum_y = np.empty(len(safe) + 1); cum_y[0] = 0.0; np.cumsum(safe, out=cum_y[1:])
+    cum_py = np.empty(len(safe) + 1); cum_py[0] = 0.0; np.cumsum(pos * safe, out=cum_py[1:])
+    cum_nan_arr = np.empty(len(nan_mask) + 1, dtype=np.int32); cum_nan_arr[0] = 0; np.cumsum(nan_mask.view(np.int8), out=cum_nan_arr[1:])
 
     cols: dict[str, np.ndarray] = {}
     for n in windows:
@@ -266,7 +270,7 @@ def add_lr_slopes(close: pd.Series, windows: tuple[int, ...] = (20, 60)) -> pd.D
         denom: float = n * Sxx - Sx ** 2
         t = np.arange(n - 1, len(log_c))
         s = t - n + 1
-        has_nan = (cum_nan[t + 1] - cum_nan[s]) > 0
+        has_nan = (cum_nan_arr[t + 1] - cum_nan_arr[s]) > 0
         Sy = cum_y[t + 1] - cum_y[s]
         Sxy = (cum_py[t + 1] - cum_py[s]) - s * Sy
         slope = np.where(has_nan, np.nan, (n * Sxy - Sx * Sy) / denom * 100)
