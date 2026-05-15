@@ -28,12 +28,9 @@ def add_macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) 
 
 def add_rsi(close: pd.Series, period: int = 14) -> pd.Series:
     delta = np.diff(close.to_numpy(dtype=float), prepend=np.nan)
-    gain = pd.Series(np.maximum(delta, 0.0), index=close.index)
-    loss = pd.Series(np.maximum(-delta, 0.0), index=close.index)
-    avg_gain = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
-    ag = avg_gain.to_numpy(dtype=float)
-    al = avg_loss.to_numpy(dtype=float)
+    alpha = 1 / period
+    ag = pd.Series(np.maximum(delta, 0.0)).ewm(alpha=alpha, min_periods=period, adjust=False).mean().to_numpy(dtype=float)
+    al = pd.Series(np.maximum(-delta, 0.0)).ewm(alpha=alpha, min_periods=period, adjust=False).mean().to_numpy(dtype=float)
     has_data = np.isfinite(ag) | np.isfinite(al)
     safe_al = np.where(al == 0, np.nan, al)
     rsi = 100.0 - 100.0 / (1.0 + ag / safe_al)
@@ -47,22 +44,25 @@ def add_adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14)
     c = close.to_numpy(dtype=float)
     up = np.diff(h, prepend=np.nan)
     dn = -np.diff(l, prepend=np.nan)
-    plus_dm = pd.Series(np.where((up > dn) & (up > 0), up, 0.0), index=high.index)
-    minus_dm = pd.Series(np.where((dn > up) & (dn > 0), dn, 0.0), index=high.index)
+    plus_dm_arr = np.where((up > dn) & (up > 0), up, 0.0)
+    minus_dm_arr = np.where((dn > up) & (dn > 0), dn, 0.0)
     _pc = np.empty_like(c)
     _pc[0] = np.nan
     _pc[1:] = c[:-1]
-    tr = pd.Series(np.fmax(np.fmax(h - l, np.abs(h - _pc)), np.abs(l - _pc)), index=high.index)
+    tr_arr = np.fmax(np.fmax(h - l, np.abs(h - _pc)), np.abs(l - _pc))
     alpha = 1 / period
-    atr = tr.ewm(alpha=alpha, min_periods=period, adjust=False).mean()
-    plus_di = 100 * plus_dm.ewm(alpha=alpha, min_periods=period, adjust=False).mean() / atr
-    minus_di = 100 * minus_dm.ewm(alpha=alpha, min_periods=period, adjust=False).mean() / atr
-    pdi_arr = plus_di.to_numpy(dtype=float)
-    mdi_arr = minus_di.to_numpy(dtype=float)
+    atr_arr = pd.Series(tr_arr).ewm(alpha=alpha, min_periods=period, adjust=False).mean().to_numpy(dtype=float)
+    pdm_arr = pd.Series(plus_dm_arr).ewm(alpha=alpha, min_periods=period, adjust=False).mean().to_numpy(dtype=float)
+    mdm_arr = pd.Series(minus_dm_arr).ewm(alpha=alpha, min_periods=period, adjust=False).mean().to_numpy(dtype=float)
+    safe_atr = np.where(atr_arr == 0, np.nan, atr_arr)
+    pdi_arr = 100 * pdm_arr / safe_atr
+    mdi_arr = 100 * mdm_arr / safe_atr
     sum_di = pdi_arr + mdi_arr
     dx_arr = np.where(sum_di == 0, np.nan, 100 * np.abs(pdi_arr - mdi_arr) / sum_di)
-    dx = pd.Series(dx_arr, index=high.index)
-    return dx.ewm(alpha=alpha, min_periods=period, adjust=False).mean()
+    return pd.Series(
+        pd.Series(dx_arr).ewm(alpha=alpha, min_periods=period, adjust=False).mean().to_numpy(dtype=float),
+        index=high.index,
+    )
 
 
 def add_bollinger_bands(close: pd.Series, window: int = 20, num_std: float = 2.0) -> pd.DataFrame:
@@ -122,25 +122,23 @@ def add_adx_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int =
     c = close.to_numpy(dtype=float)
     up = np.diff(h, prepend=np.nan)
     dn = -np.diff(l, prepend=np.nan)
-    plus_dm = pd.Series(np.where((up > dn) & (up > 0), up, 0.0), index=high.index)
-    minus_dm = pd.Series(np.where((dn > up) & (dn > 0), dn, 0.0), index=high.index)
+    plus_dm_arr = np.where((up > dn) & (up > 0), up, 0.0)
+    minus_dm_arr = np.where((dn > up) & (dn > 0), dn, 0.0)
     _pc = np.empty_like(c)
     _pc[0] = np.nan
     _pc[1:] = c[:-1]
-    tr = pd.Series(np.fmax(np.fmax(h - l, np.abs(h - _pc)), np.abs(l - _pc)), index=high.index)
+    tr_arr = np.fmax(np.fmax(h - l, np.abs(h - _pc)), np.abs(l - _pc))
     alpha = 1 / period
-    atr = tr.ewm(alpha=alpha, min_periods=period, adjust=False).mean()
-    plus_di = 100 * plus_dm.ewm(alpha=alpha, min_periods=period, adjust=False).mean() / atr
-    minus_di = 100 * minus_dm.ewm(alpha=alpha, min_periods=period, adjust=False).mean() / atr
-    pdi_arr = plus_di.to_numpy(dtype=float)
-    mdi_arr = minus_di.to_numpy(dtype=float)
+    atr_arr = pd.Series(tr_arr).ewm(alpha=alpha, min_periods=period, adjust=False).mean().to_numpy(dtype=float)
+    pdm_arr = pd.Series(plus_dm_arr).ewm(alpha=alpha, min_periods=period, adjust=False).mean().to_numpy(dtype=float)
+    mdm_arr = pd.Series(minus_dm_arr).ewm(alpha=alpha, min_periods=period, adjust=False).mean().to_numpy(dtype=float)
+    safe_atr = np.where(atr_arr == 0, np.nan, atr_arr)
+    pdi_arr = 100 * pdm_arr / safe_atr
+    mdi_arr = 100 * mdm_arr / safe_atr
     sum_di = pdi_arr + mdi_arr
-    dx = pd.Series(
-        np.where(sum_di == 0, np.nan, 100 * np.abs(pdi_arr - mdi_arr) / sum_di),
-        index=high.index,
-    )
-    adx = dx.ewm(alpha=alpha, min_periods=period, adjust=False).mean()
-    return pd.DataFrame({"adx14": adx, "atr14": atr})
+    dx_arr = np.where(sum_di == 0, np.nan, 100 * np.abs(pdi_arr - mdi_arr) / sum_di)
+    adx_arr = pd.Series(dx_arr).ewm(alpha=alpha, min_periods=period, adjust=False).mean().to_numpy(dtype=float)
+    return pd.DataFrame({"adx14": adx_arr, "atr14": atr_arr}, index=high.index)
 
 
 def consecutive_positive(series: pd.Series) -> pd.Series:
@@ -156,10 +154,8 @@ def add_mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series
     tp = typical_price.to_numpy(dtype=float)
     rmf = (typical_price * volume).to_numpy(dtype=float)
     tp_diff = np.diff(tp, prepend=np.nan)
-    pos_mf = pd.Series(np.where(tp_diff > 0, rmf, 0.0), index=close.index)
-    neg_mf = pd.Series(np.where(tp_diff < 0, rmf, 0.0), index=close.index)
-    pos_sum = pos_mf.rolling(window=period, min_periods=period).sum().to_numpy(dtype=float)
-    neg_sum = neg_mf.rolling(window=period, min_periods=period).sum().to_numpy(dtype=float)
+    pos_sum = pd.Series(np.where(tp_diff > 0, rmf, 0.0)).rolling(window=period, min_periods=period).sum().to_numpy(dtype=float)
+    neg_sum = pd.Series(np.where(tp_diff < 0, rmf, 0.0)).rolling(window=period, min_periods=period).sum().to_numpy(dtype=float)
     safe_neg = np.where(neg_sum == 0, np.nan, neg_sum)
     mfi = 100.0 - 100.0 / (1.0 + pos_sum / safe_neg)
     return pd.Series(np.where(np.isnan(mfi), 50.0, mfi), index=close.index)
