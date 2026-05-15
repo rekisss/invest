@@ -22,9 +22,9 @@ def add_macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) 
 
 
 def add_rsi(close: pd.Series, period: int = 14) -> pd.Series:
-    delta = close.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
+    delta = np.diff(close.to_numpy(dtype=float), prepend=np.nan)
+    gain = pd.Series(np.maximum(delta, 0.0), index=close.index)
+    loss = pd.Series(np.maximum(-delta, 0.0), index=close.index)
     avg_gain = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
     rs = avg_gain / avg_loss.replace(0, np.nan)
@@ -85,15 +85,17 @@ def add_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14)
 
 def add_adx_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.DataFrame:
     """Compute ADX and ATR together, sharing the True Range calculation."""
-    up_move = high.diff()
-    down_move = -low.diff()
-    plus_dm = pd.Series(np.where((up_move > down_move) & (up_move > 0), up_move, 0.0), index=high.index)
-    minus_dm = pd.Series(np.where((down_move > up_move) & (down_move > 0), down_move, 0.0), index=high.index)
-    _pc = close.shift(1)
-    tr = pd.Series(
-        np.fmax(np.fmax((high - low).to_numpy(), (high - _pc).abs().to_numpy()), (low - _pc).abs().to_numpy()),
-        index=high.index,
-    )
+    h = high.to_numpy(dtype=float)
+    l = low.to_numpy(dtype=float)
+    c = close.to_numpy(dtype=float)
+    up = np.diff(h, prepend=np.nan)
+    dn = -np.diff(l, prepend=np.nan)
+    plus_dm = pd.Series(np.where((up > dn) & (up > 0), up, 0.0), index=high.index)
+    minus_dm = pd.Series(np.where((dn > up) & (dn > 0), dn, 0.0), index=high.index)
+    _pc = np.empty_like(c)
+    _pc[0] = np.nan
+    _pc[1:] = c[:-1]
+    tr = pd.Series(np.fmax(np.fmax(h - l, np.abs(h - _pc)), np.abs(l - _pc)), index=high.index)
     alpha = 1 / period
     atr = tr.ewm(alpha=alpha, min_periods=period, adjust=False).mean()
     plus_di = 100 * plus_dm.ewm(alpha=alpha, min_periods=period, adjust=False).mean() / atr

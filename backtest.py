@@ -383,8 +383,9 @@ def summarize_trades(fill_frame: pd.DataFrame) -> pd.DataFrame:
     )
     reasons = (
         fill_frame.groupby("position_id")["reason"]
-        .apply(lambda values: " | ".join(values.astype(str)))
-        .reset_index(name="exit_reasons")
+        .agg(" | ".join)
+        .rename("exit_reasons")
+        .reset_index()
     )
     summary = grouped.merge(reasons, on="position_id")
     summary["avg_exit_price"] = summary["weighted_exit"] / summary["quantity"]
