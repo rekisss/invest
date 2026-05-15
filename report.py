@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from pathlib import Path
 
 import matplotlib
@@ -134,7 +135,6 @@ def _write_excel(
         notes_frame.to_excel(writer, sheet_name="notes", index=False)
         if config is not None:
             try:
-                from dataclasses import asdict
                 config_dict = asdict(config)  # type: ignore[arg-type]
                 config_frame = pd.DataFrame(
                     [{"parameter": k, "value": v} for k, v in config_dict.items()]
@@ -149,25 +149,25 @@ def _plot_equity_curve(equity_curve: pd.DataFrame, output_path: Path) -> None:
     if equity_curve.empty:
         return
 
-    frame = equity_curve.copy()
-    frame["date"] = pd.to_datetime(frame["date"])
-    frame["drawdown_pct"] = frame["equity"] / frame["equity"].cummax() - 1
-    worst = frame.loc[frame["drawdown_pct"].idxmin()]
+    dates = pd.to_datetime(equity_curve["date"])
+    equity = equity_curve["equity"].astype(float)
+    drawdown_pct = equity / equity.cummax() - 1
+    worst_idx = drawdown_pct.idxmin()
 
-    has_benchmark = "benchmark_equity" in frame.columns and frame["benchmark_equity"].notna().any()
+    has_benchmark = "benchmark_equity" in equity_curve.columns and equity_curve["benchmark_equity"].notna().any()
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(13, 8), sharex=True, gridspec_kw={"height_ratios": [3, 1]})
-    ax1.plot(frame["date"], frame["equity"], color="#0f6cbd", linewidth=2, label="Strategy")
+    ax1.plot(dates, equity, color="#0f6cbd", linewidth=2, label="Strategy")
     if has_benchmark:
-        ax1.plot(frame["date"], frame["benchmark_equity"], color="#767676", linewidth=1.5,
+        ax1.plot(dates, equity_curve["benchmark_equity"], color="#767676", linewidth=1.5,
                  linestyle="--", alpha=0.8, label="TAIEX (buy & hold)")
-    ax1.scatter(worst["date"], worst["equity"], color="#c50f1f", s=60, zorder=5, label="Max drawdown")
+    ax1.scatter(dates.iloc[worst_idx], equity.iloc[worst_idx], color="#c50f1f", s=60, zorder=5, label="Max drawdown")
     ax1.set_title("Portfolio Equity Curve vs TAIEX")
     ax1.set_ylabel("Equity")
     ax1.grid(alpha=0.3)
     ax1.legend()
 
-    ax2.fill_between(frame["date"], frame["drawdown_pct"] * 100, 0, color="#f8b3b8")
+    ax2.fill_between(dates, drawdown_pct * 100, 0, color="#f8b3b8")
     ax2.set_title("Drawdown")
     ax2.set_ylabel("%")
     ax2.grid(alpha=0.3)
@@ -205,11 +205,8 @@ def _plot_monthly_returns(equity_curve: pd.DataFrame, output_path: Path) -> None
     if equity_curve.empty:
         return
 
-    frame = equity_curve.copy()
-    frame["date"] = pd.to_datetime(frame["date"])
-    frame["year"] = frame["date"].dt.year
-    frame["month"] = frame["date"].dt.month
-    monthly = frame.groupby(["year", "month"])["equity"].last().reset_index()
+    _dates = pd.to_datetime(equity_curve["date"])
+    monthly = equity_curve.assign(year=_dates.dt.year, month=_dates.dt.month).groupby(["year", "month"])["equity"].last().reset_index()
     monthly["prev_equity"] = monthly["equity"].shift(1)
     monthly["return_pct"] = (monthly["equity"] / monthly["prev_equity"] - 1) * 100
 

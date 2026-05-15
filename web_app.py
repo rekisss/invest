@@ -175,17 +175,19 @@ def run_dashboard() -> str:
             if mode == "scan":
                 candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
                 report_path = save_scan_report(args.output, candidates, watchlist, universe)
+                cand_records = _frame_records(candidates)
+                watch_records = _frame_records(watchlist)
+                news_map = _build_news_map(news_client, cand_records or watch_records) if args.include_news else {}
                 if args.notify:
-                    news_map_notify = _build_news_map(news_client, _frame_records(candidates)) if args.include_news else {}
-                    send_discord_messages(split_message(format_scan_message_rich(candidates, watchlist, args.end, news_map_notify, breadth=breadth)))
+                    send_discord_messages(split_message(format_scan_message_rich(candidates, watchlist, args.end, news_map, breadth=breadth)))
                 context["scan"] = {
                     "report_path": str(report_path),
                     "report_url": _artifact_url(report_path),
-                    "candidates": _frame_records(candidates),
-                    "watchlist": _frame_records(watchlist),
+                    "candidates": cand_records,
+                    "watchlist": watch_records,
                     "universe_size": len(universe),
                     "breadth": breadth,
-                    "news_map": _build_news_map(news_client, _frame_records(candidates) or _frame_records(watchlist)) if args.include_news else {},
+                    "news_map": news_map,
                 }
             elif mode == "hybrid-monitor":
                 if args.stocks != "auto":
@@ -211,9 +213,9 @@ def run_dashboard() -> str:
                     )
 
                 report_path = save_hybrid_report(args.output, candidates, watchlist, live_quotes, universe)
+                hybrid_news_map = _build_news_map(news_client, _frame_records(watch_pool)) if args.include_news else {}
                 if args.notify:
-                    news_map_notify = _build_news_map(news_client, _frame_records(watch_pool)) if args.include_news else {}
-                    send_discord_messages(split_message(format_hybrid_message_rich(candidates, watchlist, live_quotes, args.end, news_map_notify)))
+                    send_discord_messages(split_message(format_hybrid_message_rich(candidates, watchlist, live_quotes, args.end, hybrid_news_map)))
                 context["hybrid"] = {
                     "report_path": str(report_path),
                     "report_url": _artifact_url(report_path),
@@ -221,7 +223,7 @@ def run_dashboard() -> str:
                     "watchlist": _frame_records(watchlist),
                     "live_quotes": _frame_records(live_quotes),
                     "watch_symbols": watch_symbols,
-                    "news_map": _build_news_map(news_client, _frame_records(watch_pool)) if args.include_news else {},
+                    "news_map": hybrid_news_map,
                 }
             elif mode == "backtest":
                 stock_list = load_universe(args, client)

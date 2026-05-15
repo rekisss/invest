@@ -5,6 +5,7 @@ import re
 import pandas as pd
 
 
+
 THEME_KEYWORDS = [
     # Core tech themes
     "AI",
@@ -77,9 +78,20 @@ EXCLUDE_NAME_KEYWORDS = [
     "可轉債",
 ]
 
+_THEME_RE = re.compile("|".join(re.escape(kw) for kw in THEME_KEYWORDS), re.IGNORECASE)
+_EXCLUDE_RE = re.compile("|".join(re.escape(kw) for kw in EXCLUDE_NAME_KEYWORDS), re.IGNORECASE)
+_SECTOR_RE = re.compile(
+    "半導體|電腦及週邊|電子|光電|通信|網路|封測|車用|綠能|儲能|PCB|工業電腦|記憶體|航太|資安|被動元件",
+    re.IGNORECASE,
+)
+_ETF_RE = re.compile(r"ETF|指數股票型|元大|富邦.*TW|國泰.*TW", re.IGNORECASE)
+_NUMERIC_ID_RE = re.compile(r"\d{4,6}")
+_LISTED_RE = re.compile(r"twse|tse|上市", re.IGNORECASE)
+_OTC_RE = re.compile(r"otc|tpex|上櫃", re.IGNORECASE)
+
 
 def _is_numeric_stock_id(stock_id: str) -> bool:
-    return bool(re.fullmatch(r"\d{4,6}", str(stock_id)))
+    return bool(_NUMERIC_ID_RE.fullmatch(str(stock_id)))
 
 
 def build_auto_universe(stock_info: pd.DataFrame, max_symbols: int = 120) -> pd.DataFrame:
@@ -89,31 +101,31 @@ def build_auto_universe(stock_info: pd.DataFrame, max_symbols: int = 120) -> pd.
     frame["industry_category"] = frame["industry_category"].astype(str).str.strip()
     frame["type"] = frame["type"].astype(str).str.strip().str.lower()
 
-    frame = frame[frame["stock_id"].map(_is_numeric_stock_id)].copy()
-    if EXCLUDE_NAME_KEYWORDS:
-        frame = frame[~frame["stock_name"].str.contains("|".join(EXCLUDE_NAME_KEYWORDS), case=False, na=False)].copy()
+    frame = frame[frame["stock_id"].map(_is_numeric_stock_id)]
+    frame = frame[~frame["stock_name"].str.contains(_EXCLUDE_RE, na=False)]
 
     # Exclude ETFs: their technical signals and volume behaviour differ from individual stocks
     # Also exclude by stock_id prefix: Taiwan ETFs are typically 6-digit IDs starting with 0
-    frame = frame[~frame["stock_name"].str.contains("ETF|指數股票型|元大|富邦.*TW|國泰.*TW", case=False, na=False)].copy()
-    frame = frame[~(frame["stock_id"].str.len() == 6)].copy()  # 6-digit IDs are almost always ETFs/derivatives
+    frame = frame[~frame["stock_name"].str.contains(_ETF_RE, na=False)]
+    frame = frame[~(frame["stock_id"].str.len() == 6)].copy()  # copy before column assignment below
 
-    frame["is_theme"] = (
-        frame["stock_name"].str.contains("|".join(THEME_KEYWORDS), case=False, na=False)
-        | frame["industry_category"].str.contains("|".join(THEME_KEYWORDS), case=False, na=False)
+    _is_theme = (
+        frame["stock_name"].str.contains(_THEME_RE, na=False)
+        | frame["industry_category"].str.contains(_THEME_RE, na=False)
     )
-    frame["is_listed"] = frame["type"].str.contains("twse|tse|上市", case=False, na=False)
-    frame["is_otc"] = frame["type"].str.contains("otc|tpex|上櫃", case=False, na=False)
-
-    frame["theme_score"] = 0
-    frame.loc[frame["is_theme"], "theme_score"] += 4
-    frame.loc[frame["industry_category"].str.contains("半導體|電腦及週邊|電子|光電|通信|網路|封測|車用|綠能|儲能|PCB|工業電腦|記憶體|航太|資安|被動元件", case=False, na=False), "theme_score"] += 3
-    frame.loc[frame["is_listed"], "theme_score"] += 2
-    frame.loc[frame["is_otc"], "theme_score"] += 1
+    _is_sector = frame["industry_category"].str.contains(_SECTOR_RE, na=False)
+    _is_listed = frame["type"].str.contains(_LISTED_RE, na=False)
+    _is_otc = frame["type"].str.contains(_OTC_RE, na=False)
+    frame["theme_score"] = (
+        _is_theme.astype("int8") * 4
+        + _is_sector.astype("int8") * 3
+        + _is_listed.astype("int8") * 2
+        + _is_otc.astype("int8")
+    )
 
     ranked = frame.sort_values(
-        ["theme_score", "is_theme", "stock_id"],
-        ascending=[False, False, True],
+        ["theme_score", "stock_id"],
+        ascending=[False, True],
     ).drop_duplicates(subset=["stock_id"])
 
     selected = ranked.head(max_symbols).copy()

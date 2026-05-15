@@ -10,3 +10,4 @@ cache/
 *.png
 sponsor_log.txt
 .DS_Store
+.env
