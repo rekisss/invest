@@ -56,6 +56,7 @@ FIXED_PARAMS: dict[str, Any] = {
     "max_positions": 3,
     "adx_threshold": 20.0,
     "volume_multiplier": 1.5,
+    "next_day_fill": True,
 }
 
 

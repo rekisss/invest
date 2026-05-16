@@ -86,7 +86,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--event-cooldown-seconds", type=int, default=600, help="Cooldown before the same symbol+event can notify again.")
     parser.add_argument("--notify", action="store_true")
     parser.add_argument("--use-earnings-filter", action="store_true")
-    parser.add_argument("--next-day-fill", action="store_true", help="Fill backtest entries at next day open instead of signal-day close.")
+    parser.add_argument("--next-day-fill", default=True, action=argparse.BooleanOptionalAction, help="Fill backtest entries at next day open (default: True). Use --no-next-day-fill to revert to signal-day close.")
     parser.add_argument("--heartbeat-minutes", type=int, default=0, help="Send a status snapshot every N minutes during event-monitor (0 = disabled).")
     parser.add_argument("--clean-cache", action="store_true", help="Delete stale cache files before running.")
     parser.add_argument("--clean-cache-days", type=int, default=30, help="Age threshold in days for --clean-cache (default 30).")
