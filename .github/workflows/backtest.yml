@@ -1,0 +1,126 @@
+name: 回測 / 參數掃描 (手動觸發)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "執行模式"
+        required: true
+        default: "backtest"
+        type: choice
+        options:
+          - backtest
+          - sweep
+      start:
+        description: "開始日期 (YYYY-MM-DD)"
+        required: false
+        default: "2020-01-01"
+      end:
+        description: "結束日期 (留空 = 今天 CST)"
+        required: false
+        default: ""
+      max_universe:
+        description: "掃描股票數上限"
+        required: false
+        default: "80"
+      rsi_threshold:
+        description: "[backtest] RSI 閾值 (預設 55.0)"
+        required: false
+        default: "55.0"
+      stop_loss_pct:
+        description: "[backtest] 停損比例 (預設 0.05)"
+        required: false
+        default: "0.05"
+      take_profit_pct:
+        description: "[backtest] 停利比例 (預設 0.10)"
+        required: false
+        default: "0.10"
+      trailing_stop_pct:
+        description: "[backtest] 移動停損比例 (預設 0.07)"
+        required: false
+        default: "0.07"
+      max_positions:
+        description: "[backtest] 最大持倉數 (預設 3)"
+        required: false
+        default: "3"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Resolve end date
+        id: date
+        run: |
+          END="${{ github.event.inputs.end }}"
+          if [ -z "$END" ]; then END=$(TZ=Asia/Taipei date +%Y-%m-%d); fi
+          echo "end=$END" >> "$GITHUB_OUTPUT"
+
+      - name: Run backtest
+        if: ${{ github.event.inputs.mode == 'backtest' }}
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: |
+          python main.py \
+            --mode backtest \
+            --stocks auto \
+            --start "${{ github.event.inputs.start }}" \
+            --end "${{ steps.date.outputs.end }}" \
+            --max-universe ${{ github.event.inputs.max_universe }} \
+            --rsi-threshold ${{ github.event.inputs.rsi_threshold }} \
+            --stop-loss-pct ${{ github.event.inputs.stop_loss_pct }} \
+            --take-profit-pct ${{ github.event.inputs.take_profit_pct }} \
+            --trailing-stop-pct ${{ github.event.inputs.trailing_stop_pct }} \
+            --max-positions ${{ github.event.inputs.max_positions }} \
+            --capital 1000000 \
+            --output output
+
+      - name: Run parameter sweep
+        if: ${{ github.event.inputs.mode == 'sweep' }}
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: |
+          python backtest_sweep.py \
+            --start "${{ github.event.inputs.start }}" \
+            --end "${{ steps.date.outputs.end }}" \
+            --stocks auto \
+            --max-universe ${{ github.event.inputs.max_universe }} \
+            --output output/sweep
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backtest-${{ github.event.inputs.mode }}-${{ github.run_id }}
+          path: output/
+          retention-days: 30
+
+      - name: Notify Discord
+        if: ${{ always() && env.DISCORD_WEBHOOK_URL != '' }}
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          STATUS="${{ job.status }}"
+          MODE="${{ github.event.inputs.mode }}"
+          EMOJI=$([ "$STATUS" = "success" ] && echo "✅" || echo "❌")
+          MSG="$EMOJI **回測完成** (\`$MODE\`) · \`$STATUS\`"
+          MSG="$MSG · [查看結果](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"$MSG\"}" \
+            "$DISCORD_WEBHOOK_URL" || true
