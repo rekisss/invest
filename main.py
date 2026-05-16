@@ -98,6 +98,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--atr-stop-multiplier", type=float, default=2.0, help="ATR multiplier for stop loss (default 2.0, used with --use-atr-stop).")
     parser.add_argument("--max-holding-days", type=int, default=0, help="Force-exit positions after N calendar days in backtest (0 = disabled).")
     parser.add_argument("--max-positions-per-sector", type=int, default=2, help="Max simultaneous positions per industry sector in backtest (default 2, 0 = unlimited).")
+    # StrategyConfig overrides (for parallel backtest experiments)
+    parser.add_argument("--rsi-threshold", type=float, default=None, help="RSI threshold for rsi_strong signal (default 55.0).")
+    parser.add_argument("--adx-threshold", type=float, default=None, help="ADX threshold for adx_trending signal (default 20.0).")
+    parser.add_argument("--stop-loss-pct", type=float, default=None, help="Fixed stop-loss percentage (default 0.05).")
+    parser.add_argument("--take-profit-pct", type=float, default=None, help="Take-profit percentage (default 0.10).")
+    parser.add_argument("--trailing-stop-pct", type=float, default=None, help="Trailing stop percentage (default 0.07).")
+    parser.add_argument("--volume-multiplier", type=float, default=None, help="Volume expansion multiplier for volume_break signal (default 1.5).")
+    parser.add_argument("--max-positions", type=int, default=None, help="Maximum concurrent positions (default 3).")
     return parser.parse_args()
 
 
@@ -1248,6 +1256,21 @@ def main() -> None:
     args = parse_args()
     cache_dir = Path(args.output) / "cache"
     client = FinMindClient(cache_dir=cache_dir)
+    _cfg_overrides: dict[str, object] = {}
+    if args.rsi_threshold is not None:
+        _cfg_overrides["rsi_threshold"] = args.rsi_threshold
+    if args.adx_threshold is not None:
+        _cfg_overrides["adx_threshold"] = args.adx_threshold
+    if args.stop_loss_pct is not None:
+        _cfg_overrides["stop_loss_pct"] = args.stop_loss_pct
+    if args.take_profit_pct is not None:
+        _cfg_overrides["take_profit_pct"] = args.take_profit_pct
+    if args.trailing_stop_pct is not None:
+        _cfg_overrides["trailing_stop_pct"] = args.trailing_stop_pct
+    if args.volume_multiplier is not None:
+        _cfg_overrides["volume_multiplier"] = args.volume_multiplier
+    if args.max_positions is not None:
+        _cfg_overrides["max_positions"] = args.max_positions
     config = StrategyConfig(
         use_earnings_filter=args.use_earnings_filter,
         next_day_fill=args.next_day_fill,
@@ -1255,6 +1278,7 @@ def main() -> None:
         atr_stop_multiplier=getattr(args, "atr_stop_multiplier", 2.0),
         max_holding_days=getattr(args, "max_holding_days", 0),
         max_positions_per_sector=getattr(args, "max_positions_per_sector", 2),
+        **_cfg_overrides,
     )
 
     if getattr(args, "clean_cache", False):
