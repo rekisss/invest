@@ -21,25 +21,25 @@ FINMIND_LOGIN_URL = "https://api.finmindtrade.com/api/v4/login"
 def validate_finmind_token() -> tuple[bool, str]:
     """Check that FINMIND_TOKEN is set and accepted by the API.
 
-    Returns (ok, message). Calls the lightweight login endpoint so we get
-    the exact error reason without downloading any dataset.
+    Makes a lightweight data request (single stock info) to verify the token
+    without downloading large datasets.
     """
     token = os.getenv("FINMIND_TOKEN", "").strip()
     if not token:
         return False, "FINMIND_TOKEN 未設定 — 請在 GitHub Secrets 加入此變數"
     try:
-        resp = requests.post(
-            FINMIND_LOGIN_URL,
-            data={"user_id": "", "password": ""},
+        resp = requests.get(
+            FINMIND_API_URL,
             headers={"Authorization": f"Bearer {token}"},
+            params={"dataset": "TaiwanStockInfo", "data_id": "2330"},
             timeout=15,
         )
         payload = resp.json()
-        # FinMind returns status 200 + msg "success" for valid tokens
-        if payload.get("status") == 200:
+        status = payload.get("status", resp.status_code)
+        if status == 200:
             return True, "token OK"
         msg = payload.get("msg") or resp.text[:200]
-        return False, f"FinMind 拒絕 token（{payload.get('status', resp.status_code)}）：{msg}"
+        return False, f"FinMind 拒絕 token（{status}）：{msg}"
     except Exception as exc:
         return False, f"無法連線 FinMind API：{exc}"
 
