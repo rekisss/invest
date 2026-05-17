@@ -15,6 +15,33 @@ from pandas.errors import EmptyDataError, ParserError
 
 
 FINMIND_API_URL = "https://api.finmindtrade.com/api/v4/data"
+FINMIND_LOGIN_URL = "https://api.finmindtrade.com/api/v4/login"
+
+
+def validate_finmind_token() -> tuple[bool, str]:
+    """Check that FINMIND_TOKEN is set and accepted by the API.
+
+    Returns (ok, message). Calls the lightweight login endpoint so we get
+    the exact error reason without downloading any dataset.
+    """
+    token = os.getenv("FINMIND_TOKEN", "").strip()
+    if not token:
+        return False, "FINMIND_TOKEN 未設定 — 請在 GitHub Secrets 加入此變數"
+    try:
+        resp = requests.post(
+            FINMIND_LOGIN_URL,
+            data={"user_id": "", "password": ""},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=15,
+        )
+        payload = resp.json()
+        # FinMind returns status 200 + msg "success" for valid tokens
+        if payload.get("status") == 200:
+            return True, "token OK"
+        msg = payload.get("msg") or resp.text[:200]
+        return False, f"FinMind 拒絕 token（{payload.get('status', resp.status_code)}）：{msg}"
+    except Exception as exc:
+        return False, f"無法連線 FinMind API：{exc}"
 
 
 @dataclass

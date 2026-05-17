@@ -32,6 +32,7 @@ from data_loader import (
     fetch_stock_kbar,
     fetch_stock_prices,
     load_stock_list,
+    validate_finmind_token,
 )
 from fugle_client import FugleClient, fetch_watch_quotes
 from news_service import NewsClient, summarize_news
@@ -915,6 +916,13 @@ def format_sponsor_message(
 
 
 def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
+    token_ok, token_msg = validate_finmind_token()
+    if not token_ok:
+        err = f"❌ **掃描中止** · {args.end}\n{token_msg}"
+        _safe_print(err)
+        if args.notify:
+            send_discord_messages([err])
+        return
     if args.notify:
         send_discord_messages([f"🔄 **選股掃描開始** · {_cst_now()} CST · {args.end}"])
     candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
