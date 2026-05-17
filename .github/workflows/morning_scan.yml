@@ -48,6 +48,7 @@ jobs:
             --news-limit 3 \
             --clean-cache \
             --clean-cache-days 14 \
+            --workers 2 \
             --output output \
             --notify
 
