@@ -22,7 +22,8 @@ def validate_finmind_token() -> tuple[bool, str]:
     """Check that FINMIND_TOKEN is set and accepted by the API.
 
     Makes a lightweight data request (single stock info) to verify the token
-    without downloading large datasets.
+    without downloading large datasets. Using the data endpoint is correct
+    for Bearer token auth — the login endpoint requires user_id/password.
     """
     token = os.getenv("FINMIND_TOKEN", "").strip()
     if not token:
