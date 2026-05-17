@@ -3,6 +3,7 @@ name: 每日選股掃描 (20:00 CST)
 on:
   schedule:
     - cron: "0 12 * * 1-5"    # UTC 12:00 = CST 20:00，週一至週五收盤後
+    - cron: "0 12 * * 6"      # UTC 12:00 = CST 20:00，週六（用星期五資料，供週日選股參考）
   workflow_dispatch:            # 允許手動觸發
 
 env:

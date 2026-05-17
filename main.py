@@ -86,7 +86,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--event-cooldown-seconds", type=int, default=600, help="Cooldown before the same symbol+event can notify again.")
     parser.add_argument("--notify", action="store_true")
     parser.add_argument("--use-earnings-filter", action="store_true")
-    parser.add_argument("--next-day-fill", action="store_true", help="Fill backtest entries at next day open instead of signal-day close.")
+    parser.add_argument("--next-day-fill", default=True, action=argparse.BooleanOptionalAction, help="Fill backtest entries at next day open (default: True). Use --no-next-day-fill to revert to signal-day close.")
     parser.add_argument("--heartbeat-minutes", type=int, default=0, help="Send a status snapshot every N minutes during event-monitor (0 = disabled).")
     parser.add_argument("--clean-cache", action="store_true", help="Delete stale cache files before running.")
     parser.add_argument("--clean-cache-days", type=int, default=30, help="Age threshold in days for --clean-cache (default 30).")
@@ -98,6 +98,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--atr-stop-multiplier", type=float, default=2.0, help="ATR multiplier for stop loss (default 2.0, used with --use-atr-stop).")
     parser.add_argument("--max-holding-days", type=int, default=0, help="Force-exit positions after N calendar days in backtest (0 = disabled).")
     parser.add_argument("--max-positions-per-sector", type=int, default=2, help="Max simultaneous positions per industry sector in backtest (default 2, 0 = unlimited).")
+    # StrategyConfig overrides (for parallel backtest experiments)
+    parser.add_argument("--rsi-threshold", type=float, default=None, help="RSI threshold for rsi_strong signal (default 55.0).")
+    parser.add_argument("--adx-threshold", type=float, default=None, help="ADX threshold for adx_trending signal (default 20.0).")
+    parser.add_argument("--stop-loss-pct", type=float, default=None, help="Fixed stop-loss percentage (default 0.05).")
+    parser.add_argument("--take-profit-pct", type=float, default=None, help="Take-profit percentage (default 0.10).")
+    parser.add_argument("--trailing-stop-pct", type=float, default=None, help="Trailing stop percentage (default 0.07).")
+    parser.add_argument("--volume-multiplier", type=float, default=None, help="Volume expansion multiplier for volume_break signal (default 1.5).")
+    parser.add_argument("--max-positions", type=int, default=None, help="Maximum concurrent positions (default 3).")
     return parser.parse_args()
 
 
@@ -140,6 +148,11 @@ _HARD_CONDITIONS = frozenset([
     "volume_break", "rsi_strong", "breakout_20d", "market_above_ma60",
     "avoid_chase", "liquidity_ok",
 ])
+
+
+def _missing_hard_count(entry_reason: object) -> int:
+    met = {p.strip() for p in str(entry_reason or "").split(",") if p.strip()}
+    return len(_HARD_CONDITIONS - met)
 
 
 def _missing_hard_labels(entry_reason: object, max_items: int = 3) -> str:
@@ -466,7 +479,7 @@ _REGIME_EMOJI: dict[str, str] = {"牛市": "🐂", "盤整": "🦀", "熊市": "
 def _format_breadth_line(breadth: dict[str, object]) -> str:
     total = int(breadth.get("total_stocks", 0))
     if not total:
-        return ""
+        return "⚠️ **掃描未載入任何股票資料** — 請確認 FINMIND_TOKEN 是否有效，或 FinMind API 是否正常。"
     entry_pct = int(breadth.get("entry_signal_pct", 0))
     above_ema = int(breadth.get("above_ema60", 0))
     trend_up = int(breadth.get("ema60_gt_ema120", 0))
@@ -503,7 +516,43 @@ def format_scan_message_rich(
             lines.append(breadth_line)
             lines.append("")
     if candidates.empty:
-        lines.extend(["今日無全條件候選。", "", "**近似觀察名單**"])
+        lines.append("今日無全條件候選。")
+        # Show which hard condition is blocking the most stocks
+        if breadth:
+            hard_keys = {
+                "macd_golden_cross": "MACD交叉",
+                "above_ema60": "站EMA60",
+                "ema60_gt_ema120": "EMA60>120",
+                "volume_break": "量能放大",
+                "rsi_strong": "RSI偏強",
+                "breakout_20d": "突破20日高",
+                "market_above_ma60": "大盤站MA60",
+                "avoid_chase": "未追價",
+                "liquidity_ok": "流動性",
+            }
+            failing = sorted(
+                [(label, int(breadth.get(k, 0))) for k, label in hard_keys.items()],
+                key=lambda x: x[1],
+            )
+            if failing:
+                bottleneck_parts = [f"`{label}` {pct}%" for label, pct in failing[:4]]
+                lines.append(f"🚧 硬條件通過率最低：{' | '.join(bottleneck_parts)}")
+        lines.append("")
+        # "Only one step away" — stocks missing exactly 1 hard condition
+        closest = [
+            row for _, row in watchlist.iterrows()
+            if not row.get("skip_reason") and _missing_hard_count(row.get("entry_reason")) == 1
+        ]
+        if closest:
+            lines.append("**⏳ 只差一步**")
+            for row in closest[:5]:
+                missing_label = _missing_hard_labels(row.get("entry_reason"), max_items=1)
+                lines.append(
+                    f"• **{row['stock_id']}** {row['name']} | 缺 `{missing_label}` | "
+                    f"`{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{float(row['close']):.2f}`"
+                )
+            lines.append("")
+        lines.append("**近似觀察名單**")
         for _, row in watchlist.head(8).iterrows():
             lines.append(_watchlist_line(row, news_map))
         return "\n".join(lines)
@@ -1248,6 +1297,21 @@ def main() -> None:
     args = parse_args()
     cache_dir = Path(args.output) / "cache"
     client = FinMindClient(cache_dir=cache_dir)
+    _cfg_overrides: dict[str, object] = {}
+    if args.rsi_threshold is not None:
+        _cfg_overrides["rsi_threshold"] = args.rsi_threshold
+    if args.adx_threshold is not None:
+        _cfg_overrides["adx_threshold"] = args.adx_threshold
+    if args.stop_loss_pct is not None:
+        _cfg_overrides["stop_loss_pct"] = args.stop_loss_pct
+    if args.take_profit_pct is not None:
+        _cfg_overrides["take_profit_pct"] = args.take_profit_pct
+    if args.trailing_stop_pct is not None:
+        _cfg_overrides["trailing_stop_pct"] = args.trailing_stop_pct
+    if args.volume_multiplier is not None:
+        _cfg_overrides["volume_multiplier"] = args.volume_multiplier
+    if args.max_positions is not None:
+        _cfg_overrides["max_positions"] = args.max_positions
     config = StrategyConfig(
         use_earnings_filter=args.use_earnings_filter,
         next_day_fill=args.next_day_fill,
@@ -1255,6 +1319,7 @@ def main() -> None:
         atr_stop_multiplier=getattr(args, "atr_stop_multiplier", 2.0),
         max_holding_days=getattr(args, "max_holding_days", 0),
         max_positions_per_sector=getattr(args, "max_positions_per_sector", 2),
+        **_cfg_overrides,
     )
 
     if getattr(args, "clean_cache", False):
