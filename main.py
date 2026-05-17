@@ -928,6 +928,23 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
     candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)
     latest_date = str(breadth.get("actual_date") or args.end)
 
+    # If 0 stocks loaded despite a valid token, diagnose and report why
+    if breadth.get("total_stocks", 0) == 0:
+        diag_lines = [f"⚠️ **診斷報告** · {latest_date}"]
+        diag_lines.append(f"• Token 驗證：✅ 通過")
+        diag_lines.append(f"• 股票清單（universe）：{len(universe)} 支")
+        if len(universe) == 0:
+            diag_lines.append("  → fetch_stock_info / build_auto_universe 回傳空清單")
+            diag_lines.append("  → 可能是 FinMind 免費帳戶不支援 TaiwanStockInfo 批量查詢")
+        else:
+            diag_lines.append(f"  → 有 {len(universe)} 支股票但全部資料抓取失敗")
+            diag_lines.append("  → 可能是 TaiwanStockPrice 需要付費方案，或 API 速率限制")
+        diag_lines.append("• 建議：確認 FinMind 帳戶方案，或查看 GitHub Actions logs 看詳細錯誤")
+        diag_msg = "\n".join(diag_lines)
+        _safe_print(diag_msg)
+        if args.notify:
+            send_discord_messages([diag_msg])
+
     # Apply minimum confidence filter for notifications (vectorized)
     min_conf = getattr(args, "min_confidence", 0)
     notify_candidates = candidates
