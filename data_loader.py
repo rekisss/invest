@@ -116,6 +116,11 @@ class FinMindClient:
             raise last_error  # type: ignore[misc]
 
         payload = response.json()
+        api_status = payload.get("status")
+        if api_status is not None and api_status != 200:
+            raise RuntimeError(
+                f"FinMind API error for {dataset}: status={api_status} msg={payload.get('msg', '')}"
+            )
         if "data" not in payload:
             raise RuntimeError(f"Unexpected FinMind payload for {dataset}: {payload}")
 
