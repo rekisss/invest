@@ -1249,7 +1249,7 @@ def run_backtest_mode(args: argparse.Namespace, client: FinMindClient, config: S
     if market_raw.empty:
         raise RuntimeError("Unable to download TAIEX market data from FinMind.")
     market = prepare_market_frame(market_raw, config)
-    signals_by_stock, signal_frames = collect_signals(stock_list, client, market, config, args.start, args.end, args.workers)
+    signals_by_stock, signal_frames, _ = collect_signals(stock_list, client, market, config, args.start, args.end, args.workers)
     if not signals_by_stock:
         raise RuntimeError("No stock data was loaded. Check the stock universe and FinMind credentials.")
 
@@ -1301,7 +1301,7 @@ def run_walk_forward(args: argparse.Namespace, client: FinMindClient, config: St
     market_full = prepare_market_frame(market_raw, config)
 
     stock_list = load_universe(args, client)
-    signals_by_stock, _ = collect_signals(stock_list, client, market_full, config, args.start, args.end, args.workers)
+    signals_by_stock, _, __ = collect_signals(stock_list, client, market_full, config, args.start, args.end, args.workers)
     if not signals_by_stock:
         raise RuntimeError("No signal data loaded.")
 
