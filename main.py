@@ -50,7 +50,7 @@ from strategy import (
 )
 from universe import build_auto_universe
 from notion_sync import confidence_score as _confidence_score, notion_enabled, recommend_observation_period, sync_scan_results
-from market_predictor import MarketPredictor, format_prediction_block
+from market_predictor import MarketPredictor, fetch_us_features, format_prediction_block
 
 _CST = timezone(timedelta(hours=8))
 
@@ -532,7 +532,7 @@ def format_scan_message_rich(
             lines.append(breadth_line)
             lines.append("")
     if ai_prediction:
-        pred_line = format_prediction_block(ai_prediction)
+        pred_line = format_prediction_block(ai_prediction, breadth=breadth)
         if pred_line:
             lines.append(pred_line)
             lines.append("")
@@ -1008,9 +1008,10 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
         train_start = (pd.Timestamp(args.end) - pd.Timedelta(days=365)).strftime("%Y-%m-%d")
         market_train = fetch_market_index(client, train_start, args.end)
         if not market_train.empty:
+            us_df = fetch_us_features(train_start, args.end)
             predictor = MarketPredictor(horizon=5)
-            predictor.fit(market_train)
-            ai_prediction = predictor.predict_proba(market_train)
+            predictor.fit(market_train, us_df if not us_df.empty else None)
+            ai_prediction = predictor.predict_proba(market_train, us_df if not us_df.empty else None)
     except Exception as _pred_exc:
         _safe_print(f"[ai] 預測略過：{_pred_exc}")
 
