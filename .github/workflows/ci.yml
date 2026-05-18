@@ -25,10 +25,18 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt -v 2>&1 | tail -20
+
+      - name: Show installed packages
+        run: pip list | grep -E "pandas|numpy|xgboost|yfinance|discord"
 
       - name: Run predictor tests
-        run: python test_predictor.py
+        run: python -u test_predictor.py
 
       - name: Syntax check main modules
-        run: python -c "import main, market_predictor, data_loader, strategy, notifier"
+        run: |
+          python -c "import market_predictor; print('market_predictor OK')"
+          python -c "import data_loader; print('data_loader OK')"
+          python -c "import strategy; print('strategy OK')"
+          python -c "import notifier; print('notifier OK')"
+          python -c "import main; print('main OK')"
