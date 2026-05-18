@@ -971,7 +971,7 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
     # AI market-direction prediction (best-effort; silent if deps missing)
     ai_prediction: dict | None = None
     try:
-        train_start = (pd.Timestamp(args.end) - pd.Timedelta(days=730)).strftime("%Y-%m-%d")
+        train_start = (pd.Timestamp(args.end) - pd.Timedelta(days=365)).strftime("%Y-%m-%d")
         market_train = fetch_market_index(client, train_start, args.end)
         if not market_train.empty:
             predictor = MarketPredictor(horizon=5)
