@@ -4,6 +4,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 from pathlib import Path
+import random
 import sys
 import time
 from typing import Any
@@ -389,7 +390,10 @@ def collect_signals(
     signals_by_stock: dict[str, pd.DataFrame] = {}
     signal_frames: list[pd.DataFrame] = []
 
+    _req_delay = max(0.0, 1.5 / max(workers, 1))  # spread requests: ~1 req/1.5s per worker slot
+
     def load_one(stock: dict[str, Any]) -> tuple[str, pd.DataFrame] | None:
+        time.sleep(_req_delay + random.uniform(0, _req_delay))
         try:
             prices = fetch_stock_prices(client, stock["stock_id"], start_date, end_date)
             if prices.empty:
