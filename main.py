@@ -389,24 +389,26 @@ def collect_signals(
 ) -> tuple[dict[str, pd.DataFrame], list[pd.DataFrame]]:
     signals_by_stock: dict[str, pd.DataFrame] = {}
     signal_frames: list[pd.DataFrame] = []
+    load_errors: list[str] = []  # collect first few errors for diagnostics
 
     _req_delay = max(0.0, 1.5 / max(workers, 1))  # spread requests: ~1 req/1.5s per worker slot
 
-    def load_one(stock: dict[str, Any]) -> tuple[str, pd.DataFrame] | None:
+    def load_one(stock: dict[str, Any]) -> tuple[str, pd.DataFrame] | tuple[str, None]:
         time.sleep(_req_delay + random.uniform(0, _req_delay))
+        sid = stock["stock_id"]
         try:
-            prices = fetch_stock_prices(client, stock["stock_id"], start_date, end_date)
+            prices = fetch_stock_prices(client, sid, start_date, end_date)
             if prices.empty:
-                return None
-            institutional = fetch_institutional_data(client, stock["stock_id"], start_date, end_date)
+                return sid, None
+            institutional = fetch_institutional_data(client, sid, start_date, end_date)
             earnings = pd.DataFrame(columns=["date"])
             if config.use_earnings_filter:
-                earnings = fetch_financial_statement_dates(client, stock["stock_id"], start_date, end_date)
+                earnings = fetch_financial_statement_dates(client, sid, start_date, end_date)
             frame = prepare_stock_signals(stock, prices, market, institutional, config, earnings_dates=earnings)
-            return stock["stock_id"], frame
+            return sid, frame
         except Exception as error:
-            print(f"[warn] skipped {stock['stock_id']}: {error}", file=sys.stderr)
-            return None
+            print(f"[warn] skipped {sid}: {error}", file=sys.stderr)
+            return sid, error  # type: ignore[return-value]
 
     _signal_cols = [
         "date", "stock_id", "name", "industry_category",
@@ -434,14 +436,19 @@ def collect_signals(
             if done % 10 == 0 or done == total:
                 print(f"[collect_signals] {done}/{total} stocks loaded", file=sys.stderr)
             result = future.result()
-            if result is None:
+            stock_id, payload = result
+            if payload is None:
+                load_errors.append(f"{stock_id}: empty prices")
                 continue
-            stock_id, signal_frame = result
+            if isinstance(payload, Exception):
+                load_errors.append(f"{stock_id}: {payload}")
+                continue
+            signal_frame = payload
             signals_by_stock[stock_id] = signal_frame
             if not _signal_cols_present:
                 _signal_cols_present = [c for c in _signal_cols if c in signal_frame.columns]
             signal_frames.append(signal_frame[_signal_cols_present])
-    return signals_by_stock, signal_frames
+    return signals_by_stock, signal_frames, load_errors
 
 
 def build_daily_snapshot(
@@ -457,9 +464,11 @@ def build_daily_snapshot(
     market = prepare_market_frame(market_raw, config)
 
     universe = load_universe(args, client)
-    signals_by_stock, _ = collect_signals(universe, client, market, config, start_date, end_date_text, args.workers)
+    signals_by_stock, _, load_errors = collect_signals(universe, client, market, config, start_date, end_date_text, args.workers)
     snapshot = latest_signal_snapshot(signals_by_stock)
     breadth = compute_market_breadth(snapshot)
+    if load_errors:
+        breadth["load_errors"] = load_errors[:3]
     breadth["market_regime"] = compute_market_regime(market)
     candidates, watchlist = rank_candidates(
         snapshot,
@@ -959,16 +968,19 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
 
     # If 0 stocks loaded despite a valid token, diagnose and report why
     if breadth.get("total_stocks", 0) == 0:
+        load_errors: list[str] = list(breadth.get("load_errors") or [])
         diag_lines = [f"⚠️ **診斷報告** · {latest_date}"]
-        diag_lines.append(f"• Token 驗證：✅ 通過")
+        diag_lines.append("• Token 驗證：✅ 通過")
         diag_lines.append(f"• 股票清單（universe）：{len(universe)} 支")
         if len(universe) == 0:
-            diag_lines.append("  → fetch_stock_info / build_auto_universe 回傳空清單")
-            diag_lines.append("  → 可能是 FinMind 免費帳戶不支援 TaiwanStockInfo 批量查詢")
+            diag_lines.append("  → build_auto_universe 回傳空清單，請確認 TaiwanStockInfo 可用")
+        elif load_errors:
+            diag_lines.append("• 抓取失敗樣本（前 3 筆）：")
+            for e in load_errors:
+                diag_lines.append(f"  → `{e}`")
         else:
-            diag_lines.append(f"  → 有 {len(universe)} 支股票但全部資料抓取失敗")
-            diag_lines.append("  → 可能是 TaiwanStockPrice 需要付費方案，或 API 速率限制")
-        diag_lines.append("• 建議：確認 FinMind 帳戶方案，或查看 GitHub Actions logs 看詳細錯誤")
+            diag_lines.append(f"  → {len(universe)} 支股票全部回傳空資料（無例外）")
+            diag_lines.append("  → TaiwanStockPrice 可能對此帳戶返回空結果，請查看 Actions logs")
         diag_msg = "\n".join(diag_lines)
         _safe_print(diag_msg)
         if args.notify:
