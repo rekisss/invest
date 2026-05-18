@@ -4,5 +4,7 @@ requests>=2.31.0
 openpyxl>=3.1.2
 matplotlib>=3.8.4
 Flask>=3.0.3
+scikit-learn>=1.4.0
 xgboost>=2.0.0
 yfinance>=0.2.40
+discord.py>=2.3.0

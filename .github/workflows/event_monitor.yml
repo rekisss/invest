@@ -52,10 +52,10 @@ jobs:
             --stocks auto \
             --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
             --lookback-days 420 \
-            --max-universe 10 \
-            --top-n 5 \
+            --max-universe 40 \
+            --top-n 10 \
             --workers 2 \
-            --watch-top 5 \
+            --watch-top 8 \
             --max-price 120 \
             --prefer-lower-price \
             --include-news \

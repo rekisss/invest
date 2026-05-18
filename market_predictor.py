@@ -17,13 +17,13 @@ import pandas as pd
 try:
     from xgboost import XGBClassifier
     _DEPS_OK = True
-except ImportError:
+except Exception:
     _DEPS_OK = False
 
 try:
     import yfinance as yf
     _YF_OK = True
-except ImportError:
+except Exception:
     _YF_OK = False
 
 
@@ -126,7 +126,11 @@ class MarketPredictor:
             return taiex_df
         taiex_df["date"] = pd.to_datetime(taiex_df["date"]).dt.normalize()
         us_df["date"] = pd.to_datetime(us_df["date"]).dt.normalize()
-        return taiex_df.merge(us_df, on="date", how="left")
+        merged = taiex_df.merge(us_df, on="date", how="left")
+        us_cols = [c for c in merged.columns if c not in taiex_df.columns and c != "date"]
+        if us_cols:
+            merged[us_cols] = merged[us_cols].ffill()
+        return merged
 
     def fit(self, market_df: pd.DataFrame, us_df: pd.DataFrame | None = None) -> "MarketPredictor":
         if not _DEPS_OK:

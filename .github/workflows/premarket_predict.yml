@@ -1,0 +1,48 @@
+name: 盤前預測 (08:00 CST)
+
+on:
+  schedule:
+    - cron: "0 0 * * 1-5"    # UTC 00:00 = CST 08:00，週一至週五
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pre-market prediction
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python main.py \
+            --mode predict \
+            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
+            --lookback-days 420 \
+            --output output \
+            --notify
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"⚠️ **盤前預測執行失敗** · $(date -u +%Y-%m-%d) · 請檢查 GitHub Actions logs\"}" \
+            "$DISCORD_WEBHOOK_URL" || true
