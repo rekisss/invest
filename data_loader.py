@@ -98,7 +98,8 @@ class FinMindClient:
                 request_params[key] = value
 
         last_error: Exception | None = None
-        for attempt in range(3):
+        response = None
+        for attempt in range(4):
             try:
                 response = self._session.get(
                     FINMIND_API_URL,
@@ -107,22 +108,31 @@ class FinMindClient:
                     timeout=self.timeout,
                 )
                 response.raise_for_status()
-                break
             except requests.exceptions.RequestException as exc:
                 last_error = exc
-                if attempt < 2:
-                    time.sleep(2 ** attempt * 2 + random.uniform(0, 1))
+                if attempt < 3:
+                    time.sleep(2 ** attempt * 3 + random.uniform(0, 2))
+                continue
+
+            payload = response.json()
+            api_status = payload.get("status")
+            if api_status == 402:
+                # Rate-limited — back off and retry
+                last_error = RuntimeError(
+                    f"FinMind rate limit (402) for {dataset}, attempt {attempt + 1}"
+                )
+                if attempt < 3:
+                    time.sleep(2 ** attempt * 5 + random.uniform(0, 3))
+                continue
+            if api_status is not None and api_status != 200:
+                raise RuntimeError(
+                    f"FinMind API error for {dataset}: status={api_status} msg={payload.get('msg', '')}"
+                )
+            if "data" not in payload:
+                raise RuntimeError(f"Unexpected FinMind payload for {dataset}: {payload}")
+            break
         else:
             raise last_error  # type: ignore[misc]
-
-        payload = response.json()
-        api_status = payload.get("status")
-        if api_status is not None and api_status != 200:
-            raise RuntimeError(
-                f"FinMind API error for {dataset}: status={api_status} msg={payload.get('msg', '')}"
-            )
-        if "data" not in payload:
-            raise RuntimeError(f"Unexpected FinMind payload for {dataset}: {payload}")
 
         frame = pd.DataFrame(payload["data"])
         if use_cache:
