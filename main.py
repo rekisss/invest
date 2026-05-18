@@ -527,6 +527,22 @@ def format_scan_message_rich(
         if pred_line:
             lines.append(pred_line)
             lines.append("")
+
+    # 動能排行榜 — top 5 by momentum_score across candidates + watchlist
+    if "momentum_score" in candidates.columns or "momentum_score" in watchlist.columns:
+        pool = pd.concat([candidates, watchlist], ignore_index=True)
+        if "momentum_score" in pool.columns:
+            top_momentum = pool.dropna(subset=["momentum_score"]).sort_values("momentum_score", ascending=False).head(5)
+            if not top_momentum.empty:
+                lines.append("🔥 **今日動能排行**")
+                for rank, (_, row) in enumerate(top_momentum.iterrows(), 1):
+                    score = int(row["momentum_score"])
+                    bar = "🟢" if score >= 70 else ("🟡" if score >= 40 else "🔴")
+                    is_candidate = not candidates.empty and str(row["stock_id"]) in candidates["stock_id"].astype(str).values
+                    star = " ✅" if is_candidate else ""
+                    lines.append(f"{rank}. **{row['stock_id']}** {row['name']} ｜ 動能 `{score}` {bar}{star}")
+                lines.append("")
+
     if candidates.empty:
         lines.append("今日無全條件候選。")
         # Show which hard condition is blocking the most stocks
@@ -605,8 +621,10 @@ def format_scan_message_rich(
         swing_low = row.get("close_10d_low")
         swing_txt = f" | 支撐 `{float(swing_low):.2f}`" if swing_low and pd.notna(swing_low) else ""
         trend_block = _trend_block(row)
+        momentum = int(row["momentum_score"]) if pd.notna(row.get("momentum_score")) else None
+        mom_txt = f" | 動能 `{momentum}`" if momentum is not None else ""
         lines.append(f"━━━━━━━━━━━━━━━━━━━━")
-        lines.append(f"**{row['stock_id']}** {row['name']}{industry_txt}{price_note}{star}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`")
+        lines.append(f"**{row['stock_id']}** {row['name']}{industry_txt}{price_note}{star}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`{mom_txt}")
         lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`{swing_txt}")
         lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ret5d_txt}{ichi_txt}")
         lines.append(f"🏦 外資連買 `{int(row.get('foreign_buy_streak', 0))}d`{invest_txt}{dealer_txt}")
