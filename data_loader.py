@@ -286,7 +286,7 @@ def fetch_institutional_data(
     frame["net"] = frame["buy"] - frame["sell"]
     name_col = frame["name"].astype(str)
 
-    result = frame["date"].drop_duplicates().sort_values().rename("date").to_frame(index=False)
+    result = frame["date"].drop_duplicates().sort_values().rename("date").to_frame().reset_index(drop=True)
     for col, regex in _INSTITUTION_REGEXES.items():
         mask = name_col.str.contains(regex, na=False)
         if mask.any():
