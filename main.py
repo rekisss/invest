@@ -1092,7 +1092,11 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
 
     fugle = FugleClient()
     if not fugle.enabled:
-        raise RuntimeError("FUGLE_API_KEY is not configured.")
+        msg = "⚠️ **事件監控略過** · FUGLE_API_KEY 未設定，無法取得即時報價。\n請在 GitHub Secrets 加入 FUGLE_API_KEY 後重新啟動。"
+        _safe_print(msg)
+        if args.notify:
+            send_discord_messages([msg])
+        return
 
     previous_state: dict[str, dict[str, float | str]] = {}
     last_notified: dict[str, float] = {}
