@@ -49,6 +49,7 @@ from strategy import (
 )
 from universe import build_auto_universe
 from notion_sync import confidence_score as _confidence_score, notion_enabled, recommend_observation_period, sync_scan_results
+from market_predictor import MarketPredictor, format_prediction_block
 
 _CST = timezone(timedelta(hours=8))
 
@@ -508,6 +509,7 @@ def format_scan_message_rich(
     latest_date: str,
     news_map: dict[str, dict[str, object]] | None = None,
     breadth: dict[str, object] | None = None,
+    ai_prediction: dict | None = None,
 ) -> str:
     news_map = news_map or {}
     lines = [f"🔍 **Taiwan MACD Scan** · {latest_date}", ""]
@@ -515,6 +517,11 @@ def format_scan_message_rich(
         breadth_line = _format_breadth_line(breadth)
         if breadth_line:
             lines.append(breadth_line)
+            lines.append("")
+    if ai_prediction:
+        pred_line = format_prediction_block(ai_prediction)
+        if pred_line:
+            lines.append(pred_line)
             lines.append("")
     if candidates.empty:
         lines.append("今日無全條件候選。")
@@ -961,12 +968,24 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
         ).astype(int).clip(0, 100)
         notify_candidates = candidates[scores >= min_conf].copy()
 
+    # AI market-direction prediction (best-effort; silent if deps missing)
+    ai_prediction: dict | None = None
+    try:
+        train_start = (pd.Timestamp(args.end) - pd.Timedelta(days=730)).strftime("%Y-%m-%d")
+        market_train = fetch_market_index(client, train_start, args.end)
+        if not market_train.empty:
+            predictor = MarketPredictor(horizon=5)
+            predictor.fit(market_train)
+            ai_prediction = predictor.predict_proba(market_train)
+    except Exception as _pred_exc:
+        _safe_print(f"[ai] 預測略過：{_pred_exc}")
+
     report_path = save_scan_report(args.output, candidates, watchlist, universe)
     news_map = {}
     if args.include_news:
         scan_rows = notify_candidates.to_dict("records") if not notify_candidates.empty else watchlist.to_dict("records")
         news_map = build_news_map(args.output, scan_rows, news_limit=args.news_limit)
-    message = format_scan_message_rich(notify_candidates, watchlist, latest_date, news_map=news_map, breadth=breadth)
+    message = format_scan_message_rich(notify_candidates, watchlist, latest_date, news_map=news_map, breadth=breadth, ai_prediction=ai_prediction)
     _safe_print(message)
     _safe_print("")
     _safe_print(f"Scan report: {report_path}")
