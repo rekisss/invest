@@ -39,7 +39,9 @@ def validate_finmind_token() -> tuple[bool, str]:
         status = payload.get("status", resp.status_code)
         if status == 200:
             return True, "token OK"
-        msg = payload.get("msg") or resp.text[:200]
+        msg = str(payload.get("msg") or resp.text[:200])
+        if status == 402 and "limit" in msg.lower():
+            return False, f"⏰ FinMind 每日免費配額已耗盡，明天 UTC 00:00 自動重置。\n升級帳戶：https://finmindtrade.com/"
         return False, f"FinMind 拒絕 token（{status}）：{msg}"
     except Exception as exc:
         return False, f"無法連線 FinMind API：{exc}"
@@ -117,7 +119,11 @@ class FinMindClient:
             payload = response.json()
             api_status = payload.get("status")
             if api_status == 402:
-                # Rate-limited — back off and retry
+                msg = payload.get("msg", "")
+                # "upper limit" = daily quota exhausted — no point retrying
+                if "upper limit" in str(msg).lower() or "limit" in str(msg).lower():
+                    raise RuntimeError(f"FinMind 每日配額已耗盡，明天自動重置。({msg})")
+                # Otherwise transient rate-limit — back off and retry
                 last_error = RuntimeError(
                     f"FinMind rate limit (402) for {dataset}, attempt {attempt + 1}"
                 )
@@ -280,7 +286,7 @@ def fetch_institutional_data(
     frame["net"] = frame["buy"] - frame["sell"]
     name_col = frame["name"].astype(str)
 
-    result = frame["date"].drop_duplicates().sort_values().rename("date").to_frame(index=False)
+    result = frame["date"].drop_duplicates().sort_values().rename("date").to_frame().reset_index(drop=True)
     for col, regex in _INSTITUTION_REGEXES.items():
         mask = name_col.str.contains(regex, na=False)
         if mask.any():

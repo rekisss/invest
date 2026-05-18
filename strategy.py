@@ -52,7 +52,7 @@ _BREADTH_COLS = [
 ]
 _CANDIDATE_COLS = [
     "date", "stock_id", "name", "industry_category", "close",
-    "condition_count", "entry_score", "rsi14", "adx14", "atr14",
+    "condition_count", "entry_score", "momentum_score", "rsi14", "adx14", "atr14",
     "volume_ratio", "volume_ma20", "return_5d", "relative_strength_5d",
     "foreign_buy_streak", "invest_trust_streak", "dealer_buy_streak",
     "stoch_k", "stoch_d",
@@ -390,6 +390,17 @@ def prepare_stock_signals(
         + _adx14
         + _soft_matrix @ _SOFT_SCORE_WEIGHTS
     )
+
+    # Momentum score (0-100): 量能 40% + 波動度 30% + 尾盤強度 30%
+    _atr_arr = merged["atr14"].to_numpy(dtype=float)
+    _vol_comp  = np.clip((_vr_arr - 1.0) * 50, 0, 100)          # volume ratio, centered at 1x
+    _safe_close = np.where(_close_arr > 0, _close_arr, np.nan)
+    _atr_pct   = np.nan_to_num(_atr_arr / _safe_close * 100, nan=0.0)
+    _volat_comp = np.clip(_atr_pct * 5, 0, 100)                  # ATR% proxy for volatility
+    _tail_comp  = np.clip((_rs5d_arr * 100 + 5) * 5, 0, 100)    # relative strength vs market
+    merged["momentum_score"] = (
+        _vol_comp * 0.40 + _volat_comp * 0.30 + _tail_comp * 0.30
+    ).round(1)
 
     merged["macd_death_cross"] = (
         (_p_macd >= _p_macd_sig)
