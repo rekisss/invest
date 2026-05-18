@@ -17,13 +17,13 @@ import pandas as pd
 try:
     from xgboost import XGBClassifier
     _DEPS_OK = True
-except ImportError:
+except Exception:
     _DEPS_OK = False
 
 try:
     import yfinance as yf
     _YF_OK = True
-except ImportError:
+except Exception:
     _YF_OK = False
 
 

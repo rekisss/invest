@@ -84,6 +84,7 @@ def test_fetch_us_features_returns_dataframe() -> None:
 
 
 if __name__ == "__main__":
+    import traceback
     tests = [
         test_merge_us_ffill,
         test_predictor_fit_predict,
@@ -91,7 +92,16 @@ if __name__ == "__main__":
         test_predictor_insufficient_data,
         test_fetch_us_features_returns_dataframe,
     ]
+    failed = []
     for fn in tests:
-        fn()
-        print(f"  ✅ {fn.__name__}")
+        try:
+            fn()
+            print(f"  ✅ {fn.__name__}")
+        except Exception as exc:
+            print(f"  ❌ {fn.__name__}: {exc}")
+            traceback.print_exc()
+            failed.append(fn.__name__)
+    if failed:
+        print(f"\n{len(failed)} test(s) FAILED: {failed}")
+        raise SystemExit(1)
     print("\nAll tests passed.")
