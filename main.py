@@ -50,7 +50,7 @@ from strategy import (
 )
 from universe import build_auto_universe
 from notion_sync import confidence_score as _confidence_score, notion_enabled, recommend_observation_period, sync_scan_results
-from market_predictor import MarketPredictor, format_prediction_block
+from market_predictor import MarketPredictor, fetch_us_features, format_prediction_block
 
 _CST = timezone(timedelta(hours=8))
 
@@ -66,7 +66,7 @@ def _cst_today() -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Taiwan MACD swing strategy backtester and scanner.")
-    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward"], default="scan")
+    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict"], default="scan")
     parser.add_argument("--stocks", default="auto", help="CSV file containing stock_id and optional name, or 'auto'.")
     parser.add_argument("--start", default="2020-01-01")
     parser.add_argument("--end", default=_cst_today())
@@ -1345,6 +1345,49 @@ def run_walk_forward(args: argparse.Namespace, client: FinMindClient, config: St
         _safe_print(f"\nSaved: {output_path / 'walk_forward_results.csv'}")
 
 
+def run_predict(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
+    token_ok, token_msg = validate_finmind_token()
+    if not token_ok:
+        msg = f"❌ **盤前預測中止** · {args.end}\n{token_msg}"
+        _safe_print(msg)
+        if args.notify:
+            send_discord_messages([msg])
+        return
+
+    today = args.end
+    train_start = (pd.Timestamp(today) - pd.Timedelta(days=args.lookback_days)).strftime("%Y-%m-%d")
+
+    try:
+        market_df = fetch_market_index(client, train_start, today)
+    except Exception as exc:
+        msg = f"❌ **盤前預測失敗** · {today}\n無法取得大盤資料：{exc}"
+        _safe_print(msg)
+        if args.notify:
+            send_discord_messages([msg])
+        return
+
+    if market_df.empty:
+        msg = f"⚠️ **盤前預測略過** · {today}\n大盤資料為空（FinMind 可能尚未更新）"
+        _safe_print(msg)
+        if args.notify:
+            send_discord_messages([msg])
+        return
+
+    us_df = fetch_us_features(train_start, today)
+
+    predictor = MarketPredictor(horizon=5)
+    predictor.fit(market_df, us_df if not us_df.empty else None)
+    pred = predictor.predict_proba(market_df, us_df if not us_df.empty else None)
+
+    latest_date = pd.Timestamp(market_df["date"].max()).strftime("%Y-%m-%d")
+    header = f"🌅 **盤前預測** · {latest_date} · {_cst_now()} CST"
+    pred_block = format_prediction_block(pred)
+    message = header + "\n\n" + (pred_block if pred_block else "⚠️ AI 模型訓練資料不足，無法產生預測。")
+    _safe_print(message)
+    if args.notify:
+        send_discord_messages([message])
+
+
 def main() -> None:
     args = parse_args()
     cache_dir = Path(args.output) / "cache"
@@ -1393,6 +1436,8 @@ def main() -> None:
         run_hybrid_monitor(args, client, config)
     elif args.mode == "daily-report":
         run_daily_report(args, client, config)
+    elif args.mode == "predict":
+        run_predict(args, client, config)
     else:
         run_scan(args, client, config)
 
