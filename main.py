@@ -27,6 +27,7 @@ from data_loader import (
     FinMindClient,
     clean_cache,
     fetch_financial_statement_dates,
+    fetch_fundamentals,
     fetch_institutional_data,
     fetch_market_index,
     fetch_stock_info,
@@ -35,6 +36,7 @@ from data_loader import (
     load_stock_list,
     validate_finmind_token,
 )
+from fundamentals import compute_f_score
 from fugle_client import FugleClient, fetch_watch_quotes
 from news_service import NewsClient, summarize_news
 from notifier import send_discord_messages, split_message
@@ -101,6 +103,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--atr-stop-multiplier", type=float, default=2.0, help="ATR multiplier for stop loss (default 2.0, used with --use-atr-stop).")
     parser.add_argument("--max-holding-days", type=int, default=0, help="Force-exit positions after N calendar days in backtest (0 = disabled).")
     parser.add_argument("--max-positions-per-sector", type=int, default=2, help="Max simultaneous positions per industry sector in backtest (default 2, 0 = unlimited).")
+    parser.add_argument("--f-score-min", type=int, default=0, help="Minimum Piotroski F-Score to qualify for entry (0 = disabled, 6 = recommended).")
     # StrategyConfig overrides (for parallel backtest experiments)
     parser.add_argument("--rsi-threshold", type=float, default=None, help="RSI threshold for rsi_strong signal (default 55.0).")
     parser.add_argument("--adx-threshold", type=float, default=None, help="ADX threshold for adx_trending signal (default 20.0).")
@@ -393,6 +396,8 @@ def collect_signals(
 
     _req_delay = max(0.0, 1.5 / max(workers, 1))  # spread requests: ~1 req/1.5s per worker slot
 
+    _fund_start = (pd.Timestamp(start_date) - pd.Timedelta(days=730)).strftime("%Y-%m-%d")
+
     def load_one(stock: dict[str, Any]) -> tuple[str, pd.DataFrame] | tuple[str, None]:
         time.sleep(_req_delay + random.uniform(0, _req_delay))
         sid = stock["stock_id"]
@@ -404,7 +409,18 @@ def collect_signals(
             earnings = pd.DataFrame(columns=["date"])
             if config.use_earnings_filter:
                 earnings = fetch_financial_statement_dates(client, sid, start_date, end_date)
-            frame = prepare_stock_signals(stock, prices, market, institutional, config, earnings_dates=earnings)
+            stock_f_score = -1
+            if config.f_score_min > 0:
+                try:
+                    fund = fetch_fundamentals(client, sid, _fund_start, end_date)
+                    result = compute_f_score(fund["income"], fund["balance"], fund["cashflow"])
+                    stock_f_score = int(result["f_score"])
+                except Exception:
+                    pass
+            frame = prepare_stock_signals(
+                stock, prices, market, institutional, config,
+                earnings_dates=earnings, f_score=stock_f_score,
+            )
             return sid, frame
         except Exception as error:
             print(f"[warn] skipped {sid}: {error}", file=sys.stderr)
@@ -424,6 +440,7 @@ def collect_signals(
         "dealer_buy_streak", "dealer_buy_3d",
         "williams_r", "cci20", "mfi14", "mfi_strong", "above_ichimoku_cloud",
         "lr_slope_20", "lr_slope_60",
+        "f_score",
     ]
     _signal_cols_present: list[str] = []  # resolved on first result
     stock_records = stock_list.to_dict("records")
@@ -1446,6 +1463,7 @@ def main() -> None:
         atr_stop_multiplier=getattr(args, "atr_stop_multiplier", 2.0),
         max_holding_days=getattr(args, "max_holding_days", 0),
         max_positions_per_sector=getattr(args, "max_positions_per_sector", 2),
+        f_score_min=getattr(args, "f_score_min", 0),
         **_cfg_overrides,
     )
 

@@ -28,7 +28,7 @@ _SOFT_ENTRY_COLS = [
 ]
 _ENTRY_COLS = _HARD_ENTRY_COLS + _SOFT_ENTRY_COLS
 _ENTRY_COLS_ARR = np.array(_ENTRY_COLS)
-_SKIP_COLS = ["long_upper_shadow", "open_high_close_low", "gap_chase_after_blowout", "earnings_blocked"]
+_SKIP_COLS = ["long_upper_shadow", "open_high_close_low", "gap_chase_after_blowout", "earnings_blocked", "f_score_low"]
 _SKIP_COLS_ARR = np.array(_SKIP_COLS)
 _EXIT_COLS = ["macd_death_cross", "close_below_ema20", "close_below_swing_low"]
 _EXIT_COLS_ARR = np.array(_EXIT_COLS)
@@ -61,6 +61,7 @@ _CANDIDATE_COLS = [
     "mfi14", "mfi_strong", "above_ichimoku_cloud",
     "close_10d_low",
     "lr_slope_20", "lr_slope_60",
+    "f_score",
     "entry_reason", "skip_reason",
 ]
 _WATCH_COLS = [
@@ -114,6 +115,7 @@ class StrategyConfig:
     atr_stop_multiplier: float = 2.0      # Stop at entry_price - N * ATR14
     max_holding_days: int = 0             # Force-exit after N calendar days (0 = disabled)
     max_positions_per_sector: int = 2     # Max simultaneous positions per industry category
+    f_score_min: int = 0                  # Minimum Piotroski F-Score (0 = disabled, 6 = recommended)
 
 
 def prepare_market_frame(market_df: pd.DataFrame, config: StrategyConfig) -> pd.DataFrame:
@@ -173,6 +175,7 @@ def prepare_stock_signals(
     institutional_df: pd.DataFrame,
     config: StrategyConfig,
     earnings_dates: pd.DataFrame | None = None,
+    f_score: int = -1,
 ) -> pd.DataFrame:
     frame = stock_df.sort_values("date").reset_index(drop=True)
     frame["stock_id"] = stock_info["stock_id"]
@@ -367,6 +370,11 @@ def prepare_stock_signals(
         pd.DatetimeIndex(merged["date"]), earnings_dates, config,
     ).values
 
+    # F-Score: constant per stock; -1 means "no data" (never blocks)
+    merged["f_score"] = f_score
+    f_score_blocked = (config.f_score_min > 0) and (f_score != -1) and (f_score < config.f_score_min)
+    merged["f_score_low"] = f_score_blocked
+
     # Compute entry condition array once — shared for condition_count, entry_signal, and reason labels
     _entry_arr = merged[_ENTRY_COLS].to_numpy(dtype=bool)
     _cond_count = _entry_arr.sum(axis=1)
@@ -375,6 +383,7 @@ def prepare_stock_signals(
     merged["skip_trade"] = (
         merged["long_upper_shadow"] | merged["open_high_close_low"]
         | merged["gap_chase_after_blowout"] | merged["earnings_blocked"]
+        | merged["f_score_low"]
     )
     _n_hard = len(_HARD_ENTRY_COLS)
     merged["entry_signal"] = _entry_arr[:, :_n_hard].all(axis=1) & ~merged["skip_trade"].to_numpy(dtype=bool)
@@ -383,12 +392,14 @@ def prepare_stock_signals(
     _rs5d = _rs5d_arr.copy(); np.nan_to_num(_rs5d, nan=-99.0, copy=False)
     _vol_ratio = _vr_arr.copy(); np.nan_to_num(_vol_ratio, nan=0.0, copy=False)
     _adx14 = _adx_arr.copy(); np.nan_to_num(_adx14, nan=0.0, copy=False)
+    _f_bonus = 50.0 if f_score >= 7 else (25.0 if f_score >= 5 else 0.0)
     merged["entry_score"] = (
         _cond_count.astype(np.float64) * 100
         + _rs5d * 100
         + _vol_ratio * 10
         + _adx14
         + _soft_matrix @ _SOFT_SCORE_WEIGHTS
+        + _f_bonus
     )
 
     # Momentum score (0-100): 量能 40% + 波動度 30% + 尾盤強度 30%

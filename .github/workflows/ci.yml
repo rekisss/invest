@@ -33,6 +33,9 @@ jobs:
       - name: Run predictor tests
         run: python -u test_predictor.py
 
+      - name: Run fundamentals tests
+        run: python -u test_fundamentals.py
+
       - name: Syntax check main modules
         run: |
           python -c "import market_predictor; print('market_predictor OK')"
