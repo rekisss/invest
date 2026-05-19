@@ -1576,14 +1576,31 @@ def run_aggregate(args: argparse.Namespace) -> None:
         close = float(row.get("close") or 0)
         score = float(row.get("entry_score") or 0)
         cond  = int(row.get("condition_count") or 0)
+        atr   = float(row.get("atr14") or 0) or None
         f_sc  = int(row.get("f_score") or -1)
         f_tag = f" F`{f_sc}`" if f_sc >= 0 else ""
         industry = str(row.get("industry_category") or "")
         ind_tag = f" 〔{industry}〕" if industry else ""
+        price_tag = _low_price_tag(row.get("close"))
+        price_note = f" `{price_tag}`" if price_tag else ""
+        entry_zone, stop, target, rr = _entry_stop_target(close, atr)
+        rsi = float(row.get("rsi14") or 0)
+        adx = float(row.get("adx14") or 0)
+        vol_ratio = float(row.get("volume_ratio") or 0)
+        foreign_streak = int(row.get("foreign_buy_streak") or 0)
+        invest_streak = int(row.get("invest_trust_streak") or 0)
+        trend_inline = _trend_label(row)
+        obs = recommend_observation_period(row, is_candidate=True)
+        invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
         lines.append(
-            f"{rank:2d}. **{row.get('stock_id')}** {row.get('name', '')}{ind_tag}"
-            f" | 收 `{close:.2f}` | 分 `{score:.0f}` | `{cond}/{_MAX_CONDITION_COUNT}條`{f_tag}"
+            f"**#{rank} {row.get('stock_id')}** {row.get('name', '')}{ind_tag}{price_note}{f_tag}"
+            f"  分 `{score:.0f}` | `{cond}/{_MAX_CONDITION_COUNT}條`"
         )
+        lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
+        lines.append(f"📊 RSI `{rsi:.1f}` | ADX `{adx:.1f}` | 量比 `{vol_ratio:.1f}x`{trend_inline}")
+        lines.append(f"🏦 外資連買 `{foreign_streak}d`{invest_txt}")
+        lines.append(f"⏱ {obs}")
 
     message = "\n".join(lines)
     _safe_print(message)

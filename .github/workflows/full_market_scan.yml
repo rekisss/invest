@@ -1,19 +1,18 @@
-name: 全市場掃描 (每小時批次，21:00–04:00 CST)
+name: 全市場掃描 (每小時批次，15:00–22:00 CST)
 
-# 每小時觸發一次，共 8 批（21:00-04:00 CST = 13:00-20:00 UTC）
-# 批次 0 = 21:00 CST，批次 7 = 04:00 CST
-# 每批掃 ~225 檔，8 批掃完約 1800 檔全市場
+# 盤後開始，每小時一批，共 8 批掃完約 1800 檔全市場
+# 批次 0 = 15:00 CST，批次 7 = 22:00 CST
 
 on:
   schedule:
-    - cron: "0 13 * * 1-5"   # 21:00 CST → batch 0
-    - cron: "0 14 * * 1-5"   # 22:00 CST → batch 1
-    - cron: "0 15 * * 1-5"   # 23:00 CST → batch 2
-    - cron: "0 16 * * 1-5"   # 00:00 CST → batch 3
-    - cron: "0 17 * * 1-5"   # 01:00 CST → batch 4
-    - cron: "0 18 * * 1-5"   # 02:00 CST → batch 5
-    - cron: "0 19 * * 1-5"   # 03:00 CST → batch 6
-    - cron: "0 20 * * 1-5"   # 04:00 CST → batch 7
+    - cron: "0 7  * * 1-5"   # 15:00 CST → batch 0
+    - cron: "0 8  * * 1-5"   # 16:00 CST → batch 1
+    - cron: "0 9  * * 1-5"   # 17:00 CST → batch 2
+    - cron: "0 10 * * 1-5"   # 18:00 CST → batch 3
+    - cron: "0 11 * * 1-5"   # 19:00 CST → batch 4
+    - cron: "0 12 * * 1-5"   # 20:00 CST → batch 5
+    - cron: "0 13 * * 1-5"   # 21:00 CST → batch 6
+    - cron: "0 14 * * 1-5"   # 22:00 CST → batch 7
   workflow_dispatch:
     inputs:
       batch_index:
@@ -52,44 +51,49 @@ jobs:
           else
             HOUR=$(TZ=Asia/Taipei date +%H)
             case $HOUR in
-              21) BATCH=0 ;;
-              22) BATCH=1 ;;
-              23) BATCH=2 ;;
-              00) BATCH=3 ;;
-              01) BATCH=4 ;;
-              02) BATCH=5 ;;
-              03) BATCH=6 ;;
-              04) BATCH=7 ;;
+              15) BATCH=0 ;;
+              16) BATCH=1 ;;
+              17) BATCH=2 ;;
+              18) BATCH=3 ;;
+              19) BATCH=4 ;;
+              20) BATCH=5 ;;
+              21) BATCH=6 ;;
+              22) BATCH=7 ;;
               *)  BATCH=-1 ;;
             esac
           fi
           echo "index=$BATCH" >> "$GITHUB_OUTPUT"
           echo "批次 $BATCH（CST $(TZ=Asia/Taipei date +%H:%M)）"
 
-      - name: Run batch scan
+      - name: Run batch scan (自動重試一次)
         if: steps.batch.outputs.index != '-1'
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
         run: |
-          python main.py \
-            --mode scan \
-            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
-            --lookback-days 420 \
-            --max-universe 1800 \
-            --batch-index ${{ steps.batch.outputs.index }} \
-            --batch-count 8 \
-            --top-n 50 \
-            --workers 4 \
-            --output output \
-            --notify false
+          BATCH=${{ steps.batch.outputs.index }}
+          for attempt in 1 2; do
+            echo "=== 嘗試第 $attempt 次（批次 $BATCH）==="
+            python main.py \
+              --mode scan \
+              --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
+              --lookback-days 420 \
+              --max-universe 1800 \
+              --batch-index $BATCH \
+              --batch-count 8 \
+              --top-n 50 \
+              --workers 4 \
+              --output output && break
+            [ $attempt -lt 2 ] && echo "失敗，60 秒後重試..." && sleep 60
+          done
 
       - name: Commit batch results
         if: steps.batch.outputs.index != '-1'
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
+          git pull --rebase origin main || true
           git add output/full_scan/ || true
-          git diff --staged --quiet || git commit -m "scan: 批次 ${{ steps.batch.outputs.index }} 結果 $(TZ=Asia/Taipei date +%Y-%m-%d)"
+          git diff --staged --quiet || git commit -m "scan: 批次 ${{ steps.batch.outputs.index }} $(TZ=Asia/Taipei date +%Y-%m-%d)"
           git push || true
 
       - name: Notify Discord on failure
@@ -98,5 +102,5 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           curl -s -H "Content-Type: application/json" \
-            -d "{\"content\": \"⚠️ **全市場掃描批次 ${{ steps.batch.outputs.index }} 失敗** · $(TZ=Asia/Taipei date +%Y-%m-%d)\"}" \
+            -d "{\"content\": \"⚠️ **全市場批次 ${{ steps.batch.outputs.index }} 失敗（已重試）** · $(TZ=Asia/Taipei date +%Y-%m-%d) · 請至 Actions 查看\"}" \
             "$DISCORD_WEBHOOK_URL" || true
