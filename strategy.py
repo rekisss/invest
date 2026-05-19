@@ -206,7 +206,8 @@ def prepare_stock_signals(
     _r5d = np.empty_like(_c); _r5d[:_w] = np.nan; _r5d[_w:] = _c[_w:] / _c[:-_w] - 1
     _dr = np.empty_like(_c); _dr[0] = np.nan; _dr[1:] = _c[1:] / _c[:-1] - 1
     _pc = np.empty_like(_c); _pc[0] = np.nan; _pc[1:] = _c[:-1]
-    _vr = frame["volume"].to_numpy(dtype=float) / frame["volume_ma20"].to_numpy(dtype=float)
+    _vma20 = frame["volume_ma20"].to_numpy(dtype=float)
+    _vr = np.nan_to_num(frame["volume"].to_numpy(dtype=float) / np.where(_vma20 > 0, _vma20, np.nan), nan=1.0)
     _pvr = np.empty_like(_vr); _pvr[0] = np.nan; _pvr[1:] = _vr[:-1]
     frame["return_5d"] = _r5d
     frame["day_return"] = _dr
@@ -291,7 +292,8 @@ def prepare_stock_signals(
     _dl_streak = merged["dealer_buy_streak"].to_numpy(dtype=float)
     _s10d_arr = merged["close_10d_low"].to_numpy(dtype=float)
     _bb_upper_arr = merged["bb_upper"].to_numpy(dtype=float)
-    _vr_arr = _vol_arr / _vma20_arr
+    _safe_vma20 = np.where(_vma20_arr > 0, _vma20_arr, np.nan)
+    _vr_arr = np.nan_to_num(_vol_arr / _safe_vma20, nan=1.0)
 
     merged["macd_golden_cross"] = (_p_macd <= _p_macd_sig) & (_macd_arr > _macd_sig_arr)
     merged["hist_turn_positive"] = (_p_macd_hist <= 0) & (_macd_hist_arr > 0)
