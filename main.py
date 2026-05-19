@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 from pathlib import Path
@@ -825,6 +826,88 @@ def format_event_message(
     return "\n".join(parts)
 
 
+# ── Volume-surge detection (rolling incremental volume vs N-minute average) ────
+
+_VOL_WINDOW = 5       # rolling average window (samples; 1 sample ≈ 1 poll interval)
+_VOL_MIN_SAMPLES = 3  # need this many past samples before alerting
+
+
+def detect_volume_surges(
+    current_quotes: pd.DataFrame,
+    prev_cumvol: dict[str, float],
+    vol_history: dict[str, "deque[float]"],
+    multiplier: float,
+) -> tuple[list[dict[str, object]], dict[str, float]]:
+    """Compare each interval's incremental volume against the rolling average.
+
+    Fugle returns cumulative daily volume, so we diff successive readings to
+    get per-interval volume, then compare against the rolling mean of recent
+    intervals.  No alert on the first observation (no baseline yet).
+    """
+    events: list[dict[str, object]] = []
+    next_cumvol = dict(prev_cumvol)
+
+    for _, row in current_quotes.iterrows():
+        symbol = str(row.get("symbol") or "")
+        if not symbol or pd.notna(row.get("error")):
+            continue
+        raw_vol = pd.to_numeric(row.get("volume"), errors="coerce")
+        if pd.isna(raw_vol):
+            continue
+
+        cumvol = float(raw_vol)
+        hist = vol_history.setdefault(symbol, deque(maxlen=_VOL_WINDOW))
+
+        if symbol not in prev_cumvol:
+            next_cumvol[symbol] = cumvol
+            continue
+
+        incr = max(0.0, cumvol - prev_cumvol[symbol])
+        next_cumvol[symbol] = cumvol
+
+        if len(hist) >= _VOL_MIN_SAMPLES and incr > 0:
+            avg = sum(hist) / len(hist)
+            if avg > 0 and incr >= avg * multiplier:
+                ratio = incr / avg
+                events.append({
+                    "symbol": symbol,
+                    "label": f"爆量 ×{ratio:.1f}（近{len(hist)}分均 {avg:,.0f}）",
+                    "incr_vol": incr,
+                    "avg_vol": avg,
+                    "row": row.to_dict(),
+                })
+
+        if incr > 0:
+            hist.append(incr)
+
+    return events, next_cumvol
+
+
+def format_volume_alert(
+    event: dict[str, object],
+    snapshot_lookup: dict[str, dict[str, object]],
+) -> str:
+    row = event["row"]
+    symbol = str(event["symbol"])
+    snapshot = snapshot_lookup.get(symbol, {})
+    name = row.get("name") or snapshot.get("name") or ""
+    last = row.get("last")
+    incr = float(event.get("incr_vol", 0))
+    avg  = float(event.get("avg_vol", 0))
+    intraday = pd.to_numeric(row.get("intraday_pct"), errors="coerce")
+    pct_txt = f"{float(intraday) * 100:+.2f}%" if pd.notna(intraday) else "N/A"
+    rsi_txt = (
+        f" | RSI `{float(snapshot['rsi14']):.0f}`"
+        if snapshot.get("rsi14") and pd.notna(snapshot.get("rsi14")) else ""
+    )
+    return "\n".join([
+        f"🔥 **爆量警報** · {_cst_now()} CST",
+        f"**{symbol}** {name}",
+        f"最新 `{last}` | 漲幅 `{pct_txt}`{rsi_txt}",
+        event["label"],
+    ])
+
+
 def format_heartbeat_message(quotes: pd.DataFrame, date: str) -> str:
     now = _cst_now()
     lines = [f"💓 **盤中快報** · {now} CST ({date})", ""]
@@ -1116,7 +1199,7 @@ def run_sponsor_monitor(args: argparse.Namespace, client: FinMindClient, config:
 def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
     token_ok, token_msg = validate_finmind_token()
     if not token_ok:
-        err = f"❌ **事件監控中止** · {args.end}\n{token_msg}"
+        err = f"❌ **爆量監控中止** · {args.end}\n{token_msg}"
         _safe_print(err)
         if args.notify:
             send_discord_messages([err])
@@ -1124,14 +1207,13 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
 
     if args.stocks != "auto":
         universe = load_universe(args, client)
-        candidates = pd.DataFrame(columns=["stock_id", "name"])
-        watchlist = universe.copy()
         watch_pool = universe.copy()
+        snapshot_lookup: dict[str, dict[str, object]] = {}
     else:
         try:
             candidates, watchlist, universe, _breadth = build_daily_snapshot(args, client, config)
         except Exception as exc:
-            err = f"❌ **事件監控中止** · {args.end}\n初始掃描失敗：{exc}"
+            err = f"❌ **爆量監控中止** · {args.end}\n初始掃描失敗：{exc}"
             _safe_print(err)
             if args.notify:
                 send_discord_messages([err])
@@ -1140,6 +1222,8 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
         if len(watch_pool) < args.watch_top:
             extra = watchlist.head(args.watch_top - len(watch_pool))
             watch_pool = pd.concat([watch_pool, extra], ignore_index=True)
+        watch_records = watch_pool.head(args.watch_top).to_dict("records")
+        snapshot_lookup = {str(r["stock_id"]): r for r in watch_records}
 
     watch_pool = watch_pool.head(args.watch_top).copy()
     watch_symbols = watch_pool["stock_id"].astype(str).tolist()
@@ -1149,29 +1233,25 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
         if sym not in watch_symbols:
             watch_symbols.append(sym)
 
-    watch_records = watch_pool.to_dict("records")
-    snapshot_lookup = {str(row["stock_id"]): row for row in watch_records}
-    daily_volume_lookup: dict[str, float] = {
-        str(row.get("stock_id") or ""): float(row["volume_ma20"])
-        for row in watch_records
-        if row.get("volume_ma20") and float(row.get("volume_ma20") or 0) > 0
-    }
-    news_map = build_news_map(args.output, watch_records, news_limit=args.news_limit) if args.include_news else {}
-
     fugle = FugleClient()
     if not fugle.enabled:
-        msg = "⚠️ **事件監控略過** · FUGLE_API_KEY 未設定，無法取得即時報價。\n請在 GitHub Secrets 加入 FUGLE_API_KEY 後重新啟動。"
+        msg = "⚠️ **爆量監控略過** · FUGLE_API_KEY 未設定，無法取得即時報價。\n請在 GitHub Secrets 加入 FUGLE_API_KEY 後重新啟動。"
         _safe_print(msg)
         if args.notify:
             send_discord_messages([msg])
         return
 
-    previous_state: dict[str, dict[str, float | str]] = {}
+    prev_cumvol: dict[str, float] = {}
+    vol_history: dict[str, deque] = {}
     last_notified: dict[str, float] = {}
-    last_heartbeat_ts: float = 0.0
     consecutive_error_cycles = 0
     _MAX_ERROR_CYCLES = 10
-    start_msg = f"🟢 **事件監控啟動** · {_cst_now()} CST\n監控標的：{', '.join(watch_symbols)}\n觸發條件：急拉 ≥{args.event_rise_threshold*100:.1f}% ｜急跌 ≤{args.event_drop_threshold*100:.1f}% ｜量能 ≥{args.event_volume_multiplier}x"
+
+    start_msg = (
+        f"🟢 **爆量監控啟動** · {_cst_now()} CST\n"
+        f"監控標的：{', '.join(watch_symbols)}\n"
+        f"觸發條件：本分鐘量 ≥ 近{_VOL_WINDOW}分均量 × {args.event_volume_multiplier:.1f}倍"
+    )
     _safe_print(start_msg)
     if args.notify:
         send_discord_messages(split_message(start_msg))
@@ -1185,12 +1265,10 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
             and quotes["error"].notna().all()
         )
         if all_errors:
-            # 取得第一個錯誤訊息，判斷錯誤類型
             sample_error = str(quotes["error"].iloc[0]) if not quotes.empty else ""
             is_auth_error = "401" in sample_error or "403" in sample_error or "金鑰" in sample_error
             is_rate_limit = "429" in sample_error or "頻率" in sample_error
             if is_rate_limit:
-                # 速率限制：不計入中止計數，等待後繼續
                 _safe_print(f"[cycle {cycle}] 速率限制，等待 60 秒後繼續…")
                 time.sleep(60)
             else:
@@ -1198,7 +1276,7 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
             if is_auth_error or consecutive_error_cycles >= _MAX_ERROR_CYCLES:
                 reason = sample_error[:80] if sample_error else f"連續 {_MAX_ERROR_CYCLES} 個週期全部錯誤"
                 abort_msg = (
-                    f"⚠️ **事件監控中止** · {_cst_now()} CST\n"
+                    f"⚠️ **爆量監控中止** · {_cst_now()} CST\n"
                     f"原因：{reason}\n"
                     f"請確認 FUGLE_API_KEY 是否有效，或手動重啟監控。"
                 )
@@ -1209,41 +1287,22 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
         else:
             consecutive_error_cycles = 0
 
-        events, next_state = detect_quote_events(
-            quotes,
-            previous_state,
-            rise_threshold=args.event_rise_threshold,
-            drop_threshold=args.event_drop_threshold,
-            volume_multiplier=args.event_volume_multiplier,
-            daily_volume_lookup=daily_volume_lookup,
+        events, prev_cumvol = detect_volume_surges(
+            quotes, prev_cumvol, vol_history, args.event_volume_multiplier
         )
-        if not previous_state:
-            previous_state = next_state
-            if cycle < args.repeat_count:
-                time.sleep(args.interval_seconds)
-            continue
-        previous_state = next_state
+
         now_ts = time.time()
-
-        # Heartbeat
-        if args.heartbeat_minutes > 0 and now_ts - last_heartbeat_ts >= args.heartbeat_minutes * 60:
-            hb_msg = format_heartbeat_message(quotes, args.end)
-            _safe_print("")
-            _safe_print(hb_msg)
-            if args.notify:
-                send_discord_messages(split_message(hb_msg))
-            last_heartbeat_ts = now_ts
-
         for event in events:
-            key = f"{event['symbol']}:{event['event_key']}"
+            key = str(event["symbol"])
             if now_ts - last_notified.get(key, 0) < args.event_cooldown_seconds:
                 continue
-            message = format_event_message(event, snapshot_lookup, news_map=news_map)
+            message = format_volume_alert(event, snapshot_lookup)
             _safe_print("")
             _safe_print(message)
             if args.notify:
                 send_discord_messages(split_message(message))
             last_notified[key] = now_ts
+
         if cycle < args.repeat_count:
             time.sleep(args.interval_seconds)
 
