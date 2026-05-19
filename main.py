@@ -69,7 +69,7 @@ def _cst_today() -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Taiwan MACD swing strategy backtester and scanner.")
-    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict"], default="scan")
+    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict", "aggregate"], default="scan")
     parser.add_argument("--stocks", default="auto", help="CSV file containing stock_id and optional name, or 'auto'.")
     parser.add_argument("--start", default="2020-01-01")
     parser.add_argument("--end", default=_cst_today())
@@ -105,6 +105,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-holding-days", type=int, default=0, help="Force-exit positions after N calendar days in backtest (0 = disabled).")
     parser.add_argument("--max-positions-per-sector", type=int, default=2, help="Max simultaneous positions per industry sector in backtest (default 2, 0 = unlimited).")
     parser.add_argument("--f-score-min", type=int, default=0, help="Minimum Piotroski F-Score to qualify for entry (0 = disabled, 6 = recommended).")
+    parser.add_argument("--batch-index", type=int, default=-1, help="0-based batch index for full-market scan (-1 = no batching).")
+    parser.add_argument("--batch-count", type=int, default=8, help="Total number of batches for full-market scan (default 8).")
     # StrategyConfig overrides (for parallel backtest experiments)
     parser.add_argument("--rsi-threshold", type=float, default=None, help="RSI threshold for rsi_strong signal (default 55.0).")
     parser.add_argument("--adx-threshold", type=float, default=None, help="ADX threshold for adx_trending signal (default 20.0).")
@@ -377,9 +379,18 @@ def _trend_label(row: Any) -> str:
 
 def load_universe(args: argparse.Namespace, client: FinMindClient) -> pd.DataFrame:
     if args.stocks != "auto":
-        return load_stock_list(args.stocks)
-    stock_info = fetch_stock_info(client)
-    return build_auto_universe(stock_info, max_symbols=args.max_universe)
+        universe = load_stock_list(args.stocks)
+    else:
+        stock_info = fetch_stock_info(client)
+        universe = build_auto_universe(stock_info, max_symbols=args.max_universe)
+    batch_index = getattr(args, "batch_index", -1)
+    batch_count = max(1, getattr(args, "batch_count", 8))
+    if batch_index >= 0 and batch_count > 1:
+        n = len(universe)
+        size = (n + batch_count - 1) // batch_count
+        start = batch_index * size
+        universe = universe.iloc[start: start + size].reset_index(drop=True)
+    return universe
 
 
 def collect_signals(
@@ -1116,6 +1127,14 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
     except Exception as _pred_exc:
         _safe_print(f"[ai] 預測略過：{_pred_exc}")
 
+    # In batch mode, save candidates CSV for later aggregation
+    if getattr(args, "batch_index", -1) >= 0:
+        batch_dir = Path(args.output) / "full_scan"
+        batch_dir.mkdir(parents=True, exist_ok=True)
+        batch_csv = batch_dir / f"batch_{args.batch_index:02d}.csv"
+        candidates.to_csv(batch_csv, index=False, encoding="utf-8-sig")
+        _safe_print(f"[batch {args.batch_index}] 儲存候選：{len(candidates)} 檔 → {batch_csv}")
+
     report_path = save_scan_report(args.output, candidates, watchlist, universe)
     news_map = {}
     if args.include_news:
@@ -1511,6 +1530,75 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         send_discord_messages([message])
 
 
+def run_aggregate(args: argparse.Namespace) -> None:
+    """Merge all batch_NN.csv files from output/full_scan/ and send top-N to Discord."""
+    batch_dir = Path(args.output) / "full_scan"
+    csvs = sorted(batch_dir.glob("batch_*.csv")) if batch_dir.exists() else []
+    if not csvs:
+        msg = f"⚠️ **全市場彙整失敗** · {args.end}\n找不到批次結果（{batch_dir}），請確認掃描已執行。"
+        _safe_print(msg)
+        if args.notify:
+            send_discord_messages([msg])
+        return
+
+    frames = []
+    for p in csvs:
+        try:
+            df = pd.read_csv(p, encoding="utf-8-sig")
+            if not df.empty:
+                frames.append(df)
+        except Exception as exc:
+            _safe_print(f"[aggregate] 略過 {p.name}: {exc}", )
+
+    if not frames:
+        msg = f"⚠️ **全市場彙整失敗** · {args.end}\n批次檔案全部為空或無法讀取。"
+        _safe_print(msg)
+        if args.notify:
+            send_discord_messages([msg])
+        return
+
+    all_candidates = pd.concat(frames, ignore_index=True)
+    total_stocks = int(all_candidates["stock_id"].nunique()) if "stock_id" in all_candidates.columns else len(all_candidates)
+    all_candidates = (
+        all_candidates
+        .sort_values("entry_score", ascending=False)
+        .drop_duplicates(subset=["stock_id"])
+        .reset_index(drop=True)
+    )
+    top = all_candidates.head(args.top_n)
+
+    lines = [
+        f"🌙 **全市場掃描 TOP {args.top_n}** · {args.end}",
+        f"共 {len(csvs)} 批次 · {total_stocks} 檔候選",
+        "",
+    ]
+    for rank, (_, row) in enumerate(top.iterrows(), 1):
+        close = float(row.get("close") or 0)
+        score = float(row.get("entry_score") or 0)
+        cond  = int(row.get("condition_count") or 0)
+        f_sc  = int(row.get("f_score") or -1)
+        f_tag = f" F`{f_sc}`" if f_sc >= 0 else ""
+        industry = str(row.get("industry_category") or "")
+        ind_tag = f" 〔{industry}〕" if industry else ""
+        lines.append(
+            f"{rank:2d}. **{row.get('stock_id')}** {row.get('name', '')}{ind_tag}"
+            f" | 收 `{close:.2f}` | 分 `{score:.0f}` | `{cond}/{_MAX_CONDITION_COUNT}條`{f_tag}"
+        )
+
+    message = "\n".join(lines)
+    _safe_print(message)
+    if args.notify:
+        send_discord_messages(split_message(message))
+
+    # Clean up batch files after successful aggregation
+    for p in csvs:
+        try:
+            p.unlink()
+        except OSError:
+            pass
+    _safe_print(f"[aggregate] 清除 {len(csvs)} 個批次檔案")
+
+
 def main() -> None:
     args = parse_args()
     cache_dir = Path(args.output) / "cache"
@@ -1562,6 +1650,8 @@ def main() -> None:
         run_daily_report(args, client, config)
     elif args.mode == "predict":
         run_predict(args, client, config)
+    elif args.mode == "aggregate":
+        run_aggregate(args)
     else:
         run_scan(args, client, config)
 

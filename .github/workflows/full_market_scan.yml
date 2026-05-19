@@ -1,0 +1,102 @@
+name: 全市場掃描 (每小時批次，21:00–04:00 CST)
+
+# 每小時觸發一次，共 8 批（21:00-04:00 CST = 13:00-20:00 UTC）
+# 批次 0 = 21:00 CST，批次 7 = 04:00 CST
+# 每批掃 ~225 檔，8 批掃完約 1800 檔全市場
+
+on:
+  schedule:
+    - cron: "0 13 * * 1-5"   # 21:00 CST → batch 0
+    - cron: "0 14 * * 1-5"   # 22:00 CST → batch 1
+    - cron: "0 15 * * 1-5"   # 23:00 CST → batch 2
+    - cron: "0 16 * * 1-5"   # 00:00 CST → batch 3
+    - cron: "0 17 * * 1-5"   # 01:00 CST → batch 4
+    - cron: "0 18 * * 1-5"   # 02:00 CST → batch 5
+    - cron: "0 19 * * 1-5"   # 03:00 CST → batch 6
+    - cron: "0 20 * * 1-5"   # 04:00 CST → batch 7
+  workflow_dispatch:
+    inputs:
+      batch_index:
+        description: "批次編號 (0-7，-1=自動偵測)"
+        default: "-1"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Determine batch index
+        id: batch
+        run: |
+          INPUT="${{ github.event.inputs.batch_index }}"
+          if [ -n "$INPUT" ] && [ "$INPUT" != "-1" ]; then
+            BATCH=$INPUT
+          else
+            HOUR=$(TZ=Asia/Taipei date +%H)
+            case $HOUR in
+              21) BATCH=0 ;;
+              22) BATCH=1 ;;
+              23) BATCH=2 ;;
+              00) BATCH=3 ;;
+              01) BATCH=4 ;;
+              02) BATCH=5 ;;
+              03) BATCH=6 ;;
+              04) BATCH=7 ;;
+              *)  BATCH=-1 ;;
+            esac
+          fi
+          echo "index=$BATCH" >> "$GITHUB_OUTPUT"
+          echo "批次 $BATCH（CST $(TZ=Asia/Taipei date +%H:%M)）"
+
+      - name: Run batch scan
+        if: steps.batch.outputs.index != '-1'
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: |
+          python main.py \
+            --mode scan \
+            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
+            --lookback-days 420 \
+            --max-universe 1800 \
+            --batch-index ${{ steps.batch.outputs.index }} \
+            --batch-count 8 \
+            --top-n 50 \
+            --workers 4 \
+            --output output \
+            --notify false
+
+      - name: Commit batch results
+        if: steps.batch.outputs.index != '-1'
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          git add output/full_scan/ || true
+          git diff --staged --quiet || git commit -m "scan: 批次 ${{ steps.batch.outputs.index }} 結果 $(TZ=Asia/Taipei date +%Y-%m-%d)"
+          git push || true
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"⚠️ **全市場掃描批次 ${{ steps.batch.outputs.index }} 失敗** · $(TZ=Asia/Taipei date +%Y-%m-%d)\"}" \
+            "$DISCORD_WEBHOOK_URL" || true
