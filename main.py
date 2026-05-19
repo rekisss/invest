@@ -1114,13 +1114,28 @@ def run_sponsor_monitor(args: argparse.Namespace, client: FinMindClient, config:
 
 
 def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
+    token_ok, token_msg = validate_finmind_token()
+    if not token_ok:
+        err = f"❌ **事件監控中止** · {args.end}\n{token_msg}"
+        _safe_print(err)
+        if args.notify:
+            send_discord_messages([err])
+        return
+
     if args.stocks != "auto":
         universe = load_universe(args, client)
         candidates = pd.DataFrame(columns=["stock_id", "name"])
         watchlist = universe.copy()
         watch_pool = universe.copy()
     else:
-        candidates, watchlist, universe, _breadth = build_daily_snapshot(args, client, config)
+        try:
+            candidates, watchlist, universe, _breadth = build_daily_snapshot(args, client, config)
+        except Exception as exc:
+            err = f"❌ **事件監控中止** · {args.end}\n初始掃描失敗：{exc}"
+            _safe_print(err)
+            if args.notify:
+                send_discord_messages([err])
+            return
         watch_pool = candidates.copy()
         if len(watch_pool) < args.watch_top:
             extra = watchlist.head(args.watch_top - len(watch_pool))
