@@ -209,63 +209,68 @@ def generate_analysis_text(pred: dict[str, Any], breadth: dict[str, object] | No
     label = pred.get("label", "中性")
     conf = pred.get("confidence", "low")
     breadth = breadth or {}
-
-    above_ema = int(breadth.get("above_ema60", 0))
-    foreign_buy = int(breadth.get("foreign_buy_3d", 0))
-    macd_cross = int(breadth.get("macd_golden_cross", 0))
-    volume_ok = int(breadth.get("volume_break", 0))
-    regime = str(breadth.get("market_regime", ""))
+    has_breadth = bool(breadth)
 
     reasons_bull: list[str] = []
     reasons_bear: list[str] = []
     risks: list[str] = []
 
-    if above_ema >= 60:
-        reasons_bull.append(f"多數個股站上 EMA60（{above_ema}%）")
-    elif above_ema <= 30:
-        reasons_bear.append(f"僅 {above_ema}% 個股站上均線，弱勢格局")
+    if has_breadth:
+        above_ema = int(breadth.get("above_ema60", 0))
+        foreign_buy = int(breadth.get("foreign_buy_3d", 0))
+        macd_cross = int(breadth.get("macd_golden_cross", 0))
+        volume_ok = int(breadth.get("volume_break", 0))
+        regime = str(breadth.get("market_regime", ""))
 
-    if foreign_buy >= 50:
-        reasons_bull.append(f"外資連買比例高（{foreign_buy}%）")
-    elif foreign_buy <= 20:
-        reasons_bear.append(f"外資偏向賣超（{foreign_buy}%）")
+        if above_ema >= 60:
+            reasons_bull.append(f"多數個股站上 EMA60（{above_ema}%）")
+        elif above_ema <= 30:
+            reasons_bear.append(f"僅 {above_ema}% 個股站上均線，弱勢格局")
 
-    if macd_cross >= 40:
-        reasons_bull.append(f"MACD 黃金交叉比例回升（{macd_cross}%）")
-    elif macd_cross <= 15:
-        risks.append("MACD 未交叉比例偏高，反彈力道有限")
+        if foreign_buy >= 50:
+            reasons_bull.append(f"外資連買比例高（{foreign_buy}%）")
+        elif foreign_buy <= 20:
+            reasons_bear.append(f"外資偏向賣超（{foreign_buy}%）")
 
-    if volume_ok <= 20:
-        risks.append("成交量未放大，突破可靠性存疑")
+        if macd_cross >= 40:
+            reasons_bull.append(f"MACD 黃金交叉比例回升（{macd_cross}%）")
+        elif macd_cross <= 15:
+            risks.append("MACD 未交叉比例偏高，反彈力道有限")
 
-    if regime == "熊市":
-        risks.append("大盤仍處熊市格局，反彈宜謹慎")
+        if volume_ok <= 20:
+            risks.append("成交量未放大，突破可靠性存疑")
+
+        if regime == "熊市":
+            risks.append("大盤仍處熊市格局，反彈宜謹慎")
 
     if prob >= 0.63:
         outlook = "整體偏多"
-        opening = f"今日看多信心較強（{prob*100:.0f}%），"
+        opening = f"今日看多信心較強（{prob*100:.0f}%）"
     elif prob >= 0.53:
         outlook = "偏多但力道有限"
-        opening = f"今日小幅偏多（{prob*100:.0f}%），"
+        opening = f"今日小幅偏多（{prob*100:.0f}%）"
     elif prob <= 0.37:
         outlook = "整體偏空"
-        opening = f"今日看空信號明顯（{(1-prob)*100:.0f}%空方機率），"
+        opening = f"今日看空信號明顯（{(1-prob)*100:.0f}%空方機率）"
     elif prob <= 0.47:
         outlook = "偏空但未確認"
-        opening = f"今日略偏空（{(1-prob)*100:.0f}%空方機率），"
+        opening = f"今日略偏空（{(1-prob)*100:.0f}%空方機率）"
     else:
         outlook = "方向不明"
-        opening = "今日多空力道均衡，"
+        opening = "今日多空力道均衡"
 
     lines = [f"📝 **AI 分析**｜{outlook}"]
-    lines.append(opening + ("以下為支撐理由：" if reasons_bull else "短期風險需留意："))
-
-    for r in reasons_bull[:2]:
-        lines.append(f"  ✅ {r}")
-    for r in reasons_bear[:2]:
-        lines.append(f"  ❌ {r}")
-    for r in risks[:2]:
-        lines.append(f"  ⚠️ {r}")
+    has_bullets = reasons_bull or reasons_bear or risks
+    if has_bullets:
+        lines.append(opening + ("，以下為支撐理由：" if reasons_bull else "，短期風險需留意："))
+        for r in reasons_bull[:2]:
+            lines.append(f"  ✅ {r}")
+        for r in reasons_bear[:2]:
+            lines.append(f"  ❌ {r}")
+        for r in risks[:2]:
+            lines.append(f"  ⚠️ {r}")
+    else:
+        lines.append(opening)
 
     if conf == "low":
         lines.append("  ℹ️ 信心偏低，建議觀望或輕倉")
