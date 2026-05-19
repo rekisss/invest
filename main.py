@@ -1132,8 +1132,10 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
         batch_dir = Path(args.output) / "full_scan"
         batch_dir.mkdir(parents=True, exist_ok=True)
         batch_csv = batch_dir / f"batch_{args.batch_index:02d}.csv"
-        candidates.to_csv(batch_csv, index=False, encoding="utf-8-sig")
-        _safe_print(f"[batch {args.batch_index}] 儲存候選：{len(candidates)} 檔 → {batch_csv}")
+        batch_df = pd.concat([candidates, watchlist], ignore_index=True) if not watchlist.empty else candidates
+        batch_df = batch_df.sort_values("entry_score", ascending=False).drop_duplicates(subset=["stock_id"])
+        batch_df.to_csv(batch_csv, index=False, encoding="utf-8-sig")
+        _safe_print(f"[batch {args.batch_index}] 儲存候選+觀察：{len(batch_df)} 檔（候選 {len(candidates)}，觀察 {len(watchlist)}）→ {batch_csv}")
 
     report_path = save_scan_report(args.output, candidates, watchlist, universe)
     news_map = {}
