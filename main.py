@@ -1542,16 +1542,26 @@ def run_aggregate(args: argparse.Namespace) -> None:
         return
 
     frames = []
+    empty_count = 0
     for p in csvs:
         try:
             df = pd.read_csv(p, encoding="utf-8-sig")
             if not df.empty:
                 frames.append(df)
+            else:
+                empty_count += 1
+                _safe_print(f"[aggregate] {p.name} 為空（本批無候選）")
         except Exception as exc:
-            _safe_print(f"[aggregate] 略過 {p.name}: {exc}", )
+            _safe_print(f"[aggregate] 略過 {p.name}: {exc}")
 
     if not frames:
-        msg = f"⚠️ **全市場彙整失敗** · {args.end}\n批次檔案全部為空或無法讀取。"
+        if empty_count > 0:
+            msg = (
+                f"⚠️ **全市場彙整：本日無候選** · {args.end}\n"
+                f"共 {len(csvs)} 批次，{empty_count} 批無符合條件的股票（可能為 API 配額不足或市場條件不符）。"
+            )
+        else:
+            msg = f"⚠️ **全市場彙整失敗** · {args.end}\n找不到可讀取的批次結果，請確認掃描已執行。"
         _safe_print(msg)
         if args.notify:
             send_discord_messages([msg])
