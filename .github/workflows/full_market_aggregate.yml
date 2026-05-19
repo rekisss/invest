@@ -1,10 +1,11 @@
-name: 全市場彙整 TOP 20 (23:00 CST)
+name: 全市場彙整 TOP 20 (02:00 CST)
 
-# 8 批掃描約 22:00 CST 完成，23:00 先偵測缺少批次，統一補跑後再彙整
+# 補跑由 full_market_scan.yml 負責（23:00、00:00、01:00 CST 各補一批）
+# 02:00 CST 彙整所有批次，送出 TOP 20 Discord 通知
 
 on:
   schedule:
-    - cron: "0 15 * * 2-6"   # 23:00 CST = 15:00 UTC（週二到週六）
+    - cron: "0 18 * * 3-7"   # 02:00 CST = 18:00 UTC（週三到週日）
   workflow_dispatch:
 
 env:
@@ -50,34 +51,6 @@ jobs:
             echo "所有批次齊全"
             echo "missing=" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Retry missing batches
-        if: steps.detect.outputs.missing != ''
-        env:
-          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
-        run: |
-          for i in ${{ steps.detect.outputs.missing }}; do
-            echo "=== 補跑批次 $i ==="
-            for attempt in 1 2; do
-              echo "--- 第 $attempt 次嘗試 ---"
-              python main.py \
-                --mode scan \
-                --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
-                --lookback-days 420 \
-                --max-universe 1800 \
-                --batch-index $i \
-                --batch-count 8 \
-                --top-n 50 \
-                --workers 4 \
-                --output output && break
-              [ $attempt -lt 2 ] && echo "失敗，60 秒後重試..." && sleep 60
-            done
-          done
-          git config user.email "github-actions@github.com"
-          git config user.name "GitHub Actions"
-          git add output/full_scan/ || true
-          git diff --staged --quiet || git commit -m "scan: 補跑缺少批次 ${{ steps.detect.outputs.missing }} $(TZ=Asia/Taipei date +%Y-%m-%d)"
-          git push || true
 
       - name: Aggregate and notify
         env:

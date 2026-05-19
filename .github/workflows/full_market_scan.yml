@@ -1,7 +1,8 @@
-name: 全市場掃描 (每小時批次，15:00–22:00 CST)
+name: 全市場掃描 (每小時批次，15:00–22:00 + 補跑 23:00–01:00 CST)
 
-# 盤後開始，每小時一批，共 8 批掃完約 1800 檔全市場
-# 批次 0 = 15:00 CST，批次 7 = 22:00 CST
+# 正式批次：15:00–22:00 CST，每小時一批（批次 0–7）
+# 補跑批次：23:00、00:00、01:00 CST，自動找第一個缺少的批次補跑
+# 彙整：02:00 CST（full_market_aggregate.yml）
 
 on:
   schedule:
@@ -13,6 +14,9 @@ on:
     - cron: "0 12 * * 1-5"   # 20:00 CST → batch 5
     - cron: "0 13 * * 1-5"   # 21:00 CST → batch 6
     - cron: "0 14 * * 1-5"   # 22:00 CST → batch 7
+    - cron: "0 15 * * 1-5"   # 23:00 CST → 補跑 (同日)
+    - cron: "0 16 * * 2-6"   # 00:00 CST → 補跑 (次日)
+    - cron: "0 17 * * 2-6"   # 01:00 CST → 補跑 (次日)
   workflow_dispatch:
     inputs:
       batch_index:
@@ -59,6 +63,22 @@ jobs:
               20) BATCH=5 ;;
               21) BATCH=6 ;;
               22) BATCH=7 ;;
+              23|0|1)
+                # 補跑模式：先拉最新 CSV，找第一個缺少的批次
+                git pull --rebase origin main || true
+                BATCH=-1
+                for i in $(seq 0 7); do
+                  PAD=$(printf "%02d" $i)
+                  if [ ! -f "output/full_scan/batch_${PAD}.csv" ]; then
+                    BATCH=$i
+                    echo "補跑模式：找到缺少批次 $i"
+                    break
+                  fi
+                done
+                if [ "$BATCH" = "-1" ]; then
+                  echo "補跑模式：所有批次齊全，跳過"
+                fi
+                ;;
               *)  BATCH=-1 ;;
             esac
           fi
