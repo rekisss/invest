@@ -1,0 +1,100 @@
+name: 全市場彙整 TOP 20 (23:00 CST)
+
+# 8 批掃描約 22:00 CST 完成，23:00 彙整並補跑缺少的批次，選出前 20 名
+
+on:
+  schedule:
+    - cron: "0 15 * * 2-6"   # 23:00 CST = 15:00 UTC（週二到週六）
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest batch results
+        run: git pull --rebase origin main || true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Detect and retry missing batches
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: |
+          MISSING=()
+          for i in $(seq 0 7); do
+            PAD=$(printf "%02d" $i)
+            if [ ! -f "output/full_scan/batch_${PAD}.csv" ]; then
+              MISSING+=($i)
+              echo "批次 $i 缺少，補跑..."
+              for attempt in 1 2; do
+                echo "=== 批次 $i 補跑第 $attempt 次 ==="
+                python main.py \
+                  --mode scan \
+                  --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
+                  --lookback-days 420 \
+                  --max-universe 1800 \
+                  --batch-index $i \
+                  --batch-count 8 \
+                  --top-n 50 \
+                  --workers 4 \
+                  --output output && break
+                [ $attempt -lt 2 ] && echo "失敗，60 秒後重試..." && sleep 60
+              done
+            fi
+          done
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "補跑批次：${MISSING[*]}"
+            git config user.email "github-actions@github.com"
+            git config user.name "GitHub Actions"
+            git add output/full_scan/ || true
+            git diff --staged --quiet || git commit -m "scan: 補跑缺少批次 ${MISSING[*]} $(TZ=Asia/Taipei date +%Y-%m-%d)"
+            git push || true
+          else
+            echo "所有批次齊全，無需補跑"
+          fi
+
+      - name: Aggregate and notify
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python main.py \
+            --mode aggregate \
+            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
+            --top-n 20 \
+            --output output \
+            --notify
+
+      - name: Commit cleanup (batch files removed by aggregate)
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          git pull --rebase origin main || true
+          git add output/full_scan/ || true
+          git diff --staged --quiet || git commit -m "scan: 清除批次檔案 $(TZ=Asia/Taipei date +%Y-%m-%d)"
+          git push || true
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"⚠️ **全市場彙整失敗** · $(TZ=Asia/Taipei date +%Y-%m-%d) · 請檢查 Actions logs\"}" \
+            "$DISCORD_WEBHOOK_URL" || true

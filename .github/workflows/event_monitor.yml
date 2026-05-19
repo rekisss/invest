@@ -58,15 +58,10 @@ jobs:
             --watch-top 8 \
             --max-price 120 \
             --prefer-lower-price \
-            --include-news \
-            --news-limit 2 \
             --interval-seconds 60 \
             --repeat-count 270 \
-            --event-rise-threshold 0.045 \
-            --event-drop-threshold -0.035 \
             --event-volume-multiplier 2.5 \
             --event-cooldown-seconds 600 \
-            --heartbeat-minutes 30 \
             --output output \
             --notify
 

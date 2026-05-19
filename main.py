@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 from pathlib import Path
@@ -27,6 +28,7 @@ from data_loader import (
     FinMindClient,
     clean_cache,
     fetch_financial_statement_dates,
+    fetch_fundamentals,
     fetch_institutional_data,
     fetch_market_index,
     fetch_stock_info,
@@ -35,6 +37,7 @@ from data_loader import (
     load_stock_list,
     validate_finmind_token,
 )
+from fundamentals import compute_f_score
 from fugle_client import FugleClient, fetch_watch_quotes
 from news_service import NewsClient, summarize_news
 from notifier import send_discord_messages, split_message
@@ -66,7 +69,7 @@ def _cst_today() -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Taiwan MACD swing strategy backtester and scanner.")
-    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict"], default="scan")
+    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict", "aggregate"], default="scan")
     parser.add_argument("--stocks", default="auto", help="CSV file containing stock_id and optional name, or 'auto'.")
     parser.add_argument("--start", default="2020-01-01")
     parser.add_argument("--end", default=_cst_today())
@@ -101,6 +104,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--atr-stop-multiplier", type=float, default=2.0, help="ATR multiplier for stop loss (default 2.0, used with --use-atr-stop).")
     parser.add_argument("--max-holding-days", type=int, default=0, help="Force-exit positions after N calendar days in backtest (0 = disabled).")
     parser.add_argument("--max-positions-per-sector", type=int, default=2, help="Max simultaneous positions per industry sector in backtest (default 2, 0 = unlimited).")
+    parser.add_argument("--f-score-min", type=int, default=0, help="Minimum Piotroski F-Score to qualify for entry (0 = disabled, 6 = recommended).")
+    parser.add_argument("--batch-index", type=int, default=-1, help="0-based batch index for full-market scan (-1 = no batching).")
+    parser.add_argument("--batch-count", type=int, default=8, help="Total number of batches for full-market scan (default 8).")
     # StrategyConfig overrides (for parallel backtest experiments)
     parser.add_argument("--rsi-threshold", type=float, default=None, help="RSI threshold for rsi_strong signal (default 55.0).")
     parser.add_argument("--adx-threshold", type=float, default=None, help="ADX threshold for adx_trending signal (default 20.0).")
@@ -373,9 +379,18 @@ def _trend_label(row: Any) -> str:
 
 def load_universe(args: argparse.Namespace, client: FinMindClient) -> pd.DataFrame:
     if args.stocks != "auto":
-        return load_stock_list(args.stocks)
-    stock_info = fetch_stock_info(client)
-    return build_auto_universe(stock_info, max_symbols=args.max_universe)
+        universe = load_stock_list(args.stocks)
+    else:
+        stock_info = fetch_stock_info(client)
+        universe = build_auto_universe(stock_info, max_symbols=args.max_universe)
+    batch_index = getattr(args, "batch_index", -1)
+    batch_count = max(1, getattr(args, "batch_count", 8))
+    if batch_index >= 0 and batch_count > 1:
+        n = len(universe)
+        size = (n + batch_count - 1) // batch_count
+        start = batch_index * size
+        universe = universe.iloc[start: start + size].reset_index(drop=True)
+    return universe
 
 
 def collect_signals(
@@ -393,6 +408,8 @@ def collect_signals(
 
     _req_delay = max(0.0, 1.5 / max(workers, 1))  # spread requests: ~1 req/1.5s per worker slot
 
+    _fund_start = (pd.Timestamp(start_date) - pd.Timedelta(days=730)).strftime("%Y-%m-%d")
+
     def load_one(stock: dict[str, Any]) -> tuple[str, pd.DataFrame] | tuple[str, None]:
         time.sleep(_req_delay + random.uniform(0, _req_delay))
         sid = stock["stock_id"]
@@ -404,7 +421,18 @@ def collect_signals(
             earnings = pd.DataFrame(columns=["date"])
             if config.use_earnings_filter:
                 earnings = fetch_financial_statement_dates(client, sid, start_date, end_date)
-            frame = prepare_stock_signals(stock, prices, market, institutional, config, earnings_dates=earnings)
+            stock_f_score = -1
+            if config.f_score_min > 0:
+                try:
+                    fund = fetch_fundamentals(client, sid, _fund_start, end_date)
+                    result = compute_f_score(fund["income"], fund["balance"], fund["cashflow"])
+                    stock_f_score = int(result["f_score"])
+                except Exception:
+                    pass
+            frame = prepare_stock_signals(
+                stock, prices, market, institutional, config,
+                earnings_dates=earnings, f_score=stock_f_score,
+            )
             return sid, frame
         except Exception as error:
             print(f"[warn] skipped {sid}: {error}", file=sys.stderr)
@@ -424,6 +452,7 @@ def collect_signals(
         "dealer_buy_streak", "dealer_buy_3d",
         "williams_r", "cci20", "mfi14", "mfi_strong", "above_ichimoku_cloud",
         "lr_slope_20", "lr_slope_60",
+        "f_score",
     ]
     _signal_cols_present: list[str] = []  # resolved on first result
     stock_records = stock_list.to_dict("records")
@@ -808,6 +837,88 @@ def format_event_message(
     return "\n".join(parts)
 
 
+# ── Volume-surge detection (rolling incremental volume vs N-minute average) ────
+
+_VOL_WINDOW = 5       # rolling average window (samples; 1 sample ≈ 1 poll interval)
+_VOL_MIN_SAMPLES = 3  # need this many past samples before alerting
+
+
+def detect_volume_surges(
+    current_quotes: pd.DataFrame,
+    prev_cumvol: dict[str, float],
+    vol_history: dict[str, "deque[float]"],
+    multiplier: float,
+) -> tuple[list[dict[str, object]], dict[str, float]]:
+    """Compare each interval's incremental volume against the rolling average.
+
+    Fugle returns cumulative daily volume, so we diff successive readings to
+    get per-interval volume, then compare against the rolling mean of recent
+    intervals.  No alert on the first observation (no baseline yet).
+    """
+    events: list[dict[str, object]] = []
+    next_cumvol = dict(prev_cumvol)
+
+    for _, row in current_quotes.iterrows():
+        symbol = str(row.get("symbol") or "")
+        if not symbol or pd.notna(row.get("error")):
+            continue
+        raw_vol = pd.to_numeric(row.get("volume"), errors="coerce")
+        if pd.isna(raw_vol):
+            continue
+
+        cumvol = float(raw_vol)
+        hist = vol_history.setdefault(symbol, deque(maxlen=_VOL_WINDOW))
+
+        if symbol not in prev_cumvol:
+            next_cumvol[symbol] = cumvol
+            continue
+
+        incr = max(0.0, cumvol - prev_cumvol[symbol])
+        next_cumvol[symbol] = cumvol
+
+        if len(hist) >= _VOL_MIN_SAMPLES and incr > 0:
+            avg = sum(hist) / len(hist)
+            if avg > 0 and incr >= avg * multiplier:
+                ratio = incr / avg
+                events.append({
+                    "symbol": symbol,
+                    "label": f"爆量 ×{ratio:.1f}（近{len(hist)}分均 {avg:,.0f}）",
+                    "incr_vol": incr,
+                    "avg_vol": avg,
+                    "row": row.to_dict(),
+                })
+
+        if incr > 0:
+            hist.append(incr)
+
+    return events, next_cumvol
+
+
+def format_volume_alert(
+    event: dict[str, object],
+    snapshot_lookup: dict[str, dict[str, object]],
+) -> str:
+    row = event["row"]
+    symbol = str(event["symbol"])
+    snapshot = snapshot_lookup.get(symbol, {})
+    name = row.get("name") or snapshot.get("name") or ""
+    last = row.get("last")
+    incr = float(event.get("incr_vol", 0))
+    avg  = float(event.get("avg_vol", 0))
+    intraday = pd.to_numeric(row.get("intraday_pct"), errors="coerce")
+    pct_txt = f"{float(intraday) * 100:+.2f}%" if pd.notna(intraday) else "N/A"
+    rsi_txt = (
+        f" | RSI `{float(snapshot['rsi14']):.0f}`"
+        if snapshot.get("rsi14") and pd.notna(snapshot.get("rsi14")) else ""
+    )
+    return "\n".join([
+        f"🔥 **爆量警報** · {_cst_now()} CST",
+        f"**{symbol}** {name}",
+        f"最新 `{last}` | 漲幅 `{pct_txt}`{rsi_txt}",
+        event["label"],
+    ])
+
+
 def format_heartbeat_message(quotes: pd.DataFrame, date: str) -> str:
     now = _cst_now()
     lines = [f"💓 **盤中快報** · {now} CST ({date})", ""]
@@ -1016,6 +1127,14 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
     except Exception as _pred_exc:
         _safe_print(f"[ai] 預測略過：{_pred_exc}")
 
+    # In batch mode, save candidates CSV for later aggregation
+    if getattr(args, "batch_index", -1) >= 0:
+        batch_dir = Path(args.output) / "full_scan"
+        batch_dir.mkdir(parents=True, exist_ok=True)
+        batch_csv = batch_dir / f"batch_{args.batch_index:02d}.csv"
+        candidates.to_csv(batch_csv, index=False, encoding="utf-8-sig")
+        _safe_print(f"[batch {args.batch_index}] 儲存候選：{len(candidates)} 檔 → {batch_csv}")
+
     report_path = save_scan_report(args.output, candidates, watchlist, universe)
     news_map = {}
     if args.include_news:
@@ -1097,17 +1216,33 @@ def run_sponsor_monitor(args: argparse.Namespace, client: FinMindClient, config:
 
 
 def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
+    token_ok, token_msg = validate_finmind_token()
+    if not token_ok:
+        err = f"❌ **爆量監控中止** · {args.end}\n{token_msg}"
+        _safe_print(err)
+        if args.notify:
+            send_discord_messages([err])
+        return
+
     if args.stocks != "auto":
         universe = load_universe(args, client)
-        candidates = pd.DataFrame(columns=["stock_id", "name"])
-        watchlist = universe.copy()
         watch_pool = universe.copy()
+        snapshot_lookup: dict[str, dict[str, object]] = {}
     else:
-        candidates, watchlist, universe, _breadth = build_daily_snapshot(args, client, config)
+        try:
+            candidates, watchlist, universe, _breadth = build_daily_snapshot(args, client, config)
+        except Exception as exc:
+            err = f"❌ **爆量監控中止** · {args.end}\n初始掃描失敗：{exc}"
+            _safe_print(err)
+            if args.notify:
+                send_discord_messages([err])
+            return
         watch_pool = candidates.copy()
         if len(watch_pool) < args.watch_top:
             extra = watchlist.head(args.watch_top - len(watch_pool))
             watch_pool = pd.concat([watch_pool, extra], ignore_index=True)
+        watch_records = watch_pool.head(args.watch_top).to_dict("records")
+        snapshot_lookup = {str(r["stock_id"]): r for r in watch_records}
 
     watch_pool = watch_pool.head(args.watch_top).copy()
     watch_symbols = watch_pool["stock_id"].astype(str).tolist()
@@ -1117,29 +1252,25 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
         if sym not in watch_symbols:
             watch_symbols.append(sym)
 
-    watch_records = watch_pool.to_dict("records")
-    snapshot_lookup = {str(row["stock_id"]): row for row in watch_records}
-    daily_volume_lookup: dict[str, float] = {
-        str(row.get("stock_id") or ""): float(row["volume_ma20"])
-        for row in watch_records
-        if row.get("volume_ma20") and float(row.get("volume_ma20") or 0) > 0
-    }
-    news_map = build_news_map(args.output, watch_records, news_limit=args.news_limit) if args.include_news else {}
-
     fugle = FugleClient()
     if not fugle.enabled:
-        msg = "⚠️ **事件監控略過** · FUGLE_API_KEY 未設定，無法取得即時報價。\n請在 GitHub Secrets 加入 FUGLE_API_KEY 後重新啟動。"
+        msg = "⚠️ **爆量監控略過** · FUGLE_API_KEY 未設定，無法取得即時報價。\n請在 GitHub Secrets 加入 FUGLE_API_KEY 後重新啟動。"
         _safe_print(msg)
         if args.notify:
             send_discord_messages([msg])
         return
 
-    previous_state: dict[str, dict[str, float | str]] = {}
+    prev_cumvol: dict[str, float] = {}
+    vol_history: dict[str, deque] = {}
     last_notified: dict[str, float] = {}
-    last_heartbeat_ts: float = 0.0
     consecutive_error_cycles = 0
     _MAX_ERROR_CYCLES = 10
-    start_msg = f"🟢 **事件監控啟動** · {_cst_now()} CST\n監控標的：{', '.join(watch_symbols)}\n觸發條件：急拉 ≥{args.event_rise_threshold*100:.1f}% ｜急跌 ≤{args.event_drop_threshold*100:.1f}% ｜量能 ≥{args.event_volume_multiplier}x"
+
+    start_msg = (
+        f"🟢 **爆量監控啟動** · {_cst_now()} CST\n"
+        f"監控標的：{', '.join(watch_symbols)}\n"
+        f"觸發條件：本分鐘量 ≥ 近{_VOL_WINDOW}分均量 × {args.event_volume_multiplier:.1f}倍"
+    )
     _safe_print(start_msg)
     if args.notify:
         send_discord_messages(split_message(start_msg))
@@ -1153,12 +1284,10 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
             and quotes["error"].notna().all()
         )
         if all_errors:
-            # 取得第一個錯誤訊息，判斷錯誤類型
             sample_error = str(quotes["error"].iloc[0]) if not quotes.empty else ""
             is_auth_error = "401" in sample_error or "403" in sample_error or "金鑰" in sample_error
             is_rate_limit = "429" in sample_error or "頻率" in sample_error
             if is_rate_limit:
-                # 速率限制：不計入中止計數，等待後繼續
                 _safe_print(f"[cycle {cycle}] 速率限制，等待 60 秒後繼續…")
                 time.sleep(60)
             else:
@@ -1166,7 +1295,7 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
             if is_auth_error or consecutive_error_cycles >= _MAX_ERROR_CYCLES:
                 reason = sample_error[:80] if sample_error else f"連續 {_MAX_ERROR_CYCLES} 個週期全部錯誤"
                 abort_msg = (
-                    f"⚠️ **事件監控中止** · {_cst_now()} CST\n"
+                    f"⚠️ **爆量監控中止** · {_cst_now()} CST\n"
                     f"原因：{reason}\n"
                     f"請確認 FUGLE_API_KEY 是否有效，或手動重啟監控。"
                 )
@@ -1177,41 +1306,22 @@ def run_event_monitor(args: argparse.Namespace, client: FinMindClient, config: S
         else:
             consecutive_error_cycles = 0
 
-        events, next_state = detect_quote_events(
-            quotes,
-            previous_state,
-            rise_threshold=args.event_rise_threshold,
-            drop_threshold=args.event_drop_threshold,
-            volume_multiplier=args.event_volume_multiplier,
-            daily_volume_lookup=daily_volume_lookup,
+        events, prev_cumvol = detect_volume_surges(
+            quotes, prev_cumvol, vol_history, args.event_volume_multiplier
         )
-        if not previous_state:
-            previous_state = next_state
-            if cycle < args.repeat_count:
-                time.sleep(args.interval_seconds)
-            continue
-        previous_state = next_state
+
         now_ts = time.time()
-
-        # Heartbeat
-        if args.heartbeat_minutes > 0 and now_ts - last_heartbeat_ts >= args.heartbeat_minutes * 60:
-            hb_msg = format_heartbeat_message(quotes, args.end)
-            _safe_print("")
-            _safe_print(hb_msg)
-            if args.notify:
-                send_discord_messages(split_message(hb_msg))
-            last_heartbeat_ts = now_ts
-
         for event in events:
-            key = f"{event['symbol']}:{event['event_key']}"
+            key = str(event["symbol"])
             if now_ts - last_notified.get(key, 0) < args.event_cooldown_seconds:
                 continue
-            message = format_event_message(event, snapshot_lookup, news_map=news_map)
+            message = format_volume_alert(event, snapshot_lookup)
             _safe_print("")
             _safe_print(message)
             if args.notify:
                 send_discord_messages(split_message(message))
             last_notified[key] = now_ts
+
         if cycle < args.repeat_count:
             time.sleep(args.interval_seconds)
 
@@ -1420,6 +1530,92 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         send_discord_messages([message])
 
 
+def run_aggregate(args: argparse.Namespace) -> None:
+    """Merge all batch_NN.csv files from output/full_scan/ and send top-N to Discord."""
+    batch_dir = Path(args.output) / "full_scan"
+    csvs = sorted(batch_dir.glob("batch_*.csv")) if batch_dir.exists() else []
+    if not csvs:
+        msg = f"⚠️ **全市場彙整失敗** · {args.end}\n找不到批次結果（{batch_dir}），請確認掃描已執行。"
+        _safe_print(msg)
+        if args.notify:
+            send_discord_messages([msg])
+        return
+
+    frames = []
+    for p in csvs:
+        try:
+            df = pd.read_csv(p, encoding="utf-8-sig")
+            if not df.empty:
+                frames.append(df)
+        except Exception as exc:
+            _safe_print(f"[aggregate] 略過 {p.name}: {exc}", )
+
+    if not frames:
+        msg = f"⚠️ **全市場彙整失敗** · {args.end}\n批次檔案全部為空或無法讀取。"
+        _safe_print(msg)
+        if args.notify:
+            send_discord_messages([msg])
+        return
+
+    all_candidates = pd.concat(frames, ignore_index=True)
+    total_stocks = int(all_candidates["stock_id"].nunique()) if "stock_id" in all_candidates.columns else len(all_candidates)
+    all_candidates = (
+        all_candidates
+        .sort_values("entry_score", ascending=False)
+        .drop_duplicates(subset=["stock_id"])
+        .reset_index(drop=True)
+    )
+    top = all_candidates.head(args.top_n)
+
+    lines = [
+        f"🌙 **全市場掃描 TOP {args.top_n}** · {args.end}",
+        f"共 {len(csvs)} 批次 · {total_stocks} 檔候選",
+        "",
+    ]
+    for rank, (_, row) in enumerate(top.iterrows(), 1):
+        close = float(row.get("close") or 0)
+        score = float(row.get("entry_score") or 0)
+        cond  = int(row.get("condition_count") or 0)
+        atr   = float(row.get("atr14") or 0) or None
+        f_sc  = int(row.get("f_score") or -1)
+        f_tag = f" F`{f_sc}`" if f_sc >= 0 else ""
+        industry = str(row.get("industry_category") or "")
+        ind_tag = f" 〔{industry}〕" if industry else ""
+        price_tag = _low_price_tag(row.get("close"))
+        price_note = f" `{price_tag}`" if price_tag else ""
+        entry_zone, stop, target, rr = _entry_stop_target(close, atr)
+        rsi = float(row.get("rsi14") or 0)
+        adx = float(row.get("adx14") or 0)
+        vol_ratio = float(row.get("volume_ratio") or 0)
+        foreign_streak = int(row.get("foreign_buy_streak") or 0)
+        invest_streak = int(row.get("invest_trust_streak") or 0)
+        trend_inline = _trend_label(row)
+        obs = recommend_observation_period(row, is_candidate=True)
+        invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append(
+            f"**#{rank} {row.get('stock_id')}** {row.get('name', '')}{ind_tag}{price_note}{f_tag}"
+            f"  分 `{score:.0f}` | `{cond}/{_MAX_CONDITION_COUNT}條`"
+        )
+        lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
+        lines.append(f"📊 RSI `{rsi:.1f}` | ADX `{adx:.1f}` | 量比 `{vol_ratio:.1f}x`{trend_inline}")
+        lines.append(f"🏦 外資連買 `{foreign_streak}d`{invest_txt}")
+        lines.append(f"⏱ {obs}")
+
+    message = "\n".join(lines)
+    _safe_print(message)
+    if args.notify:
+        send_discord_messages(split_message(message))
+
+    # Clean up batch files after successful aggregation
+    for p in csvs:
+        try:
+            p.unlink()
+        except OSError:
+            pass
+    _safe_print(f"[aggregate] 清除 {len(csvs)} 個批次檔案")
+
+
 def main() -> None:
     args = parse_args()
     cache_dir = Path(args.output) / "cache"
@@ -1446,6 +1642,7 @@ def main() -> None:
         atr_stop_multiplier=getattr(args, "atr_stop_multiplier", 2.0),
         max_holding_days=getattr(args, "max_holding_days", 0),
         max_positions_per_sector=getattr(args, "max_positions_per_sector", 2),
+        f_score_min=getattr(args, "f_score_min", 0),
         **_cfg_overrides,
     )
 
@@ -1470,6 +1667,8 @@ def main() -> None:
         run_daily_report(args, client, config)
     elif args.mode == "predict":
         run_predict(args, client, config)
+    elif args.mode == "aggregate":
+        run_aggregate(args)
     else:
         run_scan(args, client, config)
 

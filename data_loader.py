@@ -316,6 +316,38 @@ def clean_cache(cache_dir: Path | str, max_age_days: int = 30) -> int:
     return deleted
 
 
+def fetch_fundamentals(
+    client: FinMindClient,
+    stock_id: str,
+    start_date: str,
+    end_date: str,
+) -> dict[str, pd.DataFrame]:
+    """Fetch income statement, balance sheet, and cash flow from FinMind.
+
+    Uses 30-day cache — quarterly data changes infrequently.
+    Returns empty DataFrames on failure so callers degrade gracefully.
+    """
+    datasets = {
+        "income":   "TaiwanStockFinancialStatements",
+        "balance":  "TaiwanStockBalanceSheet",
+        "cashflow": "TaiwanStockCashFlowStatement",
+    }
+    result: dict[str, pd.DataFrame] = {}
+    for key, dataset in datasets.items():
+        try:
+            df = client.fetch_dataset(
+                dataset,
+                cache_ttl_days=30,
+                data_id=stock_id,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            result[key] = df
+        except Exception:
+            result[key] = pd.DataFrame()
+    return result
+
+
 def fetch_financial_statement_dates(
     client: FinMindClient,
     stock_id: str,
