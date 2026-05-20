@@ -6,6 +6,7 @@ fetched via yfinance (best-effort, degrades gracefully if unavailable).
 """
 from __future__ import annotations
 
+import sys
 import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -45,21 +46,28 @@ def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
         return pd.DataFrame()
     try:
         end_dt = (datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=2)).strftime("%Y-%m-%d")
-        raw = yf.download(
-            list(_US_TICKERS.values()),
-            start=start_date,
-            end=end_dt,
-            progress=False,
-            auto_adjust=True,
-            threads=True,
-        )
-        if raw.empty:
+
+        # Download each ticker individually so one failure doesn't drop all features
+        col_frames: list[pd.Series] = []
+        failed: list[str] = []
+        for key, ticker in _US_TICKERS.items():
+            try:
+                df = yf.download(ticker, start=start_date, end=end_dt,
+                                 progress=False, auto_adjust=True, threads=False)
+                if df.empty:
+                    failed.append(ticker)
+                    continue
+                close = df["Close"] if "Close" in df.columns else df.iloc[:, 0]
+                col_frames.append(close.rename(key))
+            except Exception:
+                failed.append(ticker)
+
+        if failed:
+            print(f"[ai] yfinance 跳過失敗 ticker: {failed}", file=sys.stderr)
+        if not col_frames:
             return pd.DataFrame()
-        closes = raw["Close"].copy() if "Close" in raw.columns else raw
-        closes.columns = [
-            next((k for k, v in _US_TICKERS.items() if v == c), c)
-            for c in closes.columns
-        ]
+
+        closes = pd.concat(col_frames, axis=1)
         closes.index = pd.to_datetime(closes.index).tz_localize(None)
         closes.index.name = "date"
         result = closes.reset_index()
@@ -74,7 +82,8 @@ def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
         result = result[[c for c in feat_cols if c in result.columns]]
         result["date"] = pd.to_datetime(result["date"]).dt.normalize()
         return result.dropna(how="all", subset=[c for c in result.columns if c != "date"])
-    except Exception:
+    except Exception as exc:
+        print(f"[ai] yfinance 整體失敗: {exc}", file=sys.stderr)
         return pd.DataFrame()
 
 

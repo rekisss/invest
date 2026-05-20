@@ -22,6 +22,9 @@ on:
       batch_index:
         description: "批次編號 (0-7，-1=自動偵測)"
         default: "-1"
+      force_rerun:
+        description: "強制重跑已完成批次 (true/false)"
+        default: "false"
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -82,8 +85,27 @@ jobs:
               *)  BATCH=-1 ;;
             esac
           fi
+          # E: 若 CSV 已存在且非強制重跑，跳過（避免浪費 quota）
+          FORCE="${{ github.event.inputs.force_rerun }}"
+          if [ "$BATCH" != "-1" ] && [ "$FORCE" != "true" ]; then
+            PAD=$(printf "%02d" $BATCH)
+            if [ -f "output/full_scan/batch_${PAD}.csv" ]; then
+              echo "批次 $BATCH CSV 已存在，跳過（force_rerun=true 可強制）"
+              BATCH=-1
+            fi
+          fi
+
           echo "index=$BATCH" >> "$GITHUB_OUTPUT"
           echo "批次 $BATCH（CST $(TZ=Asia/Taipei date +%H:%M)）"
+
+      - name: Notify Discord batch start
+        if: steps.batch.outputs.index != '-1'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"📍 **批次 ${{ steps.batch.outputs.index }}/7 掃描開始** · $(TZ=Asia/Taipei date +%H:%M) CST · $(TZ=Asia/Taipei date +%Y-%m-%d)\"}" \
+            "$DISCORD_WEBHOOK_URL" || true
 
       - name: Run batch scan (自動重試一次)
         if: steps.batch.outputs.index != '-1'

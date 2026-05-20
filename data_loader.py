@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import random
 import re
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -194,6 +195,7 @@ def fetch_stock_prices(
     keep_columns = ["date", "open", "high", "low", "close", "volume", "amount"]
     missing = [c for c in keep_columns if c not in renamed.columns]
     if missing:
+        print(f"[data_loader] fetch_stock_prices: 缺少欄位 {missing}，回傳空資料", file=sys.stderr)
         return pd.DataFrame(columns=keep_columns)
     renamed = renamed[keep_columns].copy()
     renamed["date"] = pd.to_datetime(renamed["date"])

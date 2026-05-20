@@ -34,7 +34,10 @@ def _post_with_retry(url: str, payload: dict, max_attempts: int = 3) -> None:
         try:
             resp = _session.post(url, json=payload, timeout=30)
             if resp.status_code == 429:
-                retry_after = float(resp.json().get("retry_after", 1))
+                try:
+                    retry_after = float(resp.json().get("retry_after", 1))
+                except Exception:
+                    retry_after = 1.0
                 time.sleep(retry_after)
                 continue
             resp.raise_for_status()
