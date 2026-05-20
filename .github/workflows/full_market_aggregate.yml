@@ -68,7 +68,7 @@ jobs:
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git pull --rebase origin main || true
-          git add output/full_scan/ || true
+          git add -f output/full_scan/ || true
           git diff --staged --quiet || git commit -m "scan: 清除批次檔案 $(TZ=Asia/Taipei date +%Y-%m-%d)"
           git push || true
 

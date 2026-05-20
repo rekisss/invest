@@ -110,10 +110,20 @@ jobs:
       - name: Run batch scan (自動重試一次)
         if: steps.batch.outputs.index != '-1'
         env:
-          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          FMT_A: ${{ secrets.FINMIND_TOKEN }}
+          FMT_B: ${{ secrets.FINMIND_TOKEN_2 }}
+          FMT_C: ${{ secrets.FINMIND_TOKEN_3 }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           BATCH=${{ steps.batch.outputs.index }}
+          MOD=$(( BATCH % 3 ))
+          case $MOD in
+            0) FINMIND_TOKEN="$FMT_A" ;;
+            1) FINMIND_TOKEN="$FMT_B" ;;
+            2) FINMIND_TOKEN="$FMT_C" ;;
+          esac
+          export FINMIND_TOKEN
+          echo "批次 $BATCH 使用 token 槽 $MOD"
           for attempt in 1 2; do
             echo "=== 嘗試第 $attempt 次（批次 $BATCH）==="
             python main.py \
@@ -135,7 +145,7 @@ jobs:
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git pull --rebase origin main || true
-          git add output/full_scan/ || true
+          git add -f output/full_scan/ || true
           git diff --staged --quiet || git commit -m "scan: 批次 ${{ steps.batch.outputs.index }} $(TZ=Asia/Taipei date +%Y-%m-%d)"
           git push || true
 
