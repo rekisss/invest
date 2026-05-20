@@ -1,11 +1,11 @@
-name: 全市場彙整 TOP 20 (02:00 CST)
+name: 全市場彙整 TOP 20 (02:00 CST 週二~週六)
 
 # 補跑由 full_market_scan.yml 負責（23:00、00:00、01:00 CST 各補一批）
 # 02:00 CST 彙整所有批次，送出 TOP 20 Discord 通知
 
 on:
   schedule:
-    - cron: "0 18 * * 3-7"   # 02:00 CST = 18:00 UTC（週三到週日）
+    - cron: "0 18 * * 1-5"   # 02:00 CST = 18:00 UTC（週二到週六 CST，= 週一到週五 UTC）
   workflow_dispatch:
 
 env:
