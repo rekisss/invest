@@ -107,6 +107,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--f-score-min", type=int, default=0, help="Minimum Piotroski F-Score to qualify for entry (0 = disabled, 6 = recommended).")
     parser.add_argument("--batch-index", type=int, default=-1, help="0-based batch index for full-market scan (-1 = no batching).")
     parser.add_argument("--batch-count", type=int, default=8, help="Total number of batches for full-market scan (default 8).")
+    parser.add_argument("--positions", default="positions.csv", help="Path to open positions CSV for monitoring (default positions.csv).")
     # StrategyConfig overrides (for parallel backtest experiments)
     parser.add_argument("--rsi-threshold", type=float, default=None, help="RSI threshold for rsi_strong signal (default 55.0).")
     parser.add_argument("--adx-threshold", type=float, default=None, help="ADX threshold for adx_trending signal (default 20.0).")
@@ -1532,6 +1533,75 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         send_discord_messages([message])
 
 
+def _check_positions(
+    prices: pd.DataFrame,
+    positions_path: Path,
+    notify: bool,
+) -> None:
+    """Check open positions against latest batch prices and alert via Discord."""
+    if not positions_path.exists():
+        return
+    try:
+        pos = pd.read_csv(positions_path, encoding="utf-8-sig")
+    except Exception as exc:
+        _safe_print(f"[positions] 讀取失敗：{exc}")
+        return
+
+    required = {"stock_id", "entry_price", "stop_loss", "target"}
+    if not required.issubset(pos.columns):
+        _safe_print(f"[positions] 欄位不足，需要：{required}")
+        return
+
+    pos["stock_id"] = pos["stock_id"].astype(str).str.strip()
+    latest = prices[["stock_id", "close", "name"]].drop_duplicates("stock_id").set_index("stock_id")
+
+    alerts: list[str] = []
+    today = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=8)))
+    for _, row in pos.iterrows():
+        sid = str(row["stock_id"])
+        if sid not in latest.index:
+            continue
+        current = float(latest.at[sid, "close"])
+        entry = float(row["entry_price"])
+        stop = float(row["stop_loss"])
+        target = float(row["target"])
+        name = str(latest.at[sid, "name"]) if "name" in latest.columns else sid
+        ret_pct = (current - entry) / entry * 100
+        entry_date_str = str(row.get("entry_date", ""))
+        days_held = 0
+        if entry_date_str:
+            try:
+                days_held = (today.date() - datetime.strptime(entry_date_str, "%Y-%m-%d").date()).days
+            except ValueError:
+                pass
+
+        if current <= stop:
+            alerts.append(
+                f"🔴 **停損警報** {sid} {name}\n"
+                f"  現價 `{current:.2f}` ≤ 停損 `{stop:.2f}` | 報酬 `{ret_pct:+.1f}%` | 持倉 `{days_held}天`"
+            )
+        elif current >= target:
+            alerts.append(
+                f"🟢 **目標到達** {sid} {name}\n"
+                f"  現價 `{current:.2f}` ≥ 目標 `{target:.2f}` | 報酬 `{ret_pct:+.1f}%` | 持倉 `{days_held}天`"
+            )
+        elif days_held > 20:
+            alerts.append(
+                f"🟡 **觀察提醒** {sid} {name}\n"
+                f"  現價 `{current:.2f}` | 報酬 `{ret_pct:+.1f}%` | 持倉 `{days_held}天` | 目標 `{target:.2f}` 尚未到達"
+            )
+
+    if not alerts:
+        _safe_print("[positions] 所有持倉正常，無警報")
+        return
+
+    header = f"📋 **持倉監控** · {today.strftime('%Y-%m-%d')}"
+    msg = header + "\n\n" + "\n\n".join(alerts)
+    _safe_print(msg)
+    if notify:
+        send_discord_messages(split_message(msg))
+
+
 def run_aggregate(args: argparse.Namespace) -> None:
     """Merge all batch_NN.csv files from output/full_scan/ and send top-N to Discord."""
     batch_dir = Path(args.output) / "full_scan"
@@ -1569,6 +1639,12 @@ def run_aggregate(args: argparse.Namespace) -> None:
             send_discord_messages([msg])
         return
 
+    batch_count = getattr(args, "batch_count", 8)
+    incomplete_warning = (
+        f"⚠️ 批次不完整（{len(frames)}/{batch_count} 批）· 結果僅供參考\n\n"
+        if 0 < len(frames) < batch_count else ""
+    )
+
     all_candidates = pd.concat(frames, ignore_index=True)
     total_stocks = int(all_candidates["stock_id"].nunique()) if "stock_id" in all_candidates.columns else len(all_candidates)
     all_candidates = (
@@ -1580,8 +1656,8 @@ def run_aggregate(args: argparse.Namespace) -> None:
     top = all_candidates.head(args.top_n)
 
     lines = [
-        f"🌙 **全市場掃描 TOP {args.top_n}** · {args.end}",
-        f"共 {len(csvs)} 批次 · {total_stocks} 檔候選",
+        f"{incomplete_warning}🌙 **全市場掃描 TOP {args.top_n}** · {args.end}",
+        f"共 {len(frames)}/{batch_count} 批次 · {total_stocks} 檔候選",
         "",
     ]
     for rank, (_, row) in enumerate(top.iterrows(), 1):
@@ -1618,6 +1694,10 @@ def run_aggregate(args: argparse.Namespace) -> None:
     _safe_print(message)
     if args.notify:
         send_discord_messages(split_message(message))
+
+    # Check open positions against latest prices
+    positions_csv = Path(getattr(args, "positions", None) or "positions.csv")
+    _check_positions(all_candidates, positions_csv, getattr(args, "notify", False))
 
     # Clean up batch files after successful aggregation
     for p in csvs:
