@@ -1830,12 +1830,6 @@ def run_partial_aggregate(args: argparse.Namespace) -> None:
             send_discord_messages([msg])
         return
 
-    batch_count = getattr(args, "batch_count", 8)
-    incomplete_note = (
-        f"（{len(frames)}/{batch_count} 批已完成，掃描進行中）\n\n"
-        if len(frames) < batch_count else ""
-    )
-
     all_candidates = pd.concat(frames, ignore_index=True)
     total_stocks = int(all_candidates["stock_id"].nunique()) if "stock_id" in all_candidates.columns else len(all_candidates)
     all_candidates = (
@@ -1848,7 +1842,7 @@ def run_partial_aggregate(args: argparse.Namespace) -> None:
 
     lines = [
         f"🔍 **即時 TOP {args.top_n} 預覽** · {args.end}",
-        f"{incomplete_note}共 {len(frames)}/{batch_count} 批次 · {total_stocks} 檔候選",
+        f"（掃描進行中）已掃 `{total_stocks}` 支 · {len(frames)} 批次",
         "",
     ]
     for rank, (_, row) in enumerate(top.iterrows(), 1):
@@ -1934,12 +1928,6 @@ def run_aggregate(args: argparse.Namespace) -> None:
             send_discord_messages([msg])
         return
 
-    batch_count = getattr(args, "batch_count", 8)
-    incomplete_warning = (
-        f"⚠️ 批次不完整（{len(frames)}/{batch_count} 批）· 結果僅供參考\n\n"
-        if 0 < len(frames) < batch_count else ""
-    )
-
     all_candidates = pd.concat(frames, ignore_index=True)
     total_stocks = int(all_candidates["stock_id"].nunique()) if "stock_id" in all_candidates.columns else len(all_candidates)
     all_candidates = (
@@ -1951,8 +1939,8 @@ def run_aggregate(args: argparse.Namespace) -> None:
     top = all_candidates.head(args.top_n)
 
     lines = [
-        f"{incomplete_warning}🌙 **全市場掃描 TOP {args.top_n}** · {args.end}",
-        f"共 {len(frames)}/{batch_count} 批次 · {total_stocks} 檔候選",
+        f"🌙 **全市場掃描 TOP {args.top_n}** · {args.end}",
+        f"共 {len(frames)} 批次 · 掃描 {total_stocks} 支",
         "",
     ]
     for rank, (_, row) in enumerate(top.iterrows(), 1):
