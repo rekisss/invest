@@ -1,11 +1,12 @@
-name: 全市場彙整 TOP 20 (02:00 CST 週二~週六)
+name: 全市場彙整 TOP 20 (20:00 CST 週二~週六)
 
-# 彙整所有 batch_*.csv，送出 TOP 20 Discord 通知
-# 02:00 CST 固定彙整（批次數量依接力模式動態產生）
+# 1. 全局缺漏補掃（用 L token，此時 quota 已 reset）
+# 2. 彙整所有 batch_*.csv，送出 TOP 20 Discord 通知
+# 3. 清除批次 CSV（保留 XLSX 供歸檔）
 
 on:
   schedule:
-    - cron: "0 18 * * 1-5"   # 02:00 CST = 18:00 UTC（週二到週六 CST）
+    - cron: "0 12 * * 1-5"   # 20:00 CST = 12:00 UTC（週二到週六 CST）
   workflow_dispatch:
 
 env:
@@ -37,14 +38,29 @@ jobs:
       - name: 顯示掃描進度
         id: detect
         run: |
-          BATCH_COUNT=$(ls output/full_scan/batch_[0-9][0-9].csv 2>/dev/null | wc -l)
+          BATCH_COUNT=$(ls output/full_scan/batch_*.csv 2>/dev/null | wc -l)
           TOTAL_ROWS=0
-          for f in output/full_scan/batch_[0-9][0-9].csv; do
+          for f in output/full_scan/batch_*.csv; do
             [ -f "$f" ] && TOTAL_ROWS=$(( TOTAL_ROWS + $(tail -n +2 "$f" | wc -l) ))
           done
           echo "批次數：$BATCH_COUNT，已掃股票：$TOTAL_ROWS 支"
           echo "batch_count=$BATCH_COUNT" >> "$GITHUB_OUTPUT"
           echo "total_rows=$TOTAL_ROWS" >> "$GITHUB_OUTPUT"
+
+      - name: 全局缺漏補掃（L token）
+        continue-on-error: true
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python main.py \
+            --mode fill-gaps \
+            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
+            --lookback-days 420 \
+            --max-universe 1800 \
+            --batch-count 15 \
+            --output output \
+            --workers 4
 
       - name: Aggregate and notify
         env:
@@ -57,13 +73,22 @@ jobs:
             --output output \
             --notify
 
+      - name: 上傳彙整 Excel（Artifacts）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aggregate-run${{ github.run_number }}
+          path: output/full_scan/*.xlsx
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Commit cleanup (batch files removed by aggregate)
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git pull --rebase origin main || true
-          git add -f output/full_scan/ || true
-          git diff --staged --quiet || git commit -m "scan: 彙整完成，清除批次 $(TZ=Asia/Taipei date +%Y-%m-%d)"
+          git add output/full_scan/ || true
+          git diff --staged --quiet || git commit -m "scan: 彙整完成 $(TZ=Asia/Taipei date +%Y-%m-%d)"
           git push || true
 
       - name: Notify Discord on failure
