@@ -1161,16 +1161,68 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
             send_discord_messages([err])
         return
 
-    # In batch mode, probe quota before launching a 450-call scan
-    if getattr(args, "batch_index", -1) >= 0:
+    _batch_idx = getattr(args, "batch_index", -1)
+    _batch_count = getattr(args, "batch_count", 15)
+    already_scanned: set[str] = set()
+    total_universe = 0
+    new_to_scan: set[str] = set()
+
+    # In batch mode, probe quota before launching a scan
+    if _batch_idx >= 0:
         quota_ok, quota_msg = probe_batch_quota(client)
         if not quota_ok:
-            _safe_print(f"[batch {args.batch_index}] {quota_msg}")
+            _safe_print(f"[batch {_batch_idx}] {quota_msg}")
             if os.getenv("DISCORD_WEBHOOK_URL"):
                 send_discord_messages([
-                    f"⏰ **批次 {args.batch_index}/7 跳過** · 配額不足 · {_cst_now()} CST\n{quota_msg}"
+                    f"⏰ **批次 {_batch_idx}/{_batch_count - 1} 跳過** · 配額不足 · {_cst_now()} CST\n{quota_msg}"
                 ])
             return
+
+    # In batch mode, detect already-scanned stocks and only scan new ones
+    if _batch_idx >= 0:
+        import copy as _copy
+        _scan_dir = Path(args.output) / "full_scan"
+        _scan_dir.mkdir(parents=True, exist_ok=True)
+
+        for _p in sorted(_scan_dir.glob("batch_*.csv")):
+            try:
+                _df = pd.read_csv(_p, encoding="utf-8-sig")
+                if "stock_id" in _df.columns:
+                    already_scanned.update(_df["stock_id"].astype(str))
+            except Exception:
+                pass
+
+        _stock_info = fetch_stock_info(client)
+        _full_univ = build_auto_universe(_stock_info, max_symbols=args.max_universe)
+        total_universe = len(_full_univ)
+        _bc = max(1, _batch_count)
+        _size = (len(_full_univ) + _bc - 1) // _bc
+        _start = _batch_idx * _size
+        _batch_slice = _full_univ.iloc[_start: _start + _size]
+        _batch_ids = set(_batch_slice["stock_id"].astype(str))
+        new_to_scan = _batch_ids - already_scanned
+
+        _safe_print(
+            f"[batch {_batch_idx}] 本批 {len(_batch_ids)} 支：已掃 {len(_batch_ids & already_scanned)}，"
+            f"新掃 {len(new_to_scan)}，全局累計 {len(already_scanned)}/{total_universe}"
+        )
+
+        if not new_to_scan:
+            msg = (
+                f"✅ **批次 {_batch_idx} 全部已掃** · {_cst_now()} CST\n"
+                f"全局累計 `{len(already_scanned)}/{total_universe}` 支"
+            )
+            _safe_print(msg)
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([msg])
+            return
+
+        _gap_file = _scan_dir / f"_scan_new_{_batch_idx:02d}.csv"
+        _new_univ = _batch_slice[_batch_slice["stock_id"].astype(str).isin(new_to_scan)]
+        _new_univ.to_csv(_gap_file, index=False)
+        args = _copy.copy(args)
+        args.stocks = str(_gap_file)
+        args.batch_index = -1
 
     if args.notify:
         send_discord_messages([f"🔄 **選股掃描開始** · {_cst_now()} CST · {args.end}"])
@@ -1226,30 +1278,37 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
     except Exception as _pred_exc:
         _safe_print(f"[ai] 預測略過：{_pred_exc}")
 
-    # In batch mode, save candidates CSV for later aggregation
-    if getattr(args, "batch_index", -1) >= 0:
-        batch_dir = Path(args.output) / "full_scan"
-        batch_dir.mkdir(parents=True, exist_ok=True)
-        batch_csv = batch_dir / f"batch_{args.batch_index:02d}.csv"
-        batch_df = pd.concat([candidates, watchlist], ignore_index=True) if not watchlist.empty else candidates
-        batch_df = batch_df.sort_values("entry_score", ascending=False).drop_duplicates(subset=["stock_id"])
-        batch_df.to_csv(batch_csv, index=False, encoding="utf-8-sig")
-        batch_xlsx = batch_dir / f"batch_{args.batch_index:02d}.xlsx"
-        batch_df.to_excel(batch_xlsx, index=False, engine="openpyxl")
-        _safe_print(f"[batch {args.batch_index}] 儲存候選+觀察：{len(batch_df)} 檔（候選 {len(candidates)}，觀察 {len(watchlist)}）→ {batch_csv}")
+    # In batch mode, merge new results with existing batch CSV and save
+    if _batch_idx >= 0:
+        _save_dir = Path(args.output) / "full_scan"
+        _save_dir.mkdir(parents=True, exist_ok=True)
+        _batch_csv = _save_dir / f"batch_{_batch_idx:02d}.csv"
+        _batch_df = pd.concat([candidates, watchlist], ignore_index=True) if not watchlist.empty else candidates
+        _batch_df = _batch_df.sort_values("entry_score", ascending=False).drop_duplicates(subset=["stock_id"])
+
+        if _batch_csv.exists():
+            _existing_df = pd.read_csv(_batch_csv, encoding="utf-8-sig")
+            _batch_df = pd.concat([_existing_df, _batch_df], ignore_index=True)
+            _batch_df = _batch_df.sort_values("entry_score", ascending=False).drop_duplicates(subset=["stock_id"])
+
+        _batch_df.to_csv(_batch_csv, index=False, encoding="utf-8-sig")
+        _batch_df.to_excel(_batch_csv.with_suffix(".xlsx"), index=False, engine="openpyxl")
+        _safe_print(f"[batch {_batch_idx}] 儲存候選+觀察：{len(_batch_df)} 檔（候選 {len(candidates)}，觀察 {len(watchlist)}）→ {_batch_csv}")
         _write_batch_markdown(
-            batch_dir, args.batch_index,
-            getattr(args, "batch_count", 8),
+            _save_dir, _batch_idx, _batch_count,
             args.end, candidates, watchlist, breadth,
         )
+        _new_global = len(already_scanned) + len(new_to_scan)
         if os.getenv("DISCORD_WEBHOOK_URL"):
             _cand_n = len(candidates)
             _watch_n = len(watchlist)
             _status = "✅" if _cand_n > 0 else "🔵"
             send_discord_messages([
-                f"{_status} **批次 {args.batch_index}/7 完成** · {_cst_now()} CST · {args.end}\n"
-                f"候選 `{_cand_n}` 檔 | 觀察 `{_watch_n}` 檔 | 共掃 `{breadth.get('total_stocks', 0)}` 檔"
+                f"{_status} **批次 {_batch_idx} 完成** · {_cst_now()} CST · {args.end}\n"
+                f"新掃 `{breadth.get('total_stocks', 0)}` 支 | 候選 `{_cand_n}` | 觀察 `{_watch_n}`\n"
+                f"全局累計 `{_new_global}/{total_universe}` 支"
             ])
+        (_save_dir / f"_scan_new_{_batch_idx:02d}.csv").unlink(missing_ok=True)
 
     report_path = save_scan_report(args.output, candidates, watchlist, universe)
     news_map = {}
