@@ -68,6 +68,91 @@ def _cst_today() -> str:
     return _cst_now("%Y-%m-%d")
 
 
+def _write_batch_markdown(
+    batch_dir: "Path",
+    batch_index: int,
+    batch_count: int,
+    scan_date: str,
+    candidates: "pd.DataFrame",
+    watchlist: "pd.DataFrame",
+    breadth: dict,
+) -> None:
+    """Write a human-readable Markdown summary of a completed batch scan."""
+    md_path = batch_dir / f"batch_{batch_index:02d}.md"
+    lines: list[str] = []
+    lines.append(f"# 批次 {batch_index}/{batch_count - 1} · {scan_date} {_cst_now()} CST\n")
+    lines.append(
+        f"掃描：**{breadth.get('total_stocks', 0)}** 檔｜"
+        f"候選：**{len(candidates)}** 檔｜"
+        f"觀察：**{len(watchlist)}** 檔\n"
+    )
+
+    def _tbl_row(r: dict, cols: list[str]) -> str:
+        return "| " + " | ".join(str(r.get(c, "")) for c in cols) + " |"
+
+    if not candidates.empty:
+        lines.append("## 候選")
+        show_cols = ["stock_id", "name", "close", "entry_score", "condition_count", "volume_ratio", "entry_reason"]
+        show_cols = [c for c in show_cols if c in candidates.columns]
+        header_map = {
+            "stock_id": "股票", "name": "名稱", "close": "收盤",
+            "entry_score": "評分", "condition_count": "條件數",
+            "volume_ratio": "量比", "entry_reason": "訊號",
+        }
+        headers = [header_map.get(c, c) for c in show_cols]
+        lines.append("| " + " | ".join(headers) + " |")
+        lines.append("|" + "|".join("---" for _ in headers) + "|")
+        for _, row in candidates.head(30).iterrows():
+            vals = []
+            for c in show_cols:
+                v = row.get(c, "")
+                if c in ("entry_score", "volume_ratio") and v != "":
+                    try:
+                        v = f"{float(v):.2f}"
+                    except Exception:
+                        pass
+                elif c == "close" and v != "":
+                    try:
+                        v = f"{float(v):.1f}"
+                    except Exception:
+                        pass
+                vals.append(str(v))
+            lines.append("| " + " | ".join(vals) + " |")
+        lines.append("")
+
+    if not watchlist.empty:
+        lines.append("## 觀察清單")
+        watch_cols = ["stock_id", "name", "close", "entry_score", "condition_count", "skip_reason"]
+        watch_cols = [c for c in watch_cols if c in watchlist.columns]
+        w_header_map = {
+            "stock_id": "股票", "name": "名稱", "close": "收盤",
+            "entry_score": "評分", "condition_count": "條件數", "skip_reason": "未進候選原因",
+        }
+        w_headers = [w_header_map.get(c, c) for c in watch_cols]
+        lines.append("| " + " | ".join(w_headers) + " |")
+        lines.append("|" + "|".join("---" for _ in w_headers) + "|")
+        for _, row in watchlist.head(20).iterrows():
+            vals = []
+            for c in watch_cols:
+                v = row.get(c, "")
+                if c in ("entry_score",) and v != "":
+                    try:
+                        v = f"{float(v):.2f}"
+                    except Exception:
+                        pass
+                elif c == "close" and v != "":
+                    try:
+                        v = f"{float(v):.1f}"
+                    except Exception:
+                        pass
+                vals.append(str(v))
+            lines.append("| " + " | ".join(vals) + " |")
+        lines.append("")
+
+    md_path.write_text("\n".join(lines), encoding="utf-8")
+    _safe_print(f"[batch {batch_index}] Markdown 摘要 → {md_path}")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Taiwan MACD swing strategy backtester and scanner.")
     parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict", "aggregate"], default="scan")
@@ -1150,6 +1235,11 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
         batch_df = batch_df.sort_values("entry_score", ascending=False).drop_duplicates(subset=["stock_id"])
         batch_df.to_csv(batch_csv, index=False, encoding="utf-8-sig")
         _safe_print(f"[batch {args.batch_index}] 儲存候選+觀察：{len(batch_df)} 檔（候選 {len(candidates)}，觀察 {len(watchlist)}）→ {batch_csv}")
+        _write_batch_markdown(
+            batch_dir, args.batch_index,
+            getattr(args, "batch_count", 8),
+            args.end, candidates, watchlist, breadth,
+        )
         if os.getenv("DISCORD_WEBHOOK_URL"):
             _cand_n = len(candidates)
             _watch_n = len(watchlist)
