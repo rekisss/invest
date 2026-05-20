@@ -1,29 +1,21 @@
-name: 全市場掃描 (每小時批次，15:00–22:00 + 補跑 23:00–01:00 CST)
+name: 全市場掃描 (接力模式，每 2 小時三帳號輪流)
 
-# 正式批次：15:00–22:00 CST，每小時一批（批次 0–7）
-# 補跑批次：23:00、00:00、01:00 CST，自動找第一個缺少的批次補跑
-# 彙整：02:00 CST（full_market_aggregate.yml）
+# 每 2 小時啟動一輪：L → 950223 → rekis 依序接力掃描
+# 每個帳號掃到 API 配額耗盡為止，下一帳號從斷點繼續
+# 掃完後彙整由 full_market_aggregate.yml 於 02:00 CST 負責
+# 排程：CST 15:00, 17:00, 19:00, 21:00, 23:00 = UTC 07, 09, 11, 13, 15
 
 on:
   schedule:
-    - cron: "0 7  * * 1-5"   # 15:00 CST → batch 0
-    - cron: "0 8  * * 1-5"   # 16:00 CST → batch 1
-    - cron: "0 9  * * 1-5"   # 17:00 CST → batch 2
-    - cron: "0 10 * * 1-5"   # 18:00 CST → batch 3
-    - cron: "0 11 * * 1-5"   # 19:00 CST → batch 4
-    - cron: "0 12 * * 1-5"   # 20:00 CST → batch 5
-    - cron: "0 13 * * 1-5"   # 21:00 CST → batch 6
-    - cron: "0 14 * * 1-5"   # 22:00 CST → batch 7
-    - cron: "0 15 * * 1-5"   # 23:00 CST → 補跑 (同日)
-    - cron: "0 16 * * 1-5"   # 00:00 CST → 補跑 (次日，UTC 週一~週五 = CST 週二~週六)
-    - cron: "0 17 * * 1-5"   # 01:00 CST → 補跑 (次日，UTC 週一~週五 = CST 週二~週六)
+    - cron: "0 7  * * 1-5"   # 15:00 CST
+    - cron: "0 9  * * 1-5"   # 17:00 CST
+    - cron: "0 11 * * 1-5"   # 19:00 CST
+    - cron: "0 13 * * 1-5"   # 21:00 CST
+    - cron: "0 15 * * 1-5"   # 23:00 CST
   workflow_dispatch:
     inputs:
-      batch_index:
-        description: "批次編號 (0-7，-1=自動偵測)"
-        default: "-1"
-      force_rerun:
-        description: "強制重跑已完成批次 (true/false)"
+      force_rescan:
+        description: "強制全部重掃（true=清除現有批次重新開始）"
         default: "false"
 
 env:
@@ -32,7 +24,7 @@ env:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -49,101 +41,92 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Determine batch index
-        id: batch
+      - name: Pull latest batch results
+        run: git pull --rebase origin main || true
+
+      - name: 強制重掃（若要求）
+        if: github.event.inputs.force_rescan == 'true'
         run: |
-          INPUT="${{ github.event.inputs.batch_index }}"
-          if [ -n "$INPUT" ] && [ "$INPUT" != "-1" ]; then
-            BATCH=$INPUT
-          else
-            HOUR=$(TZ=Asia/Taipei date +%H)
-            case $HOUR in
-              15) BATCH=0 ;;
-              16) BATCH=1 ;;
-              17) BATCH=2 ;;
-              18) BATCH=3 ;;
-              19) BATCH=4 ;;
-              20) BATCH=5 ;;
-              21) BATCH=6 ;;
-              22) BATCH=7 ;;
-              23|0|1)
-                # 補跑模式：先拉最新 CSV，找第一個缺少的批次
-                git pull --rebase origin main || true
-                BATCH=-1
-                for i in $(seq 0 7); do
-                  PAD=$(printf "%02d" $i)
-                  if [ ! -f "output/full_scan/batch_${PAD}.csv" ]; then
-                    BATCH=$i
-                    echo "補跑模式：找到缺少批次 $i"
-                    break
-                  fi
-                done
-                if [ "$BATCH" = "-1" ]; then
-                  echo "補跑模式：所有批次齊全，跳過"
-                fi
-                ;;
-              *)  BATCH=-1 ;;
-            esac
-          fi
-          # E: 若 CSV 已存在且非強制重跑，跳過（避免浪費 quota）
-          FORCE="${{ github.event.inputs.force_rerun }}"
-          if [ "$BATCH" != "-1" ] && [ "$FORCE" != "true" ]; then
-            PAD=$(printf "%02d" $BATCH)
-            if [ -f "output/full_scan/batch_${PAD}.csv" ]; then
-              echo "批次 $BATCH CSV 已存在，跳過（force_rerun=true 可強制）"
-              BATCH=-1
-            fi
-          fi
+          rm -f output/full_scan/batch_*.csv output/full_scan/batch_*.xlsx || true
+          echo "已清除所有批次，重新掃描"
 
-          echo "index=$BATCH" >> "$GITHUB_OUTPUT"
-          echo "批次 $BATCH（CST $(TZ=Asia/Taipei date +%H:%M)）"
-
-      - name: Notify Discord batch start
-        if: steps.batch.outputs.index != '-1'
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          curl -s -H "Content-Type: application/json" \
-            -d "{\"content\": \"📍 **批次 ${{ steps.batch.outputs.index }}/7 掃描開始** · $(TZ=Asia/Taipei date +%H:%M) CST · $(TZ=Asia/Taipei date +%Y-%m-%d)\"}" \
-            "$DISCORD_WEBHOOK_URL" || true
-
-      - name: Run batch scan (自動重試一次)
-        if: steps.batch.outputs.index != '-1'
+      # ─── 帳號 L ───────────────────────────────────────────────
+      - name: 掃描 L 帳號（掃到配額耗盡）
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          BATCH=${{ steps.batch.outputs.index }}
-          for attempt in 1 2; do
-            echo "=== 嘗試第 $attempt 次（批次 $BATCH）==="
-            python main.py \
-              --mode scan \
-              --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
-              --lookback-days 420 \
-              --max-universe 1800 \
-              --batch-index $BATCH \
-              --batch-count 8 \
-              --top-n 50 \
-              --workers 4 \
-              --output output && break
-            [ $attempt -lt 2 ] && echo "失敗，60 秒後重試..." && sleep 60
-          done
+          python main.py \
+            --mode continue-scan \
+            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
+            --lookback-days 420 \
+            --max-universe 1800 \
+            --top-n 50 \
+            --workers 4 \
+            --output output || true
 
-      - name: Commit batch results
-        if: steps.batch.outputs.index != '-1'
+      - name: Commit L 帳號結果
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git pull --rebase origin main || true
-          git add output/full_scan/ || true
-          git diff --staged --quiet || git commit -m "scan: 批次 ${{ steps.batch.outputs.index }} $(TZ=Asia/Taipei date +%Y-%m-%d)"
-          git push || true
+          git add -f output/full_scan/ || true
+          git diff --staged --quiet || git commit -m \
+            "scan: L帳號接力 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)"
+          git push || (sleep 5 && git pull --rebase origin main && git push) || true
 
+      # ─── 帳號 950223 ──────────────────────────────────────────
+      - name: 掃描 950223 帳號（接續 L，掃到配額耗盡）
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN_2 }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python main.py \
+            --mode continue-scan \
+            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
+            --lookback-days 420 \
+            --max-universe 1800 \
+            --top-n 50 \
+            --workers 4 \
+            --output output || true
+
+      - name: Commit 950223 帳號結果
+        run: |
+          git pull --rebase origin main || true
+          git add -f output/full_scan/ || true
+          git diff --staged --quiet || git commit -m \
+            "scan: 950223帳號接力 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)"
+          git push || (sleep 5 && git pull --rebase origin main && git push) || true
+
+      # ─── 帳號 rekis ───────────────────────────────────────────
+      - name: 掃描 rekis 帳號（接續 950223，掃到配額耗盡）
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN_3 }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python main.py \
+            --mode continue-scan \
+            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
+            --lookback-days 420 \
+            --max-universe 1800 \
+            --top-n 50 \
+            --workers 4 \
+            --output output || true
+
+      - name: Commit rekis 帳號結果
+        run: |
+          git pull --rebase origin main || true
+          git add -f output/full_scan/ || true
+          git diff --staged --quiet || git commit -m \
+            "scan: rekis帳號接力 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)"
+          git push || (sleep 5 && git pull --rebase origin main && git push) || true
+
+      # ─── 失敗通知 ─────────────────────────────────────────────
       - name: Notify Discord on failure
         if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           curl -s -H "Content-Type: application/json" \
-            -d "{\"content\": \"⚠️ **全市場批次 ${{ steps.batch.outputs.index }} 失敗（已重試）** · $(TZ=Asia/Taipei date +%Y-%m-%d) · 請至 Actions 查看\"}" \
+            -d "{\"content\": \"⚠️ **全市場掃描失敗** · $(TZ=Asia/Taipei date +%Y-%m-%d %H:%M) CST · 請至 Actions 查看\"}" \
             "$DISCORD_WEBHOOK_URL" || true

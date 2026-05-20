@@ -155,7 +155,7 @@ def _write_batch_markdown(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Taiwan MACD swing strategy backtester and scanner.")
-    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict", "aggregate", "partial-aggregate"], default="scan")
+    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict", "aggregate", "partial-aggregate", "continue-scan"], default="scan")
     parser.add_argument("--stocks", default="auto", help="CSV file containing stock_id and optional name, or 'auto'.")
     parser.add_argument("--start", default="2020-01-01")
     parser.add_argument("--end", default=_cst_today())
@@ -1266,6 +1266,94 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
         sync_scan_results(candidates, watchlist, latest_date, news_map, market_regime=str(breadth.get("market_regime") or ""))
 
 
+def run_continue_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
+    """掃描尚未掃描的股票，直到 API 配額耗盡為止。
+
+    從 output/full_scan/batch_*.csv 讀取已掃記錄，對剩餘股票繼續掃描，
+    儲存到下一個可用的 batch_NN.csv/xlsx。
+    """
+    import copy
+
+    quota_ok, quota_msg = probe_batch_quota(client)
+    if not quota_ok:
+        _safe_print(f"[continue-scan] 配額不足，跳過此輪。{quota_msg}")
+        if os.getenv("DISCORD_WEBHOOK_URL"):
+            send_discord_messages([f"⏰ **繼續掃描跳過** · {_cst_now()} CST\n{quota_msg}"])
+        return
+
+    batch_dir = Path(args.output) / "full_scan"
+    batch_dir.mkdir(parents=True, exist_ok=True)
+
+    scanned_ids: set[str] = set()
+    for p in sorted(batch_dir.glob("batch_*.csv")):
+        try:
+            df = pd.read_csv(p, encoding="utf-8-sig")
+            if "stock_id" in df.columns:
+                scanned_ids.update(df["stock_id"].astype(str))
+        except Exception:
+            pass
+
+    stock_info = fetch_stock_info(client)
+    full_universe = build_auto_universe(stock_info, max_symbols=args.max_universe)
+    all_ids = set(full_universe["stock_id"].astype(str))
+    remaining_ids = all_ids - scanned_ids
+    total_universe = len(all_ids)
+    total_scanned = len(scanned_ids & all_ids)
+
+    if not remaining_ids:
+        _safe_print(f"[continue-scan] 全部掃完！{total_scanned}/{total_universe} 支")
+        if os.getenv("DISCORD_WEBHOOK_URL"):
+            send_discord_messages([
+                f"✅ **全市場掃描完成** · {_cst_now()} CST · {args.end}\n"
+                f"已掃 {total_scanned}/{total_universe} 支"
+            ])
+        return
+
+    remaining = full_universe[full_universe["stock_id"].astype(str).isin(remaining_ids)].reset_index(drop=True)
+    pct = f"{total_scanned / total_universe:.0%}" if total_universe else "0%"
+    _safe_print(f"[continue-scan] 尚未掃描 {len(remaining)} 支（已掃 {total_scanned}/{total_universe}，{pct}）")
+    if os.getenv("DISCORD_WEBHOOK_URL"):
+        send_discord_messages([
+            f"🔄 **繼續掃描** · {_cst_now()} CST · {args.end}\n"
+            f"尚餘 `{len(remaining)}` 支 · 已掃 `{total_scanned}/{total_universe}`（`{pct}`）"
+        ])
+
+    existing = sorted(batch_dir.glob("batch_[0-9][0-9].csv"))
+    next_num = int(existing[-1].stem.split("_")[-1]) + 1 if existing else 0
+
+    _tmp = batch_dir / "_continue_tmp.csv"
+    remaining[["stock_id", "name"]].to_csv(_tmp, index=False, encoding="utf-8-sig")
+    scan_args = copy.copy(args)
+    scan_args.stocks = str(_tmp)
+    scan_args.batch_index = -1
+
+    try:
+        candidates, watchlist, _, breadth = build_daily_snapshot(scan_args, client, config)
+    finally:
+        _tmp.unlink(missing_ok=True)
+
+    newly_scanned = int(breadth.get("total_stocks", 0))
+    batch_csv = batch_dir / f"batch_{next_num:02d}.csv"
+    batch_xlsx = batch_dir / f"batch_{next_num:02d}.xlsx"
+    batch_df = pd.concat([candidates, watchlist], ignore_index=True) if not watchlist.empty else candidates
+    batch_df = batch_df.sort_values("entry_score", ascending=False).drop_duplicates(subset=["stock_id"])
+    batch_df.to_csv(batch_csv, index=False, encoding="utf-8-sig")
+    batch_df.to_excel(batch_xlsx, index=False, engine="openpyxl")
+    _safe_print(f"[continue-scan] 本輪掃 {newly_scanned} 支 → {batch_csv.name}")
+
+    if os.getenv("DISCORD_WEBHOOK_URL"):
+        new_total = total_scanned + newly_scanned
+        remaining_after = max(0, total_universe - new_total)
+        _cand_n = len(candidates)
+        _watch_n = len(watchlist)
+        _status = "✅" if _cand_n > 0 else "🔵"
+        send_discord_messages([
+            f"{_status} **批次 {next_num:02d} 完成** · {_cst_now()} CST · {args.end}\n"
+            f"候選 `{_cand_n}` 檔 | 觀察 `{_watch_n}` 檔 | 本輪掃 `{newly_scanned}` 檔\n"
+            f"進度：`{new_total}/{total_universe}` 支（剩 `{remaining_after}` 支）"
+        ])
+
+
 def run_hybrid_monitor(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
     if args.stocks != "auto":
         universe = load_universe(args, client)
@@ -1742,12 +1830,6 @@ def run_partial_aggregate(args: argparse.Namespace) -> None:
             send_discord_messages([msg])
         return
 
-    batch_count = getattr(args, "batch_count", 8)
-    incomplete_note = (
-        f"（{len(frames)}/{batch_count} 批已完成，掃描進行中）\n\n"
-        if len(frames) < batch_count else ""
-    )
-
     all_candidates = pd.concat(frames, ignore_index=True)
     total_stocks = int(all_candidates["stock_id"].nunique()) if "stock_id" in all_candidates.columns else len(all_candidates)
     all_candidates = (
@@ -1760,7 +1842,7 @@ def run_partial_aggregate(args: argparse.Namespace) -> None:
 
     lines = [
         f"🔍 **即時 TOP {args.top_n} 預覽** · {args.end}",
-        f"{incomplete_note}共 {len(frames)}/{batch_count} 批次 · {total_stocks} 檔候選",
+        f"（掃描進行中）已掃 `{total_stocks}` 支 · {len(frames)} 批次",
         "",
     ]
     for rank, (_, row) in enumerate(top.iterrows(), 1):
@@ -1846,12 +1928,6 @@ def run_aggregate(args: argparse.Namespace) -> None:
             send_discord_messages([msg])
         return
 
-    batch_count = getattr(args, "batch_count", 8)
-    incomplete_warning = (
-        f"⚠️ 批次不完整（{len(frames)}/{batch_count} 批）· 結果僅供參考\n\n"
-        if 0 < len(frames) < batch_count else ""
-    )
-
     all_candidates = pd.concat(frames, ignore_index=True)
     total_stocks = int(all_candidates["stock_id"].nunique()) if "stock_id" in all_candidates.columns else len(all_candidates)
     all_candidates = (
@@ -1863,8 +1939,8 @@ def run_aggregate(args: argparse.Namespace) -> None:
     top = all_candidates.head(args.top_n)
 
     lines = [
-        f"{incomplete_warning}🌙 **全市場掃描 TOP {args.top_n}** · {args.end}",
-        f"共 {len(frames)}/{batch_count} 批次 · {total_stocks} 檔候選",
+        f"🌙 **全市場掃描 TOP {args.top_n}** · {args.end}",
+        f"共 {len(frames)} 批次 · 掃描 {total_stocks} 支",
         "",
     ]
     for rank, (_, row) in enumerate(top.iterrows(), 1):
@@ -1970,6 +2046,8 @@ def main() -> None:
         run_aggregate(args)
     elif args.mode == "partial-aggregate":
         run_partial_aggregate(args)
+    elif args.mode == "continue-scan":
+        run_continue_scan(args, client, config)
     else:
         run_scan(args, client, config)
 
