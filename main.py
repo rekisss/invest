@@ -155,7 +155,7 @@ def _write_batch_markdown(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Taiwan MACD swing strategy backtester and scanner.")
-    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict", "aggregate"], default="scan")
+    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict", "aggregate", "partial-aggregate"], default="scan")
     parser.add_argument("--stocks", default="auto", help="CSV file containing stock_id and optional name, or 'auto'.")
     parser.add_argument("--start", default="2020-01-01")
     parser.add_argument("--end", default=_cst_today())
@@ -1234,6 +1234,8 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
         batch_df = pd.concat([candidates, watchlist], ignore_index=True) if not watchlist.empty else candidates
         batch_df = batch_df.sort_values("entry_score", ascending=False).drop_duplicates(subset=["stock_id"])
         batch_df.to_csv(batch_csv, index=False, encoding="utf-8-sig")
+        batch_xlsx = batch_dir / f"batch_{args.batch_index:02d}.xlsx"
+        batch_df.to_excel(batch_xlsx, index=False, engine="openpyxl")
         _safe_print(f"[batch {args.batch_index}] 儲存候選+觀察：{len(batch_df)} 檔（候選 {len(candidates)}，觀察 {len(watchlist)}）→ {batch_csv}")
         _write_batch_markdown(
             batch_dir, args.batch_index,
@@ -1713,6 +1715,100 @@ def _check_positions(
         send_discord_messages(split_message(msg))
 
 
+def run_partial_aggregate(args: argparse.Namespace) -> None:
+    """Merge existing batch_NN.csv files and report current TOP N. Does NOT delete batch files."""
+    batch_dir = Path(args.output) / "full_scan"
+    csvs = sorted(batch_dir.glob("batch_*.csv")) if batch_dir.exists() else []
+    if not csvs:
+        msg = f"⚠️ **即時 TOP {args.top_n} 預覽失敗** · {args.end}\n找不到批次結果（{batch_dir}），請等掃描執行後再試。"
+        _safe_print(msg)
+        if args.notify:
+            send_discord_messages([msg])
+        return
+
+    frames = []
+    for p in csvs:
+        try:
+            df = pd.read_csv(p, encoding="utf-8-sig")
+            if not df.empty:
+                frames.append(df)
+        except Exception as exc:
+            _safe_print(f"[partial-aggregate] 略過 {p.name}: {exc}")
+
+    if not frames:
+        msg = f"⚠️ **即時 TOP {args.top_n} 預覽** · {args.end}\n所有批次皆無候選。"
+        _safe_print(msg)
+        if args.notify:
+            send_discord_messages([msg])
+        return
+
+    batch_count = getattr(args, "batch_count", 8)
+    incomplete_note = (
+        f"（{len(frames)}/{batch_count} 批已完成，掃描進行中）\n\n"
+        if len(frames) < batch_count else ""
+    )
+
+    all_candidates = pd.concat(frames, ignore_index=True)
+    total_stocks = int(all_candidates["stock_id"].nunique()) if "stock_id" in all_candidates.columns else len(all_candidates)
+    all_candidates = (
+        all_candidates
+        .sort_values("entry_score", ascending=False)
+        .drop_duplicates(subset=["stock_id"])
+        .reset_index(drop=True)
+    )
+    top = all_candidates.head(args.top_n)
+
+    lines = [
+        f"🔍 **即時 TOP {args.top_n} 預覽** · {args.end}",
+        f"{incomplete_note}共 {len(frames)}/{batch_count} 批次 · {total_stocks} 檔候選",
+        "",
+    ]
+    for rank, (_, row) in enumerate(top.iterrows(), 1):
+        close = float(row.get("close") or 0)
+        score = float(row.get("entry_score") or 0)
+        cond  = int(row.get("condition_count") or 0)
+        atr   = float(row.get("atr14") or 0) or None
+        f_sc  = int(row.get("f_score") or -1)
+        f_tag = f" F`{f_sc}`" if f_sc >= 0 else ""
+        industry = str(row.get("industry_category") or "")
+        ind_tag = f" 〔{industry}〕" if industry else ""
+        price_tag = _low_price_tag(row.get("close"))
+        price_note = f" `{price_tag}`" if price_tag else ""
+        entry_zone, stop, target, rr = _entry_stop_target(close, atr)
+        rsi = float(row.get("rsi14") or 0)
+        adx = float(row.get("adx14") or 0)
+        vol_ratio = float(row.get("volume_ratio") or 0)
+        foreign_streak = int(row.get("foreign_buy_streak") or 0)
+        invest_streak = int(row.get("invest_trust_streak") or 0)
+        trend_inline = _trend_label(row)
+        obs = recommend_observation_period(row, is_candidate=True)
+        invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append(
+            f"**#{rank} {row.get('stock_id')}** {row.get('name', '')}{ind_tag}{price_note}{f_tag}"
+            f"  分 `{score:.0f}` | `{cond}/{_MAX_CONDITION_COUNT}條`"
+        )
+        lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
+        lines.append(f"📊 RSI `{rsi:.1f}` | ADX `{adx:.1f}` | 量比 `{vol_ratio:.1f}x`{trend_inline}")
+        lines.append(f"🏦 外資連買 `{foreign_streak}d`{invest_txt}")
+        lines.append(f"⏱ {obs}")
+
+    message = "\n".join(lines)
+    _safe_print(message)
+
+    # Save summary files (GitHub-renderable MD + downloadable XLSX)
+    batch_dir.mkdir(parents=True, exist_ok=True)
+    md_path = batch_dir / f"partial_top{args.top_n}.md"
+    md_path.write_text(message, encoding="utf-8")
+    _safe_print(f"[partial-aggregate] 摘要 → {md_path}")
+    xlsx_path = batch_dir / f"partial_top{args.top_n}.xlsx"
+    top.to_excel(xlsx_path, index=False, engine="openpyxl")
+    _safe_print(f"[partial-aggregate] Excel → {xlsx_path}")
+
+    if args.notify:
+        send_discord_messages(split_message(message))
+
+
 def run_aggregate(args: argparse.Namespace) -> None:
     """Merge all batch_NN.csv files from output/full_scan/ and send top-N to Discord."""
     batch_dir = Path(args.output) / "full_scan"
@@ -1872,6 +1968,8 @@ def main() -> None:
         run_predict(args, client, config)
     elif args.mode == "aggregate":
         run_aggregate(args)
+    elif args.mode == "partial-aggregate":
+        run_partial_aggregate(args)
     else:
         run_scan(args, client, config)
 

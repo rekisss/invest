@@ -1,0 +1,57 @@
+name: 即時 TOP N 預覽 (手動觸發)
+
+# 從目前已有的批次 CSV 計算 TOP N，不影響 23:00 批次掃描或 02:00 彙整流程
+
+on:
+  workflow_dispatch:
+    inputs:
+      top_n:
+        description: "取 TOP N 名（預設 20）"
+        default: "20"
+        required: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  partial-aggregate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest batch results
+        run: git pull --rebase origin main || true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run partial aggregate
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python main.py \
+            --mode partial-aggregate \
+            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
+            --top-n ${{ github.event.inputs.top_n || 20 }} \
+            --output output \
+            --notify
+
+      - name: Commit summary files
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          git pull --rebase origin main || true
+          git add output/full_scan/partial_top*.md output/full_scan/partial_top*.xlsx || true
+          git diff --staged --quiet || git commit -m "scan: 即時 TOP ${{ github.event.inputs.top_n || 20 }} 預覽 $(TZ=Asia/Taipei date +%Y-%m-%d)"
+          git push || true
