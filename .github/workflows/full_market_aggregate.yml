@@ -1,11 +1,11 @@
 name: 全市場彙整 TOP 20 (02:00 CST 週二~週六)
 
-# 補跑由 full_market_scan.yml 負責（23:00、00:00、01:00 CST 各補一批）
-# 02:00 CST 彙整所有批次，送出 TOP 20 Discord 通知
+# 彙整所有 batch_*.csv，送出 TOP 20 Discord 通知
+# 02:00 CST 固定彙整（批次數量依接力模式動態產生）
 
 on:
   schedule:
-    - cron: "0 18 * * 1-5"   # 02:00 CST = 18:00 UTC（週二到週六 CST，= 週一到週五 UTC）
+    - cron: "0 18 * * 1-5"   # 02:00 CST = 18:00 UTC（週二到週六 CST）
   workflow_dispatch:
 
 env:
@@ -34,23 +34,17 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Detect missing batches
+      - name: 顯示掃描進度
         id: detect
         run: |
-          MISSING=()
-          for i in $(seq 0 7); do
-            PAD=$(printf "%02d" $i)
-            if [ ! -f "output/full_scan/batch_${PAD}.csv" ]; then
-              MISSING+=($i)
-            fi
+          BATCH_COUNT=$(ls output/full_scan/batch_[0-9][0-9].csv 2>/dev/null | wc -l)
+          TOTAL_ROWS=0
+          for f in output/full_scan/batch_[0-9][0-9].csv; do
+            [ -f "$f" ] && TOTAL_ROWS=$(( TOTAL_ROWS + $(tail -n +2 "$f" | wc -l) ))
           done
-          if [ ${#MISSING[@]} -gt 0 ]; then
-            echo "缺少批次：${MISSING[*]}"
-            echo "missing=${MISSING[*]}" >> "$GITHUB_OUTPUT"
-          else
-            echo "所有批次齊全"
-            echo "missing=" >> "$GITHUB_OUTPUT"
-          fi
+          echo "批次數：$BATCH_COUNT，已掃股票：$TOTAL_ROWS 支"
+          echo "batch_count=$BATCH_COUNT" >> "$GITHUB_OUTPUT"
+          echo "total_rows=$TOTAL_ROWS" >> "$GITHUB_OUTPUT"
 
       - name: Aggregate and notify
         env:
@@ -69,7 +63,7 @@ jobs:
           git config user.name "GitHub Actions"
           git pull --rebase origin main || true
           git add -f output/full_scan/ || true
-          git diff --staged --quiet || git commit -m "scan: 清除批次檔案 $(TZ=Asia/Taipei date +%Y-%m-%d)"
+          git diff --staged --quiet || git commit -m "scan: 彙整完成，清除批次 $(TZ=Asia/Taipei date +%Y-%m-%d)"
           git push || true
 
       - name: Notify Discord on failure
@@ -78,5 +72,5 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           curl -s -H "Content-Type: application/json" \
-            -d "{\"content\": \"⚠️ **全市場彙整失敗** · $(TZ=Asia/Taipei date +%Y-%m-%d) · 缺少批次：${{ steps.detect.outputs.missing || '未知' }} · 請檢查 Actions logs\"}" \
+            -d "{\"content\": \"⚠️ **全市場彙整失敗** · $(TZ=Asia/Taipei date +%Y-%m-%d) · 已掃批次：${{ steps.detect.outputs.batch_count || 0 }} · 請檢查 Actions logs\"}" \
             "$DISCORD_WEBHOOK_URL" || true
