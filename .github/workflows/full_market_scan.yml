@@ -111,6 +111,7 @@ jobs:
         if: steps.batch.outputs.index != '-1'
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           BATCH=${{ steps.batch.outputs.index }}
           for attempt in 1 2; do
