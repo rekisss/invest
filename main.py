@@ -155,7 +155,7 @@ def _write_batch_markdown(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Taiwan MACD swing strategy backtester and scanner.")
-    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict", "aggregate", "partial-aggregate", "continue-scan", "smart-scan"], default="scan")
+    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict", "aggregate", "partial-aggregate", "continue-scan", "smart-scan", "fill-batch-gaps", "fill-gaps"], default="scan")
     parser.add_argument("--stocks", default="auto", help="CSV file containing stock_id and optional name, or 'auto'.")
     parser.add_argument("--start", default="2020-01-01")
     parser.add_argument("--end", default=_cst_today())
@@ -1266,6 +1266,103 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
         sync_scan_results(candidates, watchlist, latest_date, news_map, market_regime=str(breadth.get("market_regime") or ""))
 
 
+def run_fill_batch_gaps(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
+    """批次掃完後，比對 universe 該批切片，補掃缺漏股票，合併回同批 CSV/XLSX。"""
+    import copy
+    batch_dir = Path(args.output) / "full_scan"
+    batch_idx = getattr(args, "batch_index", -1)
+    if batch_idx < 0:
+        _safe_print("[fill-batch-gaps] 未指定 --batch-index，略過")
+        return
+    batch_csv = batch_dir / f"batch_{batch_idx:02d}.csv"
+    if not batch_csv.exists():
+        _safe_print(f"[fill-batch-gaps] {batch_csv} 不存在，略過")
+        return
+
+    existing = pd.read_csv(batch_csv, encoding="utf-8-sig")
+    scanned = set(existing["stock_id"].astype(str)) if "stock_id" in existing.columns else set()
+
+    stock_info = fetch_stock_info(client)
+    full_univ = build_auto_universe(stock_info, max_symbols=args.max_universe)
+    bc = max(1, getattr(args, "batch_count", 15))
+    n = len(full_univ)
+    size = (n + bc - 1) // bc
+    start = batch_idx * size
+    batch_univ = full_univ.iloc[start: start + size]
+    missing = set(batch_univ["stock_id"].astype(str)) - scanned
+
+    if not missing:
+        _safe_print(f"[fill-batch-gaps] 批次 {batch_idx} 無缺漏")
+        return
+    _safe_print(f"[fill-batch-gaps] 批次 {batch_idx} 缺漏 {len(missing)} 支，開始補掃")
+
+    quota_ok, quota_msg = probe_batch_quota(client)
+    if not quota_ok:
+        _safe_print(f"[fill-batch-gaps] 配額不足，略過：{quota_msg}")
+        return
+
+    gap_univ = batch_univ[batch_univ["stock_id"].astype(str).isin(missing)]
+    gap_file = batch_dir / f"_gap_{batch_idx:02d}.csv"
+    gap_univ.to_csv(gap_file, index=False)
+
+    gap_args = copy.copy(args)
+    gap_args.stocks = str(gap_file)
+    gap_args.batch_index = -1
+
+    try:
+        candidates, watchlist, _, _ = build_daily_snapshot(gap_args, client, config)
+        gap_df = pd.concat([candidates, watchlist], ignore_index=True) if not watchlist.empty else candidates
+        if not gap_df.empty:
+            merged = pd.concat([existing, gap_df], ignore_index=True)
+            merged = merged.sort_values("entry_score", ascending=False).drop_duplicates(subset=["stock_id"])
+            merged.to_csv(batch_csv, index=False, encoding="utf-8-sig")
+            merged.to_excel(batch_csv.with_suffix(".xlsx"), index=False, engine="openpyxl")
+            _safe_print(f"[fill-batch-gaps] 補入 {len(gap_df)} 支，合併後共 {len(merged)} 支")
+    finally:
+        gap_file.unlink(missing_ok=True)
+
+
+def run_fill_gaps(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
+    """彙整前：比對所有批次 CSV vs 完整 universe，補掃仍缺漏的股票 → batch_gap.csv/xlsx。"""
+    import copy
+    batch_dir = Path(args.output) / "full_scan"
+    scanned: set[str] = set()
+    for p in batch_dir.glob("batch_*.csv"):
+        try:
+            df = pd.read_csv(p, encoding="utf-8-sig")
+            if "stock_id" in df.columns:
+                scanned.update(df["stock_id"].astype(str))
+        except Exception:
+            pass
+
+    stock_info = fetch_stock_info(client)
+    full_univ = build_auto_universe(stock_info, max_symbols=args.max_universe)
+    missing = set(full_univ["stock_id"].astype(str)) - scanned
+
+    if not missing:
+        _safe_print("[fill-gaps] 無全局缺漏，跳過")
+        return
+    _safe_print(f"[fill-gaps] 全局缺漏 {len(missing)} 支，開始補掃")
+
+    gap_univ = full_univ[full_univ["stock_id"].astype(str).isin(missing)]
+    gap_file = batch_dir / "_gap_global.csv"
+    gap_univ.to_csv(gap_file, index=False)
+
+    gap_args = copy.copy(args)
+    gap_args.stocks = str(gap_file)
+    gap_args.batch_index = -1
+
+    try:
+        candidates, watchlist, _, _ = build_daily_snapshot(gap_args, client, config)
+        gap_df = pd.concat([candidates, watchlist], ignore_index=True) if not watchlist.empty else candidates
+        gap_df = gap_df.sort_values("entry_score", ascending=False).drop_duplicates(subset=["stock_id"])
+        gap_df.to_csv(batch_dir / "batch_gap.csv", index=False, encoding="utf-8-sig")
+        gap_df.to_excel(batch_dir / "batch_gap.xlsx", index=False, engine="openpyxl")
+        _safe_print(f"[fill-gaps] 補掃完成：{len(gap_df)} 支 → batch_gap.csv")
+    finally:
+        gap_file.unlink(missing_ok=True)
+
+
 def run_smart_scan(args: argparse.Namespace, config: StrategyConfig) -> None:
     """智能掃描：先顯示進度，依序檢查三個帳號配額，有額度就掃，沒有就換下一個。"""
     batch_dir = Path(args.output) / "full_scan"
@@ -2123,6 +2220,10 @@ def main() -> None:
         run_continue_scan(args, client, config)
     elif args.mode == "smart-scan":
         run_smart_scan(args, config)
+    elif args.mode == "fill-batch-gaps":
+        run_fill_batch_gaps(args, client, config)
+    elif args.mode == "fill-gaps":
+        run_fill_gaps(args, client, config)
     else:
         run_scan(args, client, config)
 
