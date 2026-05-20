@@ -54,6 +54,15 @@ jobs:
       - name: Determine batch index
         id: batch
         run: |
+          # 非排程/手動觸發（如 PR CI check）直接略過
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" != "schedule" ] && [ "$EVENT" != "workflow_dispatch" ]; then
+            echo "非排程或手動觸發（event=$EVENT），略過所有掃描"
+            echo "index=-1" >> $GITHUB_OUTPUT
+            echo "index_pad=skip" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           # 用 cron expression 來決定輪次（比看時鐘更精確）
           SCHEDULE="${{ github.event.schedule }}"
           MANUAL_ROUND="${{ github.event.inputs.round }}"
