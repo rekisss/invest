@@ -155,7 +155,7 @@ def _write_batch_markdown(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Taiwan MACD swing strategy backtester and scanner.")
-    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict", "aggregate", "partial-aggregate", "continue-scan"], default="scan")
+    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict", "aggregate", "partial-aggregate", "continue-scan", "smart-scan"], default="scan")
     parser.add_argument("--stocks", default="auto", help="CSV file containing stock_id and optional name, or 'auto'.")
     parser.add_argument("--start", default="2020-01-01")
     parser.add_argument("--end", default=_cst_today())
@@ -1266,6 +1266,71 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
         sync_scan_results(candidates, watchlist, latest_date, news_map, market_regime=str(breadth.get("market_regime") or ""))
 
 
+def run_smart_scan(args: argparse.Namespace, config: StrategyConfig) -> None:
+    """智能掃描：先顯示進度，依序檢查三個帳號配額，有額度就掃，沒有就換下一個。"""
+    batch_dir = Path(args.output) / "full_scan"
+    batch_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir = Path(args.output) / "cache"
+
+    # 1. 讀取已掃進度
+    scanned_ids: set[str] = set()
+    for p in sorted(batch_dir.glob("batch_*.csv")):
+        try:
+            df = pd.read_csv(p, encoding="utf-8-sig")
+            if "stock_id" in df.columns:
+                scanned_ids.update(df["stock_id"].astype(str))
+        except Exception:
+            pass
+
+    total_est = args.max_universe
+    pct = f"{len(scanned_ids) / total_est:.0%}" if total_est else "?"
+    progress_line = f"已掃 `{len(scanned_ids)}` 支（約 `{pct}` of {total_est}）"
+
+    # 2. 依序檢查三個帳號配額
+    tokens_config = [
+        ("FINMIND_TOKEN",   "L"),
+        ("FINMIND_TOKEN_2", "950223"),
+        ("FINMIND_TOKEN_3", "rekis"),
+    ]
+    quota_results: list[tuple[str, str, bool, str]] = []  # (env_key, name, ok, token)
+    status_lines: list[str] = []
+    for env_key, name in tokens_config:
+        token = os.getenv(env_key, "").strip()
+        if not token:
+            status_lines.append(f"• {name}：❌ 未設定")
+            quota_results.append((env_key, name, False, ""))
+            continue
+        os.environ["FINMIND_TOKEN"] = token
+        tmp_client = FinMindClient(cache_dir=cache_dir)
+        quota_ok, _ = probe_batch_quota(tmp_client)
+        icon = "✅ 有額度" if quota_ok else "⏰ 配額耗盡"
+        status_lines.append(f"• {name}：{icon}")
+        quota_results.append((env_key, name, quota_ok, token))
+
+    summary = "\n".join([
+        f"📋 **掃描狀態** · {_cst_now()} CST · {args.end}",
+        progress_line,
+        *status_lines,
+    ])
+    _safe_print(summary)
+    if os.getenv("DISCORD_WEBHOOK_URL"):
+        send_discord_messages([summary])
+
+    # 3. 依序用有額度的帳號掃描
+    original_token = os.environ.get("FINMIND_TOKEN", "")
+    try:
+        for env_key, account_name, quota_ok, token in quota_results:
+            if not quota_ok or not token:
+                _safe_print(f"[smart-scan] 跳過 {account_name}（無額度或未設定）")
+                continue
+            _safe_print(f"[smart-scan] 開始使用 {account_name} 帳號")
+            os.environ["FINMIND_TOKEN"] = token
+            account_client = FinMindClient(cache_dir=cache_dir)
+            run_continue_scan(args, account_client, config)
+    finally:
+        os.environ["FINMIND_TOKEN"] = original_token
+
+
 def run_continue_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
     """掃描尚未掃描的股票，直到 API 配額耗盡為止。
 
@@ -1273,6 +1338,14 @@ def run_continue_scan(args: argparse.Namespace, client: FinMindClient, config: S
     儲存到下一個可用的 batch_NN.csv/xlsx。
     """
     import copy
+
+    token_ok, token_msg = validate_finmind_token()
+    if not token_ok:
+        err = f"❌ **繼續掃描中止：Token 無效** · {_cst_now()} CST\n{token_msg}"
+        _safe_print(err)
+        if os.getenv("DISCORD_WEBHOOK_URL"):
+            send_discord_messages([err])
+        return
 
     quota_ok, quota_msg = probe_batch_quota(client)
     if not quota_ok:
@@ -2048,6 +2121,8 @@ def main() -> None:
         run_partial_aggregate(args)
     elif args.mode == "continue-scan":
         run_continue_scan(args, client, config)
+    elif args.mode == "smart-scan":
+        run_smart_scan(args, config)
     else:
         run_scan(args, client, config)
 
