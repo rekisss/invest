@@ -15,8 +15,8 @@ on:
     - cron: "0 13 * * 1-5"   # 21:00 CST → batch 6
     - cron: "0 14 * * 1-5"   # 22:00 CST → batch 7
     - cron: "0 15 * * 1-5"   # 23:00 CST → 補跑 (同日)
-    - cron: "0 16 * * 2-6"   # 00:00 CST → 補跑 (次日)
-    - cron: "0 17 * * 2-6"   # 01:00 CST → 補跑 (次日)
+    - cron: "0 16 * * 1-5"   # 00:00 CST → 補跑 (次日，UTC 週一~週五 = CST 週二~週六)
+    - cron: "0 17 * * 1-5"   # 01:00 CST → 補跑 (次日，UTC 週一~週五 = CST 週二~週六)
   workflow_dispatch:
     inputs:
       batch_index:
