@@ -35,6 +35,7 @@ from data_loader import (
     fetch_stock_kbar,
     fetch_stock_prices,
     load_stock_list,
+    probe_batch_quota,
     validate_finmind_token,
 )
 from fundamentals import compute_f_score
@@ -1074,6 +1075,18 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
         if args.notify:
             send_discord_messages([err])
         return
+
+    # In batch mode, probe quota before launching a 450-call scan
+    if getattr(args, "batch_index", -1) >= 0:
+        quota_ok, quota_msg = probe_batch_quota(client)
+        if not quota_ok:
+            _safe_print(f"[batch {args.batch_index}] {quota_msg}")
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"⏰ **批次 {args.batch_index}/7 跳過** · 配額不足 · {_cst_now()} CST\n{quota_msg}"
+                ])
+            return
+
     if args.notify:
         send_discord_messages([f"🔄 **選股掃描開始** · {_cst_now()} CST · {args.end}"])
     candidates, watchlist, universe, breadth = build_daily_snapshot(args, client, config)

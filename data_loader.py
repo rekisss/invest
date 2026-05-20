@@ -48,6 +48,34 @@ def validate_finmind_token() -> tuple[bool, str]:
         return False, f"無法連線 FinMind API：{exc}"
 
 
+def probe_batch_quota(client: "FinMindClient") -> tuple[bool, str]:
+    """Probe TaiwanStockPrice quota before a batch scan.
+
+    Makes one uncached price request to detect 402 quota exhaustion.
+    Returns (True, msg) if quota looks OK, (False, msg) if exhausted.
+    Network errors are treated as OK to avoid falsely skipping batches.
+    """
+    from datetime import datetime, timedelta
+    probe_date = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+    today = datetime.now().strftime("%Y-%m-%d")
+    try:
+        client.fetch_dataset(
+            "TaiwanStockPrice",
+            use_cache=False,
+            data_id="2330",
+            start_date=probe_date,
+            end_date=today,
+        )
+        return True, "配額正常"
+    except RuntimeError as exc:
+        msg = str(exc)
+        if "配額" in msg or "limit" in msg.lower() or "upper limit" in msg.lower():
+            return False, f"⏰ FinMind 配額已耗盡，跳過此批次。({msg})"
+        return True, "配額正常（非配額錯誤忽略）"
+    except Exception:
+        return True, "配額正常（探測失敗忽略）"
+
+
 @dataclass
 class FinMindClient:
     cache_dir: Path = Path("cache")
