@@ -1,9 +1,10 @@
-name: 全市場掃描 (接力模式，每 2 小時三帳號輪流)
+name: 全市場掃描 (智能接力，每 2 小時)
 
-# 每 2 小時啟動一輪：L → 950223 → rekis 依序接力掃描
-# 每個帳號掃到 API 配額耗盡為止，下一帳號從斷點繼續
-# 掃完後彙整由 full_market_aggregate.yml 於 02:00 CST 負責
-# 排程：CST 15:00, 17:00, 19:00, 21:00, 23:00 = UTC 07, 09, 11, 13, 15
+# 每 2 小時啟動一輪：
+#   1. 顯示目前掃描進度（已掃幾支）
+#   2. 依序檢查 L → 950223 → rekis 的 API 配額
+#   3. 有額度就繼續掃，沒有就換下一個
+# 彙整由 full_market_aggregate.yml 於 02:00 CST 負責
 
 on:
   schedule:
@@ -50,15 +51,17 @@ jobs:
           rm -f output/full_scan/batch_*.csv output/full_scan/batch_*.xlsx || true
           echo "已清除所有批次，重新掃描"
 
-      # ─── 帳號 L ───────────────────────────────────────────────
-      - name: 掃描 L 帳號（掃到配額耗盡）
+      # 智能掃描：先看進度 + 配額，再依序 L → 950223 → rekis 接力
+      - name: 智能接力掃描
         continue-on-error: true
         env:
-          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          FINMIND_TOKEN:   ${{ secrets.FINMIND_TOKEN }}
+          FINMIND_TOKEN_2: ${{ secrets.FINMIND_TOKEN_2 }}
+          FINMIND_TOKEN_3: ${{ secrets.FINMIND_TOKEN_3 }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           python main.py \
-            --mode continue-scan \
+            --mode smart-scan \
             --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
             --lookback-days 420 \
             --max-universe 1800 \
@@ -66,7 +69,7 @@ jobs:
             --workers 4 \
             --output output
 
-      - name: Commit L 帳號結果
+      - name: Commit 掃描結果
         continue-on-error: true
         run: |
           git config user.email "github-actions@github.com"
@@ -74,60 +77,9 @@ jobs:
           git pull --rebase origin main || true
           git add -f output/full_scan/ || true
           git diff --staged --quiet || git commit -m \
-            "scan: L帳號接力 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)" || true
+            "scan: 智能掃描 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)" || true
           git push || (sleep 5 && git pull --rebase origin main && git push) || true
 
-      # ─── 帳號 950223 ──────────────────────────────────────────
-      - name: 掃描 950223 帳號（接續 L，掃到配額耗盡）
-        continue-on-error: true
-        env:
-          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN_2 }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          python main.py \
-            --mode continue-scan \
-            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
-            --lookback-days 420 \
-            --max-universe 1800 \
-            --top-n 50 \
-            --workers 4 \
-            --output output
-
-      - name: Commit 950223 帳號結果
-        continue-on-error: true
-        run: |
-          git pull --rebase origin main || true
-          git add -f output/full_scan/ || true
-          git diff --staged --quiet || git commit -m \
-            "scan: 950223帳號接力 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)" || true
-          git push || (sleep 5 && git pull --rebase origin main && git push) || true
-
-      # ─── 帳號 rekis ───────────────────────────────────────────
-      - name: 掃描 rekis 帳號（接續 950223，掃到配額耗盡）
-        continue-on-error: true
-        env:
-          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN_3 }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          python main.py \
-            --mode continue-scan \
-            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
-            --lookback-days 420 \
-            --max-universe 1800 \
-            --top-n 50 \
-            --workers 4 \
-            --output output
-
-      - name: Commit rekis 帳號結果
-        continue-on-error: true
-        run: |
-          git pull --rebase origin main || true
-          git add -f output/full_scan/ || true
-          git diff --staged --quiet || git commit -m \
-            "scan: rekis帳號接力 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)" || true
-          git push || (sleep 5 && git pull --rebase origin main && git push) || true
-
-      # ─── 失敗通知 ─────────────────────────────────────────────
       - name: Notify Discord on failure
         if: failure()
         env:
