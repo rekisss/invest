@@ -1137,6 +1137,14 @@ def run_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyCo
         batch_df = batch_df.sort_values("entry_score", ascending=False).drop_duplicates(subset=["stock_id"])
         batch_df.to_csv(batch_csv, index=False, encoding="utf-8-sig")
         _safe_print(f"[batch {args.batch_index}] 儲存候選+觀察：{len(batch_df)} 檔（候選 {len(candidates)}，觀察 {len(watchlist)}）→ {batch_csv}")
+        if os.getenv("DISCORD_WEBHOOK_URL"):
+            _cand_n = len(candidates)
+            _watch_n = len(watchlist)
+            _status = "✅" if _cand_n > 0 else "🔵"
+            send_discord_messages([
+                f"{_status} **批次 {args.batch_index}/7 完成** · {_cst_now()} CST · {args.end}\n"
+                f"候選 `{_cand_n}` 檔 | 觀察 `{_watch_n}` 檔 | 共掃 `{breadth.get('total_stocks', 0)}` 檔"
+            ])
 
     report_path = save_scan_report(args.output, candidates, watchlist, universe)
     news_map = {}
