@@ -101,7 +101,9 @@ jobs:
           fi
 
       - name: 確認 API 配額
+        id: quota
         if: steps.batch.outputs.index != '-1'
+        continue-on-error: true
         env:
           FMT_A: ${{ secrets.FINMIND_TOKEN }}
           FMT_B: ${{ secrets.FINMIND_TOKEN_2 }}
@@ -123,7 +125,7 @@ jobs:
           "
 
       - name: 批次掃描
-        if: steps.batch.outputs.index != '-1'
+        if: steps.batch.outputs.index != '-1' && steps.quota.outcome == 'success'
         continue-on-error: true
         env:
           FMT_A: ${{ secrets.FINMIND_TOKEN }}
@@ -150,7 +152,7 @@ jobs:
             --output output
 
       - name: 缺漏補掃（同批次）
-        if: steps.batch.outputs.index != '-1'
+        if: steps.batch.outputs.index != '-1' && steps.quota.outcome == 'success'
         continue-on-error: true
         env:
           FMT_A: ${{ secrets.FINMIND_TOKEN }}
@@ -185,7 +187,7 @@ jobs:
           retention-days: 14
 
       - name: Commit 批次結果
-        if: steps.batch.outputs.index != '-1'
+        if: steps.batch.outputs.index != '-1' && steps.quota.outcome == 'success'
         continue-on-error: true
         run: |
           git config user.email "github-actions@github.com"
