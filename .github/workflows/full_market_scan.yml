@@ -4,6 +4,7 @@ name: 全市場掃描 (智能接力，每 2 小時)
 #   1. 顯示目前掃描進度（已掃幾支）
 #   2. 依序檢查 L → 950223 → rekis 的 API 配額
 #   3. 有額度就繼續掃，沒有就換下一個
+# 掃完的 Excel/CSV 上傳 Actions Artifacts 隨時可下載
 # 彙整由 full_market_aggregate.yml 於 02:00 CST 負責
 
 on:
@@ -69,13 +70,23 @@ jobs:
             --workers 4 \
             --output output
 
+      # 上傳 Excel 為 Artifact（Actions → 本次 Run → Artifacts 下載）
+      - name: 上傳批次 Excel（Artifacts）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: batch-results-${{ github.run_number }}-${{ github.run_attempt }}
+          path: output/full_scan/batch_*.xlsx
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Commit 掃描結果
         continue-on-error: true
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git pull --rebase origin main || true
-          git add -f output/full_scan/ || true
+          git add output/full_scan/ || true
           git diff --staged --quiet || git commit -m \
             "scan: 智能掃描 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)" || true
           git push || (sleep 5 && git pull --rebase origin main && git push) || true
