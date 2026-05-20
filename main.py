@@ -1274,6 +1274,14 @@ def run_continue_scan(args: argparse.Namespace, client: FinMindClient, config: S
     """
     import copy
 
+    token_ok, token_msg = validate_finmind_token()
+    if not token_ok:
+        err = f"❌ **繼續掃描中止：Token 無效** · {_cst_now()} CST\n{token_msg}"
+        _safe_print(err)
+        if os.getenv("DISCORD_WEBHOOK_URL"):
+            send_discord_messages([err])
+        return
+
     quota_ok, quota_msg = probe_batch_quota(client)
     if not quota_ok:
         _safe_print(f"[continue-scan] 配額不足，跳過此輪。{quota_msg}")

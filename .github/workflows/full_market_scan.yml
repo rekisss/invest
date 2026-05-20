@@ -52,6 +52,7 @@ jobs:
 
       # ─── 帳號 L ───────────────────────────────────────────────
       - name: 掃描 L 帳號（掃到配額耗盡）
+        continue-on-error: true
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -63,20 +64,22 @@ jobs:
             --max-universe 1800 \
             --top-n 50 \
             --workers 4 \
-            --output output || true
+            --output output
 
       - name: Commit L 帳號結果
+        continue-on-error: true
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git pull --rebase origin main || true
           git add -f output/full_scan/ || true
           git diff --staged --quiet || git commit -m \
-            "scan: L帳號接力 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)"
+            "scan: L帳號接力 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)" || true
           git push || (sleep 5 && git pull --rebase origin main && git push) || true
 
       # ─── 帳號 950223 ──────────────────────────────────────────
       - name: 掃描 950223 帳號（接續 L，掃到配額耗盡）
+        continue-on-error: true
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN_2 }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -88,18 +91,20 @@ jobs:
             --max-universe 1800 \
             --top-n 50 \
             --workers 4 \
-            --output output || true
+            --output output
 
       - name: Commit 950223 帳號結果
+        continue-on-error: true
         run: |
           git pull --rebase origin main || true
           git add -f output/full_scan/ || true
           git diff --staged --quiet || git commit -m \
-            "scan: 950223帳號接力 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)"
+            "scan: 950223帳號接力 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)" || true
           git push || (sleep 5 && git pull --rebase origin main && git push) || true
 
       # ─── 帳號 rekis ───────────────────────────────────────────
       - name: 掃描 rekis 帳號（接續 950223，掃到配額耗盡）
+        continue-on-error: true
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN_3 }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -111,14 +116,15 @@ jobs:
             --max-universe 1800 \
             --top-n 50 \
             --workers 4 \
-            --output output || true
+            --output output
 
       - name: Commit rekis 帳號結果
+        continue-on-error: true
         run: |
           git pull --rebase origin main || true
           git add -f output/full_scan/ || true
           git diff --staged --quiet || git commit -m \
-            "scan: rekis帳號接力 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)"
+            "scan: rekis帳號接力 $(TZ=Asia/Taipei date +%Y-%m-%d) $(TZ=Asia/Taipei date +%H:%M)" || true
           git push || (sleep 5 && git pull --rebase origin main && git push) || true
 
       # ─── 失敗通知 ─────────────────────────────────────────────
