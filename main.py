@@ -505,8 +505,9 @@ def collect_signals(
     _quota_event = threading.Event()  # set when daily quota is confirmed exhausted
 
     def _is_quota_error(exc: BaseException) -> bool:
-        s = str(exc).lower()
-        return "配額已耗盡" in s or "upper limit" in s or "quota" in s
+        s = str(exc)
+        # Only permanent quota exhaustion aborts the scan — transient rate-limits must not.
+        return "配額已耗盡" in s or "upper limit" in s.lower()
 
     def load_one(stock: dict[str, Any]) -> tuple[str, pd.DataFrame] | tuple[str, None]:
         # Skip immediately if quota was already detected as exhausted by another thread
