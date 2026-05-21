@@ -2582,6 +2582,14 @@ def run_aggregate(args: argparse.Namespace) -> None:
     positions_csv = Path(getattr(args, "positions", None) or "positions.csv")
     _check_positions(all_candidates, positions_csv, getattr(args, "notify", False))
 
+    # Sync full scan results to Notion
+    if notion_enabled():
+        try:
+            sync_scan_results(all_candidates, pd.DataFrame(), args.end)
+            _safe_print(f"[aggregate] Notion 同步完成，共 {len(all_candidates)} 筆")
+        except Exception as _exc:
+            _safe_print(f"[aggregate] Notion 同步失敗（不影響主流程）: {_exc}")
+
     # Clean up batch files after successful aggregation
     for p in csvs:
         try:
