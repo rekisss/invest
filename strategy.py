@@ -391,9 +391,12 @@ def prepare_stock_signals(
     merged["entry_signal"] = _entry_arr[:, :_n_hard].all(axis=1) & ~merged["skip_trade"].to_numpy(dtype=bool)
 
     _soft_matrix = merged[_SOFT_SCORE_COLS].to_numpy(dtype=np.float64)
-    _rs5d = _rs5d_arr.copy(); np.nan_to_num(_rs5d, nan=-99.0, copy=False)
-    _vol_ratio = _vr_arr.copy(); np.nan_to_num(_vol_ratio, nan=0.0, copy=False)
-    _adx14 = _adx_arr.copy(); np.nan_to_num(_adx14, nan=0.0, copy=False)
+    # posinf/neginf must be handled explicitly — nan_to_num only replaces NaN
+    # when nan= is specified. DR stocks with near-zero base price can produce
+    # inf return_5d, which propagates to entry_score as inf.
+    _rs5d = _rs5d_arr.copy(); np.nan_to_num(_rs5d, nan=-99.0, posinf=10.0, neginf=-99.0, copy=False)
+    _vol_ratio = _vr_arr.copy(); np.nan_to_num(_vol_ratio, nan=0.0, posinf=50.0, neginf=0.0, copy=False)
+    _adx14 = _adx_arr.copy(); np.nan_to_num(_adx14, nan=0.0, posinf=100.0, neginf=0.0, copy=False)
     _f_bonus = 50.0 if f_score >= 7 else (25.0 if f_score >= 5 else 0.0)
     merged["entry_score"] = (
         _cond_count.astype(np.float64) * 100
