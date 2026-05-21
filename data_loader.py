@@ -144,8 +144,25 @@ class FinMindClient:
                 )
                 response.raise_for_status()
             except requests.exceptions.HTTPError as exc:
-                # HTTP 402 = quota exhausted; retrying won't help — fail immediately
                 if exc.response is not None and exc.response.status_code == 402:
+                    # Try to read the response body to distinguish permanent quota
+                    # exhaustion ("upper limit") from a transient rate-limit 402.
+                    body = ""
+                    try:
+                        body = exc.response.text or ""
+                    except Exception:
+                        pass
+                    if "upper limit" in body.lower() or "每日" in body or "daily" in body.lower():
+                        raise RuntimeError(
+                            f"FinMind 每日配額已耗盡，明天自動重置。(HTTP 402 {dataset})"
+                        ) from exc
+                    # Transient rate-limit: one quick retry (2 s), then give up
+                    if attempt < 1:
+                        last_error = RuntimeError(
+                            f"FinMind transient 402 for {dataset}, will retry once"
+                        )
+                        time.sleep(2.0)
+                        continue
                     raise RuntimeError(
                         f"FinMind 每日配額已耗盡，明天自動重置。(HTTP 402 {dataset})"
                     ) from exc
