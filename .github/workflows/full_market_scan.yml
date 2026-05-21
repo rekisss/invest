@@ -1,35 +1,25 @@
-name: 全市場掃描 (並行三帳號，每輪 3 批)
+name: 全市場掃描 (接力掃描，每小時繼續)
 
-# 架構：1800 支 / 15 批 = 每批 120 支 × 5 calls ≈ 600 calls（恰好在限額內）
-# 每輪 3 個帳號並行，各掃 1 批；5 輪掃完全部 1800 支
-# 每批掃完立即上傳 Excel Artifact + commit CSV/XLSX
-# 20:00 CST 由 full_market_aggregate.yml 補掃缺漏 + 彙整 TOP 20 → Discord
+# 架構：每小時觸發一次，3 個帳號依序掃描剩餘股票
+# 每個帳號 ~120 支 × 5 API calls ≈ 600 calls（在限額內）
+# API 每小時重置後接力，最多 5 小時掃完全部 1800 支
+# 進度存於 output/full_scan/batch_daily_YYYY-MM-DD.csv（跨輪次共用）
+# 20:00 CST 由 full_market_aggregate.yml 彙整 TOP 20 → Discord
 
 on:
   schedule:
-    - cron: "0 7  * * 1-5"   # 15:00 CST → 輪次 0（批次 0,1,2）
-    - cron: "0 8  * * 1-5"   # 16:00 CST → 輪次 1（批次 3,4,5）
-    - cron: "0 9  * * 1-5"   # 17:00 CST → 輪次 2（批次 6,7,8）
-    - cron: "0 10 * * 1-5"   # 18:00 CST → 輪次 3（批次 9,10,11）
-    - cron: "0 11 * * 1-5"   # 19:00 CST → 輪次 4（批次 12,13,14）
+    - cron: "0 7  * * 1-5"   # 15:00 CST
+    - cron: "0 8  * * 1-5"   # 16:00 CST
+    - cron: "0 9  * * 1-5"   # 17:00 CST
+    - cron: "0 10 * * 1-5"   # 18:00 CST
+    - cron: "0 11 * * 1-5"   # 19:00 CST
   workflow_dispatch:
-    inputs:
-      round:
-        description: "輪次 0-4（不填 = 依目前 CST 時間自動推算）"
-        default: ""
-      force_rescan:
-        description: "強制重掃（true = 忽略已存在的批次）"
-        default: "false"
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   scan:
-    strategy:
-      matrix:
-        account_idx: [0, 1, 2]
-      fail-fast: false
     runs-on: ubuntu-latest
     timeout-minutes: 55
 
@@ -38,6 +28,9 @@ jobs:
         uses: actions/checkout@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest scan progress
+        run: git pull --rebase origin main || true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -48,144 +41,46 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Pull latest batch results
-        run: git pull --rebase origin main || true
-
-      - name: Determine batch index
-        id: batch
+      - name: 判斷是否需要掃描
+        id: guard
         run: |
-          # 用 cron expression 來決定輪次（比看時鐘更精確）
-          SCHEDULE="${{ github.event.schedule }}"
-          MANUAL_ROUND="${{ github.event.inputs.round }}"
-
-          if [ -n "$MANUAL_ROUND" ] && [ "$MANUAL_ROUND" != "" ]; then
-            ROUND="$MANUAL_ROUND"
-          elif [ "$SCHEDULE" = "0 7 * * 1-5" ]; then
-            ROUND=0
-          elif [ "$SCHEDULE" = "0 8 * * 1-5" ]; then
-            ROUND=1
-          elif [ "$SCHEDULE" = "0 9 * * 1-5" ]; then
-            ROUND=2
-          elif [ "$SCHEDULE" = "0 10 * * 1-5" ]; then
-            ROUND=3
-          elif [ "$SCHEDULE" = "0 11 * * 1-5" ]; then
-            ROUND=4
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" != "schedule" ] && [ "$EVENT" != "workflow_dispatch" ]; then
+            echo "非排程或手動觸發（event=$EVENT），略過"
+            echo "skip=true" >> $GITHUB_OUTPUT
           else
-            # fallback：看 CST 時間
-            HOUR=$(TZ=Asia/Taipei date +%H)
-            case $HOUR in
-              15) ROUND=0 ;; 16) ROUND=1 ;; 17) ROUND=2 ;;
-              18) ROUND=3 ;; 19) ROUND=4 ;; *) ROUND=-1 ;;
-            esac
+            echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-          ACCOUNT_IDX=${{ matrix.account_idx }}
-          FORCE="${{ github.event.inputs.force_rescan }}"
-
-          if [ "$ROUND" = "-1" ]; then
-            echo "輪次無法判斷，略過"
-            echo "index=-1" >> $GITHUB_OUTPUT
-            echo "index_pad=skip" >> $GITHUB_OUTPUT
-          else
-            BATCH=$(( ROUND * 3 + ACCOUNT_IDX ))
-            PAD=$(printf "%02d" $BATCH)
-            if [ "$FORCE" != "true" ] && [ -f "output/full_scan/batch_${PAD}.csv" ]; then
-              echo "批次 $BATCH 已存在，跳過（force_rescan=false）"
-              echo "index=-1" >> $GITHUB_OUTPUT
-              echo "index_pad=skip" >> $GITHUB_OUTPUT
-            else
-              echo "輪次 $ROUND · 帳號 $ACCOUNT_IDX → 批次 $BATCH"
-              echo "index=$BATCH" >> $GITHUB_OUTPUT
-              echo "index_pad=$PAD" >> $GITHUB_OUTPUT
-            fi
-          fi
-
-      - name: 確認 API 配額
-        if: steps.batch.outputs.index != '-1'
-        env:
-          FMT_A: ${{ secrets.FINMIND_TOKEN }}
-          FMT_B: ${{ secrets.FINMIND_TOKEN_2 }}
-          FMT_C: ${{ secrets.FINMIND_TOKEN_3 }}
-        run: |
-          ACCOUNT_IDX=${{ matrix.account_idx }}
-          case $ACCOUNT_IDX in
-            0) TOKEN="$FMT_A" ;;
-            1) TOKEN="$FMT_B" ;;
-            2) TOKEN="$FMT_C" ;;
-          esac
-          export FINMIND_TOKEN="$TOKEN"
-          python -c "
-          from data_loader import FinMindClient, probe_batch_quota
-          import os, sys
-          ok, msg = probe_batch_quota(FinMindClient(cache_dir='output/cache'))
-          print(msg)
-          sys.exit(0 if ok else 1)
-          "
-
-      - name: 批次掃描
-        if: steps.batch.outputs.index != '-1'
+      - name: 接力掃描（依序使用三帳號，額度用完自動切換）
+        if: steps.guard.outputs.skip == 'false'
         continue-on-error: true
         env:
-          FMT_A: ${{ secrets.FINMIND_TOKEN }}
-          FMT_B: ${{ secrets.FINMIND_TOKEN_2 }}
-          FMT_C: ${{ secrets.FINMIND_TOKEN_3 }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          FINMIND_TOKEN_2: ${{ secrets.FINMIND_TOKEN_2 }}
+          FINMIND_TOKEN_3: ${{ secrets.FINMIND_TOKEN_3 }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          ACCOUNT_IDX=${{ matrix.account_idx }}
-          case $ACCOUNT_IDX in
-            0) export FINMIND_TOKEN="$FMT_A" ;;
-            1) export FINMIND_TOKEN="$FMT_B" ;;
-            2) export FINMIND_TOKEN="$FMT_C" ;;
-          esac
-          BATCH=${{ steps.batch.outputs.index }}
           python main.py \
-            --mode scan \
+            --mode sequential-scan \
             --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
             --lookback-days 420 \
             --max-universe 1800 \
-            --batch-index $BATCH \
-            --batch-count 15 \
             --top-n 50 \
             --workers 4 \
             --output output
 
-      - name: 缺漏補掃（同批次）
-        if: steps.batch.outputs.index != '-1'
-        continue-on-error: true
-        env:
-          FMT_A: ${{ secrets.FINMIND_TOKEN }}
-          FMT_B: ${{ secrets.FINMIND_TOKEN_2 }}
-          FMT_C: ${{ secrets.FINMIND_TOKEN_3 }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          ACCOUNT_IDX=${{ matrix.account_idx }}
-          case $ACCOUNT_IDX in
-            0) export FINMIND_TOKEN="$FMT_A" ;;
-            1) export FINMIND_TOKEN="$FMT_B" ;;
-            2) export FINMIND_TOKEN="$FMT_C" ;;
-          esac
-          BATCH=${{ steps.batch.outputs.index }}
-          python main.py \
-            --mode fill-batch-gaps \
-            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
-            --lookback-days 420 \
-            --max-universe 1800 \
-            --batch-index $BATCH \
-            --batch-count 15 \
-            --output output \
-            --workers 4
-
-      - name: 上傳批次 Excel（Artifacts）
+      - name: 上傳每日掃描 Excel（Artifacts）
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: batch-${{ steps.batch.outputs.index_pad }}-run${{ github.run_number }}
-          path: output/full_scan/batch_${{ steps.batch.outputs.index_pad }}.xlsx
+          name: daily-scan-run${{ github.run_number }}
+          path: output/full_scan/batch_daily_*.xlsx
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Commit 批次結果
-        if: steps.batch.outputs.index != '-1'
+      - name: Commit 掃描進度
+        if: steps.guard.outputs.skip == 'false'
         continue-on-error: true
         run: |
           git config user.email "github-actions@github.com"
@@ -193,7 +88,7 @@ jobs:
           git pull --rebase origin main || true
           git add output/full_scan/ || true
           git diff --staged --quiet || git commit -m \
-            "scan: 批次 ${{ steps.batch.outputs.index }} $(TZ=Asia/Taipei date +%Y-%m-%d %H:%M CST)"
+            "scan: 接力掃描 $(TZ=Asia/Taipei date +%Y-%m-%d %H:%M CST)"
           git push || (sleep $((RANDOM % 10 + 5)) && git pull --rebase origin main && git push) || true
 
       - name: Notify Discord on failure
@@ -202,5 +97,5 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           curl -s -H "Content-Type: application/json" \
-            -d "{\"content\": \"⚠️ **批次 ${{ steps.batch.outputs.index }} 掃描失敗** · $(TZ=Asia/Taipei date +%Y-%m-%d %H:%M) CST · 帳號 ${{ matrix.account_idx }}\"}" \
+            -d "{\"content\": \"⚠️ **接力掃描失敗** · $(TZ=Asia/Taipei date +%Y-%m-%d %H:%M) CST · 請檢查 Actions logs\"}" \
             "$DISCORD_WEBHOOK_URL" || true

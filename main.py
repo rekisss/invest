@@ -155,7 +155,7 @@ def _write_batch_markdown(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Taiwan MACD swing strategy backtester and scanner.")
-    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict", "aggregate", "partial-aggregate", "continue-scan", "smart-scan", "fill-batch-gaps", "fill-gaps"], default="scan")
+    parser.add_argument("--mode", choices=["backtest", "scan", "hybrid-monitor", "sponsor-monitor", "event-monitor", "daily-report", "walk-forward", "predict", "aggregate", "partial-aggregate", "continue-scan", "smart-scan", "fill-batch-gaps", "fill-gaps", "sequential-scan"], default="scan")
     parser.add_argument("--stocks", default="auto", help="CSV file containing stock_id and optional name, or 'auto'.")
     parser.add_argument("--start", default="2020-01-01")
     parser.add_argument("--end", default=_cst_today())
@@ -601,6 +601,8 @@ def build_daily_snapshot(
         except Exception:
             pass
     breadth["actual_date"] = actual_date
+    if "stock_id" in snapshot.columns:
+        breadth["scanned_ids"] = set(snapshot["stock_id"].astype(str))
     return candidates, watchlist, universe, breadth
 
 
@@ -1420,6 +1422,146 @@ def run_fill_gaps(args: argparse.Namespace, client: FinMindClient, config: Strat
         _safe_print(f"[fill-gaps] 補掃完成：{len(gap_df)} 支 → batch_gap.csv")
     finally:
         gap_file.unlink(missing_ok=True)
+
+
+def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
+    """
+    Hourly sequential multi-token scan with daily accumulation.
+    Each hourly run:
+      1. Reads today's batch_daily_{date}.csv to resume from last position
+      2. Probes all 3 tokens; scans remaining stocks with each available token in order
+      3. Saves progress after each token; sends Discord round summary
+    Runs until all stocks covered or all quotas exhausted for this hour.
+    """
+    import copy as _copy
+
+    today = args.end
+    scan_dir = Path(args.output) / "full_scan"
+    scan_dir.mkdir(parents=True, exist_ok=True)
+    daily_csv = scan_dir / f"batch_daily_{today}.csv"
+
+    # Load today's progress
+    already_scanned: set[str] = set()
+    daily_df = pd.DataFrame()
+    if daily_csv.exists():
+        try:
+            daily_df = pd.read_csv(daily_csv, encoding="utf-8-sig")
+            if "stock_id" in daily_df.columns:
+                already_scanned = set(daily_df["stock_id"].astype(str))
+        except Exception:
+            pass
+
+    # Get full universe
+    stock_info = fetch_stock_info(client)
+    full_univ = build_auto_universe(stock_info, max_symbols=args.max_universe)
+    total = len(full_univ)
+    remaining_ids = set(full_univ["stock_id"].astype(str)) - already_scanned
+
+    _safe_print(f"[sequential] 今日已掃 {len(already_scanned)}/{total}，剩餘 {len(remaining_ids)} 支")
+
+    if not remaining_ids:
+        msg = f"✅ **今日全部已掃完** · {_cst_now()} CST · {today}\n全部 `{total}` 支"
+        _safe_print(msg)
+        if os.getenv("DISCORD_WEBHOOK_URL"):
+            send_discord_messages([msg])
+        return
+
+    token_list = [
+        (0, os.getenv("FINMIND_TOKEN")),
+        (1, os.getenv("FINMIND_TOKEN_2")),
+        (2, os.getenv("FINMIND_TOKEN_3")),
+    ]
+    token_list = [(i, t) for i, t in token_list if t]
+
+    round_new = 0
+    orig_env_token = os.environ.get("FINMIND_TOKEN", "")
+
+    for token_idx, token in token_list:
+        if not remaining_ids:
+            break
+
+        # Switch token env so FinMindClient picks up correct account
+        os.environ["FINMIND_TOKEN"] = token
+        token_client = FinMindClient(cache_dir=client.cache_dir)
+
+        quota_ok, quota_msg = probe_batch_quota(token_client)
+        if not quota_ok:
+            _safe_print(f"[sequential] 帳號 {token_idx}: 額度不足，跳過 ({quota_msg})")
+            continue
+
+        n_rem = len(remaining_ids)
+        _safe_print(f"[sequential] 帳號 {token_idx}: 額度正常，開始掃描 {n_rem} 支")
+        if os.getenv("DISCORD_WEBHOOK_URL"):
+            send_discord_messages([
+                f"🔄 **帳號 {token_idx} 開始** · {_cst_now()} CST\n"
+                f"剩餘 `{n_rem}/{total}` 支待掃"
+            ])
+
+        remaining_univ = full_univ[full_univ["stock_id"].astype(str).isin(remaining_ids)]
+        gap_file = scan_dir / f"_seq_{token_idx}.csv"
+        remaining_univ.to_csv(gap_file, index=False)
+
+        scan_args = _copy.copy(args)
+        scan_args.stocks = str(gap_file)
+        scan_args.batch_index = -1
+        scan_args.notify = False
+
+        try:
+            candidates, watchlist, _, breadth = build_daily_snapshot(scan_args, token_client, config)
+        finally:
+            gap_file.unlink(missing_ok=True)
+            os.environ["FINMIND_TOKEN"] = orig_env_token
+
+        # Mark successfully fetched stocks as scanned
+        scanned_now: set[str] = set(breadth.get("scanned_ids") or set())
+        if not scanned_now:
+            if not candidates.empty and "stock_id" in candidates.columns:
+                scanned_now.update(candidates["stock_id"].astype(str))
+            if not watchlist.empty and "stock_id" in watchlist.columns:
+                scanned_now.update(watchlist["stock_id"].astype(str))
+
+        if scanned_now:
+            already_scanned.update(scanned_now)
+            remaining_ids -= scanned_now
+            round_new += len(scanned_now)
+
+            new_df = pd.concat([candidates, watchlist], ignore_index=True) if not watchlist.empty else candidates
+            if not new_df.empty:
+                daily_df = pd.concat([daily_df, new_df], ignore_index=True)
+                daily_df = daily_df.sort_values("entry_score", ascending=False).drop_duplicates(subset=["stock_id"])
+            daily_df.to_csv(daily_csv, index=False, encoding="utf-8-sig")
+            daily_df.to_excel(daily_csv.with_suffix(".xlsx"), index=False, engine="openpyxl")
+
+        n_actual = int(breadth.get("total_stocks", 0))
+        _cand_n = len(candidates)
+        _watch_n = len(watchlist)
+        _safe_print(
+            f"[sequential] 帳號 {token_idx}: 完成，實際掃 {n_actual} 支，"
+            f"候選 {_cand_n}，觀察 {_watch_n}，累計 {len(already_scanned)}/{total}"
+        )
+        if os.getenv("DISCORD_WEBHOOK_URL"):
+            _status = "✅" if _cand_n > 0 else "🔵"
+            send_discord_messages([
+                f"{_status} **帳號 {token_idx} 完成** · {_cst_now()} CST\n"
+                f"掃 `{n_actual}` 支 | 候選 `{_cand_n}` | 觀察 `{_watch_n}`\n"
+                f"全局累計 `{len(already_scanned)}/{total}` 支"
+            ])
+
+    # Round summary
+    if not remaining_ids:
+        msg = (
+            f"🎉 **今日全部掃完！** · {_cst_now()} CST · {today}\n"
+            f"全部 `{total}` 支已覆蓋 | 本輪新掃 `{round_new}` 支"
+        )
+    else:
+        msg = (
+            f"⏸ **本輪結束** · {_cst_now()} CST · {today}\n"
+            f"本輪新掃 `{round_new}` 支 | 累計 `{len(already_scanned)}/{total}` | "
+            f"剩餘 `{len(remaining_ids)}` 支（下小時繼續）"
+        )
+    _safe_print(msg)
+    if os.getenv("DISCORD_WEBHOOK_URL"):
+        send_discord_messages([msg])
 
 
 def run_smart_scan(args: argparse.Namespace, config: StrategyConfig) -> None:
@@ -2283,6 +2425,8 @@ def main() -> None:
         run_fill_batch_gaps(args, client, config)
     elif args.mode == "fill-gaps":
         run_fill_gaps(args, client, config)
+    elif args.mode == "sequential-scan":
+        run_sequential_scan(args, client, config)
     else:
         run_scan(args, client, config)
 
