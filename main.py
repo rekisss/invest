@@ -1499,13 +1499,15 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         except Exception:
             pass
 
-    # Get full universe — try each token in order so account 0 quota exhaustion doesn't crash
+    # Get full universe — try each token in order so account 0 quota exhaustion doesn't crash.
+    # Track tokens confirmed as quota-exhausted so the scan loop skips them immediately.
     _all_env_tokens = [
         ("FINMIND_TOKEN",   os.getenv("FINMIND_TOKEN")),
         ("FINMIND_TOKEN_2", os.getenv("FINMIND_TOKEN_2")),
         ("FINMIND_TOKEN_3", os.getenv("FINMIND_TOKEN_3")),
     ]
     _orig_token_env = os.environ.get("FINMIND_TOKEN", "")
+    _quota_exhausted_keys: set[str] = set()  # env var names already confirmed quota-empty
     full_univ = None
     try:
         for _env_key, _env_val in _all_env_tokens:
@@ -1520,6 +1522,9 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     _safe_print(f"[sequential] 股票清單取得成功（使用 {_env_key}）：{len(full_univ)} 支")
                     break
             except Exception as _e:
+                _exc_s = str(_e).lower()
+                if any(k in _exc_s for k in ("402", "配額", "upper limit", "payment required")):
+                    _quota_exhausted_keys.add(_env_key)
                 _safe_print(f"[sequential] 取股票清單失敗（{_env_key}）：{_e}，嘗試下一個 token")
                 if os.getenv("DISCORD_WEBHOOK_URL"):
                     send_discord_messages([
@@ -1562,9 +1567,20 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     round_new = 0
     orig_env_token = os.environ.get("FINMIND_TOKEN", "")
 
+    _env_key_map = {0: "FINMIND_TOKEN", 1: "FINMIND_TOKEN_2", 2: "FINMIND_TOKEN_3"}
+
     for token_idx, token in token_list:
         if not remaining_ids:
             break
+
+        # Skip immediately if this token already confirmed quota-exhausted via fetch_stock_info
+        if _env_key_map.get(token_idx) in _quota_exhausted_keys:
+            _safe_print(f"[sequential] 帳號 {token_idx}: 取股票清單時已確認配額不足，略過")
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"⏰ **帳號 {token_idx} 略過（已確認配額不足）** · {_cst_now()} CST"
+                ])
+            continue
 
         os.environ["FINMIND_TOKEN"] = token
         token_client = FinMindClient(cache_dir=client.cache_dir)

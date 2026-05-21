@@ -143,6 +143,16 @@ class FinMindClient:
                     timeout=self.timeout,
                 )
                 response.raise_for_status()
+            except requests.exceptions.HTTPError as exc:
+                # HTTP 402 = quota exhausted; retrying won't help — fail immediately
+                if exc.response is not None and exc.response.status_code == 402:
+                    raise RuntimeError(
+                        f"FinMind 每日配額已耗盡，明天自動重置。(HTTP 402 {dataset})"
+                    ) from exc
+                last_error = exc
+                if attempt < 3:
+                    time.sleep(2 ** attempt * 3 + random.uniform(0, 2))
+                continue
             except requests.exceptions.RequestException as exc:
                 last_error = exc
                 if attempt < 3:
