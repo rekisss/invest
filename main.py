@@ -1521,6 +1521,11 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     break
             except Exception as _e:
                 _safe_print(f"[sequential] 取股票清單失敗（{_env_key}）：{_e}，嘗試下一個 token")
+                if os.getenv("DISCORD_WEBHOOK_URL"):
+                    send_discord_messages([
+                        f"⚠️ **股票清單取得失敗（{_env_key}）** · {_cst_now()} CST\n"
+                        f"改用下一個 token 重試"
+                    ])
                 full_univ = None
     finally:
         os.environ["FINMIND_TOKEN"] = _orig_token_env
@@ -1534,6 +1539,11 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     remaining_ids = set(full_univ["stock_id"].astype(str)) - already_scanned
 
     _safe_print(f"[sequential] 今日已嘗試 {len(already_scanned)}/{total}，剩餘未掃 {len(remaining_ids)} 支")
+    if os.getenv("DISCORD_WEBHOOK_URL"):
+        send_discord_messages([
+            f"🚀 **接力掃描啟動** · {_cst_now()} CST · {today}\n"
+            f"已掃 `{len(already_scanned)}/{total}` | 本輪待掃 `{len(remaining_ids)}` 支"
+        ])
 
     if not remaining_ids:
         msg = f"✅ **今日全部已掃完** · {_cst_now()} CST · {today}\n全部 `{total}` 支"
@@ -1562,6 +1572,11 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         quota_ok, quota_msg = probe_batch_quota(token_client)
         if not quota_ok:
             _safe_print(f"[sequential] 帳號 {token_idx}: 額度不足，跳過 ({quota_msg})")
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"⏰ **帳號 {token_idx} 額度不足** · {_cst_now()} CST\n"
+                    f"切換下一帳號繼續"
+                ])
             continue
 
         n_rem = len(remaining_ids)
