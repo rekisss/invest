@@ -51,43 +51,48 @@ def validate_finmind_token() -> tuple[bool, str]:
 def probe_batch_quota(client: "FinMindClient") -> tuple[bool, str]:
     """Probe TaiwanStockPrice quota before a batch scan.
 
-    Makes one uncached price request to detect 402 quota exhaustion.
-    Returns (True, msg) if quota looks OK, (False, msg) if exhausted.
+    Makes 3 uncached requests (different stocks) to verify the account has
+    meaningful remaining quota, not just 1 call left.  If any call hits a
+    permanent daily-limit error the account is considered exhausted.
     Network errors are treated as OK to avoid falsely skipping batches.
     """
     from datetime import datetime, timedelta
     probe_date = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
     today = datetime.now().strftime("%Y-%m-%d")
-    try:
-        client.fetch_dataset(
-            "TaiwanStockPrice",
-            use_cache=False,
-            data_id="2330",
-            start_date=probe_date,
-            end_date=today,
-        )
-        return True, "配額正常"
-    except RuntimeError as exc:
-        msg = str(exc)
-        # Only permanent daily quota exhaustion returns False;
-        # transient rate-limits ("FinMind transient rate-limit ...", "FinMind rate limit ...")
-        # should NOT block the scan — they may clear by the time the scan starts.
-        if "配額已耗盡" in msg or "upper limit" in msg.lower():
-            return False, f"⏰ FinMind 配額已耗盡，跳過此批次。({msg})"
-        return True, "配額正常（暫時性限流，繼續）"
-    except requests.exceptions.HTTPError as exc:
-        if exc.response is not None and exc.response.status_code == 402:
-            body = ""
-            try:
-                body = exc.response.text or ""
-            except Exception:
-                pass
-            if "upper limit" in body.lower() or "每日" in body or "daily" in body.lower():
-                return False, f"⏰ FinMind 配額已耗盡（HTTP 402），跳過此批次。"
-            return True, "配額正常（暫時性 HTTP 402，繼續）"
-        return True, "配額正常（HTTP 錯誤忽略）"
-    except Exception:
-        return True, "配額正常（探測失敗忽略）"
+    # 3 liquid large-caps — different stocks to prevent any server-side dedup
+    _probe_ids = ["2330", "2317", "0050"]
+    for _pid in _probe_ids:
+        try:
+            client.fetch_dataset(
+                "TaiwanStockPrice",
+                use_cache=False,
+                data_id=_pid,
+                start_date=probe_date,
+                end_date=today,
+            )
+        except RuntimeError as exc:
+            msg = str(exc)
+            # Only permanent daily quota exhaustion returns False;
+            # transient rate-limits ("FinMind transient rate-limit ...", "FinMind rate limit ...")
+            # should NOT block the scan — they may clear by the time the scan starts.
+            if "配額已耗盡" in msg or "upper limit" in msg.lower():
+                return False, f"⏰ FinMind 配額已耗盡，跳過此批次。({msg})"
+            # Transient error on one probe stock — stop probing but treat as OK
+            return True, "配額正常（暫時性限流，繼續）"
+        except requests.exceptions.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 402:
+                body = ""
+                try:
+                    body = exc.response.text or ""
+                except Exception:
+                    pass
+                if "upper limit" in body.lower() or "每日" in body or "daily" in body.lower():
+                    return False, f"⏰ FinMind 配額已耗盡（HTTP 402），跳過此批次。"
+                return True, "配額正常（暫時性 HTTP 402，繼續）"
+            return True, "配額正常（HTTP 錯誤忽略）"
+        except Exception:
+            return True, "配額正常（探測失敗忽略）"
+    return True, "配額正常"
 
 
 @dataclass
