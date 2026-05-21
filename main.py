@@ -1596,11 +1596,33 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         scan_args.batch_index = -1
         scan_args.notify = False
 
+        _scan_failed = False
         try:
             candidates, watchlist, _, breadth = build_daily_snapshot(scan_args, token_client, config)
+        except Exception as _scan_exc:
+            _scan_failed = True
+            _exc_str = str(_scan_exc).lower()
+            _is_quota = (
+                "402" in _exc_str
+                or "upper limit" in _exc_str
+                or "配額" in _exc_str
+                or "payment required" in _exc_str
+            )
+            if _is_quota:
+                _safe_print(f"[sequential] 帳號 {token_idx}: 掃描中配額耗盡（{_scan_exc}），切換下一帳號")
+                if os.getenv("DISCORD_WEBHOOK_URL"):
+                    send_discord_messages([
+                        f"⏰ **帳號 {token_idx} 掃描中配額耗盡** · {_cst_now()} CST\n"
+                        f"切換下一帳號繼續"
+                    ])
+            else:
+                _safe_print(f"[sequential] 帳號 {token_idx}: 掃描異常（{_scan_exc}），切換下一帳號")
         finally:
             gap_file.unlink(missing_ok=True)
             os.environ["FINMIND_TOKEN"] = orig_env_token
+
+        if _scan_failed:
+            continue
 
         # scanned_ids = all stocks that got price data back (incl. no-signal ones)
         scanned_now: set[str] = set(breadth.get("scanned_ids") or set())

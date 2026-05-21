@@ -72,6 +72,10 @@ def probe_batch_quota(client: "FinMindClient") -> tuple[bool, str]:
         if "配額" in msg or "limit" in msg.lower() or "upper limit" in msg.lower():
             return False, f"⏰ FinMind 配額已耗盡，跳過此批次。({msg})"
         return True, "配額正常（非配額錯誤忽略）"
+    except requests.exceptions.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 402:
+            return False, f"⏰ FinMind 配額已耗盡（HTTP 402），跳過此批次。"
+        return True, "配額正常（HTTP 錯誤忽略）"
     except Exception:
         return True, "配額正常（探測失敗忽略）"
 
