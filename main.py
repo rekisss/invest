@@ -1384,10 +1384,27 @@ def run_fill_batch_gaps(args: argparse.Namespace, client: FinMindClient, config:
 
 
 def run_fill_gaps(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
-    """彙整前：比對所有批次 CSV vs 完整 universe，補掃仍缺漏的股票 → batch_gap.csv/xlsx。"""
+    """彙整前：比對所有批次 CSV vs 完整 universe，補掃仍缺漏的股票 → batch_gap.csv/xlsx。
+
+    讀取順序：
+      1. _attempted_{date}.csv — sequential-scan 記錄的「所有已嘗試」股票（含無訊號者）
+      2. batch_*.csv           — 舊批次掃描結果（相容舊架構）
+    兩者合集 = 真正的「已掃過」清單，差集 = 需補掃。
+    """
     import copy
     batch_dir = Path(args.output) / "full_scan"
     scanned: set[str] = set()
+
+    # 1. Read sequential-scan's complete attempt log (preferred; covers no-signal stocks too)
+    for p in sorted(batch_dir.glob("_attempted_*.csv")):
+        try:
+            df = pd.read_csv(p, encoding="utf-8-sig")
+            if "stock_id" in df.columns:
+                scanned.update(df["stock_id"].astype(str))
+        except Exception:
+            pass
+
+    # 2. Also read batch_*.csv for compatibility with old parallel-scan results
     for p in batch_dir.glob("batch_*.csv"):
         try:
             df = pd.read_csv(p, encoding="utf-8-sig")
@@ -1427,27 +1444,42 @@ def run_fill_gaps(args: argparse.Namespace, client: FinMindClient, config: Strat
 def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config: StrategyConfig) -> None:
     """
     Hourly sequential multi-token scan with daily accumulation.
+
+    Two separate files per day:
+      _attempted_{date}.csv  — ALL stock IDs that were fetched (including no-signal ones).
+                               Used for resume tracking across hourly runs.
+      batch_daily_{date}.csv — candidates + watchlist only (interesting stocks).
+                               Read by run_aggregate and saved as xlsx for the user.
+
     Each hourly run:
-      1. Reads today's batch_daily_{date}.csv to resume from last position
-      2. Probes all 3 tokens; scans remaining stocks with each available token in order
-      3. Saves progress after each token; sends Discord round summary
-    Runs until all stocks covered or all quotas exhausted for this hour.
+      1. Reads _attempted_{date}.csv to know which stocks were already attempted
+      2. Probes each token in order; scans remaining stocks; auto-switches on quota exhaustion
+      3. Appends newly attempted IDs to _attempted_{date}.csv immediately after each token
+      4. Merges new candidates/watchlist into batch_daily_{date}.csv/xlsx
     """
     import copy as _copy
 
     today = args.end
     scan_dir = Path(args.output) / "full_scan"
     scan_dir.mkdir(parents=True, exist_ok=True)
+    attempted_csv = scan_dir / f"_attempted_{today}.csv"
     daily_csv = scan_dir / f"batch_daily_{today}.csv"
 
-    # Load today's progress
+    # Load which stocks were already attempted today (all fetched, incl. no-signal)
     already_scanned: set[str] = set()
+    if attempted_csv.exists():
+        try:
+            _att = pd.read_csv(attempted_csv, encoding="utf-8-sig")
+            if "stock_id" in _att.columns:
+                already_scanned = set(_att["stock_id"].astype(str))
+        except Exception:
+            pass
+
+    # Load today's result accumulator (candidates + watchlist)
     daily_df = pd.DataFrame()
     if daily_csv.exists():
         try:
             daily_df = pd.read_csv(daily_csv, encoding="utf-8-sig")
-            if "stock_id" in daily_df.columns:
-                already_scanned = set(daily_df["stock_id"].astype(str))
         except Exception:
             pass
 
@@ -1457,7 +1489,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     total = len(full_univ)
     remaining_ids = set(full_univ["stock_id"].astype(str)) - already_scanned
 
-    _safe_print(f"[sequential] 今日已掃 {len(already_scanned)}/{total}，剩餘 {len(remaining_ids)} 支")
+    _safe_print(f"[sequential] 今日已嘗試 {len(already_scanned)}/{total}，剩餘未掃 {len(remaining_ids)} 支")
 
     if not remaining_ids:
         msg = f"✅ **今日全部已掃完** · {_cst_now()} CST · {today}\n全部 `{total}` 支"
@@ -1480,7 +1512,6 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         if not remaining_ids:
             break
 
-        # Switch token env so FinMindClient picks up correct account
         os.environ["FINMIND_TOKEN"] = token
         token_client = FinMindClient(cache_dir=client.cache_dir)
 
@@ -1512,7 +1543,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             gap_file.unlink(missing_ok=True)
             os.environ["FINMIND_TOKEN"] = orig_env_token
 
-        # Mark successfully fetched stocks as scanned
+        # scanned_ids = all stocks that got price data back (incl. no-signal ones)
         scanned_now: set[str] = set(breadth.get("scanned_ids") or set())
         if not scanned_now:
             if not candidates.empty and "stock_id" in candidates.columns:
@@ -1525,6 +1556,12 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             remaining_ids -= scanned_now
             round_new += len(scanned_now)
 
+            # Persist attempted IDs immediately so next hourly run sees them
+            pd.DataFrame({"stock_id": sorted(already_scanned)}).to_csv(
+                attempted_csv, index=False, encoding="utf-8-sig"
+            )
+
+            # Merge candidates + watchlist into daily results file
             new_df = pd.concat([candidates, watchlist], ignore_index=True) if not watchlist.empty else candidates
             if not new_df.empty:
                 daily_df = pd.concat([daily_df, new_df], ignore_index=True)
@@ -1537,7 +1574,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         _watch_n = len(watchlist)
         _safe_print(
             f"[sequential] 帳號 {token_idx}: 完成，實際掃 {n_actual} 支，"
-            f"候選 {_cand_n}，觀察 {_watch_n}，累計 {len(already_scanned)}/{total}"
+            f"候選 {_cand_n}，觀察 {_watch_n}，累計嘗試 {len(already_scanned)}/{total}"
         )
         if os.getenv("DISCORD_WEBHOOK_URL"):
             _status = "✅" if _cand_n > 0 else "🔵"
