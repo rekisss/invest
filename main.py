@@ -2426,22 +2426,28 @@ def run_partial_aggregate(args: argparse.Namespace) -> None:
         "",
     ]
     for rank, (_, row) in enumerate(top.iterrows(), 1):
-        close = float(row.get("close") or 0)
-        score = float(row.get("entry_score") or 0)
-        cond  = int(row.get("condition_count") or 0)
-        atr   = float(row.get("atr14") or 0) or None
-        f_sc  = int(row.get("f_score") or -1)
+        def _si(key, default=0):
+            v = row.get(key)
+            return int(v) if pd.notna(v) and v is not None else default
+        def _sf(key, default=0.0):
+            v = row.get(key)
+            return float(v) if pd.notna(v) and v is not None else default
+        close = _sf("close")
+        score = _sf("entry_score")
+        cond  = _si("condition_count")
+        atr   = _sf("atr14") or None
+        f_sc  = _si("f_score", -1)
         f_tag = f" F`{f_sc}`" if f_sc >= 0 else ""
         industry = str(row.get("industry_category") or "")
         ind_tag = f" 〔{industry}〕" if industry else ""
         price_tag = _low_price_tag(row.get("close"))
         price_note = f" `{price_tag}`" if price_tag else ""
         entry_zone, stop, target, rr = _entry_stop_target(close, atr)
-        rsi = float(row.get("rsi14") or 0)
-        adx = float(row.get("adx14") or 0)
-        vol_ratio = float(row.get("volume_ratio") or 0)
-        foreign_streak = int(row.get("foreign_buy_streak") or 0)
-        invest_streak = int(row.get("invest_trust_streak") or 0)
+        rsi = _sf("rsi14")
+        adx = _sf("adx14")
+        vol_ratio = _sf("volume_ratio")
+        foreign_streak = _si("foreign_buy_streak")
+        invest_streak = _si("invest_trust_streak")
         trend_inline = _trend_label(row)
         obs = recommend_observation_period(row, is_candidate=True)
         invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
@@ -2524,22 +2530,28 @@ def run_aggregate(args: argparse.Namespace) -> None:
         "",
     ]
     for rank, (_, row) in enumerate(top.iterrows(), 1):
-        close = float(row.get("close") or 0)
-        score = float(row.get("entry_score") or 0)
-        cond  = int(row.get("condition_count") or 0)
-        atr   = float(row.get("atr14") or 0) or None
-        f_sc  = int(row.get("f_score") or -1)
+        def _si(key, default=0):
+            v = row.get(key)
+            return int(v) if pd.notna(v) and v is not None else default
+        def _sf(key, default=0.0):
+            v = row.get(key)
+            return float(v) if pd.notna(v) and v is not None else default
+        close = _sf("close")
+        score = _sf("entry_score")
+        cond  = _si("condition_count")
+        atr   = _sf("atr14") or None
+        f_sc  = _si("f_score", -1)
         f_tag = f" F`{f_sc}`" if f_sc >= 0 else ""
         industry = str(row.get("industry_category") or "")
         ind_tag = f" 〔{industry}〕" if industry else ""
         price_tag = _low_price_tag(row.get("close"))
         price_note = f" `{price_tag}`" if price_tag else ""
         entry_zone, stop, target, rr = _entry_stop_target(close, atr)
-        rsi = float(row.get("rsi14") or 0)
-        adx = float(row.get("adx14") or 0)
-        vol_ratio = float(row.get("volume_ratio") or 0)
-        foreign_streak = int(row.get("foreign_buy_streak") or 0)
-        invest_streak = int(row.get("invest_trust_streak") or 0)
+        rsi = _sf("rsi14")
+        adx = _sf("adx14")
+        vol_ratio = _sf("volume_ratio")
+        foreign_streak = _si("foreign_buy_streak")
+        invest_streak = _si("invest_trust_streak")
         trend_inline = _trend_label(row)
         obs = recommend_observation_period(row, is_candidate=True)
         invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
