@@ -1404,8 +1404,11 @@ def run_fill_gaps(args: argparse.Namespace, client: FinMindClient, config: Strat
         except Exception:
             pass
 
-    # 2. Also read batch_*.csv for compatibility with old parallel-scan results
+    # 2. Read old-style batch_NN.csv / batch_gap.csv for compatibility with parallel-scan results.
+    #    Skip batch_seq*.csv — those are sequential-scan outputs already covered by _attempted_*.csv.
     for p in batch_dir.glob("batch_*.csv"):
+        if p.stem.startswith("batch_seq"):
+            continue
         try:
             df = pd.read_csv(p, encoding="utf-8-sig")
             if "stock_id" in df.columns:
@@ -1480,6 +1483,11 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     stock_info = fetch_stock_info(client)
     full_univ = build_auto_universe(stock_info, max_symbols=args.max_universe)
     total = len(full_univ)
+
+    if total == 0:
+        _safe_print("[sequential] ⚠️ build_auto_universe 回傳空清單，請確認 API 是否正常")
+        return
+
     remaining_ids = set(full_univ["stock_id"].astype(str)) - already_scanned
 
     _safe_print(f"[sequential] 今日已嘗試 {len(already_scanned)}/{total}，剩餘未掃 {len(remaining_ids)} 支")
@@ -1568,6 +1576,8 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         n_actual = int(breadth.get("total_stocks", 0))
         _cand_n = len(candidates)
         _watch_n = len(watchlist)
+        if n_actual == 0 and len(remaining_univ) > 0:
+            _safe_print(f"[sequential] 帳號 {token_idx}: ⚠️ 實際掃 0 支（API 可能靜默限流），本輪略過儲存")
         _safe_print(
             f"[sequential] 帳號 {token_idx}: 完成，實際掃 {n_actual} 支，"
             f"候選 {_cand_n}，觀察 {_watch_n}，累計嘗試 {len(already_scanned)}/{total}"
