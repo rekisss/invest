@@ -1488,6 +1488,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     scan_dir = Path(args.output) / "full_scan"
     scan_dir.mkdir(parents=True, exist_ok=True)
     attempted_csv = scan_dir / f"_attempted_{today}.csv"
+    no_data_csv = scan_dir / "_no_data_stocks.csv"  # persistent cross-day blacklist
 
     # Load which stocks were already attempted today (all fetched, incl. no-signal)
     already_scanned: set[str] = set()
@@ -1496,6 +1497,17 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             _att = pd.read_csv(attempted_csv, encoding="utf-8-sig")
             if "stock_id" in _att.columns:
                 already_scanned = set(_att["stock_id"].astype(str))
+        except Exception:
+            pass
+
+    # Load persistent blacklist of stocks that returned no price data on any previous day
+    # (delisted stocks, stocks with insufficient history, FinMind missing data, etc.)
+    no_data_ids: set[str] = set()
+    if no_data_csv.exists():
+        try:
+            _nd = pd.read_csv(no_data_csv, encoding="utf-8-sig")
+            if "stock_id" in _nd.columns:
+                no_data_ids = set(_nd["stock_id"].astype(str))
         except Exception:
             pass
 
@@ -1542,6 +1554,14 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     total = len(full_univ)
 
     remaining_ids = set(full_univ["stock_id"].astype(str)) - already_scanned
+
+    # Filter out stocks confirmed empty on a previous day (delisted / no price data ever)
+    if no_data_ids:
+        _before_nd = len(remaining_ids)
+        remaining_ids -= no_data_ids
+        _skipped_nd = _before_nd - len(remaining_ids)
+        if _skipped_nd > 0:
+            _safe_print(f"[sequential] 過濾 {_skipped_nd} 支歷史空資料股票（黑名單共 {len(no_data_ids)} 支）")
 
     _safe_print(f"[sequential] 今日已嘗試 {len(already_scanned)}/{total}，剩餘未掃 {len(remaining_ids)} 支")
     if os.getenv("DISCORD_WEBHOOK_URL"):
@@ -1655,6 +1675,21 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         if not _quota_hit:
             # All stocks in the gap were processed — include empty-data ones too
             scanned_now.update(remaining_univ["stock_id"].astype(str))
+
+            # Stocks in the gap that returned NO price data at all → add to persistent blacklist.
+            # These are delisted, have insufficient history, or FinMind has no records for them.
+            # They will be skipped on all future days without wasting API calls.
+            _got_data = set(breadth.get("scanned_ids") or set())
+            _new_no_data = set(remaining_univ["stock_id"].astype(str)) - _got_data
+            if _new_no_data:
+                no_data_ids.update(_new_no_data)
+                pd.DataFrame({"stock_id": sorted(no_data_ids)}).to_csv(
+                    no_data_csv, index=False, encoding="utf-8-sig"
+                )
+                _safe_print(
+                    f"[sequential] 帳號 {token_idx}: 新增 {len(_new_no_data)} 支到空資料黑名單"
+                    f"（黑名單共 {len(no_data_ids)} 支）"
+                )
 
         if scanned_now:
             already_scanned.update(scanned_now)

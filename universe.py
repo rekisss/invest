@@ -107,7 +107,13 @@ def build_auto_universe(stock_info: pd.DataFrame, max_symbols: int = 120) -> pd.
     # Exclude ETFs: their technical signals and volume behaviour differ from individual stocks
     # Also exclude by stock_id prefix: Taiwan ETFs are typically 6-digit IDs starting with 0
     frame = frame[~frame["stock_name"].str.contains(_ETF_RE, na=False)]
-    frame = frame[~(frame["stock_id"].str.len() == 6)].copy()  # copy before column assignment below
+    frame = frame[~(frame["stock_id"].str.len() == 6)]
+
+    # Keep only actively listed (TWSE) or OTC stocks — filters out delisted stocks whose
+    # type field is blank, "下市", or otherwise does not match the active market categories.
+    _is_listed = frame["type"].str.contains(_LISTED_RE, na=False)
+    _is_otc = frame["type"].str.contains(_OTC_RE, na=False)
+    frame = frame[_is_listed | _is_otc].copy()
 
     _is_theme = (
         frame["stock_name"].str.contains(_THEME_RE, na=False)
