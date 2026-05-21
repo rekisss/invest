@@ -260,6 +260,24 @@ def _missing_hard_labels(entry_reason: object, max_items: int = 3) -> str:
 
 
 
+def _int_or(v: object, default: int = 0) -> int:
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return default
+    try:
+        return int(v)
+    except (ValueError, TypeError):
+        return default
+
+
+def _float_or(v: object, default: float = 0.0) -> float:
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return default
+    try:
+        return float(v)
+    except (ValueError, TypeError):
+        return default
+
+
 def _entry_stop_target(close: float, atr: float | None, stop_pct: float = 0.05, target_pct: float = 0.10) -> tuple[str, str, str, str]:
     if atr and atr > 0:
         # ATR-based: entry within 0.5 ATR, stop 2 ATR below, target 3 ATR above
@@ -393,8 +411,8 @@ def _watchlist_line(row: Any, news_map: dict[str, dict[str, object]]) -> str:
             gap_txt = f" | 距突破 `{gap_pct:.1f}%`"
     trend_txt = _trend_label(row)
     return (
-        f"• **{row['stock_id']}** {row['name']} | `{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | "
-        f"收 `{row['close']:.2f}`{price_note}{missing_txt}{gap_txt}{trend_txt}{brief}"
+        f"• **{row['stock_id']}** {row['name']} | `{_int_or(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | "
+        f"收 `{_float_or(row['close']):.2f}`{price_note}{missing_txt}{gap_txt}{trend_txt}{brief}"
     )
 
 
@@ -726,7 +744,7 @@ def format_scan_message_rich(
                 missing_label = _missing_hard_labels(row.get("entry_reason"), max_items=1)
                 lines.append(
                     f"• **{row['stock_id']}** {row['name']} | 缺 `{missing_label}` | "
-                    f"`{int(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{float(row['close']):.2f}`"
+                    f"`{_int_or(row['condition_count'])}/{_MAX_CONDITION_COUNT}` | 收 `{_float_or(row['close']):.2f}`"
                 )
             lines.append("")
         lines.append("**近似觀察名單**")
@@ -757,13 +775,13 @@ def format_scan_message_rich(
         kd_txt = f" | KD `{stoch_k:.0f}`" if stoch_k is not None else ""
         mfi_val = float(row["mfi14"]) if pd.notna(row.get("mfi14")) else None
         mfi_txt = f" | MFI `{mfi_val:.0f}`" if mfi_val is not None else ""
-        invest_streak = int(row.get("invest_trust_streak", 0) or 0)
+        invest_streak = _int_or(row.get("invest_trust_streak"))
         invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
-        dealer_streak = int(row.get("dealer_buy_streak", 0) or 0)
+        dealer_streak = _int_or(row.get("dealer_buy_streak"))
         dealer_txt = f" | 自營 `{dealer_streak}d`" if dealer_streak >= 1 else ""
         ichi_txt = " | ☁雲上" if bool(row.get("above_ichimoku_cloud")) else ""
         star = " ⭐" if confidence >= 70 else ""
-        ret5d = float(row.get("return_5d") or 0)
+        ret5d = _float_or(row.get("return_5d"))
         ret5d_txt = f" | 5d `{ret5d*100:+.1f}%`" if ret5d != 0 else ""
         industry = str(row.get("industry_category") or "")
         industry_txt = f" 〔{industry}〕" if industry else ""
@@ -775,8 +793,8 @@ def format_scan_message_rich(
         lines.append(f"━━━━━━━━━━━━━━━━━━━━")
         lines.append(f"**{row['stock_id']}** {row['name']}{industry_txt}{price_note}{star}  信心 `{confidence}/100` | `{cond_count}/{_MAX_CONDITION_COUNT}條`{mom_txt}")
         lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`{swing_txt}")
-        lines.append(f"📊 RSI `{row['rsi14']:.1f}` | ADX `{row['adx14']:.1f}`{kd_txt}{mfi_txt} | 量比 `{float(row.get('volume_ratio', 0)):.1f}x`{ret5d_txt}{ichi_txt}")
-        lines.append(f"🏦 外資連買 `{int(row.get('foreign_buy_streak', 0))}d`{invest_txt}{dealer_txt}")
+        lines.append(f"📊 RSI `{_float_or(row.get('rsi14')):.1f}` | ADX `{_float_or(row.get('adx14')):.1f}`{kd_txt}{mfi_txt} | 量比 `{_float_or(row.get('volume_ratio')):.1f}x`{ret5d_txt}{ichi_txt}")
+        lines.append(f"🏦 外資連買 `{_int_or(row.get('foreign_buy_streak'))}d`{invest_txt}{dealer_txt}")
         if trend_block:
             lines.append(trend_block)
         lines.append(f"🔍 {_reason_labels(row.get('entry_reason'), max_items=5)}")
@@ -2426,28 +2444,22 @@ def run_partial_aggregate(args: argparse.Namespace) -> None:
         "",
     ]
     for rank, (_, row) in enumerate(top.iterrows(), 1):
-        def _si(key, default=0):
-            v = row.get(key)
-            return int(v) if pd.notna(v) and v is not None else default
-        def _sf(key, default=0.0):
-            v = row.get(key)
-            return float(v) if pd.notna(v) and v is not None else default
-        close = _sf("close")
-        score = _sf("entry_score")
-        cond  = _si("condition_count")
-        atr   = _sf("atr14") or None
-        f_sc  = _si("f_score", -1)
+        close = _float_or(row.get("close"))
+        score = _float_or(row.get("entry_score"))
+        cond  = _int_or(row.get("condition_count"))
+        atr   = _float_or(row.get("atr14")) or None
+        f_sc  = _int_or(row.get("f_score"), -1)
         f_tag = f" F`{f_sc}`" if f_sc >= 0 else ""
         industry = str(row.get("industry_category") or "")
         ind_tag = f" 〔{industry}〕" if industry else ""
         price_tag = _low_price_tag(row.get("close"))
         price_note = f" `{price_tag}`" if price_tag else ""
         entry_zone, stop, target, rr = _entry_stop_target(close, atr)
-        rsi = _sf("rsi14")
-        adx = _sf("adx14")
-        vol_ratio = _sf("volume_ratio")
-        foreign_streak = _si("foreign_buy_streak")
-        invest_streak = _si("invest_trust_streak")
+        rsi = _float_or(row.get("rsi14"))
+        adx = _float_or(row.get("adx14"))
+        vol_ratio = _float_or(row.get("volume_ratio"))
+        foreign_streak = _int_or(row.get("foreign_buy_streak"))
+        invest_streak = _int_or(row.get("invest_trust_streak"))
         trend_inline = _trend_label(row)
         obs = recommend_observation_period(row, is_candidate=True)
         invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
@@ -2530,28 +2542,22 @@ def run_aggregate(args: argparse.Namespace) -> None:
         "",
     ]
     for rank, (_, row) in enumerate(top.iterrows(), 1):
-        def _si(key, default=0):
-            v = row.get(key)
-            return int(v) if pd.notna(v) and v is not None else default
-        def _sf(key, default=0.0):
-            v = row.get(key)
-            return float(v) if pd.notna(v) and v is not None else default
-        close = _sf("close")
-        score = _sf("entry_score")
-        cond  = _si("condition_count")
-        atr   = _sf("atr14") or None
-        f_sc  = _si("f_score", -1)
+        close = _float_or(row.get("close"))
+        score = _float_or(row.get("entry_score"))
+        cond  = _int_or(row.get("condition_count"))
+        atr   = _float_or(row.get("atr14")) or None
+        f_sc  = _int_or(row.get("f_score"), -1)
         f_tag = f" F`{f_sc}`" if f_sc >= 0 else ""
         industry = str(row.get("industry_category") or "")
         ind_tag = f" 〔{industry}〕" if industry else ""
         price_tag = _low_price_tag(row.get("close"))
         price_note = f" `{price_tag}`" if price_tag else ""
         entry_zone, stop, target, rr = _entry_stop_target(close, atr)
-        rsi = _sf("rsi14")
-        adx = _sf("adx14")
-        vol_ratio = _sf("volume_ratio")
-        foreign_streak = _si("foreign_buy_streak")
-        invest_streak = _si("invest_trust_streak")
+        rsi = _float_or(row.get("rsi14"))
+        adx = _float_or(row.get("adx14"))
+        vol_ratio = _float_or(row.get("volume_ratio"))
+        foreign_streak = _int_or(row.get("foreign_buy_streak"))
+        invest_streak = _int_or(row.get("invest_trust_streak"))
         trend_inline = _trend_label(row)
         obs = recommend_observation_period(row, is_candidate=True)
         invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
