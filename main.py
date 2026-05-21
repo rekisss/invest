@@ -1590,6 +1590,27 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
 
     _env_key_map = {0: "FINMIND_TOKEN", 1: "FINMIND_TOKEN_2", 2: "FINMIND_TOKEN_3"}
 
+    # ── 掃描前一次預檢所有帳號配額，結果快取供迴圈重用（避免重複消耗 API 呼叫）──
+    _quota_probe_cache: dict[int, tuple[bool, str]] = {}
+    _quota_lines: list[str] = []
+    for _pi, _pt in token_list:
+        _pk = _env_key_map.get(_pi, f"FINMIND_TOKEN_{_pi}")
+        if _pk in _quota_exhausted_keys:
+            _quota_probe_cache[_pi] = (False, "取清單時已確認配額不足")
+            _quota_lines.append(f"帳號 {_pi}: ❌ 取清單時配額不足")
+            continue
+        os.environ["FINMIND_TOKEN"] = _pt
+        _pc = FinMindClient(cache_dir=client.cache_dir)
+        _pok, _pmsg = probe_batch_quota(_pc)
+        os.environ["FINMIND_TOKEN"] = orig_env_token
+        _quota_probe_cache[_pi] = (_pok, _pmsg)
+        _quota_lines.append(f"帳號 {_pi}: {'✅ 有額度' if _pok else f'❌ 無額度'}")
+    _safe_print(f"[sequential] 帳號配額預檢：{' | '.join(_quota_lines)}")
+    if os.getenv("DISCORD_WEBHOOK_URL"):
+        send_discord_messages([
+            f"📊 **帳號配額預檢** · {_cst_now()} CST\n" + "\n".join(_quota_lines)
+        ])
+
     for token_idx, token in token_list:
         if not remaining_ids:
             break
@@ -1606,7 +1627,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         os.environ["FINMIND_TOKEN"] = token
         token_client = FinMindClient(cache_dir=client.cache_dir)
 
-        quota_ok, quota_msg = probe_batch_quota(token_client)
+        quota_ok, quota_msg = _quota_probe_cache.get(token_idx, (True, "（未預檢）"))
         if not quota_ok:
             _safe_print(f"[sequential] 帳號 {token_idx}: 額度不足，跳過 ({quota_msg})")
             if os.getenv("DISCORD_WEBHOOK_URL"):
