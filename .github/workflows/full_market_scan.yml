@@ -32,6 +32,20 @@ jobs:
       - name: Pull latest scan progress
         run: git pull --rebase origin main || true
 
+      - name: Get current date (CST)
+        id: date
+        run: echo "date=$(TZ=Asia/Taipei date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+      - name: Restore scan cache（掃描進度 + FinMind 原始資料）
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            output/full_scan
+            output/cache
+          key: finmind-scan-${{ steps.date.outputs.date }}-${{ github.run_id }}
+          restore-keys: |
+            finmind-scan-${{ steps.date.outputs.date }}-
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -110,6 +124,15 @@ jobs:
                 "$DISCORD_WEBHOOK_URL" || true
             fi
           fi
+
+      - name: Save scan cache（掃描進度 + FinMind 原始資料）
+        if: steps.guard.outputs.skip == 'false'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            output/full_scan
+            output/cache
+          key: finmind-scan-${{ steps.date.outputs.date }}-${{ github.run_id }}
 
       - name: Notify Discord on failure
         if: failure()
