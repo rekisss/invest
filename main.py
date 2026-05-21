@@ -2450,14 +2450,15 @@ def run_partial_aggregate(args: argparse.Namespace) -> None:
         atr   = _float_or(row.get("atr14")) or None
         f_sc  = _int_or(row.get("f_score"), -1)
         f_tag = f" F`{f_sc}`" if f_sc >= 0 else ""
-        industry = str(row.get("industry_category") or "")
+        _ind_raw = row.get("industry_category")
+        industry = str(_ind_raw) if pd.notna(_ind_raw) and _ind_raw is not None else ""
         ind_tag = f" 〔{industry}〕" if industry else ""
         price_tag = _low_price_tag(row.get("close"))
         price_note = f" `{price_tag}`" if price_tag else ""
         entry_zone, stop, target, rr = _entry_stop_target(close, atr)
-        rsi = _float_or(row.get("rsi14"))
-        adx = _float_or(row.get("adx14"))
-        vol_ratio = _float_or(row.get("volume_ratio"))
+        _rsi = row.get("rsi14"); rsi_txt = f"RSI `{_float_or(_rsi):.1f}`" if pd.notna(_rsi) else "RSI `-`"
+        _adx = row.get("adx14"); adx_txt = f"ADX `{_float_or(_adx):.1f}`" if pd.notna(_adx) else "ADX `-`"
+        _vr  = row.get("volume_ratio"); vr_txt = f"量比 `{_float_or(_vr):.1f}x`" if pd.notna(_vr) else "量比 `-`"
         foreign_streak = _int_or(row.get("foreign_buy_streak"))
         invest_streak = _int_or(row.get("invest_trust_streak"))
         trend_inline = _trend_label(row)
@@ -2469,7 +2470,7 @@ def run_partial_aggregate(args: argparse.Namespace) -> None:
             f"  分 `{score:.0f}` | `{cond}/{_MAX_CONDITION_COUNT}條`"
         )
         lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
-        lines.append(f"📊 RSI `{rsi:.1f}` | ADX `{adx:.1f}` | 量比 `{vol_ratio:.1f}x`{trend_inline}")
+        lines.append(f"📊 {rsi_txt} | {adx_txt} | {vr_txt}{trend_inline}")
         lines.append(f"🏦 外資連買 `{foreign_streak}d`{invest_txt}")
         lines.append(f"⏱ {obs}")
 
@@ -2548,14 +2549,15 @@ def run_aggregate(args: argparse.Namespace) -> None:
         atr   = _float_or(row.get("atr14")) or None
         f_sc  = _int_or(row.get("f_score"), -1)
         f_tag = f" F`{f_sc}`" if f_sc >= 0 else ""
-        industry = str(row.get("industry_category") or "")
+        _ind_raw = row.get("industry_category")
+        industry = str(_ind_raw) if pd.notna(_ind_raw) and _ind_raw is not None else ""
         ind_tag = f" 〔{industry}〕" if industry else ""
         price_tag = _low_price_tag(row.get("close"))
         price_note = f" `{price_tag}`" if price_tag else ""
         entry_zone, stop, target, rr = _entry_stop_target(close, atr)
-        rsi = _float_or(row.get("rsi14"))
-        adx = _float_or(row.get("adx14"))
-        vol_ratio = _float_or(row.get("volume_ratio"))
+        _rsi = row.get("rsi14"); rsi_txt = f"RSI `{_float_or(_rsi):.1f}`" if pd.notna(_rsi) else "RSI `-`"
+        _adx = row.get("adx14"); adx_txt = f"ADX `{_float_or(_adx):.1f}`" if pd.notna(_adx) else "ADX `-`"
+        _vr  = row.get("volume_ratio"); vr_txt = f"量比 `{_float_or(_vr):.1f}x`" if pd.notna(_vr) else "量比 `-`"
         foreign_streak = _int_or(row.get("foreign_buy_streak"))
         invest_streak = _int_or(row.get("invest_trust_streak"))
         trend_inline = _trend_label(row)
@@ -2567,7 +2569,7 @@ def run_aggregate(args: argparse.Namespace) -> None:
             f"  分 `{score:.0f}` | `{cond}/{_MAX_CONDITION_COUNT}條`"
         )
         lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
-        lines.append(f"📊 RSI `{rsi:.1f}` | ADX `{adx:.1f}` | 量比 `{vol_ratio:.1f}x`{trend_inline}")
+        lines.append(f"📊 {rsi_txt} | {adx_txt} | {vr_txt}{trend_inline}")
         lines.append(f"🏦 外資連買 `{foreign_streak}d`{invest_txt}")
         lines.append(f"⏱ {obs}")
 
@@ -2579,6 +2581,14 @@ def run_aggregate(args: argparse.Namespace) -> None:
     # Check open positions against latest prices
     positions_csv = Path(getattr(args, "positions", None) or "positions.csv")
     _check_positions(all_candidates, positions_csv, getattr(args, "notify", False))
+
+    # Sync full scan results to Notion
+    if notion_enabled():
+        try:
+            sync_scan_results(all_candidates, pd.DataFrame(), args.end)
+            _safe_print(f"[aggregate] Notion 同步完成，共 {len(all_candidates)} 筆")
+        except Exception as _exc:
+            _safe_print(f"[aggregate] Notion 同步失敗（不影響主流程）: {_exc}")
 
     # Clean up batch files after successful aggregation
     for p in csvs:
