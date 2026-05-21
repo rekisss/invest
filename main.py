@@ -1640,13 +1640,21 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         if _scan_failed:
             continue
 
-        # scanned_ids = all stocks that got price data back (incl. no-signal ones)
+        # Determine which stocks were actually attempted this scan.
+        # breadth["scanned_ids"] only contains stocks that returned price data
+        # (i.e., entered signals_by_stock). Stocks with empty prices, short history,
+        # or FinMind returning no rows are NOT in scanned_ids — but they WERE
+        # attempted and should not be re-scanned next hour.
+        #
+        # Fix: if quota was NOT exhausted, every stock in remaining_univ was
+        # attempted (some just had no data). Mark the full set as done.
+        # If quota WAS exhausted, only the fetched stocks are safe to mark as done;
+        # the rest were skipped by the quota event and must be retried.
+        _quota_hit = bool(breadth.get("quota_exhausted"))
         scanned_now: set[str] = set(breadth.get("scanned_ids") or set())
-        if not scanned_now:
-            if not candidates.empty and "stock_id" in candidates.columns:
-                scanned_now.update(candidates["stock_id"].astype(str))
-            if not watchlist.empty and "stock_id" in watchlist.columns:
-                scanned_now.update(watchlist["stock_id"].astype(str))
+        if not _quota_hit:
+            # All stocks in the gap were processed — include empty-data ones too
+            scanned_now.update(remaining_univ["stock_id"].astype(str))
 
         if scanned_now:
             already_scanned.update(scanned_now)
@@ -1672,7 +1680,6 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         n_actual = int(breadth.get("total_stocks", 0))
         _cand_n = len(candidates)
         _watch_n = len(watchlist)
-        _quota_hit = bool(breadth.get("quota_exhausted"))
         if _quota_hit:
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚡ 配額耗盡，掃到 {n_actual} 支後提前中止，切換下一帳號")
         elif n_actual == 0 and len(remaining_univ) > 0:
