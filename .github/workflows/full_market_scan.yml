@@ -75,7 +75,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: daily-scan-run${{ github.run_number }}
-          path: output/full_scan/batch_daily_*.xlsx
+          path: output/full_scan/batch_seq*.xlsx
           if-no-files-found: ignore
           retention-days: 14
 

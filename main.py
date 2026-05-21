@@ -1445,17 +1445,19 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     """
     Hourly sequential multi-token scan with daily accumulation.
 
-    Two separate files per day:
-      _attempted_{date}.csv  — ALL stock IDs that were fetched (including no-signal ones).
-                               Used for resume tracking across hourly runs.
-      batch_daily_{date}.csv — candidates + watchlist only (interesting stocks).
-                               Read by run_aggregate and saved as xlsx for the user.
+    Two file types per day:
+      _attempted_{date}.csv      — ALL stock IDs that were fetched (incl. no-signal).
+                                   Used for resume tracking across hourly runs.
+      batch_seq{N}_{date}.csv/xlsx — raw candidates+watchlist per token, saved immediately
+                                     after each token finishes — NO sorting, NO merging.
+                                     Aggregate at 20:00 reads all batch_*.csv files and
+                                     produces the final sorted ranking + TOP 20.
 
     Each hourly run:
       1. Reads _attempted_{date}.csv to know which stocks were already attempted
       2. Probes each token in order; scans remaining stocks; auto-switches on quota exhaustion
       3. Appends newly attempted IDs to _attempted_{date}.csv immediately after each token
-      4. Merges new candidates/watchlist into batch_daily_{date}.csv/xlsx
+      4. Dumps raw results to batch_seq{N}_{date}.csv/xlsx — no merging across tokens
     """
     import copy as _copy
 
@@ -1463,7 +1465,6 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     scan_dir = Path(args.output) / "full_scan"
     scan_dir.mkdir(parents=True, exist_ok=True)
     attempted_csv = scan_dir / f"_attempted_{today}.csv"
-    daily_csv = scan_dir / f"batch_daily_{today}.csv"
 
     # Load which stocks were already attempted today (all fetched, incl. no-signal)
     already_scanned: set[str] = set()
@@ -1472,14 +1473,6 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             _att = pd.read_csv(attempted_csv, encoding="utf-8-sig")
             if "stock_id" in _att.columns:
                 already_scanned = set(_att["stock_id"].astype(str))
-        except Exception:
-            pass
-
-    # Load today's result accumulator (candidates + watchlist)
-    daily_df = pd.DataFrame()
-    if daily_csv.exists():
-        try:
-            daily_df = pd.read_csv(daily_csv, encoding="utf-8-sig")
         except Exception:
             pass
 
@@ -1556,18 +1549,21 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             remaining_ids -= scanned_now
             round_new += len(scanned_now)
 
-            # Persist attempted IDs immediately so next hourly run sees them
+            # Persist attempted IDs immediately so next hourly run skips these stocks
             pd.DataFrame({"stock_id": sorted(already_scanned)}).to_csv(
                 attempted_csv, index=False, encoding="utf-8-sig"
             )
 
-            # Merge candidates + watchlist into daily results file
-            new_df = pd.concat([candidates, watchlist], ignore_index=True) if not watchlist.empty else candidates
-            if not new_df.empty:
-                daily_df = pd.concat([daily_df, new_df], ignore_index=True)
-                daily_df = daily_df.sort_values("entry_score", ascending=False).drop_duplicates(subset=["stock_id"])
-            daily_df.to_csv(daily_csv, index=False, encoding="utf-8-sig")
-            daily_df.to_excel(daily_csv.with_suffix(".xlsx"), index=False, engine="openpyxl")
+        # Save this token's raw results immediately — no sorting, no merging with other tokens.
+        # Aggregate at 20:00 will read all batch_seq*.csv files and produce the final ranking.
+        raw_df = pd.concat([candidates, watchlist], ignore_index=True) if not watchlist.empty else candidates
+        token_csv = scan_dir / f"batch_seq{token_idx}_{today}.csv"
+        if token_csv.exists():
+            # Append to existing file if this token ran again (e.g., fill-gaps re-run)
+            prev = pd.read_csv(token_csv, encoding="utf-8-sig")
+            raw_df = pd.concat([prev, raw_df], ignore_index=True).drop_duplicates(subset=["stock_id"])
+        raw_df.to_csv(token_csv, index=False, encoding="utf-8-sig")
+        raw_df.to_excel(token_csv.with_suffix(".xlsx"), index=False, engine="openpyxl")
 
         n_actual = int(breadth.get("total_stocks", 0))
         _cand_n = len(candidates)
