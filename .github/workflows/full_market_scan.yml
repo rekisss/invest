@@ -36,12 +36,10 @@ jobs:
         id: date
         run: echo "date=$(TZ=Asia/Taipei date +%Y-%m-%d)" >> $GITHUB_OUTPUT
 
-      - name: Restore scan cache（掃描進度 + FinMind 原始資料）
+      - name: Restore scan cache（掃描進度）
         uses: actions/cache/restore@v4
         with:
-          path: |
-            output/full_scan
-            output/cache
+          path: output/full_scan
           key: finmind-scan-${{ steps.date.outputs.date }}-${{ github.run_id }}
           restore-keys: |
             finmind-scan-${{ steps.date.outputs.date }}-
@@ -103,8 +101,8 @@ jobs:
           git config user.name "GitHub Actions"
           git pull --rebase origin main || true
           git add output/full_scan/ || true
-          git diff --staged --quiet || git commit -m \
-            "scan: 接力掃描 $(TZ=Asia/Taipei date +%Y-%m-%d %H:%M CST)"
+          CTS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
+          git diff --staged --quiet || git commit -m "scan: 接力掃描 ${CTS} CST"
           # Retry git push up to 4 times with exponential backoff
           PUSHED=false
           for i in 1 2 3 4; do
@@ -126,13 +124,11 @@ jobs:
             fi
           fi
 
-      - name: Save scan cache（掃描進度 + FinMind 原始資料）
+      - name: Save scan cache（掃描進度）
         if: steps.guard.outputs.skip == 'false'
         uses: actions/cache/save@v4
         with:
-          path: |
-            output/full_scan
-            output/cache
+          path: output/full_scan
           key: finmind-scan-${{ steps.date.outputs.date }}-${{ github.run_id }}
 
       - name: Notify Discord on failure
