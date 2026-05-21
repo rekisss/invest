@@ -41,7 +41,7 @@ from data_loader import (
 )
 from fundamentals import compute_f_score
 from fugle_client import FugleClient, fetch_watch_quotes
-from news_service import NewsClient, summarize_news
+from news_service import NewsClient, summarize_news, fetch_market_news_sentiment, format_market_news_block
 from notifier import send_discord_messages, split_message
 from report import save_hybrid_report, save_reports, save_scan_report, save_sponsor_monitor_report
 from strategy import (
@@ -56,6 +56,11 @@ from strategy import (
 from universe import build_auto_universe
 from notion_sync import confidence_score as _confidence_score, notion_enabled, recommend_observation_period, sync_scan_results
 from market_predictor import MarketPredictor, fetch_us_features, format_prediction_block
+from taiwan_futures import (
+    fetch_futures_daily, fetch_futures_institutional,
+    build_futures_features, format_futures_block,
+)
+from economic_calendar import fetch_upcoming_events, format_calendar_block
 
 _CST = timezone(timedelta(hours=8))
 
@@ -2317,15 +2322,43 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
             send_discord_messages([msg])
         return
 
-    us_df = fetch_us_features(train_start, today)
+    # Fetch auxiliary data in parallel (all graceful-degrade on failure)
+    with ThreadPoolExecutor(max_workers=4) as _pool:
+        _f_us       = _pool.submit(fetch_us_features, train_start, today)
+        _f_futures  = _pool.submit(fetch_futures_daily, client, train_start, today)
+        _f_inst     = _pool.submit(fetch_futures_institutional, client, train_start, today)
+        _f_calendar = _pool.submit(fetch_upcoming_events)
+        us_df       = _f_us.result()
+        futures_raw = _f_futures.result()
+        inst_raw    = _f_inst.result()
+        calendar_events = _f_calendar.result()
+
+    futures_df = build_futures_features(market_df, futures_raw, inst_raw)
+
+    # Market-level news sentiment (quick RSS fetch)
+    news_client = NewsClient(Path(args.output) / "news_cache")
+    market_news = fetch_market_news_sentiment(news_client)
 
     predictor = MarketPredictor(horizon=5)
-    predictor.fit(market_df, us_df if not us_df.empty else None)
-    pred = predictor.predict_proba(market_df, us_df if not us_df.empty else None)
+    predictor.fit(
+        market_df,
+        us_df      if not us_df.empty      else None,
+        futures_df if not futures_df.empty else None,
+    )
+    pred = predictor.predict_proba(
+        market_df,
+        us_df      if not us_df.empty      else None,
+        futures_df if not futures_df.empty else None,
+    )
 
     latest_date = pd.Timestamp(market_df["date"].max()).strftime("%Y-%m-%d")
     header = f"🌅 **盤前預測** · {latest_date} · {_cst_now()} CST"
-    pred_block = format_prediction_block(pred)
+    pred_block = format_prediction_block(
+        pred,
+        futures_block=format_futures_block(futures_df),
+        news_block=format_market_news_block(market_news),
+        calendar_block=format_calendar_block(calendar_events),
+    )
     message = header + "\n\n" + (pred_block if pred_block else "⚠️ AI 模型訓練資料不足，無法產生預測。")
     _safe_print(message)
     if args.notify:
