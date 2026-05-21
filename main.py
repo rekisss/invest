@@ -2582,11 +2582,15 @@ def run_aggregate(args: argparse.Namespace) -> None:
     positions_csv = Path(getattr(args, "positions", None) or "positions.csv")
     _check_positions(all_candidates, positions_csv, getattr(args, "notify", False))
 
-    # Sync full scan results to Notion
+    # Sync full scan results to Notion (all stocks; top N marked as "TOP 20")
     if notion_enabled():
         try:
-            sync_scan_results(all_candidates, pd.DataFrame(), args.end)
-            _safe_print(f"[aggregate] Notion 同步完成，共 {len(all_candidates)} 筆")
+            _top_ids = set(top["stock_id"].tolist()) if "stock_id" in top.columns else set()
+            sync_scan_results(
+                all_candidates, pd.DataFrame(), args.end,
+                top_stock_ids=_top_ids,
+            )
+            _safe_print(f"[aggregate] Notion 同步完成，共 {len(all_candidates)} 筆（TOP 20 標記 {len(_top_ids)} 筆）")
         except Exception as _exc:
             _safe_print(f"[aggregate] Notion 同步失敗（不影響主流程）: {_exc}")
 
