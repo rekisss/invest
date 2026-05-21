@@ -99,14 +99,17 @@ jobs:
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
-          git pull --rebase origin main || true
+          # -X theirs: in rebase context "theirs" = our local commits being
+          # replayed (cache-restored, most complete version); auto-resolves
+          # conflicts in _attempted_*.csv without getting stuck mid-rebase.
+          git pull --rebase -X theirs origin main || true
           git add output/full_scan/ || true
           CTS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
           git diff --staged --quiet || git commit -m "scan: 接力掃描 ${CTS} CST"
           # Retry git push up to 4 times with exponential backoff.
-          # Each retry re-aborts any pending rebase, re-pulls, then re-stages
-          # and re-commits — in case the initial commit was lost inside a
-          # mid-rebase state caused by a concurrent workflow run pushing first.
+          # Each retry re-aborts any pending rebase, re-pulls (-X theirs to
+          # auto-resolve conflicts), then re-stages and re-commits in case the
+          # initial commit was lost inside a mid-rebase state.
           PUSHED=false
           for i in 1 2 3 4; do
             if git push; then
@@ -116,7 +119,7 @@ jobs:
             echo "Push attempt $i failed, retrying in $((i * 10))s..."
             sleep $((i * 10))
             git rebase --abort 2>/dev/null || true
-            git pull --rebase origin main || true
+            git pull --rebase -X theirs origin main || true
             git add output/full_scan/ || true
             CTS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
             git diff --staged --quiet || git commit -m "scan: 接力掃描 ${CTS} CST" || true
