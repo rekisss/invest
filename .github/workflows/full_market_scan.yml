@@ -112,6 +112,7 @@ jobs:
             fi
             echo "Push attempt $i failed, retrying in $((i * 10))s..."
             sleep $((i * 10))
+            git rebase --abort 2>/dev/null || true
             git pull --rebase origin main || true
           done
           if [ "$PUSHED" = "false" ]; then
