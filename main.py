@@ -1536,7 +1536,10 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     break
             except Exception as _e:
                 _exc_s = str(_e).lower()
-                if any(k in _exc_s for k in ("402", "配額", "upper limit", "payment required")):
+                # Only mark as quota-exhausted for permanent daily limit errors.
+                # Transient rate-limits ("transient rate-limit", "rate limit (402)") must NOT
+                # be treated as permanent — the account may still have quota for the scan.
+                if any(k in _exc_s for k in ("配額已耗盡", "upper limit")):
                     _quota_exhausted_keys.add(_env_key)
                 _safe_print(f"[sequential] 取股票清單失敗（{_env_key}）：{_e}，嘗試下一個 token")
                 if os.getenv("DISCORD_WEBHOOK_URL"):
