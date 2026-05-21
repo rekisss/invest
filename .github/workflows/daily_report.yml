@@ -14,6 +14,15 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: 通知 Discord：開始執行
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          TS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"📋 **盤後總結 開始** · ${TS} CST\"}" \
+            "$DISCORD_WEBHOOK_URL" || true
+
       - name: Checkout
         uses: actions/checkout@v5
 

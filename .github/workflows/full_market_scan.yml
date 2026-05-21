@@ -44,17 +44,42 @@ jobs:
           restore-keys: |
             finmind-scan-${{ steps.date.outputs.date }}-
 
+      - name: 檢查今日是否已全部掃完
+        id: check_done
+        run: |
+          DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
+          ATTEMPTED=$(tail -n +2 "output/full_scan/_attempted_${DATE}.csv" 2>/dev/null | wc -l || echo 0)
+          echo "today_attempted=${ATTEMPTED}"
+          if [ "$ATTEMPTED" -ge 1750 ]; then
+            echo "done=true" >> $GITHUB_OUTPUT
+          else
+            echo "done=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 今日掃描已完成，通知並略過
+        if: steps.check_done.outputs.done == 'true'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          TS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"✅ **今日全市場掃描已完成** · ${TS} CST · 略過本輪\"}" \
+            "$DISCORD_WEBHOOK_URL" || true
+
       - name: Set up Python
+        if: steps.check_done.outputs.done != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
+        if: steps.check_done.outputs.done != 'true'
         run: pip install -r requirements.txt
 
       - name: 判斷是否需要掃描
         id: guard
+        if: steps.check_done.outputs.done != 'true'
         run: |
           EVENT="${{ github.event_name }}"
           if [ "$EVENT" != "schedule" ] && [ "$EVENT" != "workflow_dispatch" ]; then
@@ -92,7 +117,7 @@ jobs:
           retention-days: 14
 
       - name: Commit 掃描進度
-        if: steps.guard.outputs.skip == 'false'
+        if: steps.check_done.outputs.done != 'true' && steps.guard.outputs.skip == 'false'
         continue-on-error: true
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -135,7 +160,7 @@ jobs:
           fi
 
       - name: Save scan cache（掃描進度）
-        if: steps.guard.outputs.skip == 'false'
+        if: steps.check_done.outputs.done != 'true' && steps.guard.outputs.skip == 'false'
         uses: actions/cache/save@v4
         with:
           path: output/full_scan
