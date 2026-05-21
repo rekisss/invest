@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 import os
 from pathlib import Path
 import random
@@ -488,17 +489,32 @@ def collect_signals(
     start_date: str,
     end_date: str,
     workers: int,
-) -> tuple[dict[str, pd.DataFrame], list[pd.DataFrame]]:
+) -> tuple[dict[str, pd.DataFrame], list[pd.DataFrame], list[str], bool]:
+    """Returns (signals_by_stock, signal_frames, load_errors, quota_exhausted).
+
+    quota_exhausted is True when a daily-quota 402 was detected mid-scan.
+    In that case remaining unfetched stocks are skipped immediately so the
+    caller can switch tokens without waiting for hundreds of timeout errors.
+    """
     signals_by_stock: dict[str, pd.DataFrame] = {}
     signal_frames: list[pd.DataFrame] = []
-    load_errors: list[str] = []  # collect first few errors for diagnostics
+    load_errors: list[str] = []
 
-    _req_delay = max(0.0, 1.5 / max(workers, 1))  # spread requests: ~1 req/1.5s per worker slot
-
+    _req_delay = max(0.0, 1.5 / max(workers, 1))
     _fund_start = (pd.Timestamp(start_date) - pd.Timedelta(days=730)).strftime("%Y-%m-%d")
+    _quota_event = threading.Event()  # set when daily quota is confirmed exhausted
+
+    def _is_quota_error(exc: BaseException) -> bool:
+        s = str(exc).lower()
+        return "配額已耗盡" in s or "upper limit" in s or "quota" in s
 
     def load_one(stock: dict[str, Any]) -> tuple[str, pd.DataFrame] | tuple[str, None]:
+        # Skip immediately if quota was already detected as exhausted by another thread
+        if _quota_event.is_set():
+            return stock["stock_id"], None
         time.sleep(_req_delay + random.uniform(0, _req_delay))
+        if _quota_event.is_set():
+            return stock["stock_id"], None
         sid = stock["stock_id"]
         try:
             prices = fetch_stock_prices(client, sid, start_date, end_date)
@@ -522,6 +538,8 @@ def collect_signals(
             )
             return sid, frame
         except Exception as error:
+            if _is_quota_error(error):
+                _quota_event.set()
             print(f"[warn] skipped {sid}: {error}", file=sys.stderr)
             return sid, error  # type: ignore[return-value]
 
@@ -550,21 +568,22 @@ def collect_signals(
         for future in as_completed(futures):
             done += 1
             if done % 10 == 0 or done == total:
-                print(f"[collect_signals] {done}/{total} stocks loaded", file=sys.stderr)
+                _q = " [配額耗盡，跳過剩餘]" if _quota_event.is_set() else ""
+                print(f"[collect_signals] {done}/{total} stocks loaded{_q}", file=sys.stderr)
             result = future.result()
             stock_id, payload = result
             if payload is None:
-                load_errors.append(f"{stock_id}: empty prices")
-                continue
+                continue  # skipped (quota abort or empty prices)
             if isinstance(payload, Exception):
-                load_errors.append(f"{stock_id}: {payload}")
+                if not _is_quota_error(payload):
+                    load_errors.append(f"{stock_id}: {payload}")
                 continue
             signal_frame = payload
             signals_by_stock[stock_id] = signal_frame
             if not _signal_cols_present:
                 _signal_cols_present = [c for c in _signal_cols if c in signal_frame.columns]
             signal_frames.append(signal_frame[_signal_cols_present])
-    return signals_by_stock, signal_frames, load_errors
+    return signals_by_stock, signal_frames, load_errors, _quota_event.is_set()
 
 
 def build_daily_snapshot(
@@ -580,11 +599,12 @@ def build_daily_snapshot(
     market = prepare_market_frame(market_raw, config)
 
     universe = load_universe(args, client)
-    signals_by_stock, _, load_errors = collect_signals(universe, client, market, config, start_date, end_date_text, args.workers)
+    signals_by_stock, _, load_errors, quota_exhausted = collect_signals(universe, client, market, config, start_date, end_date_text, args.workers)
     snapshot = latest_signal_snapshot(signals_by_stock)
     breadth = compute_market_breadth(snapshot)
     if load_errors:
         breadth["load_errors"] = load_errors[:3]
+    breadth["quota_exhausted"] = quota_exhausted
     breadth["market_regime"] = compute_market_regime(market)
     candidates, watchlist = rank_candidates(
         snapshot,
@@ -1576,7 +1596,10 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         n_actual = int(breadth.get("total_stocks", 0))
         _cand_n = len(candidates)
         _watch_n = len(watchlist)
-        if n_actual == 0 and len(remaining_univ) > 0:
+        _quota_hit = bool(breadth.get("quota_exhausted"))
+        if _quota_hit:
+            _safe_print(f"[sequential] 帳號 {token_idx}: ⚡ 配額耗盡，掃到 {n_actual} 支後提前中止，切換下一帳號")
+        elif n_actual == 0 and len(remaining_univ) > 0:
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚠️ 實際掃 0 支（API 可能靜默限流），本輪略過儲存")
         _safe_print(
             f"[sequential] 帳號 {token_idx}: 完成，實際掃 {n_actual} 支，"
@@ -1978,7 +2001,7 @@ def run_backtest_mode(args: argparse.Namespace, client: FinMindClient, config: S
     if market_raw.empty:
         raise RuntimeError("Unable to download TAIEX market data from FinMind.")
     market = prepare_market_frame(market_raw, config)
-    signals_by_stock, signal_frames, _ = collect_signals(stock_list, client, market, config, args.start, args.end, args.workers)
+    signals_by_stock, signal_frames, _, _q = collect_signals(stock_list, client, market, config, args.start, args.end, args.workers)
     if not signals_by_stock:
         raise RuntimeError("No stock data was loaded. Check the stock universe and FinMind credentials.")
 
@@ -2030,7 +2053,7 @@ def run_walk_forward(args: argparse.Namespace, client: FinMindClient, config: St
     market_full = prepare_market_frame(market_raw, config)
 
     stock_list = load_universe(args, client)
-    signals_by_stock, _, __ = collect_signals(stock_list, client, market_full, config, args.start, args.end, args.workers)
+    signals_by_stock, _, __, _q = collect_signals(stock_list, client, market_full, config, args.start, args.end, args.workers)
     if not signals_by_stock:
         raise RuntimeError("No signal data loaded.")
 
