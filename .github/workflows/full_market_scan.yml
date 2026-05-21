@@ -119,8 +119,9 @@ jobs:
           if [ "$PUSHED" = "false" ]; then
             echo "⚠️ git push failed after 4 attempts — progress may be lost next run"
             if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+              TS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
               curl -s -H "Content-Type: application/json" \
-                -d "{\"content\": \"⚠️ **掃描進度 push 失敗** · $(TZ=Asia/Taipei date +%Y-%m-%d %H:%M) CST · _attempted_*.csv 未儲存，下次接力可能從頭開始\"}" \
+                -d "{\"content\": \"⚠️ **掃描進度 push 失敗** · ${TS} CST · Actions Cache 已備份，下次 run 仍可從 cache 接續\"}" \
                 "$DISCORD_WEBHOOK_URL" || true
             fi
           fi
@@ -139,6 +140,7 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
+          TS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
           curl -s -H "Content-Type: application/json" \
-            -d "{\"content\": \"⚠️ **接力掃描失敗** · $(TZ=Asia/Taipei date +%Y-%m-%d %H:%M) CST · 請檢查 Actions logs\"}" \
+            -d "{\"content\": \"⚠️ **接力掃描失敗** · ${TS} CST · 請檢查 Actions logs\"}" \
             "$DISCORD_WEBHOOK_URL" || true
