@@ -1499,14 +1499,37 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         except Exception:
             pass
 
-    # Get full universe
-    stock_info = fetch_stock_info(client)
-    full_univ = build_auto_universe(stock_info, max_symbols=args.max_universe)
-    total = len(full_univ)
+    # Get full universe — try each token in order so account 0 quota exhaustion doesn't crash
+    _all_env_tokens = [
+        ("FINMIND_TOKEN",   os.getenv("FINMIND_TOKEN")),
+        ("FINMIND_TOKEN_2", os.getenv("FINMIND_TOKEN_2")),
+        ("FINMIND_TOKEN_3", os.getenv("FINMIND_TOKEN_3")),
+    ]
+    _orig_token_env = os.environ.get("FINMIND_TOKEN", "")
+    full_univ = None
+    try:
+        for _env_key, _env_val in _all_env_tokens:
+            if not _env_val:
+                continue
+            try:
+                os.environ["FINMIND_TOKEN"] = _env_val
+                _info_client = FinMindClient(cache_dir=client.cache_dir)
+                stock_info = fetch_stock_info(_info_client)
+                full_univ = build_auto_universe(stock_info, max_symbols=args.max_universe)
+                if len(full_univ) > 0:
+                    _safe_print(f"[sequential] 股票清單取得成功（使用 {_env_key}）：{len(full_univ)} 支")
+                    break
+            except Exception as _e:
+                _safe_print(f"[sequential] 取股票清單失敗（{_env_key}）：{_e}，嘗試下一個 token")
+                full_univ = None
+    finally:
+        os.environ["FINMIND_TOKEN"] = _orig_token_env
 
-    if total == 0:
-        _safe_print("[sequential] ⚠️ build_auto_universe 回傳空清單，請確認 API 是否正常")
+    if full_univ is None or len(full_univ) == 0:
+        _safe_print("[sequential] ⚠️ 所有 token 都無法取得股票清單，中止")
         return
+
+    total = len(full_univ)
 
     remaining_ids = set(full_univ["stock_id"].astype(str)) - already_scanned
 
