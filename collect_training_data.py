@@ -120,30 +120,53 @@ def _flatten_yf(raw: pd.DataFrame, yf_ticker: str, sid: str) -> pd.DataFrame | N
         return None
 
 
+def _download_single(yf_ticker: str, sid: str, period: str) -> tuple[str, pd.DataFrame | None]:
+    """Download one stock individually; returns (sid, df_or_None)."""
+    try:
+        raw = yf.download(yf_ticker, period=period, progress=False, auto_adjust=True)
+        return sid, _flatten_yf(raw, yf_ticker, sid)
+    except Exception:
+        return sid, None
+
+
 def download_stocks_batch(tickers: list[str], period: str) -> dict[str, pd.DataFrame]:
-    """Batch-download OHLCV for a list of stock IDs; return {stock_id: df}."""
+    """Batch-download OHLCV for a list of stock IDs; return {stock_id: df}.
+
+    Strategy:
+    1. Try batch download for all tickers at once (fast path).
+    2. For any ticker not returned by the batch (Yahoo rate-limit or missing data),
+       fall back to individual downloads with small per-request delays.
+    """
     yf_tickers = [f"{t}.TW" for t in tickers]
     result: dict[str, pd.DataFrame] = {}
     if not yf_tickers:
         return result
 
-    if len(yf_tickers) == 1:
-        raw = yf.download(yf_tickers[0], period=period, progress=False, auto_adjust=True)
-        df = _flatten_yf(raw, yf_tickers[0], tickers[0])
-        if df is not None:
-            result[tickers[0]] = df
-        return result
+    # ── Batch download (no group_by — compatible with yfinance 0.2.x) ──────────
+    succeeded: set[str] = set()
+    if len(yf_tickers) > 1:
+        try:
+            raw = yf.download(
+                yf_tickers, period=period,
+                progress=False, auto_adjust=True,
+            )
+            if not raw.empty:
+                for yf_t, sid in zip(yf_tickers, tickers):
+                    df = _flatten_yf(raw, yf_t, sid)
+                    if df is not None:
+                        result[sid] = df
+                        succeeded.add(yf_t)
+        except Exception:
+            pass  # batch failed entirely → fall through to individual downloads
 
-    raw = yf.download(
-        " ".join(yf_tickers), period=period,
-        group_by="ticker", progress=False, auto_adjust=True,
-    )
-    if raw.empty:
-        return result
-    for yf_t, sid in zip(yf_tickers, tickers):
-        df = _flatten_yf(raw, yf_t, sid)
+    # ── Individual retry for tickers missing from batch result ─────────────────
+    missing = [(yf_t, sid) for yf_t, sid in zip(yf_tickers, tickers) if yf_t not in succeeded]
+    for yf_t, sid in missing:
+        time.sleep(random.uniform(0.3, 0.8))
+        _, df = _download_single(yf_t, sid, period)
         if df is not None:
             result[sid] = df
+
     return result
 
 

@@ -43,7 +43,7 @@ jobs:
         run: |
           python collect_training_data.py \
             --period "${{ inputs.period }}" \
-            --batch-size 80 \
+            --batch-size 30 \
             --output training_data \
             --max-stocks "${{ inputs.max_stocks }}" \
             --format parquet
