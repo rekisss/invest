@@ -632,6 +632,7 @@ def build_daily_snapshot(
         breadth["load_errors"] = load_errors[:3]
     breadth["quota_exhausted"] = quota_exhausted
     breadth["market_regime"] = compute_market_regime(market)
+    breadth["_snapshot"] = snapshot  # full per-stock data; used by sequential-scan to save all rows
     candidates, watchlist = rank_candidates(
         snapshot,
         args.top_n,
@@ -1762,8 +1763,15 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             )
 
         # Save this token's raw results immediately — no sorting, no merging with other tokens.
-        # Aggregate at 20:00 will read all batch_seq*.csv files and produce the final ranking.
-        raw_df = pd.concat([candidates, watchlist], ignore_index=True) if not watchlist.empty else candidates
+        # Use the full snapshot (all scanned stocks) so Notion receives every stock as a DB row,
+        # not just the candidates/watchlist. Falls back to candidates+watchlist if snapshot absent.
+        full_snapshot = breadth.pop("_snapshot", pd.DataFrame())
+        if not full_snapshot.empty:
+            raw_df = full_snapshot.copy()
+        elif not watchlist.empty:
+            raw_df = pd.concat([candidates, watchlist], ignore_index=True)
+        else:
+            raw_df = candidates.copy()
         token_csv = scan_dir / f"batch_seq{token_idx}_{today}.csv"
         if token_csv.exists():
             # Append to existing file if this token ran again (e.g., fill-gaps re-run)

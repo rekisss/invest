@@ -228,7 +228,14 @@ def _sync_row(
     sentiment_label, news_summary = _news_sentiment(news_info.get("summary", {}))
 
     is_top20 = row_type == "TOP 20"
-    狀態 = "TOP 20 進場" if is_top20 else ("候選進場" if row_type == "全部掃描" else "觀察中")
+    if is_top20:
+        狀態 = "TOP 20 進場"
+    elif row_type in ("全部掃描", "候選進場"):
+        狀態 = "候選進場"
+    elif row_type == "觀察名單":
+        狀態 = "觀察中"
+    else:  # "無訊號" — full-snapshot stocks with no entry signal
+        狀態 = "無訊號"
 
     properties: dict[str, Any] = {
         title_prop:    {"title": _rt(f"{stock_id} {name}")},
@@ -322,13 +329,19 @@ def sync_scan_results(
 
     # Fetch existing pages for today to enable upsert (no duplicates)
     existing = _query_existing_for_date(database_id, date)
-    print(f"[Notion] {date} 已有 {len(existing)} 筆，本次同步 {len(candidates)} 筆掃描 + {len(watchlist)} 筆觀察")
+    total_in = len(candidates) + len(watchlist)
+    print(f"[Notion] {date} 已有 {len(existing)} 筆，本次同步 {total_in} 筆（含無訊號）+ {len(watchlist)} 筆觀察")
 
-    # Build row list: each candidate appears once, type based on top_ids
+    # Build row list: each candidate appears once, type based on top_ids and entry_signal
     rows: list[tuple[Any, str]] = []
     for _, row in candidates.iterrows():
         sid = str(row.get("stock_id", ""))
-        row_type = "TOP 20" if sid in top_ids else "全部掃描"
+        if sid in top_ids:
+            row_type = "TOP 20"
+        elif row.get("entry_signal", False):
+            row_type = "全部掃描"
+        else:
+            row_type = "無訊號"
         rows.append((row, row_type))
     for _, row in watchlist.iterrows():
         rows.append((row, "觀察名單"))
