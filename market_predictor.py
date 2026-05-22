@@ -42,6 +42,7 @@ _US_TICKERS = {
     "oil":     "CL=F",
     "us2y":    "^IRX",
     "usdcny":  "CNY=X",
+    "twd":     "TWD=X",
 }
 
 
@@ -120,12 +121,17 @@ _BASE_FEATURES = [
 _US_FEATURES = [
     "sp500_ret1", "sp500_ret5", "nasdaq_ret1", "vix",
     "sox_ret1", "dxy_ret1", "us10y_ret1",
-    "gold_ret1", "oil_ret1", "us2y_ret1", "usdcny_ret1",
+    "gold_ret1", "oil_ret1", "us2y_ret1", "usdcny_ret1", "twd_ret1",
 ]
 
 _FUTURES_FEATURES = [
     "futures_ret_1d", "futures_ret_5d", "futures_basis",
     "futures_oi_chg", "futures_vol_ratio", "foreign_futures_net",
+]
+
+_INST_FEATURES = [
+    "foreign_inst_norm", "trust_inst_norm",
+    "margin_purchase_chg", "short_sale_chg",
 ]
 
 
@@ -167,7 +173,8 @@ class MarketPredictor:
         return merged
 
     def fit(self, market_df: pd.DataFrame, us_df: pd.DataFrame | None = None,
-            futures_df: pd.DataFrame | None = None) -> "MarketPredictor":
+            futures_df: pd.DataFrame | None = None,
+            inst_df: pd.DataFrame | None = None) -> "MarketPredictor":
         if not _DEPS_OK:
             return self
         df = _build_taiex_features(market_df.copy().sort_values("date").reset_index(drop=True))
@@ -176,12 +183,15 @@ class MarketPredictor:
             self._us_available = True
         if futures_df is not None and not futures_df.empty:
             df = self._merge_external(df, futures_df, _FUTURES_FEATURES)
+        if inst_df is not None and not inst_df.empty:
+            df = self._merge_external(df, inst_df, _INST_FEATURES)
 
         df["target"] = (df["close"].shift(-self.horizon) > df["close"]).astype(float)
         feat_cols = (
             _BASE_FEATURES
             + [c for c in _US_FEATURES if c in df.columns]
             + [c for c in _FUTURES_FEATURES if c in df.columns]
+            + [c for c in _INST_FEATURES if c in df.columns]
         )
         df = df.dropna(subset=["target"])
 
@@ -210,7 +220,8 @@ class MarketPredictor:
         return self
 
     def predict_proba(self, market_df: pd.DataFrame, us_df: pd.DataFrame | None = None,
-                      futures_df: pd.DataFrame | None = None) -> dict[str, Any]:
+                      futures_df: pd.DataFrame | None = None,
+                      inst_df: pd.DataFrame | None = None) -> dict[str, Any]:
         default: dict[str, Any] = {
             "prob_up": 0.5, "confidence": "low", "label": "資料不足",
             "horizon": self.horizon, "trained": False, "us_features": False,
@@ -223,6 +234,8 @@ class MarketPredictor:
             df = self._merge_us(df, us_df)
         if futures_df is not None and not futures_df.empty:
             df = self._merge_external(df, futures_df, _FUTURES_FEATURES)
+        if inst_df is not None and not inst_df.empty:
+            df = self._merge_external(df, inst_df, _INST_FEATURES)
 
         row = df[self._feature_cols].iloc[[-1]].replace([np.inf, -np.inf], np.nan).fillna(self._medians)
         prob = float(self._model.predict_proba(row.values)[0, 1])

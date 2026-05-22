@@ -32,6 +32,8 @@ from data_loader import (
     fetch_fundamentals,
     fetch_institutional_data,
     fetch_market_index,
+    fetch_market_institutional,
+    fetch_market_margin,
     fetch_stock_info,
     fetch_stock_kbar,
     fetch_stock_prices,
@@ -2323,17 +2325,30 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         return
 
     # Fetch auxiliary data in parallel (all graceful-degrade on failure)
-    with ThreadPoolExecutor(max_workers=4) as _pool:
+    with ThreadPoolExecutor(max_workers=6) as _pool:
         _f_us       = _pool.submit(fetch_us_features, train_start, today)
         _f_futures  = _pool.submit(fetch_futures_daily, client, train_start, today)
         _f_inst     = _pool.submit(fetch_futures_institutional, client, train_start, today)
         _f_calendar = _pool.submit(fetch_upcoming_events)
-        us_df       = _f_us.result()
-        futures_raw = _f_futures.result()
-        inst_raw    = _f_inst.result()
+        _f_mkinst   = _pool.submit(fetch_market_institutional, client, train_start, today)
+        _f_margin   = _pool.submit(fetch_market_margin, client, train_start, today)
+        us_df           = _f_us.result()
+        futures_raw     = _f_futures.result()
+        inst_raw        = _f_inst.result()
         calendar_events = _f_calendar.result()
+        mkinst_df       = _f_mkinst.result()
+        margin_df       = _f_margin.result()
 
     futures_df = build_futures_features(market_df, futures_raw, inst_raw)
+
+    # Merge 三大法人 + 融資融券 into a single inst_df for MarketPredictor
+    inst_feat_df: pd.DataFrame | None = None
+    if not mkinst_df.empty or not margin_df.empty:
+        _frames = [df for df in (mkinst_df, margin_df) if not df.empty]
+        if len(_frames) == 1:
+            inst_feat_df = _frames[0]
+        else:
+            inst_feat_df = _frames[0].merge(_frames[1], on="date", how="outer")
 
     # Market-level news sentiment (quick RSS fetch)
     news_client = NewsClient(Path(args.output) / "news_cache")
@@ -2342,13 +2357,15 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
     predictor = MarketPredictor(horizon=5)
     predictor.fit(
         market_df,
-        us_df      if not us_df.empty      else None,
-        futures_df if not futures_df.empty else None,
+        us_df        if not us_df.empty        else None,
+        futures_df   if not futures_df.empty   else None,
+        inst_feat_df if inst_feat_df is not None and not inst_feat_df.empty else None,
     )
     pred = predictor.predict_proba(
         market_df,
-        us_df      if not us_df.empty      else None,
-        futures_df if not futures_df.empty else None,
+        us_df        if not us_df.empty        else None,
+        futures_df   if not futures_df.empty   else None,
+        inst_feat_df if inst_feat_df is not None and not inst_feat_df.empty else None,
     )
 
     latest_date = pd.Timestamp(market_df["date"].max()).strftime("%Y-%m-%d")
