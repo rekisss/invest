@@ -13,3 +13,4 @@ cache/
 sponsor_log.txt
 .DS_Store
 .env
+training_data/*.csv

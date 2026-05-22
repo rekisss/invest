@@ -18,6 +18,9 @@ on:
         required: false
         default: "0"
 
+permissions:
+  contents: write
+
 jobs:
   collect:
     runs-on: ubuntu-latest
@@ -42,12 +45,22 @@ jobs:
             --period "${{ inputs.period }}" \
             --batch-size 80 \
             --output training_data \
-            --max-stocks "${{ inputs.max_stocks }}"
+            --max-stocks "${{ inputs.max_stocks }}" \
+            --format parquet
+
+      - name: Commit training data to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add training_data/*.parquet
+          git diff --cached --quiet || git commit -m \
+            "data: training data ${{ inputs.period }} $(date +%Y-%m-%d) [skip ci]"
+          git push
 
       - name: Upload training data as artifact
         uses: actions/upload-artifact@v4
         with:
           name: training-data-${{ inputs.period }}-${{ github.run_id }}
-          path: training_data/*.csv
+          path: training_data/*.parquet
           retention-days: 30
           if-no-files-found: error
