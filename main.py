@@ -1653,9 +1653,11 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 ])
             continue
 
-        # Wait between account switches to let FinMind's IP-based rate limiter cool down.
-        # After account 0 makes hundreds of rapid calls, the server may temporarily block
-        # the runner's IP even for different tokens. 30 s is enough to clear the burst window.
+        # After account 0 makes hundreds of rapid calls, FinMind may temporarily block
+        # the runner's IP even for a different token. Wait 90 s first, then probe.
+        # If probe shows IP still throttled (not permanent quota exhaustion), wait-and-retry
+        # up to _IP_RETRY_MAX_SECS so this account can actually scan and return data
+        # rather than being skipped entirely.
         if token_idx > 0:
             _safe_print(f"[sequential] 帳號 {token_idx}: 等待 90 秒讓 FinMind IP 限流冷卻…")
             time.sleep(90)
@@ -1663,15 +1665,33 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         os.environ["FINMIND_TOKEN"] = token
         token_client = FinMindClient(cache_dir=client.cache_dir)
 
-        # Re-probe quota right before scanning — the pre-run cache may be stale if a
-        # previous token exhausted its quota during the scan (cache was built before any scan).
+        _IP_RETRY_INTERVAL = 60   # seconds between each probe retry
+        _IP_RETRY_MAX_SECS = 480  # give up after 8 minutes of IP-throttle retries
+        _ip_waited = 0
         _re_ok, _re_msg = probe_batch_quota(token_client)
-        if not _re_ok:
-            _safe_print(f"[sequential] 帳號 {token_idx}: 重新探測配額不足，跳過 ({_re_msg})")
+        while not _re_ok and "IP 限流" in _re_msg and _ip_waited < _IP_RETRY_MAX_SECS:
+            _safe_print(
+                f"[sequential] 帳號 {token_idx}: IP 仍在限流（{_re_msg}），"
+                f"等待 {_IP_RETRY_INTERVAL}s 後再探測…（已等 {_ip_waited}s / 上限 {_IP_RETRY_MAX_SECS}s）"
+            )
             if os.getenv("DISCORD_WEBHOOK_URL"):
                 send_discord_messages([
-                    f"⏰ **帳號 {token_idx} 額度不足（重新探測）** · {_cst_now()} CST\n"
-                    f"切換下一帳號繼續"
+                    f"⏳ **帳號 {token_idx} IP 限流中** · {_cst_now()} CST\n"
+                    f"已等 `{_ip_waited}s`，再等 `{_IP_RETRY_INTERVAL}s` 後重試探測"
+                ])
+            time.sleep(_IP_RETRY_INTERVAL)
+            _ip_waited += _IP_RETRY_INTERVAL
+            token_client = FinMindClient(cache_dir=client.cache_dir)
+            _re_ok, _re_msg = probe_batch_quota(token_client)
+
+        if not _re_ok:
+            # Permanent quota exhaustion (or IP still throttled after 8 min — rare)
+            _is_ip = "IP 限流" in _re_msg
+            _reason = f"IP 限流超時（等待 {_ip_waited}s 仍未冷卻）" if _is_ip else f"配額已耗盡（{_re_msg}）"
+            _safe_print(f"[sequential] 帳號 {token_idx}: {_reason}，跳過")
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"⏰ **帳號 {token_idx} 跳過** · {_cst_now()} CST\n{_reason}"
                 ])
             os.environ["FINMIND_TOKEN"] = orig_env_token
             continue
