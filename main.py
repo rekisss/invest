@@ -1655,14 +1655,20 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         os.environ["FINMIND_TOKEN"] = token
         token_client = FinMindClient(cache_dir=client.cache_dir)
 
-        quota_ok, quota_msg = _quota_probe_cache.get(token_idx, (True, "（未預檢）"))
-        if not quota_ok:
-            _safe_print(f"[sequential] 帳號 {token_idx}: 額度不足，跳過 ({quota_msg})")
+        # Re-probe quota right before scanning — the pre-run cache may be stale if a
+        # previous token exhausted its quota during the scan (cache was built before any scan).
+        _pk = _env_key_map.get(token_idx, f"FINMIND_TOKEN_{token_idx}")
+        _re_ok, _re_msg = probe_batch_quota(token_client)
+        os.environ["FINMIND_TOKEN"] = orig_env_token
+        os.environ["FINMIND_TOKEN"] = token
+        if not _re_ok:
+            _safe_print(f"[sequential] 帳號 {token_idx}: 重新探測配額不足，跳過 ({_re_msg})")
             if os.getenv("DISCORD_WEBHOOK_URL"):
                 send_discord_messages([
-                    f"⏰ **帳號 {token_idx} 額度不足** · {_cst_now()} CST\n"
+                    f"⏰ **帳號 {token_idx} 額度不足（重新探測）** · {_cst_now()} CST\n"
                     f"切換下一帳號繼續"
                 ])
+            os.environ["FINMIND_TOKEN"] = orig_env_token
             continue
 
         n_rem = len(remaining_ids)
@@ -1767,6 +1773,12 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         _watch_n = len(watchlist)
         if _quota_hit:
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚡ 配額耗盡，掃到 {n_actual} 支後提前中止，切換下一帳號")
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"⚡ **帳號 {token_idx} 配額耗盡** · {_cst_now()} CST\n"
+                    f"掃到 `{n_actual}` 支後中止，切換下一帳號\n"
+                    f"（若三帳號皆立即耗盡，請確認三個 FINMIND_TOKEN 是否為不同帳號）"
+                ])
         elif n_actual == 0 and len(remaining_univ) > 0:
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚠️ 實際掃 0 支（API 可能靜默限流），本輪略過儲存")
         _safe_print(
@@ -1775,8 +1787,9 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         )
         if os.getenv("DISCORD_WEBHOOK_URL"):
             _status = "✅" if _cand_n > 0 else "🔵"
+            _quota_note = " ⚡配額耗盡" if _quota_hit else ""
             send_discord_messages([
-                f"{_status} **帳號 {token_idx} 完成** · {_cst_now()} CST\n"
+                f"{_status} **帳號 {token_idx} 完成{_quota_note}** · {_cst_now()} CST\n"
                 f"掃 `{n_actual}` 支 | 候選 `{_cand_n}` | 觀察 `{_watch_n}`\n"
                 f"全局累計 `{len(already_scanned)}/{total}` 支"
             ])
