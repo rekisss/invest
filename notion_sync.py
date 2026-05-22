@@ -56,7 +56,10 @@ def _headers() -> dict[str, str]:
 
 
 def _rt(content: str) -> list[dict]:
-    return [{"text": {"content": str(content)[:2000]}}]
+    s = str(content).strip()[:2000]
+    if not s:
+        return []
+    return [{"text": {"content": s}}]
 
 
 # ── Public helpers (used by main.py) ─────────────────────────────────────────
