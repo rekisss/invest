@@ -2657,6 +2657,21 @@ def run_aggregate(args: argparse.Namespace) -> None:
     positions_csv = Path(getattr(args, "positions", None) or "positions.csv")
     _check_positions(all_candidates, positions_csv, getattr(args, "notify", False))
 
+    # 產生彙整 Excel（所有掃描股票，含 TOP 20 / 候選進場 / 無訊號 標記）
+    _top_ids_set = set(top["stock_id"].tolist()) if "stock_id" in top.columns else set()
+    agg_df = all_candidates.copy()
+    agg_df["類型"] = agg_df.apply(
+        lambda r: "TOP 20" if str(r.get("stock_id", "")) in _top_ids_set
+        else ("候選進場" if r.get("entry_signal", False) else "無訊號"),
+        axis=1,
+    )
+    agg_xlsx = scan_dir / f"aggregate_{args.end}.xlsx"
+    try:
+        agg_df.to_excel(agg_xlsx, index=False, engine="openpyxl")
+        _safe_print(f"[aggregate] 彙整 Excel 已產生：{agg_xlsx.name}（{len(agg_df)} 支股票）")
+    except Exception as _xlsx_exc:
+        _safe_print(f"[aggregate] 彙整 Excel 寫入失敗：{_xlsx_exc}")
+
     # Sync full scan results to Notion (all stocks; top N marked as "TOP 20")
     if notion_enabled():
         try:
