@@ -1672,15 +1672,8 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 ])
             continue
 
-        # After account 0 makes hundreds of rapid calls, FinMind may temporarily block
-        # the runner's IP even for a different token. Wait 90 s first, then probe.
-        # If probe shows IP still throttled (not permanent quota exhaustion), wait-and-retry
-        # up to _IP_RETRY_MAX_SECS so this account can actually scan and return data
-        # rather than being skipped entirely.
-        if token_idx > 0:
-            _safe_print(f"[sequential] 帳號 {token_idx}: 等待 90 秒讓 FinMind IP 限流冷卻…")
-            time.sleep(90)
-
+        # 直接切換到下一個帳號，不做固定等待。
+        # 若遇到 IP 限流，交由下方 probe + retry 機制處理。
         os.environ["FINMIND_TOKEN"] = token
         token_client = FinMindClient(cache_dir=client.cache_dir)
 
@@ -1776,14 +1769,13 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         # If quota WAS exhausted, only the fetched stocks are safe to mark as done;
         # the rest were skipped by the quota event and must be retried.
         _quota_hit = bool(breadth.get("quota_exhausted"))
+        n_actual = int(breadth.get("total_stocks", 0))
         scanned_now: set[str] = set(breadth.get("scanned_ids") or set())
-        if not _quota_hit:
-            # All stocks in the gap were processed — include empty-data ones too
+        if not _quota_hit and n_actual > 0:
+            # Only when this token really scanned data do we mark the whole gap as attempted.
             scanned_now.update(remaining_univ["stock_id"].astype(str))
 
             # Stocks in the gap that returned NO price data at all → add to persistent blacklist.
-            # These are delisted, have insufficient history, or FinMind has no records for them.
-            # They will be skipped on all future days without wasting API calls.
             _got_data = set(breadth.get("scanned_ids") or set())
             _new_no_data = set(remaining_univ["stock_id"].astype(str)) - _got_data
             if _new_no_data:
@@ -1795,6 +1787,11 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     f"[sequential] 帳號 {token_idx}: 新增 {len(_new_no_data)} 支到空資料黑名單"
                     f"（黑名單共 {len(no_data_ids)} 支）"
                 )
+        elif not _quota_hit and n_actual == 0 and len(remaining_univ) > 0:
+            _safe_print(
+                f"[sequential] 帳號 {token_idx}: 本輪 0 支有效掃描，"
+                "不將剩餘股票標記為已嘗試，交給下一帳號/下一輪"
+            )
 
         if scanned_now:
             already_scanned.update(scanned_now)
@@ -1836,7 +1833,6 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     f"IP 仍在限流中或配額不足，已略過儲存，下輪繼續接力"
                 ])
 
-        n_actual = int(breadth.get("total_stocks", 0))
         _cand_n = len(candidates)
         _watch_n = len(watchlist)
         if _quota_hit:

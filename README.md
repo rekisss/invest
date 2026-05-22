@@ -222,3 +222,53 @@ This is the most stable setup under limited API quotas.
 - FinMind `TaiwanStockKBar` is not a guaranteed real-time feed for all tokens, so Fugle is the safer live-monitor path.
 - This project intentionally uses a narrow, high-selectivity filter rather than frequent signals.
 - The earnings-date avoidance filter is optional because source timing fields can vary.
+
+
+## Code Change & Upload Flow（之後固定流程）
+
+### 直接推 main（小改動）
+
+```bash
+# 1. 拉最新程式碼
+git pull origin main
+
+# 2. 改程式
+
+# 3. 查看改了什麼
+git status
+git diff
+
+# 4. 加入暫存區
+git add <changed_file>
+# 或全部加入
+git add .
+
+# 5. 建立 commit（建議格式：fix:/feat:/chore:）
+git commit -m "fix: 說明你改了什麼"
+
+# 6. 推上 GitHub
+git push origin main
+```
+
+### PR 流程（大改動/不確定時，優先使用）
+
+```bash
+# 1. 拉最新
+git pull origin main
+
+# 2. 開新分支
+git checkout -b fix/<change-name>
+
+# 3. 改程式、add、commit
+
+# 4. 推分支
+git push origin fix/<change-name>
+
+# 5. 開 PR → 等 CI 全綠 → 合併
+```
+
+### 快速規則
+
+- 小修改（一兩行）：可直接 push main。
+- 大改動或不確定：走分支 + PR，先讓 CI 驗證。
+- 合併前：確認 CI 全綠（✅）。
