@@ -514,6 +514,7 @@ def collect_signals(
     start_date: str,
     end_date: str,
     workers: int,
+    checkpoint_path: "str | None" = None,
 ) -> tuple[dict[str, pd.DataFrame], list[pd.DataFrame], list[str], bool]:
     """Returns (signals_by_stock, signal_frames, load_errors, quota_exhausted).
 
@@ -586,6 +587,7 @@ def collect_signals(
         "f_score",
     ]
     _signal_cols_present: list[str] = []  # resolved on first result
+    _checkpoint_written = False           # tracks whether checkpoint header was written
     stock_records = stock_list.to_dict("records")
     total = len(stock_records)
     done = 0
@@ -609,6 +611,20 @@ def collect_signals(
             if not _signal_cols_present:
                 _signal_cols_present = [c for c in _signal_cols if c in signal_frame.columns]
             signal_frames.append(signal_frame[_signal_cols_present])
+            # Incremental checkpoint: write the latest row for this stock immediately.
+            # Runs in the main thread (as_completed loop) so no lock needed.
+            # This ensures scanned data is preserved even if the process is
+            # interrupted mid-scan by quota exhaustion, IP throttle, or crash.
+            if checkpoint_path:
+                try:
+                    _row = signal_frame.iloc[[-1]].copy()
+                    _mode = "a" if _checkpoint_written else "w"
+                    _row.to_csv(checkpoint_path, mode=_mode, header=not _checkpoint_written,
+                                index=False, encoding="utf-8-sig")
+                    _checkpoint_written = True
+                except Exception as _cp_exc:
+                    print(f"[collect_signals] checkpoint write failed for {stock_id}: {_cp_exc}",
+                          file=sys.stderr)
     return signals_by_stock, signal_frames, load_errors, _quota_event.is_set()
 
 
@@ -625,7 +641,10 @@ def build_daily_snapshot(
     market = prepare_market_frame(market_raw, config)
 
     universe = load_universe(args, client)
-    signals_by_stock, _, load_errors, quota_exhausted = collect_signals(universe, client, market, config, start_date, end_date_text, args.workers)
+    signals_by_stock, _, load_errors, quota_exhausted = collect_signals(
+        universe, client, market, config, start_date, end_date_text, args.workers,
+        checkpoint_path=getattr(args, "checkpoint_csv", None),
+    )
     snapshot = latest_signal_snapshot(signals_by_stock)
     breadth = compute_market_breadth(snapshot)
     if load_errors:
@@ -1653,25 +1672,45 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 ])
             continue
 
-        # Wait between account switches to let FinMind's IP-based rate limiter cool down.
-        # After account 0 makes hundreds of rapid calls, the server may temporarily block
-        # the runner's IP even for different tokens. 30 s is enough to clear the burst window.
+        # After account 0 makes hundreds of rapid calls, FinMind may temporarily block
+        # the runner's IP even for a different token. Wait 90 s first, then probe.
+        # If probe shows IP still throttled (not permanent quota exhaustion), wait-and-retry
+        # up to _IP_RETRY_MAX_SECS so this account can actually scan and return data
+        # rather than being skipped entirely.
         if token_idx > 0:
-            _safe_print(f"[sequential] 帳號 {token_idx}: 等待 30 秒讓 FinMind IP 限流冷卻…")
-            time.sleep(30)
+            _safe_print(f"[sequential] 帳號 {token_idx}: 等待 90 秒讓 FinMind IP 限流冷卻…")
+            time.sleep(90)
 
         os.environ["FINMIND_TOKEN"] = token
         token_client = FinMindClient(cache_dir=client.cache_dir)
 
-        # Re-probe quota right before scanning — the pre-run cache may be stale if a
-        # previous token exhausted its quota during the scan (cache was built before any scan).
+        _IP_RETRY_INTERVAL = 60   # seconds between each probe retry
+        _IP_RETRY_MAX_SECS = 480  # give up after 8 minutes of IP-throttle retries
+        _ip_waited = 0
         _re_ok, _re_msg = probe_batch_quota(token_client)
-        if not _re_ok:
-            _safe_print(f"[sequential] 帳號 {token_idx}: 重新探測配額不足，跳過 ({_re_msg})")
+        while not _re_ok and "IP 限流" in _re_msg and _ip_waited < _IP_RETRY_MAX_SECS:
+            _safe_print(
+                f"[sequential] 帳號 {token_idx}: IP 仍在限流（{_re_msg}），"
+                f"等待 {_IP_RETRY_INTERVAL}s 後再探測…（已等 {_ip_waited}s / 上限 {_IP_RETRY_MAX_SECS}s）"
+            )
             if os.getenv("DISCORD_WEBHOOK_URL"):
                 send_discord_messages([
-                    f"⏰ **帳號 {token_idx} 額度不足（重新探測）** · {_cst_now()} CST\n"
-                    f"切換下一帳號繼續"
+                    f"⏳ **帳號 {token_idx} IP 限流中** · {_cst_now()} CST\n"
+                    f"已等 `{_ip_waited}s`，再等 `{_IP_RETRY_INTERVAL}s` 後重試探測"
+                ])
+            time.sleep(_IP_RETRY_INTERVAL)
+            _ip_waited += _IP_RETRY_INTERVAL
+            token_client = FinMindClient(cache_dir=client.cache_dir)
+            _re_ok, _re_msg = probe_batch_quota(token_client)
+
+        if not _re_ok:
+            # Permanent quota exhaustion (or IP still throttled after 8 min — rare)
+            _is_ip = "IP 限流" in _re_msg
+            _reason = f"IP 限流超時（等待 {_ip_waited}s 仍未冷卻）" if _is_ip else f"配額已耗盡（{_re_msg}）"
+            _safe_print(f"[sequential] 帳號 {token_idx}: {_reason}，跳過")
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"⏰ **帳號 {token_idx} 跳過** · {_cst_now()} CST\n{_reason}"
                 ])
             os.environ["FINMIND_TOKEN"] = orig_env_token
             continue
@@ -1688,10 +1727,15 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         gap_file = scan_dir / f"_seq_{token_idx}.csv"
         remaining_univ.to_csv(gap_file, index=False)
 
+        token_csv = scan_dir / f"batch_seq{token_idx}_{today}.csv"
+        _ckpt_csv = scan_dir / f"_ckpt_seq{token_idx}_{today}.csv"
+        _ckpt_csv.unlink(missing_ok=True)  # start fresh for this scan run
+
         scan_args = _copy.copy(args)
         scan_args.stocks = str(gap_file)
         scan_args.batch_index = -1
         scan_args.notify = False
+        scan_args.checkpoint_csv = str(_ckpt_csv)
 
         _scan_failed = False
         try:
@@ -1762,23 +1806,35 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 attempted_csv, index=False, encoding="utf-8-sig"
             )
 
-        # Save this token's raw results immediately — no sorting, no merging with other tokens.
-        # Use the full snapshot (all scanned stocks) so Notion receives every stock as a DB row,
-        # not just the candidates/watchlist. Falls back to candidates+watchlist if snapshot absent.
-        full_snapshot = breadth.pop("_snapshot", pd.DataFrame())
-        if not full_snapshot.empty:
-            raw_df = full_snapshot.copy()
-        elif not watchlist.empty:
-            raw_df = pd.concat([candidates, watchlist], ignore_index=True)
+        # Save this token's raw results immediately.
+        # Primary: incremental checkpoint written stock-by-stock during scan (preserves data
+        # even if the process crashes or quota exhausts mid-scan).
+        # Fallback: in-memory full snapshot, then candidates/watchlist.
+        if _ckpt_csv.exists():
+            raw_df = pd.read_csv(_ckpt_csv, encoding="utf-8-sig").drop_duplicates(subset=["stock_id"])
+            _ckpt_csv.unlink(missing_ok=True)
         else:
-            raw_df = candidates.copy()
-        token_csv = scan_dir / f"batch_seq{token_idx}_{today}.csv"
+            full_snapshot = breadth.pop("_snapshot", pd.DataFrame())
+            if not full_snapshot.empty:
+                raw_df = full_snapshot.copy()
+            elif not watchlist.empty:
+                raw_df = pd.concat([candidates, watchlist], ignore_index=True)
+            else:
+                raw_df = candidates.copy()
         if token_csv.exists():
-            # Append to existing file if this token ran again (e.g., fill-gaps re-run)
+            # Merge with previous run's data for the same account (fill-gaps / re-run)
             prev = pd.read_csv(token_csv, encoding="utf-8-sig")
             raw_df = pd.concat([prev, raw_df], ignore_index=True).drop_duplicates(subset=["stock_id"])
         raw_df.to_csv(token_csv, index=False, encoding="utf-8-sig")
         raw_df.to_excel(token_csv.with_suffix(".xlsx"), index=False, engine="openpyxl")
+
+        if raw_df.empty and len(remaining_univ) > 0:
+            _safe_print(f"[sequential] 帳號 {token_idx}: ⚠️ 掃描 0 支有效資料（IP 仍在限流中），本輪略過")
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"⚠️ **帳號 {token_idx} 掃描 0 支資料** · {_cst_now()} CST\n"
+                    f"IP 仍在限流中或配額不足，已略過儲存，下輪繼續接力"
+                ])
 
         n_actual = int(breadth.get("total_stocks", 0))
         _cand_n = len(candidates)
@@ -2657,21 +2713,43 @@ def run_aggregate(args: argparse.Namespace) -> None:
     positions_csv = Path(getattr(args, "positions", None) or "positions.csv")
     _check_positions(all_candidates, positions_csv, getattr(args, "notify", False))
 
+    # 產生彙整 Excel（所有掃描股票，含 TOP 20 / 候選進場 / 無訊號 標記）
+    _top_ids_set = set(top["stock_id"].tolist()) if "stock_id" in top.columns else set()
+    agg_df = all_candidates.copy()
+    agg_df["類型"] = agg_df.apply(
+        lambda r: "TOP 20" if str(r.get("stock_id", "")) in _top_ids_set
+        else ("候選進場" if r.get("entry_signal", False) else "無訊號"),
+        axis=1,
+    )
+    agg_xlsx = scan_dir / f"aggregate_{args.end}.xlsx"
+    try:
+        agg_df.to_excel(agg_xlsx, index=False, engine="openpyxl")
+        _safe_print(f"[aggregate] 彙整 Excel 已產生：{agg_xlsx.name}（{len(agg_df)} 支股票）")
+    except Exception as _xlsx_exc:
+        _safe_print(f"[aggregate] 彙整 Excel 寫入失敗：{_xlsx_exc}")
+
     # Sync full scan results to Notion (all stocks; top N marked as "TOP 20")
     if notion_enabled():
         try:
             _top_ids = set(top["stock_id"].tolist()) if "stock_id" in top.columns else set()
-            sync_scan_results(
+            _ok, _fail = sync_scan_results(
                 all_candidates, pd.DataFrame(), args.end,
                 top_stock_ids=_top_ids,
             )
-            _safe_print(f"[aggregate] Notion 同步完成，共 {len(all_candidates)} 筆（TOP 20 標記 {len(_top_ids)} 筆）")
+            _safe_print(f"[aggregate] Notion 同步完成，共 {len(all_candidates)} 筆（成功 {_ok}，失敗 {_fail}）")
             if args.notify and os.getenv("DISCORD_WEBHOOK_URL"):
                 TS = _cst_now()
-                send_discord_messages([
-                    f"✅ **Notion 同步完成** · {TS} CST\n"
-                    f"共 `{len(all_candidates)}` 筆已上傳（TOP 20 標記 `{len(_top_ids)}` 筆）"
-                ])
+                if _ok > 0:
+                    send_discord_messages([
+                        f"✅ **Notion 同步完成** · {TS} CST\n"
+                        f"成功 `{_ok}` 筆，失敗 `{_fail}` 筆（TOP 20 標記 `{len(_top_ids)}` 筆）"
+                    ])
+                else:
+                    send_discord_messages([
+                        f"⚠️ **Notion 同步失敗** · {TS} CST\n"
+                        f"全部 `{_fail}` 筆寫入失敗（401 Unauthorized）\n"
+                        f"請確認 GitHub Secrets 的 `NOTION_TOKEN` 是否為正確的 `secret_xxx...` 格式"
+                    ])
         except Exception as _exc:
             _safe_print(f"[aggregate] Notion 同步失敗（不影響主流程）: {_exc}")
             if args.notify and os.getenv("DISCORD_WEBHOOK_URL"):
