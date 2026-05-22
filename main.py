@@ -2661,17 +2661,24 @@ def run_aggregate(args: argparse.Namespace) -> None:
     if notion_enabled():
         try:
             _top_ids = set(top["stock_id"].tolist()) if "stock_id" in top.columns else set()
-            sync_scan_results(
+            _ok, _fail = sync_scan_results(
                 all_candidates, pd.DataFrame(), args.end,
                 top_stock_ids=_top_ids,
             )
-            _safe_print(f"[aggregate] Notion 同步完成，共 {len(all_candidates)} 筆（TOP 20 標記 {len(_top_ids)} 筆）")
+            _safe_print(f"[aggregate] Notion 同步完成，共 {len(all_candidates)} 筆（成功 {_ok}，失敗 {_fail}）")
             if args.notify and os.getenv("DISCORD_WEBHOOK_URL"):
                 TS = _cst_now()
-                send_discord_messages([
-                    f"✅ **Notion 同步完成** · {TS} CST\n"
-                    f"共 `{len(all_candidates)}` 筆已上傳（TOP 20 標記 `{len(_top_ids)}` 筆）"
-                ])
+                if _ok > 0:
+                    send_discord_messages([
+                        f"✅ **Notion 同步完成** · {TS} CST\n"
+                        f"成功 `{_ok}` 筆，失敗 `{_fail}` 筆（TOP 20 標記 `{len(_top_ids)}` 筆）"
+                    ])
+                else:
+                    send_discord_messages([
+                        f"⚠️ **Notion 同步失敗** · {TS} CST\n"
+                        f"全部 `{_fail}` 筆寫入失敗（401 Unauthorized）\n"
+                        f"請確認 GitHub Secrets 的 `NOTION_TOKEN` 是否為正確的 `secret_xxx...` 格式"
+                    ])
         except Exception as _exc:
             _safe_print(f"[aggregate] Notion 同步失敗（不影響主流程）: {_exc}")
             if args.notify and os.getenv("DISCORD_WEBHOOK_URL"):
