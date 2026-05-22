@@ -90,9 +90,16 @@ def _flatten_yf(raw: pd.DataFrame, yf_ticker: str, sid: str) -> pd.DataFrame | N
     """Extract one stock's OHLCV from a possibly-MultiIndex yfinance result."""
     try:
         if isinstance(raw.columns, pd.MultiIndex):
-            if yf_ticker not in raw.columns.get_level_values(0):
+            lvl0 = raw.columns.get_level_values(0)
+            lvl1 = raw.columns.get_level_values(1)
+            if yf_ticker in lvl0:
+                # Old yfinance: (Ticker, Price)
+                df = raw[yf_ticker].copy()
+            elif yf_ticker in lvl1:
+                # New yfinance >=0.2.38: (Price, Ticker)
+                df = raw.xs(yf_ticker, axis=1, level=1).copy()
+            else:
                 return None
-            df = raw[yf_ticker].copy()
         else:
             df = raw.copy()
 
