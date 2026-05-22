@@ -379,6 +379,9 @@ def main() -> None:
                              "(e.g. 2330,2317,0050)")
     parser.add_argument("--skip-market", action="store_true",
                         help="skip TAIEX download (market context columns will be NaN)")
+    parser.add_argument("--format",      default="parquet",
+                        choices=["csv", "parquet", "both"],
+                        help="輸出格式（預設 parquet，比 CSV 小 5–8 倍，可直接 commit 進 GitHub）")
     args = parser.parse_args()
 
     out_dir = Path(args.output)
@@ -459,14 +462,25 @@ def main() -> None:
 
     # 4. Save
     print("\n💾 合併並儲存...", flush=True)
-    combined = pd.concat(all_frames, ignore_index=True)
+    combined  = pd.concat(all_frames, ignore_index=True)
     today_str = date.today().strftime("%Y-%m-%d")
-    out_path  = out_dir / f"historical_{args.period}_{today_str}.csv"
-    combined.to_csv(out_path, index=False, encoding="utf-8-sig")
+    saved: list[Path] = []
+
+    if args.format in ("parquet", "both"):
+        out_parquet = out_dir / f"historical_{args.period}_{today_str}.parquet"
+        combined.to_parquet(out_parquet, index=False, engine="pyarrow", compression="snappy")
+        saved.append(out_parquet)
+        print(f"   Parquet：{out_parquet}  ({out_parquet.stat().st_size // 1024 / 1024:.1f} MB)")
+
+    if args.format in ("csv", "both"):
+        out_csv = out_dir / f"historical_{args.period}_{today_str}.csv"
+        combined.to_csv(out_csv, index=False, encoding="utf-8-sig")
+        saved.append(out_csv)
+        print(f"   CSV：{out_csv}  ({out_csv.stat().st_size // 1024 / 1024:.1f} MB)")
 
     # Summary stats
-    total    = len(combined)
-    n_stocks = combined["stock_id"].nunique()
+    total     = len(combined)
+    n_stocks  = combined["stock_id"].nunique()
     n_labeled = int(combined["label_5d"].notna().sum())
     pos_rate  = float((combined["label_5d"].dropna() == 1).mean())
     elapsed   = time.time() - t_start
@@ -476,7 +490,8 @@ def main() -> None:
     print(f"   總筆數    ：{total:>10,}  ({n_stocks} 支股票)")
     print(f"   有標籤筆數：{n_labeled:>10,}")
     print(f"   label_5d 正樣本比例：{pos_rate:.1%}")
-    print(f"   輸出檔案：{out_path}")
+    for p in saved:
+        print(f"   輸出：{p}")
     print(f"{'='*50}")
 
 
