@@ -7,12 +7,6 @@ name: 全市場掃描 (接力掃描，每小時繼續)
 # 20:00 CST 由 full_market_aggregate.yml 彙整 TOP 20 → Discord
 
 on:
-  schedule:
-    - cron: "0 7  * * 1-5"   # 15:00 CST
-    - cron: "0 8  * * 1-5"   # 16:00 CST
-    - cron: "0 9  * * 1-5"   # 17:00 CST
-    - cron: "0 10 * * 1-5"   # 18:00 CST
-    - cron: "0 11 * * 1-5"   # 19:00 CST
   workflow_dispatch:
 
 env:

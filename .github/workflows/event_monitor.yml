@@ -1,8 +1,6 @@
 name: 盤中事件監控 (09:00–13:30 CST)
 
 on:
-  schedule:
-    - cron: "50 0 * * 1-5"    # UTC 00:50 = CST 08:50，提早10分鐘確保準時
   workflow_dispatch:
 
 env:

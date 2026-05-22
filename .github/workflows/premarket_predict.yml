@@ -1,8 +1,6 @@
 name: 盤前預測 (08:00 CST)
 
 on:
-  schedule:
-    - cron: "0 0 * * 1-5"    # UTC 00:00 = CST 08:00，週一至週五
   workflow_dispatch:
 
 env:
