@@ -514,6 +514,7 @@ def collect_signals(
     start_date: str,
     end_date: str,
     workers: int,
+    checkpoint_path: "str | None" = None,
 ) -> tuple[dict[str, pd.DataFrame], list[pd.DataFrame], list[str], bool]:
     """Returns (signals_by_stock, signal_frames, load_errors, quota_exhausted).
 
@@ -586,6 +587,7 @@ def collect_signals(
         "f_score",
     ]
     _signal_cols_present: list[str] = []  # resolved on first result
+    _checkpoint_written = False           # tracks whether checkpoint header was written
     stock_records = stock_list.to_dict("records")
     total = len(stock_records)
     done = 0
@@ -609,6 +611,20 @@ def collect_signals(
             if not _signal_cols_present:
                 _signal_cols_present = [c for c in _signal_cols if c in signal_frame.columns]
             signal_frames.append(signal_frame[_signal_cols_present])
+            # Incremental checkpoint: write the latest row for this stock immediately.
+            # Runs in the main thread (as_completed loop) so no lock needed.
+            # This ensures scanned data is preserved even if the process is
+            # interrupted mid-scan by quota exhaustion, IP throttle, or crash.
+            if checkpoint_path:
+                try:
+                    _row = signal_frame.iloc[[-1]].copy()
+                    _mode = "a" if _checkpoint_written else "w"
+                    _row.to_csv(checkpoint_path, mode=_mode, header=not _checkpoint_written,
+                                index=False, encoding="utf-8-sig")
+                    _checkpoint_written = True
+                except Exception as _cp_exc:
+                    print(f"[collect_signals] checkpoint write failed for {stock_id}: {_cp_exc}",
+                          file=sys.stderr)
     return signals_by_stock, signal_frames, load_errors, _quota_event.is_set()
 
 
@@ -625,7 +641,10 @@ def build_daily_snapshot(
     market = prepare_market_frame(market_raw, config)
 
     universe = load_universe(args, client)
-    signals_by_stock, _, load_errors, quota_exhausted = collect_signals(universe, client, market, config, start_date, end_date_text, args.workers)
+    signals_by_stock, _, load_errors, quota_exhausted = collect_signals(
+        universe, client, market, config, start_date, end_date_text, args.workers,
+        checkpoint_path=getattr(args, "checkpoint_csv", None),
+    )
     snapshot = latest_signal_snapshot(signals_by_stock)
     breadth = compute_market_breadth(snapshot)
     if load_errors:
@@ -1708,10 +1727,15 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         gap_file = scan_dir / f"_seq_{token_idx}.csv"
         remaining_univ.to_csv(gap_file, index=False)
 
+        token_csv = scan_dir / f"batch_seq{token_idx}_{today}.csv"
+        _ckpt_csv = scan_dir / f"_ckpt_seq{token_idx}_{today}.csv"
+        _ckpt_csv.unlink(missing_ok=True)  # start fresh for this scan run
+
         scan_args = _copy.copy(args)
         scan_args.stocks = str(gap_file)
         scan_args.batch_index = -1
         scan_args.notify = False
+        scan_args.checkpoint_csv = str(_ckpt_csv)
 
         _scan_failed = False
         try:
@@ -1782,19 +1806,23 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 attempted_csv, index=False, encoding="utf-8-sig"
             )
 
-        # Save this token's raw results immediately — no sorting, no merging with other tokens.
-        # Use the full snapshot (all scanned stocks) so Notion receives every stock as a DB row,
-        # not just the candidates/watchlist. Falls back to candidates+watchlist if snapshot absent.
-        full_snapshot = breadth.pop("_snapshot", pd.DataFrame())
-        if not full_snapshot.empty:
-            raw_df = full_snapshot.copy()
-        elif not watchlist.empty:
-            raw_df = pd.concat([candidates, watchlist], ignore_index=True)
+        # Save this token's raw results immediately.
+        # Primary: incremental checkpoint written stock-by-stock during scan (preserves data
+        # even if the process crashes or quota exhausts mid-scan).
+        # Fallback: in-memory full snapshot, then candidates/watchlist.
+        if _ckpt_csv.exists():
+            raw_df = pd.read_csv(_ckpt_csv, encoding="utf-8-sig").drop_duplicates(subset=["stock_id"])
+            _ckpt_csv.unlink(missing_ok=True)
         else:
-            raw_df = candidates.copy()
-        token_csv = scan_dir / f"batch_seq{token_idx}_{today}.csv"
+            full_snapshot = breadth.pop("_snapshot", pd.DataFrame())
+            if not full_snapshot.empty:
+                raw_df = full_snapshot.copy()
+            elif not watchlist.empty:
+                raw_df = pd.concat([candidates, watchlist], ignore_index=True)
+            else:
+                raw_df = candidates.copy()
         if token_csv.exists():
-            # Append to existing file if this token ran again (e.g., fill-gaps re-run)
+            # Merge with previous run's data for the same account (fill-gaps / re-run)
             prev = pd.read_csv(token_csv, encoding="utf-8-sig")
             raw_df = pd.concat([prev, raw_df], ignore_index=True).drop_duplicates(subset=["stock_id"])
         raw_df.to_csv(token_csv, index=False, encoding="utf-8-sig")
