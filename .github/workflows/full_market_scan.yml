@@ -8,6 +8,15 @@ name: 全市場掃描 (接力掃描，每小時繼續)
 
 on:
   workflow_dispatch:
+    inputs:
+      force_rescan:
+        description: "強制重置今日進度重新掃描（忽略 cache）"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -39,6 +48,13 @@ jobs:
           key: finmind-scan-${{ steps.date.outputs.date }}-${{ github.run_id }}
           restore-keys: |
             finmind-scan-${{ steps.date.outputs.date }}-
+
+      - name: 強制重置今日進度（force_rescan=true 時）
+        if: ${{ inputs.force_rescan == 'true' }}
+        run: |
+          DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
+          rm -f "output/full_scan/_attempted_${DATE}.csv"
+          echo "已刪除 _attempted_${DATE}.csv，將從頭開始掃描"
 
       - name: 檢查今日是否已全部掃完
         id: check_done
