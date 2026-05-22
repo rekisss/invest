@@ -1652,15 +1652,19 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 ])
             continue
 
+        # Wait between account switches to let FinMind's IP-based rate limiter cool down.
+        # After account 0 makes hundreds of rapid calls, the server may temporarily block
+        # the runner's IP even for different tokens. 30 s is enough to clear the burst window.
+        if token_idx > 0:
+            _safe_print(f"[sequential] 帳號 {token_idx}: 等待 30 秒讓 FinMind IP 限流冷卻…")
+            time.sleep(30)
+
         os.environ["FINMIND_TOKEN"] = token
         token_client = FinMindClient(cache_dir=client.cache_dir)
 
         # Re-probe quota right before scanning — the pre-run cache may be stale if a
         # previous token exhausted its quota during the scan (cache was built before any scan).
-        _pk = _env_key_map.get(token_idx, f"FINMIND_TOKEN_{token_idx}")
         _re_ok, _re_msg = probe_batch_quota(token_client)
-        os.environ["FINMIND_TOKEN"] = orig_env_token
-        os.environ["FINMIND_TOKEN"] = token
         if not _re_ok:
             _safe_print(f"[sequential] 帳號 {token_idx}: 重新探測配額不足，跳過 ({_re_msg})")
             if os.getenv("DISCORD_WEBHOOK_URL"):
