@@ -2721,7 +2721,7 @@ def run_aggregate(args: argparse.Namespace) -> None:
         else ("候選進場" if r.get("entry_signal", False) else "無訊號"),
         axis=1,
     )
-    agg_xlsx = scan_dir / f"aggregate_{args.end}.xlsx"
+    agg_xlsx = batch_dir / f"aggregate_{args.end}.xlsx"
     try:
         agg_df.to_excel(agg_xlsx, index=False, engine="openpyxl")
         _safe_print(f"[aggregate] 彙整 Excel 已產生：{agg_xlsx.name}（{len(agg_df)} 支股票）")
