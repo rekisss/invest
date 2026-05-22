@@ -89,14 +89,6 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: 等待配額重置（10 分鐘，確保整點後額度充足）
-        if: steps.guard.outputs.skip == 'false'
-        run: |
-          TS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
-          echo "⏳ ${TS} CST — 等待 10 分鐘讓 FinMind 整點配額完全重置…"
-          sleep 600
-          echo "✅ 等待完成，開始掃描"
-
       - name: 接力掃描（依序使用三帳號，額度用完自動切換）
         if: steps.guard.outputs.skip == 'false'
         continue-on-error: true

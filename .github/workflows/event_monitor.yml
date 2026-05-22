@@ -32,7 +32,7 @@ jobs:
           HOUR=$(date -u +%H)
           MIN=$(date -u +%M)
           TOTAL=$(( HOUR * 60 + MIN ))
-          if [ "$TOTAL" -lt 50 ] || [ "$TOTAL" -gt 330 ]; then
+          if [ "$TOTAL" -lt 50 ] || [ "$TOTAL" -ge 330 ]; then
             echo "Current UTC time is $(date -u +%H:%M), outside Taiwan market hours. Skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
