@@ -1677,37 +1677,9 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         os.environ["FINMIND_TOKEN"] = token
         token_client = FinMindClient(cache_dir=client.cache_dir)
 
-        _IP_RETRY_INTERVAL = 60   # seconds between each probe retry
-        _IP_RETRY_MAX_SECS = 480  # give up after 8 minutes of IP-throttle retries
-        _ip_waited = 0
-        _re_ok, _re_msg = probe_batch_quota(token_client)
-        while not _re_ok and "IP 限流" in _re_msg and _ip_waited < _IP_RETRY_MAX_SECS:
-            _safe_print(
-                f"[sequential] 帳號 {token_idx}: IP 仍在限流（{_re_msg}），"
-                f"等待 {_IP_RETRY_INTERVAL}s 後再探測…（已等 {_ip_waited}s / 上限 {_IP_RETRY_MAX_SECS}s）"
-            )
-            if os.getenv("DISCORD_WEBHOOK_URL"):
-                send_discord_messages([
-                    f"⏳ **帳號 {token_idx} IP 限流中** · {_cst_now()} CST\n"
-                    f"已等 `{_ip_waited}s`，再等 `{_IP_RETRY_INTERVAL}s` 後重試探測"
-                ])
-            time.sleep(_IP_RETRY_INTERVAL)
-            _ip_waited += _IP_RETRY_INTERVAL
-            token_client = FinMindClient(cache_dir=client.cache_dir)
-            _re_ok, _re_msg = probe_batch_quota(token_client)
-
-        if not _re_ok:
-            # Permanent quota exhaustion (or IP still throttled after 8 min — rare)
-            _is_ip = "IP 限流" in _re_msg
-            _reason = f"IP 限流超時（等待 {_ip_waited}s 仍未冷卻）" if _is_ip else f"配額已耗盡（{_re_msg}）"
-            _safe_print(f"[sequential] 帳號 {token_idx}: {_reason}，跳過")
-            if os.getenv("DISCORD_WEBHOOK_URL"):
-                send_discord_messages([
-                    f"⏰ **帳號 {token_idx} 跳過** · {_cst_now()} CST\n{_reason}"
-                ])
-            os.environ["FINMIND_TOKEN"] = orig_env_token
-            continue
-
+        # 不再用切換前 probe 決定跳過，避免誤判「有額度帳號」為無額度。
+        # 直接進入實際掃描；若途中真的配額耗盡，build_daily_snapshot 會回報
+        # quota_exhausted，並由後續邏輯切換下一帳號。
         n_rem = len(remaining_ids)
         _safe_print(f"[sequential] 帳號 {token_idx}: 額度正常，開始掃描 {n_rem} 支")
         if os.getenv("DISCORD_WEBHOOK_URL"):
