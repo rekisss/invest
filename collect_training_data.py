@@ -90,9 +90,16 @@ def _flatten_yf(raw: pd.DataFrame, yf_ticker: str, sid: str) -> pd.DataFrame | N
     """Extract one stock's OHLCV from a possibly-MultiIndex yfinance result."""
     try:
         if isinstance(raw.columns, pd.MultiIndex):
-            if yf_ticker not in raw.columns.get_level_values(0):
+            lvl0 = raw.columns.get_level_values(0)
+            lvl1 = raw.columns.get_level_values(1)
+            if yf_ticker in lvl0:
+                # Old yfinance: (Ticker, Price)
+                df = raw[yf_ticker].copy()
+            elif yf_ticker in lvl1:
+                # New yfinance >=0.2.38: (Price, Ticker)
+                df = raw.xs(yf_ticker, axis=1, level=1).copy()
+            else:
                 return None
-            df = raw[yf_ticker].copy()
         else:
             df = raw.copy()
 
@@ -463,14 +470,48 @@ def main() -> None:
     # 4. Save
     print("\n💾 合併並儲存...", flush=True)
     combined  = pd.concat(all_frames, ignore_index=True)
+
+    # Dedup: same stock × same date should appear only once
+    before = len(combined)
+    combined = combined.drop_duplicates(subset=["stock_id", "date"], keep="last")
+    dropped = before - len(combined)
+    if dropped:
+        print(f"   去除重複筆數：{dropped:,}（重複 stock_id + date）")
+
     today_str = date.today().strftime("%Y-%m-%d")
     saved: list[Path] = []
 
     if args.format in ("parquet", "both"):
+        # ── Combined parquet (backward compat) ──────────────────────────────
         out_parquet = out_dir / f"historical_{args.period}_{today_str}.parquet"
         combined.to_parquet(out_parquet, index=False, engine="pyarrow", compression="snappy")
         saved.append(out_parquet)
         print(f"   Parquet：{out_parquet}  ({out_parquet.stat().st_size // 1024 / 1024:.1f} MB)")
+
+        # ── features_*.parquet — no labels or forward returns ────────────────
+        _LABEL_COLS = [
+            "forward_return_5d", "forward_return_10d", "forward_return_20d",
+            "label_5d", "label_10d",
+        ]
+        feat_cols   = [c for c in combined.columns if c not in _LABEL_COLS]
+        features_df = combined[feat_cols]
+        feat_path   = out_dir / f"features_{args.period}_{today_str}.parquet"
+        features_df.to_parquet(feat_path, index=False, engine="pyarrow", compression="snappy")
+        saved.append(feat_path)
+        print(f"   Features：{feat_path}  ({feat_path.stat().st_size // 1024 / 1024:.1f} MB)"
+              f"  [{len(feat_cols)} 欄，無 label/forward_return]")
+
+        # ── labels_*.parquet — labels only, NaN rows removed ─────────────────
+        labels_df = (
+            combined[["stock_id", "date"] + _LABEL_COLS]
+            .dropna(subset=["label_5d"])
+            .reset_index(drop=True)
+        )
+        label_path = out_dir / f"labels_{args.period}_{today_str}.parquet"
+        labels_df.to_parquet(label_path, index=False, engine="pyarrow", compression="snappy")
+        saved.append(label_path)
+        print(f"   Labels ：{label_path}  ({label_path.stat().st_size // 1024 / 1024:.1f} MB)"
+              f"  [{len(labels_df):,} 筆，NaN label 已移除]")
 
     if args.format in ("csv", "both"):
         out_csv = out_dir / f"historical_{args.period}_{today_str}.csv"
