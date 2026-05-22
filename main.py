@@ -2666,8 +2666,21 @@ def run_aggregate(args: argparse.Namespace) -> None:
                 top_stock_ids=_top_ids,
             )
             _safe_print(f"[aggregate] Notion 同步完成，共 {len(all_candidates)} 筆（TOP 20 標記 {len(_top_ids)} 筆）")
+            if args.notify and os.getenv("DISCORD_WEBHOOK_URL"):
+                TS = _cst_now()
+                send_discord_messages([
+                    f"✅ **Notion 同步完成** · {TS} CST\n"
+                    f"共 `{len(all_candidates)}` 筆已上傳（TOP 20 標記 `{len(_top_ids)}` 筆）"
+                ])
         except Exception as _exc:
             _safe_print(f"[aggregate] Notion 同步失敗（不影響主流程）: {_exc}")
+            if args.notify and os.getenv("DISCORD_WEBHOOK_URL"):
+                TS = _cst_now()
+                send_discord_messages([
+                    f"⚠️ **Notion 同步失敗** · {TS} CST\n"
+                    f"錯誤：`{_exc}`\n"
+                    f"請確認：1) Notion database 已連結 Integration  2) NOTION_DATABASE_ID 正確"
+                ])
 
     # Clean up batch files after successful aggregation
     for p in csvs:
