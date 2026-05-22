@@ -1,8 +1,6 @@
 name: 盤後總結 (14:15 CST)
 
 on:
-  schedule:
-    - cron: "30 6 * * 1-5"   # UTC 06:30 = CST 14:30，fallback（cron-job.org 主排程 14:15）
   workflow_dispatch:
 
 env:
