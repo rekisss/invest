@@ -61,28 +61,51 @@ def _add_derived(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _find_latest_parquet(directory: str) -> Path:
-    files = sorted(Path(directory).glob("historical_*.parquet"))
-    if not files:
-        raise FileNotFoundError(f"No historical_*.parquet found in {directory}")
-    return files[-1]
+    """Prefer features_*.parquet (clean split); fall back to historical_*.parquet."""
+    d = Path(directory)
+    feat_files = sorted(d.glob("features_*.parquet"))
+    if feat_files:
+        return feat_files[-1]
+    hist_files = sorted(d.glob("historical_*.parquet"))
+    if hist_files:
+        return hist_files[-1]
+    raise FileNotFoundError(f"No features_*.parquet or historical_*.parquet in {directory}")
 
 
 def load_and_prepare(data_path: str | Path, target: str) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
     """Load parquet, add derived features, drop rows without label.
-    Returns (X, y, dates)."""
-    df = pd.read_parquet(data_path)
+
+    Supports two modes:
+    - features_*.parquet → auto-loads matching labels_*.parquet and inner-joins
+    - historical_*.parquet (legacy) → filters NaN labels inline
+    Returns (X, y, dates).
+    """
+    p = Path(data_path)
+
+    if p.name.startswith("features_"):
+        label_path = p.parent / p.name.replace("features_", "labels_")
+        if not label_path.exists():
+            raise FileNotFoundError(f"Expected labels file not found: {label_path}")
+        feat_df  = pd.read_parquet(p)
+        label_df = pd.read_parquet(label_path)[["stock_id", "date", target]]
+        df = feat_df.merge(label_df, on=["stock_id", "date"], how="inner")
+        print(f"   Loaded features ({len(feat_df):,}) + labels ({len(label_df):,}) → joined {len(df):,} rows")
+    else:
+        df = pd.read_parquet(p)
+        before = len(df)
+        df = df.drop_duplicates(subset=["stock_id", "date"], keep="last")
+        if len(df) < before:
+            print(f"   去除重複 {before - len(df):,} 筆")
+        df = df[df[target].notna()].reset_index(drop=True)
+
     df = df.sort_values(["date", "stock_id"]).reset_index(drop=True)
     df = _add_derived(df)
-
-    # Drop rows where target label is NaN (last N days with no forward return)
-    df = df[df[target].notna()].reset_index(drop=True)
 
     missing = [c for c in _FEATURE_COLS if c not in df.columns]
     if missing:
         raise ValueError(f"Missing feature columns: {missing}")
 
     X = df[_FEATURE_COLS].copy()
-    # Cast booleans to int for XGBoost
     for col in X.select_dtypes(include="bool").columns:
         X[col] = X[col].astype(np.int8)
     X = X.fillna(0)
