@@ -372,6 +372,138 @@ def fetch_institutional_data(
     return result.sort_values("date").reset_index(drop=True)
 
 
+def fetch_market_institutional(
+    client: FinMindClient,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    """Fetch 三大法人現貨市場合計買賣超. Returns empty DataFrame on failure.
+
+    Uses FinMind TaiwanStockInstitutionalInvestors (market-level aggregate, no stock_id).
+    Returns columns: date, foreign_inst_norm, trust_inst_norm (rolling-normalised to [-1,1]).
+    """
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockInstitutionalInvestors",
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 三大法人市場合計取得失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+    if frame.empty:
+        return pd.DataFrame()
+
+    frame = frame.copy()
+    frame.columns = [c.lower().strip() for c in frame.columns]
+    frame["date"] = pd.to_datetime(frame["date"])
+
+    inst_col = next(
+        (c for c in frame.columns if c in ("institutional_investors", "name", "identity_type")),
+        None,
+    )
+    if inst_col is None:
+        return pd.DataFrame()
+
+    net_col = next((c for c in frame.columns if c in ("diff", "net")), None)
+    if net_col is None:
+        if "buy" in frame.columns and "sell" in frame.columns:
+            frame["buy"] = pd.to_numeric(frame["buy"], errors="coerce").fillna(0)
+            frame["sell"] = pd.to_numeric(frame["sell"], errors="coerce").fillna(0)
+            frame["diff"] = frame["buy"] - frame["sell"]
+            net_col = "diff"
+        else:
+            return pd.DataFrame()
+    frame[net_col] = pd.to_numeric(frame[net_col], errors="coerce").fillna(0)
+
+    inst_str = frame[inst_col].astype(str)
+    masks = {
+        "foreign_buy_net": inst_str.str.contains("外資|Foreign", na=False),
+        "trust_buy_net":   inst_str.str.contains("投信|Investment_Trust", na=False),
+    }
+
+    result: pd.DataFrame | None = None
+    for col_name, mask in masks.items():
+        if not mask.any():
+            continue
+        grp = (
+            frame.loc[mask]
+            .groupby("date", as_index=False)[net_col]
+            .sum()
+            .rename(columns={net_col: col_name})
+        )
+        result = grp if result is None else result.merge(grp, on="date", how="outer")
+
+    if result is None or result.empty:
+        return pd.DataFrame()
+
+    result = result.sort_values("date").reset_index(drop=True)
+
+    for raw_col, norm_col in [("foreign_buy_net", "foreign_inst_norm"), ("trust_buy_net", "trust_inst_norm")]:
+        if raw_col not in result.columns:
+            continue
+        rolling_max = result[raw_col].abs().rolling(30, min_periods=5).max().replace(0, float("nan"))
+        result[norm_col] = result[raw_col] / rolling_max
+
+    keep = ["date"] + [c for c in ("foreign_inst_norm", "trust_inst_norm") if c in result.columns]
+    out = result[keep].dropna(how="all", subset=[c for c in keep if c != "date"])
+    return out.reset_index(drop=True)
+
+
+def fetch_market_margin(
+    client: FinMindClient,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    """Fetch 融資融券餘額 for 0050 as market proxy. Returns empty DataFrame on failure.
+
+    Returns columns: date, margin_purchase_chg (5d pct change), short_sale_chg (5d pct change).
+    """
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockMarginPurchaseShortSale",
+            data_id="0050",
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 融資融券取得失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+    if frame.empty:
+        return pd.DataFrame()
+
+    frame = frame.copy()
+    frame.columns = [c.lower().strip() for c in frame.columns]
+    frame["date"] = pd.to_datetime(frame["date"])
+    frame = frame.sort_values("date").reset_index(drop=True)
+
+    margin_col = next(
+        (c for c in frame.columns if "marginpurchasebalance" in c or "margin_purchase_balance" in c
+         or ("margin" in c and "balance" in c and "short" not in c)),
+        None,
+    )
+    short_col = next(
+        (c for c in frame.columns if "shortsalebalance" in c or "short_sale_balance" in c
+         or ("short" in c and "balance" in c)),
+        None,
+    )
+
+    if margin_col is None and short_col is None:
+        return pd.DataFrame()
+
+    result = frame[["date"]].copy()
+    for src, feat in [(margin_col, "margin_purchase_chg"), (short_col, "short_sale_chg")]:
+        if src is not None:
+            series = pd.to_numeric(frame[src], errors="coerce")
+            result[feat] = series.pct_change(5)
+
+    keep = ["date"] + [c for c in ("margin_purchase_chg", "short_sale_chg") if c in result.columns]
+    out = result[keep].dropna(how="all", subset=[c for c in keep if c != "date"])
+    return out.reset_index(drop=True)
+
+
 def clean_cache(cache_dir: Path | str, max_age_days: int = 30) -> int:
     """Delete CSV cache files older than max_age_days. Returns count of deleted files."""
     cache_path = Path(cache_dir)
