@@ -51,16 +51,19 @@ def validate_finmind_token() -> tuple[bool, str]:
 def probe_batch_quota(client: "FinMindClient") -> tuple[bool, str]:
     """Probe TaiwanStockPrice quota before a batch scan.
 
-    Makes 3 uncached requests (different stocks) to verify the account has
-    meaningful remaining quota, not just 1 call left.  If any call hits a
-    permanent daily-limit error the account is considered exhausted.
-    Network errors are treated as OK to avoid falsely skipping batches.
+    Returns (True, msg)  — quota available, safe to scan.
+    Returns (False, msg) — either permanent quota exhaustion OR transient IP
+    throttle still active.  The caller is responsible for deciding whether to
+    wait-and-retry (IP throttle) or skip entirely (quota exhausted).
+
+    Callers can distinguish the two cases by checking whether "IP 限流" appears
+    in the returned message.
     """
     from datetime import datetime, timedelta
     probe_date = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
     today = datetime.now().strftime("%Y-%m-%d")
-    # 3 liquid large-caps — different stocks to prevent any server-side dedup
     _probe_ids = ["2330", "2317", "0050"]
+    _transient_hits = 0
     for _pid in _probe_ids:
         try:
             client.fetch_dataset(
@@ -72,13 +75,11 @@ def probe_batch_quota(client: "FinMindClient") -> tuple[bool, str]:
             )
         except RuntimeError as exc:
             msg = str(exc)
-            # Only permanent daily quota exhaustion returns False;
-            # transient rate-limits ("FinMind transient rate-limit ...", "FinMind rate limit ...")
-            # should NOT block the scan — they may clear by the time the scan starts.
             if "配額已耗盡" in msg or "upper limit" in msg.lower():
-                return False, f"⏰ FinMind 配額已耗盡，跳過此批次。({msg})"
-            # Transient error on one probe stock — stop probing but treat as OK
-            return True, "配額正常（暫時性限流，繼續）"
+                return False, f"配額已耗盡：{msg}"
+            # Transient IP throttle — count it and try the next probe stock
+            # immediately (no sleep here; the caller handles wait-and-retry).
+            _transient_hits += 1
         except requests.exceptions.HTTPError as exc:
             if exc.response is not None and exc.response.status_code == 402:
                 body = ""
@@ -87,11 +88,14 @@ def probe_batch_quota(client: "FinMindClient") -> tuple[bool, str]:
                 except Exception:
                     pass
                 if "upper limit" in body.lower() or "每日" in body or "daily" in body.lower():
-                    return False, f"⏰ FinMind 配額已耗盡（HTTP 402），跳過此批次。"
-                return True, "配額正常（暫時性 HTTP 402，繼續）"
-            return True, "配額正常（HTTP 錯誤忽略）"
+                    return False, "配額已耗盡（HTTP 402）"
+                _transient_hits += 1
+            else:
+                return True, "配額正常（HTTP 錯誤忽略）"
         except Exception:
             return True, "配額正常（探測失敗忽略）"
+    if _transient_hits >= 2:
+        return False, f"IP 限流中（{_transient_hits}/3 個探測均暫時性失敗）"
     return True, "配額正常"
 
 

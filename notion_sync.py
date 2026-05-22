@@ -363,3 +363,4 @@ def sync_scan_results(
                 print(f"[Notion] {result}")
 
     print(f"[Notion] 完成：成功 {ok_count} 筆，失敗 {fail_count} 筆")
+    return ok_count, fail_count
