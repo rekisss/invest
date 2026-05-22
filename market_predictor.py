@@ -37,6 +37,11 @@ _US_TICKERS = {
     "vix":     "^VIX",
     "dxy":     "DX-Y.NYB",
     "us10y":   "^TNX",
+    # Global macro additions
+    "gold":    "GC=F",
+    "oil":     "CL=F",
+    "us2y":    "^IRX",
+    "usdcny":  "CNY=X",
 }
 
 
@@ -115,6 +120,12 @@ _BASE_FEATURES = [
 _US_FEATURES = [
     "sp500_ret1", "sp500_ret5", "nasdaq_ret1", "vix",
     "sox_ret1", "dxy_ret1", "us10y_ret1",
+    "gold_ret1", "oil_ret1", "us2y_ret1", "usdcny_ret1",
+]
+
+_FUTURES_FEATURES = [
+    "futures_ret_1d", "futures_ret_5d", "futures_basis",
+    "futures_oi_chg", "futures_vol_ratio", "foreign_futures_net",
 ]
 
 
@@ -141,16 +152,37 @@ class MarketPredictor:
             merged[us_cols] = merged[us_cols].ffill()
         return merged
 
-    def fit(self, market_df: pd.DataFrame, us_df: pd.DataFrame | None = None) -> "MarketPredictor":
+    def _merge_external(self, base_df: pd.DataFrame, ext_df: pd.DataFrame, feat_cols: list[str]) -> pd.DataFrame:
+        """Left-join external features to base_df on date, forward-filling gaps."""
+        if ext_df.empty:
+            return base_df
+        base_df = base_df.copy()
+        ext = ext_df.copy()
+        base_df["date"] = pd.to_datetime(base_df["date"]).dt.normalize()
+        ext["date"] = pd.to_datetime(ext["date"]).dt.normalize()
+        merged = base_df.merge(ext[["date"] + [c for c in feat_cols if c in ext.columns]], on="date", how="left")
+        cols = [c for c in feat_cols if c in merged.columns]
+        if cols:
+            merged[cols] = merged[cols].ffill()
+        return merged
+
+    def fit(self, market_df: pd.DataFrame, us_df: pd.DataFrame | None = None,
+            futures_df: pd.DataFrame | None = None) -> "MarketPredictor":
         if not _DEPS_OK:
             return self
         df = _build_taiex_features(market_df.copy().sort_values("date").reset_index(drop=True))
         if us_df is not None and not us_df.empty:
             df = self._merge_us(df, us_df)
             self._us_available = True
+        if futures_df is not None and not futures_df.empty:
+            df = self._merge_external(df, futures_df, _FUTURES_FEATURES)
 
         df["target"] = (df["close"].shift(-self.horizon) > df["close"]).astype(float)
-        feat_cols = _BASE_FEATURES + [c for c in _US_FEATURES if c in df.columns]
+        feat_cols = (
+            _BASE_FEATURES
+            + [c for c in _US_FEATURES if c in df.columns]
+            + [c for c in _FUTURES_FEATURES if c in df.columns]
+        )
         df = df.dropna(subset=["target"])
 
         valid_cols = [c for c in feat_cols if c in df.columns and df[c].notna().sum() >= 20]
@@ -175,7 +207,8 @@ class MarketPredictor:
         self._trained = True
         return self
 
-    def predict_proba(self, market_df: pd.DataFrame, us_df: pd.DataFrame | None = None) -> dict[str, Any]:
+    def predict_proba(self, market_df: pd.DataFrame, us_df: pd.DataFrame | None = None,
+                      futures_df: pd.DataFrame | None = None) -> dict[str, Any]:
         default: dict[str, Any] = {
             "prob_up": 0.5, "confidence": "low", "label": "資料不足",
             "horizon": self.horizon, "trained": False, "us_features": False,
@@ -186,6 +219,8 @@ class MarketPredictor:
         df = _build_taiex_features(market_df.copy().sort_values("date").reset_index(drop=True))
         if us_df is not None and not us_df.empty:
             df = self._merge_us(df, us_df)
+        if futures_df is not None and not futures_df.empty:
+            df = self._merge_external(df, futures_df, _FUTURES_FEATURES)
 
         row = df[self._feature_cols].iloc[[-1]].fillna(self._medians)
         prob = float(self._model.predict_proba(row.values)[0, 1])
@@ -293,7 +328,14 @@ _CONF_EMOJI = {"high": "🟢", "medium": "🟡", "low": "⚪"}
 _LABEL_EMOJI = {"看多": "📈", "偏多": "↗", "看空": "📉", "偏空": "↘", "中性": "→"}
 
 
-def format_prediction_block(pred: dict[str, Any], breadth: dict[str, object] | None = None) -> str:
+def format_prediction_block(
+    pred: dict[str, Any],
+    breadth: dict[str, object] | None = None,
+    *,
+    futures_block: str = "",
+    news_block: str = "",
+    calendar_block: str = "",
+) -> str:
     if not pred.get("trained"):
         return ""
     prob = pred["prob_up"]
@@ -311,7 +353,17 @@ def format_prediction_block(pred: dict[str, Any], breadth: dict[str, object] | N
         f"`{label}` · 多方 `{prob_pct}` {_CONF_EMOJI.get(conf, '⚪')}",
         f"   `{bar}` 空方 `{(1-prob)*100:.0f}%`",
     ]
+    if futures_block:
+        lines.append("")
+        lines.append(futures_block)
     analysis = generate_analysis_text(pred, breadth)
     if analysis:
+        lines.append("")
         lines.append(analysis)
+    if news_block:
+        lines.append("")
+        lines.append(news_block)
+    if calendar_block:
+        lines.append("")
+        lines.append(calendar_block)
     return "\n".join(lines)

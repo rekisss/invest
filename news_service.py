@@ -266,6 +266,43 @@ def summarize_news(news_items: Iterable[dict[str, object]]) -> dict[str, object]
     }
 
 
+def fetch_market_news_sentiment(
+    news_client: "NewsClient",
+    days: int = 7,
+    limit: int = 20,
+) -> dict[str, object]:
+    """Fetch aggregate news sentiment for the Taiwan stock market overall."""
+    try:
+        news = news_client.fetch_stock_news(
+            stock_id="TAIEX",
+            name="台股大盤",
+            days=days,
+            limit=limit,
+        )
+        if news.empty:
+            return {}
+        return summarize_news(news.to_dict("records"))
+    except Exception as exc:
+        print(f"[news] 台股大盤情緒取得失敗（graceful skip）: {exc}")
+        return {}
+
+
+def format_market_news_block(sentiment: dict[str, object]) -> str:
+    """Format market-level news sentiment as a Discord block. Returns '' if empty."""
+    if not sentiment:
+        return ""
+    counts = sentiment.get("counts") or {}
+    pos   = int(counts.get("positive", 0))
+    neg   = int(counts.get("negative", 0))
+    total = pos + neg + int(counts.get("neutral", 0))
+    if total == 0:
+        return ""
+    overall = str(sentiment.get("sentiment", "neutral"))
+    label = {"positive": "偏多", "negative": "偏空"}.get(overall, "中性")
+    emoji = {"positive": "📈", "negative": "📉"}.get(overall, "→")
+    return f"📰 **市場情緒**（近7天台股新聞）\n   正面 `{pos}` 則 | 負面 `{neg}` 則 | {emoji} **{label}**"
+
+
 def _is_recent(value: object) -> bool:
     if not value:
         return False
