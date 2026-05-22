@@ -1657,8 +1657,8 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         # After account 0 makes hundreds of rapid calls, the server may temporarily block
         # the runner's IP even for different tokens. 30 s is enough to clear the burst window.
         if token_idx > 0:
-            _safe_print(f"[sequential] 帳號 {token_idx}: 等待 30 秒讓 FinMind IP 限流冷卻…")
-            time.sleep(30)
+            _safe_print(f"[sequential] 帳號 {token_idx}: 等待 90 秒讓 FinMind IP 限流冷卻…")
+            time.sleep(90)
 
         os.environ["FINMIND_TOKEN"] = token
         token_client = FinMindClient(cache_dir=client.cache_dir)
@@ -1779,6 +1779,14 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             raw_df = pd.concat([prev, raw_df], ignore_index=True).drop_duplicates(subset=["stock_id"])
         raw_df.to_csv(token_csv, index=False, encoding="utf-8-sig")
         raw_df.to_excel(token_csv.with_suffix(".xlsx"), index=False, engine="openpyxl")
+
+        if raw_df.empty and len(remaining_univ) > 0:
+            _safe_print(f"[sequential] 帳號 {token_idx}: ⚠️ 掃描 0 支有效資料（IP 仍在限流中），本輪略過")
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"⚠️ **帳號 {token_idx} 掃描 0 支資料** · {_cst_now()} CST\n"
+                    f"IP 仍在限流中或配額不足，已略過儲存，下輪繼續接力"
+                ])
 
         n_actual = int(breadth.get("total_stocks", 0))
         _cand_n = len(candidates)
