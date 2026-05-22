@@ -55,6 +55,7 @@ jobs:
           git add training_data/
           git diff --cached --quiet || git commit -m \
             "data: training data ${{ inputs.period }} $(date +%Y-%m-%d) [skip ci]"
+          git pull --rebase origin main
           git push
 
       - name: Upload training data as artifact
