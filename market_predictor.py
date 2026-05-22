@@ -186,7 +186,9 @@ class MarketPredictor:
         df = df.dropna(subset=["target"])
 
         valid_cols = [c for c in feat_cols if c in df.columns and df[c].notna().sum() >= 20]
-        df_clean = df[valid_cols].fillna(df[valid_cols].median())
+        # Replace inf before fillna — fillna only handles NaN, not inf
+        df_finite = df[valid_cols].replace([np.inf, -np.inf], np.nan)
+        df_clean = df_finite.fillna(df_finite.median())
         y = df.loc[df_clean.index, "target"].values if len(df_clean) < len(df) else df["target"].values
 
         if len(df_clean) < self.min_train_rows or len(np.unique(y)) < 2:
@@ -222,7 +224,7 @@ class MarketPredictor:
         if futures_df is not None and not futures_df.empty:
             df = self._merge_external(df, futures_df, _FUTURES_FEATURES)
 
-        row = df[self._feature_cols].iloc[[-1]].fillna(self._medians)
+        row = df[self._feature_cols].iloc[[-1]].replace([np.inf, -np.inf], np.nan).fillna(self._medians)
         prob = float(self._model.predict_proba(row.values)[0, 1])
 
         if prob >= 0.63:
