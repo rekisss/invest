@@ -1700,8 +1700,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     f"⏰ **帳號 {token_idx} 開掃前配額不足** · {_cst_now()} CST\n{_pre_msg}"
                 ])
             os.environ["FINMIND_TOKEN"] = orig_env_token
-            continue
-
+            continuemain
         # 不再用切換前 probe 決定跳過，避免誤判「有額度帳號」為無額度。
         # 直接進入實際掃描；若途中真的配額耗盡，build_daily_snapshot 會回報
         # quota_exhausted，並由後續邏輯切換下一帳號。
