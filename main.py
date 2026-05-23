@@ -1707,6 +1707,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     f"{_pre_msg}\n改以實際掃描再確認，避免誤判略過"
                 ])
 
+
         # 不再用切換前 probe 決定跳過，避免誤判「有額度帳號」為無額度。
         # 直接進入實際掃描；若途中真的配額耗盡，build_daily_snapshot 會回報
         # quota_exhausted，並由後續邏輯切換下一帳號。
