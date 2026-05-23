@@ -1683,6 +1683,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     for token_idx, token in token_list:
         if not remaining_ids:
             break
+        _remaining_before = len(remaining_ids)
 
         # Skip immediately if this token already confirmed quota-exhausted via fetch_stock_info
         if _env_key_map.get(token_idx) in _quota_exhausted_keys:
@@ -1859,6 +1860,8 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             raw_df = pd.concat([prev, raw_df], ignore_index=True).drop_duplicates(subset=["stock_id"])
         raw_df.to_csv(token_csv, index=False, encoding="utf-8-sig")
         raw_df.to_excel(token_csv.with_suffix(".xlsx"), index=False, engine="openpyxl")
+        _remaining_after = len(remaining_ids)
+        _delta_done = _remaining_before - _remaining_after
 
         if raw_df.empty and len(remaining_univ) > 0:
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚠️ 掃描 0 支有效資料（IP 仍在限流中），本輪略過")
@@ -1884,7 +1887,8 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚠️ 實際掃 0 支（API 可能靜默限流），本輪略過儲存")
         _safe_print(
             f"[sequential] 帳號 {token_idx}: 完成，實際掃 {n_actual} 支，"
-            f"候選 {_cand_n}，觀察 {_watch_n}，累計嘗試 {len(already_scanned)}/{total}"
+            f"候選 {_cand_n}，觀察 {_watch_n}，"
+            f"本帳號接續完成 {_delta_done} 支，累計嘗試 {len(already_scanned)}/{total}"
         )
         if os.getenv("DISCORD_WEBHOOK_URL"):
             _status = "✅" if _cand_n > 0 else "🔵"
@@ -1892,6 +1896,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             send_discord_messages([
                 f"{_status} **帳號 {token_idx} 完成{_quota_note}** · {_cst_now()} CST\n"
                 f"掃 `{n_actual}` 支 | 候選 `{_cand_n}` | 觀察 `{_watch_n}`\n"
+                f"接續完成 `{_delta_done}` 支（{_remaining_before} → {_remaining_after}）\n"
                 f"全局累計 `{len(already_scanned)}/{total}` 支"
             ])
 
