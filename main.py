@@ -1632,6 +1632,19 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         (2, os.getenv("FINMIND_TOKEN_3")),
     ]
     token_list = [(i, t) for i, t in token_list if t]
+    # Detect duplicated tokens (same account key copied into multiple env vars).
+    _token_to_idxs: dict[str, list[int]] = {}
+    for _i, _t in token_list:
+        _token_to_idxs.setdefault(str(_t), []).append(_i)
+    _dup_groups = [idxs for idxs in _token_to_idxs.values() if len(idxs) > 1]
+    if _dup_groups:
+        _dup_msg = "；".join([",".join([str(x) for x in g]) for g in _dup_groups])
+        _safe_print(f"[sequential] ⚠️ 偵測到重複 token（帳號索引：{_dup_msg}），可能不是三個不同帳號")
+        if os.getenv("DISCORD_WEBHOOK_URL"):
+            send_discord_messages([
+                f"⚠️ **偵測到重複 FINMIND_TOKEN** · {_cst_now()} CST\n"
+                f"帳號索引 `{_dup_msg}` 使用相同 token，請確認三個帳號是否不同"
+            ])
 
     round_new = 0
     orig_env_token = os.environ.get("FINMIND_TOKEN", "")
@@ -1677,6 +1690,17 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         os.environ["FINMIND_TOKEN"] = token
         token_client = FinMindClient(cache_dir=client.cache_dir)
 
+        # 每次帳號正式開掃前都重新探測一次該帳號配額（使用最新狀態）。
+        # 只在「明確每日配額耗盡」時跳過；IP 限流/暫時性失敗仍讓其嘗試掃描。
+        _pre_ok, _pre_msg = probe_batch_quota(token_client)
+        if not _pre_ok and ("配額已耗盡" in _pre_msg or "upper limit" in _pre_msg.lower()):
+            _safe_print(f"[sequential] 帳號 {token_idx}: 開掃前配額檢查不足，略過（{_pre_msg}）")
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"⏰ **帳號 {token_idx} 開掃前配額不足** · {_cst_now()} CST\n{_pre_msg}"
+                ])
+            os.environ["FINMIND_TOKEN"] = orig_env_token
+            continuemain
         # 不再用切換前 probe 決定跳過，避免誤判「有額度帳號」為無額度。
         # 直接進入實際掃描；若途中真的配額耗盡，build_daily_snapshot 會回報
         # quota_exhausted，並由後續邏輯切換下一帳號。
@@ -1703,11 +1727,18 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         scan_args.checkpoint_csv = str(_ckpt_csv)
 
         _scan_failed = False
+        _scan_exc = None
         try:
             candidates, watchlist, _, breadth = build_daily_snapshot(scan_args, token_client, config)
-        except Exception as _scan_exc:
+        except Exception as _e:
             _scan_failed = True
-            _exc_str = str(_scan_exc).lower()
+            _scan_exc = _e
+        finally:
+            gap_file.unlink(missing_ok=True)
+            os.environ["FINMIND_TOKEN"] = orig_env_token
+
+        if _scan_failed:
+            _exc_str = str(_scan_exc).lower() if _scan_exc is not None else ""
             _is_quota = (
                 "402" in _exc_str
                 or "upper limit" in _exc_str
@@ -1723,12 +1754,35 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     ])
             else:
                 _safe_print(f"[sequential] 帳號 {token_idx}: 掃描異常（{_scan_exc}），切換下一帳號")
-        finally:
-            gap_file.unlink(missing_ok=True)
-            os.environ["FINMIND_TOKEN"] = orig_env_token
-
-        if _scan_failed:
             continue
+
+        _quota_hit = bool(breadth.get("quota_exhausted"))
+        n_actual = int(breadth.get("total_stocks", 0))
+        if _quota_hit and n_actual == 0 and len(remaining_univ) > 0:
+            _safe_print(f"[sequential] 帳號 {token_idx}: 首次掃描即 0 支且回報配額耗盡，等待 20 秒後重試一次")
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"⏳ **帳號 {token_idx} 觸發 0 支配額耗盡保護** · {_cst_now()} CST\n"
+                    f"等待 `20s` 後重試一次，避免誤判"
+                ])
+            time.sleep(20)
+            os.environ["FINMIND_TOKEN"] = token
+            token_client = FinMindClient(cache_dir=client.cache_dir)
+            gap_file = scan_dir / f"_seq_{token_idx}.csv"
+            remaining_univ.to_csv(gap_file, index=False)
+            _ckpt_csv = scan_dir / f"_ckpt_seq{token_idx}_{today}.csv"
+            _ckpt_csv.unlink(missing_ok=True)
+            scan_args.checkpoint_csv = str(_ckpt_csv)
+            try:
+                candidates, watchlist, _, breadth = build_daily_snapshot(scan_args, token_client, config)
+            except Exception as _scan_exc2:
+                _safe_print(f"[sequential] 帳號 {token_idx}: 重試仍失敗（{_scan_exc2}），切換下一帳號")
+                gap_file.unlink(missing_ok=True)
+                os.environ["FINMIND_TOKEN"] = orig_env_token
+                continue
+            finally:
+                gap_file.unlink(missing_ok=True)
+                os.environ["FINMIND_TOKEN"] = orig_env_token
 
         # Determine which stocks were actually attempted this scan.
         # breadth["scanned_ids"] only contains stocks that returned price data
