@@ -1565,7 +1565,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         ("FINMIND_TOKEN_3", os.getenv("FINMIND_TOKEN_3")),
     ]
     _orig_token_env = os.environ.get("FINMIND_TOKEN", "")
-    _quota_exhausted_keys: set[str] = set()  # env var names already confirmed quota-empty
+    _quota_exhausted_keys: set[str] = set()  # legacy marker; no hard-skip in sequential mode
     full_univ = None
     try:
         for _env_key, _env_val in _all_env_tokens:
@@ -1584,8 +1584,9 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 # Only mark as quota-exhausted for permanent daily limit errors.
                 # Transient rate-limits ("transient rate-limit", "rate limit (402)") must NOT
                 # be treated as permanent — the account may still have quota for the scan.
-                if any(k in _exc_s for k in ("配額已耗盡", "upper limit")):
-                    _quota_exhausted_keys.add(_env_key)
+                # Do not hard-mark this token as exhausted here.
+                # TaiwanStockInfo probe can be transiently throttled and does not always
+                # reflect true per-account scan availability at handoff time.
                 _safe_print(f"[sequential] 取股票清單失敗（{_env_key}）：{_e}，嘗試下一個 token")
                 if os.getenv("DISCORD_WEBHOOK_URL"):
                     send_discord_messages([
@@ -1632,6 +1633,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         (2, os.getenv("FINMIND_TOKEN_3")),
     ]
     token_list = [(i, t) for i, t in token_list if t]
+    _chunk_size = max(1, int(os.getenv("SEQUENTIAL_CHUNK_SIZE", "30") or "30"))
     # Detect duplicated tokens (same account key copied into multiple env vars).
     _token_to_idxs: dict[str, list[int]] = {}
     for _i, _t in token_list:
@@ -1658,15 +1660,15 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     for _pi, _pt in token_list:
         _pk = _env_key_map.get(_pi, f"FINMIND_TOKEN_{_pi}")
         if _pk in _quota_exhausted_keys:
-            _quota_probe_cache[_pi] = (False, "取清單時已確認配額不足")
-            _quota_lines.append(f"帳號 {_pi}: ❌ 取清單時配額不足")
+            _quota_probe_cache[_pi] = (False, "取清單時疑似配額不足（僅提示）")
+            _quota_lines.append(f"帳號 {_pi}: ⚠️ 疑似不足（取清單）")
             continue
         os.environ["FINMIND_TOKEN"] = _pt
         _pc = FinMindClient(cache_dir=client.cache_dir)
         _pok, _pmsg = probe_batch_quota(_pc)
         os.environ["FINMIND_TOKEN"] = orig_env_token
         _quota_probe_cache[_pi] = (_pok, _pmsg)
-        _quota_lines.append(f"帳號 {_pi}: {'✅ 有額度' if _pok else f'❌ 無額度'}")
+        _quota_lines.append(f"帳號 {_pi}: {'✅ 可用（探測）' if _pok else '⚠️ 疑似不足（探測）'}")
     _safe_print(f"[sequential] 帳號配額預檢：{' | '.join(_quota_lines)}")
     if os.getenv("DISCORD_WEBHOOK_URL"):
         send_discord_messages([
@@ -1685,14 +1687,8 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             break
         _remaining_before = len(remaining_ids)
 
-        # Skip immediately if this token already confirmed quota-exhausted via fetch_stock_info
-        if _env_key_map.get(token_idx) in _quota_exhausted_keys:
-            _safe_print(f"[sequential] 帳號 {token_idx}: 取股票清單時已確認配額不足，略過")
-            if os.getenv("DISCORD_WEBHOOK_URL"):
-                send_discord_messages([
-                    f"⏰ **帳號 {token_idx} 略過（已確認配額不足）** · {_cst_now()} CST"
-                ])
-            continue
+        # Never hard-skip a token in sequential mode based on pre-probe signals.
+        # Each account always gets a real scan attempt.
 
         # 直接切換到下一個帳號，不做固定等待。
         # 若遇到 IP 限流，交由下方 probe + retry 機制處理。
@@ -1711,6 +1707,8 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     f"{_pre_msg}\n改以實際掃描再確認，避免誤判略過"
                 ])
 
+
+
         # 不再用切換前 probe 決定跳過，避免誤判「有額度帳號」為無額度。
         # 直接進入實際掃描；若途中真的配額耗盡，build_daily_snapshot 會回報
         # quota_exhausted，並由後續邏輯切換下一帳號。
@@ -1722,7 +1720,13 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 f"剩餘 `{n_rem}/{total}` 支待掃"
             ])
 
-        remaining_univ = full_univ[full_univ["stock_id"].astype(str).isin(remaining_ids)]
+        remaining_univ_all = full_univ[full_univ["stock_id"].astype(str).isin(remaining_ids)]
+        remaining_univ = remaining_univ_all.head(_chunk_size)
+        if len(remaining_univ_all) > len(remaining_univ):
+            _safe_print(
+                f"[sequential] 帳號 {token_idx}: 本輪採用 chunk 掃描 {len(remaining_univ)} 支"
+                f"（尚有 {len(remaining_univ_all) - len(remaining_univ)} 支待後續接力）"
+            )
         gap_file = scan_dir / f"_seq_{token_idx}.csv"
         remaining_univ.to_csv(gap_file, index=False)
 
