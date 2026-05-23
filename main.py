@@ -1691,16 +1691,17 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         token_client = FinMindClient(cache_dir=client.cache_dir)
 
         # 每次帳號正式開掃前都重新探測一次該帳號配額（使用最新狀態）。
-        # 只在「明確每日配額耗盡」時跳過；IP 限流/暫時性失敗仍讓其嘗試掃描。
+        # 注意：此探測結果只做提示，不作硬性跳過。實務上 FinMind 在帳號切換
+        # 當下可能回傳暫時性 402，若直接略過會錯失可用帳號。
         _pre_ok, _pre_msg = probe_batch_quota(token_client)
         if not _pre_ok and ("配額已耗盡" in _pre_msg or "upper limit" in _pre_msg.lower()):
-            _safe_print(f"[sequential] 帳號 {token_idx}: 開掃前配額檢查不足，略過（{_pre_msg}）")
+            _safe_print(f"[sequential] 帳號 {token_idx}: 開掃前配額檢查顯示不足（{_pre_msg}），仍嘗試實掃確認")
             if os.getenv("DISCORD_WEBHOOK_URL"):
                 send_discord_messages([
-                    f"⏰ **帳號 {token_idx} 開掃前配額不足** · {_cst_now()} CST\n{_pre_msg}"
+                    f"⚠️ **帳號 {token_idx} 開掃前配額疑似不足** · {_cst_now()} CST\n"
+                    f"{_pre_msg}\n改以實際掃描再確認，避免誤判略過"
                 ])
-            os.environ["FINMIND_TOKEN"] = orig_env_token
-            continuemain
+
         # 不再用切換前 probe 決定跳過，避免誤判「有額度帳號」為無額度。
         # 直接進入實際掃描；若途中真的配額耗盡，build_daily_snapshot 會回報
         # quota_exhausted，並由後續邏輯切換下一帳號。
