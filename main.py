@@ -1633,6 +1633,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         (2, os.getenv("FINMIND_TOKEN_3")),
     ]
     token_list = [(i, t) for i, t in token_list if t]
+    _chunk_size = max(1, int(os.getenv("SEQUENTIAL_CHUNK_SIZE", "30") or "30"))
     # Detect duplicated tokens (same account key copied into multiple env vars).
     _token_to_idxs: dict[str, list[int]] = {}
     for _i, _t in token_list:
@@ -1717,7 +1718,13 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 f"剩餘 `{n_rem}/{total}` 支待掃"
             ])
 
-        remaining_univ = full_univ[full_univ["stock_id"].astype(str).isin(remaining_ids)]
+        remaining_univ_all = full_univ[full_univ["stock_id"].astype(str).isin(remaining_ids)]
+        remaining_univ = remaining_univ_all.head(_chunk_size)
+        if len(remaining_univ_all) > len(remaining_univ):
+            _safe_print(
+                f"[sequential] 帳號 {token_idx}: 本輪採用 chunk 掃描 {len(remaining_univ)} 支"
+                f"（尚有 {len(remaining_univ_all) - len(remaining_univ)} 支待後續接力）"
+            )
         gap_file = scan_dir / f"_seq_{token_idx}.csv"
         remaining_univ.to_csv(gap_file, index=False)
 
