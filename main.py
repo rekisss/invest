@@ -1647,6 +1647,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             ])
 
     round_new = 0
+    zero_quota_accounts: set[int] = set()
     orig_env_token = os.environ.get("FINMIND_TOKEN", "")
 
     _env_key_map = {0: "FINMIND_TOKEN", 1: "FINMIND_TOKEN_2", 2: "FINMIND_TOKEN_3"}
@@ -1671,6 +1672,13 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         send_discord_messages([
             f"📊 **帳號配額預檢** · {_cst_now()} CST\n" + "\n".join(_quota_lines)
         ])
+
+    # Multi-pass budget:
+    # If precheck says N accounts are available, run up to N passes in the same job
+    # (i.e., re-run whole sequential flow N-1 extra times) to improve handoff success.
+    _pre_ok_cnt = sum(1 for _ok, _ in _quota_probe_cache.values() if _ok)
+    _planned_budget = max(0, _pre_ok_cnt - 1)
+    _pass_budget = int(getattr(args, "_sequential_reentry_budget", _planned_budget) or 0)
 
     for token_idx, token in token_list:
         if not remaining_ids:
@@ -1863,6 +1871,8 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         _cand_n = len(candidates)
         _watch_n = len(watchlist)
         if _quota_hit:
+            if n_actual == 0:
+                zero_quota_accounts.add(token_idx)
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚡ 配額耗盡，掃到 {n_actual} 支後提前中止，切換下一帳號")
             if os.getenv("DISCORD_WEBHOOK_URL"):
                 send_discord_messages([
@@ -1884,6 +1894,27 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 f"掃 `{n_actual}` 支 | 候選 `{_cand_n}` | 觀察 `{_watch_n}`\n"
                 f"全局累計 `{len(already_scanned)}/{total}` 支"
             ])
+
+    # If this round made progress and reentry budget remains, run another full pass.
+    # Example:
+    #   precheck 2 accounts available -> budget 1 (run once more)
+    #   precheck 3 accounts available -> budget 2 (run twice more)
+    if remaining_ids and round_new > 0 and _pass_budget > 0:
+        _safe_print(
+            f"[sequential] 本輪有進度 {round_new} 支，剩餘 {len(remaining_ids)} 支，"
+            f"啟動整輪重跑（剩餘重跑次數 {_pass_budget}）"
+        )
+        if os.getenv("DISCORD_WEBHOOK_URL"):
+            send_discord_messages([
+                f"🔁 **啟動一次整輪重跑** · {_cst_now()} CST\n"
+                f"本輪新掃 `{round_new}` 支，仍剩 `{len(remaining_ids)}` 支\n"
+                f"依預檢可用帳號策略，將再重跑一次（剩餘重跑次數 `{_pass_budget}`）"
+            ])
+        time.sleep(20)
+        rerun_args = _copy.copy(args)
+        setattr(rerun_args, "_sequential_reentry_budget", _pass_budget - 1)
+        run_sequential_scan(rerun_args, client, config)
+        return
 
     # Round summary
     if not remaining_ids:
