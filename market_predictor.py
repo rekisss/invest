@@ -342,38 +342,179 @@ def generate_analysis_text(pred: dict[str, Any], breadth: dict[str, object] | No
 # ── Claude scenario analysis ───────────────────────────────────────────────────
 
 def generate_scenario_analysis(market_data: dict) -> str:
-    """Call Claude API with structured market JSON → qualitative TX scenario text.
+    """Rule-based TX scenario analysis from structured market data.
 
-    Returns empty string if ANTHROPIC_API_KEY is not set or on any failure.
+    Evaluates US market, night session, and capital flow signals to output
+    a 5-line qualitative scenario without any external API dependency.
     """
-    import json
-    import os
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return ""
-    try:
-        import anthropic
-        _client = anthropic.Anthropic(api_key=api_key)
-        prompt = (
-            "你是專業台指期交易員。根據以下市場資料：\n"
-            f"{json.dumps(market_data, ensure_ascii=False, indent=2)}\n\n"
-            "請輸出（簡短5行）：\n"
-            "1. 今日偏多/偏空/震盪\n"
-            "2. 最可能劇本：開高走高 / 開高走低 / 開低走高 / 開低走低\n"
-            "3. ORB 建議：做突破 / 做回測 / 不交易\n"
-            "4. 關鍵支撐壓力（2個點位）\n"
-            "5. 風險提示（1句話）\n"
-            "格式：純文字，每項一行，不加 markdown 符號。"
-        )
-        msg = _client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=300,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return msg.content[0].text.strip()
-    except Exception as exc:
-        print(f"[ai] Claude 劇本分析失敗（graceful skip）: {exc}", file=sys.stderr)
-        return ""
+    import math as _math
+
+    def _f(path: str, default: float = float("nan")) -> float:
+        keys = path.split(".")
+        node: Any = market_data
+        for k in keys:
+            if not isinstance(node, dict):
+                return default
+            node = node.get(k)
+        try:
+            v = float(node)  # type: ignore[arg-type]
+            return default if (_math.isnan(v) or _math.isinf(v)) else v
+        except (TypeError, ValueError):
+            return default
+
+    sox        = _f("us_market.sox_ret")
+    tsm_adr    = _f("us_market.tsm_adr_ret")
+    nvda       = _f("us_market.nvda_ret")
+    nasdaq     = _f("us_market.nasdaq_ret")
+    vix        = _f("us_market.vix")
+    night_chg  = _f("night_session.change") if market_data.get("night_session") else float("nan")
+    night_trend = (market_data.get("night_session") or {}).get("last_hour_trend", "—")
+    fut_net    = _f("foreign_capital.futures_net")
+    pcr        = _f("foreign_capital.pcr")
+    prob_up    = _f("xgb_prob_up", 0.5)
+
+    # ── 訊號計分（+1 多方、-1 空方）─────────────────────────────────────────
+    bull_score = 0
+    bear_score = 0
+    risk_notes: list[str] = []
+
+    # 費半 / TSM ADR / NVDA（台股最強連動）
+    if not _math.isnan(sox):
+        if sox >= 0.025:
+            bull_score += 2
+        elif sox >= 0.01:
+            bull_score += 1
+        elif sox <= -0.02:
+            bear_score += 2
+        elif sox <= -0.01:
+            bear_score += 1
+
+    if not _math.isnan(tsm_adr):
+        if tsm_adr >= 0.03:
+            bull_score += 2
+        elif tsm_adr >= 0.01:
+            bull_score += 1
+        elif tsm_adr <= -0.02:
+            bear_score += 2
+        elif tsm_adr <= -0.01:
+            bear_score += 1
+
+    if not _math.isnan(nvda):
+        if nvda >= 0.03:
+            bull_score += 1
+        elif nvda <= -0.03:
+            bear_score += 1
+
+    # VIX 恐慌指數
+    if not _math.isnan(vix):
+        if vix >= 30:
+            bear_score += 2
+            risk_notes.append("VIX 恐慌指數偏高，波動劇烈謹慎操作")
+        elif vix >= 22:
+            bear_score += 1
+            risk_notes.append("VIX 偏高，注意假突破風險")
+
+    # 夜盤變化
+    if not _math.isnan(night_chg):
+        if night_chg >= 100:
+            bull_score += 1
+        elif night_chg <= -100:
+            bear_score += 1
+
+    # 夜盤末段走向
+    if "走弱" in night_trend:
+        bear_score += 1
+        risk_notes.append("夜盤末段收弱，追價動能不足")
+    elif "偏強" in night_trend:
+        bull_score += 1
+
+    # 外資期貨未平倉
+    if not _math.isnan(fut_net):
+        if fut_net >= 10000:
+            bull_score += 1
+        elif fut_net <= -10000:
+            bear_score += 1
+
+    # PCR
+    if not _math.isnan(pcr):
+        if pcr >= 1.3:
+            bull_score += 1
+        elif pcr <= 0.7:
+            bear_score += 1
+            risk_notes.append("PCR 偏低，空方籌碼偏多")
+
+    # XGBoost 預測
+    if prob_up >= 0.6:
+        bull_score += 1
+    elif prob_up <= 0.4:
+        bear_score += 1
+
+    # ── 判斷今日偏向 ───────────────────────────────────────────────────────
+    net = bull_score - bear_score
+    if vix >= 30 and not _math.isnan(vix):
+        bias = "偏空（高波動警戒）"
+    elif net >= 3:
+        bias = "偏多"
+    elif net >= 1:
+        bias = "小幅偏多"
+    elif net <= -3:
+        bias = "偏空"
+    elif net <= -1:
+        bias = "小幅偏空"
+    else:
+        bias = "震盪"
+
+    # ── 劇本判斷 ──────────────────────────────────────────────────────────
+    strong_us = (not _math.isnan(sox) and sox >= 0.02) or (not _math.isnan(tsm_adr) and tsm_adr >= 0.025)
+    night_up  = not _math.isnan(night_chg) and night_chg >= 50
+    night_down = not _math.isnan(night_chg) and night_chg <= -50
+    night_weak_end = "走弱" in night_trend
+
+    if strong_us and night_up and not night_weak_end:
+        scenario = "開高走高（美股強勢 + 夜盤正面）"
+    elif strong_us and night_weak_end:
+        scenario = "開高走低（美股強但夜盤末段收弱，追價力道不足）"
+    elif strong_us and not night_up and not night_down:
+        scenario = "開高震盪（美股偏強，等待現貨確認）"
+    elif night_down and not strong_us:
+        scenario = "開低走低（夜盤弱勢）"
+    elif night_down and strong_us:
+        scenario = "開低走高（夜盤跌但美股相對強，注意低接）"
+    elif net >= 2:
+        scenario = "溫和偏多，無明顯跳空"
+    elif net <= -2:
+        scenario = "溫和偏空，無明顯跳空"
+    else:
+        scenario = "方向不明，區間震盪"
+
+    # ── ORB 建議 ──────────────────────────────────────────────────────────
+    if not _math.isnan(vix) and vix >= 28:
+        orb = "不交易（波動過大）"
+    elif "開高走低" in scenario or "假突破" in scenario:
+        orb = "做回測（小心開高走低）"
+    elif net >= 3 and not night_weak_end:
+        orb = "做突破（多方強勢格局）"
+    elif net <= -3:
+        orb = "做空突破（空方格局）"
+    else:
+        orb = "觀察開盤15分鐘再決策"
+
+    # ── 風險提示 ──────────────────────────────────────────────────────────
+    if not risk_notes:
+        if abs(net) <= 1:
+            risk_notes.append("多空訊號不明確，輕倉觀察")
+        elif net >= 3:
+            risk_notes.append("訊號偏多但避免追高，等回測確認")
+        else:
+            risk_notes.append("訊號偏空，注意反彈陷阱")
+
+    lines = [
+        f"今日：{bias}",
+        f"劇本：{scenario}",
+        f"ORB：{orb}",
+        f"風險：{risk_notes[0]}",
+    ]
+    return "\n".join(lines)
 
 
 def format_us_block(us_df: "pd.DataFrame") -> str:
