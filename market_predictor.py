@@ -37,12 +37,13 @@ _US_TICKERS = {
     "vix":     "^VIX",
     "dxy":     "DX-Y.NYB",
     "us10y":   "^TNX",
-    # Global macro additions
     "gold":    "GC=F",
     "oil":     "CL=F",
     "us2y":    "^IRX",
     "usdcny":  "CNY=X",
     "twd":     "TWD=X",
+    "tsm_adr": "TSM",
+    "nvda":    "NVDA",
 }
 
 
@@ -122,6 +123,7 @@ _US_FEATURES = [
     "sp500_ret1", "sp500_ret5", "nasdaq_ret1", "vix",
     "sox_ret1", "dxy_ret1", "us10y_ret1",
     "gold_ret1", "oil_ret1", "us2y_ret1", "usdcny_ret1", "twd_ret1",
+    "tsm_adr_ret1", "nvda_ret1",
 ]
 
 _FUTURES_FEATURES = [
@@ -337,6 +339,73 @@ def generate_analysis_text(pred: dict[str, Any], breadth: dict[str, object] | No
     return "\n".join(lines)
 
 
+# ── Claude scenario analysis ───────────────────────────────────────────────────
+
+def generate_scenario_analysis(market_data: dict) -> str:
+    """Call Claude API with structured market JSON → qualitative TX scenario text.
+
+    Returns empty string if ANTHROPIC_API_KEY is not set or on any failure.
+    """
+    import json
+    import os
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return ""
+    try:
+        import anthropic
+        _client = anthropic.Anthropic(api_key=api_key)
+        prompt = (
+            "你是專業台指期交易員。根據以下市場資料：\n"
+            f"{json.dumps(market_data, ensure_ascii=False, indent=2)}\n\n"
+            "請輸出（簡短5行）：\n"
+            "1. 今日偏多/偏空/震盪\n"
+            "2. 最可能劇本：開高走高 / 開高走低 / 開低走高 / 開低走低\n"
+            "3. ORB 建議：做突破 / 做回測 / 不交易\n"
+            "4. 關鍵支撐壓力（2個點位）\n"
+            "5. 風險提示（1句話）\n"
+            "格式：純文字，每項一行，不加 markdown 符號。"
+        )
+        msg = _client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return msg.content[0].text.strip()
+    except Exception as exc:
+        print(f"[ai] Claude 劇本分析失敗（graceful skip）: {exc}", file=sys.stderr)
+        return ""
+
+
+def format_us_block(us_df: "pd.DataFrame") -> str:
+    """Format latest US market snapshot as a Discord block. Returns '' if no data."""
+    if us_df is None or us_df.empty:
+        return ""
+    row = us_df.iloc[-1]
+
+    def _pct(col: str) -> str:
+        v = row.get(col)
+        if v is None or (hasattr(v, "__float__") and __import__("math").isnan(float(v))):
+            return "N/A"
+        return f"{float(v)*100:+.1f}%"
+
+    def _val(col: str, decimals: int = 1) -> str:
+        v = row.get(col)
+        if v is None or (hasattr(v, "__float__") and __import__("math").isnan(float(v))):
+            return "N/A"
+        return f"{float(v):.{decimals}f}"
+
+    line1_parts = []
+    for label, col in [("S&P", "sp500_ret1"), ("NASDAQ", "nasdaq_ret1"), ("SOX", "sox_ret1")]:
+        line1_parts.append(f"{label} `{_pct(col)}`")
+    line2_parts = []
+    for label, col in [("TSM ADR", "tsm_adr_ret1"), ("NVDA", "nvda_ret1")]:
+        line2_parts.append(f"{label} `{_pct(col)}`")
+    line2_parts.append(f"VIX `{_val('vix', 1)}`")
+
+    lines = ["📊 **美股（昨收）**", "   " + " | ".join(line1_parts), "   " + " | ".join(line2_parts)]
+    return "\n".join(lines)
+
+
 # ── Discord formatter ──────────────────────────────────────────────────────────
 
 _CONF_EMOJI = {"high": "🟢", "medium": "🟡", "low": "⚪"}
@@ -350,6 +419,10 @@ def format_prediction_block(
     futures_block: str = "",
     news_block: str = "",
     calendar_block: str = "",
+    us_block: str = "",
+    night_block: str = "",
+    chipset_block: str = "",
+    scenario_block: str = "",
 ) -> str:
     if not pred.get("trained"):
         return ""
@@ -368,6 +441,15 @@ def format_prediction_block(
         f"`{label}` · 多方 `{prob_pct}` {_CONF_EMOJI.get(conf, '⚪')}",
         f"   `{bar}` 空方 `{(1-prob)*100:.0f}%`",
     ]
+    if us_block:
+        lines.append("")
+        lines.append(us_block)
+    if night_block:
+        lines.append("")
+        lines.append(night_block)
+    if chipset_block:
+        lines.append("")
+        lines.append(chipset_block)
     if futures_block:
         lines.append("")
         lines.append(futures_block)
@@ -375,6 +457,9 @@ def format_prediction_block(
     if analysis:
         lines.append("")
         lines.append(analysis)
+    if scenario_block:
+        lines.append("")
+        lines.append(scenario_block)
     if news_block:
         lines.append("")
         lines.append(news_block)

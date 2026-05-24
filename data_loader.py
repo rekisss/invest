@@ -508,6 +508,63 @@ def fetch_market_margin(
     return out.reset_index(drop=True)
 
 
+def fetch_options_pcr(
+    client: "FinMindClient",
+    start_date: str,
+    end_date: str,
+    code: str = "TXO",
+) -> "pd.DataFrame":
+    """Fetch Put/Call Ratio for Taiwan Options (台指選擇權). Returns DataFrame(date, pcr) or empty."""
+    import pandas as pd
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanOptionInstitutionalInvestors",
+            data_id=code,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 選擇權PCR取得失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+    if frame.empty:
+        return pd.DataFrame()
+
+    frame = frame.copy()
+    frame.columns = [c.lower().strip() for c in frame.columns]
+    frame["date"] = pd.to_datetime(frame["date"])
+
+    opt_col = next(
+        (c for c in frame.columns if c in ("option_type", "call_put", "type", "put_call")),
+        None,
+    )
+    if opt_col is None:
+        return pd.DataFrame()
+
+    oi_col = next(
+        (c for c in frame.columns if "open_interest" in c or "_oi" in c),
+        None,
+    ) or next(
+        (c for c in frame.columns if "volume" in c or "trade_volume" in c),
+        None,
+    )
+    if oi_col is None:
+        return pd.DataFrame()
+
+    frame[oi_col] = pd.to_numeric(frame[oi_col], errors="coerce").fillna(0)
+    opt_str = frame[opt_col].astype(str).str.upper()
+    call_mask = opt_str.str.contains("CALL|^C$", na=False, regex=True)
+    put_mask  = opt_str.str.contains("PUT|^P$",  na=False, regex=True)
+
+    call_oi = frame.loc[call_mask].groupby("date")[oi_col].sum().rename("call_oi")
+    put_oi  = frame.loc[put_mask].groupby("date")[oi_col].sum().rename("put_oi")
+
+    result = pd.concat([call_oi, put_oi], axis=1).reset_index()
+    result["pcr"] = result["put_oi"] / result["call_oi"].replace(0, float("nan"))
+
+    return result[["date", "pcr"]].dropna().sort_values("date").reset_index(drop=True)
+
+
 def clean_cache(cache_dir: Path | str, max_age_days: int = 30) -> int:
     """Delete CSV cache files older than max_age_days. Returns count of deleted files."""
     cache_path = Path(cache_dir)
