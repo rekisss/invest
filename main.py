@@ -1708,13 +1708,23 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         # 注意：此探測結果只做提示，不作硬性跳過。實務上 FinMind 在帳號切換
         # 當下可能回傳暫時性 402，若直接略過會錯失可用帳號。
         _pre_ok, _pre_msg = probe_batch_quota(token_client)
-        if not _pre_ok and ("配額已耗盡" in _pre_msg or "upper limit" in _pre_msg.lower()):
-            _safe_print(f"[sequential] 帳號 {token_idx}: 開掃前配額檢查顯示不足（{_pre_msg}），仍嘗試實掃確認")
-            if os.getenv("DISCORD_WEBHOOK_URL"):
-                send_discord_messages([
-                    f"⚠️ **帳號 {token_idx} 開掃前配額疑似不足** · {_cst_now()} CST\n"
-                    f"{_pre_msg}\n改以實際掃描再確認，避免誤判略過"
-                ])
+        if not _pre_ok:
+            _is_quota_issue = "配額已耗盡" in _pre_msg or "upper limit" in _pre_msg.lower()
+            _is_ip_throttle = "IP 限流" in _pre_msg or "ip" in _pre_msg.lower() and "限流" in _pre_msg
+            if _is_quota_issue:
+                _safe_print(f"[sequential] 帳號 {token_idx}: 開掃前配額檢查顯示不足（{_pre_msg}），仍嘗試實掃確認")
+                if os.getenv("DISCORD_WEBHOOK_URL"):
+                    send_discord_messages([
+                        f"⚠️ **帳號 {token_idx} 開掃前配額疑似不足** · {_cst_now()} CST\n"
+                        f"{_pre_msg}\n改以實際掃描再確認，避免誤判略過"
+                    ])
+            elif _is_ip_throttle:
+                _safe_print(f"[sequential] 帳號 {token_idx}: 開掃前偵測到 IP 限流（{_pre_msg}），稍後仍嘗試實掃")
+                if os.getenv("DISCORD_WEBHOOK_URL"):
+                    send_discord_messages([
+                        f"⚠️ **帳號 {token_idx} 開掃前 IP 限流** · {_cst_now()} CST\n"
+                        f"{_pre_msg}\n將嘗試繼續掃描"
+                    ])
 
 
 
@@ -1820,22 +1830,42 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         _quota_hit = bool(breadth.get("quota_exhausted"))
         n_actual = int(breadth.get("total_stocks", 0))
         scanned_now: set[str] = set(breadth.get("scanned_ids") or set())
+        _success_ratio = n_actual / max(len(remaining_univ), 1)
+        _ip_throttled = (not _quota_hit and n_actual > 0 and _success_ratio < 0.5)
         if not _quota_hit and n_actual > 0:
-            # Only when this token really scanned data do we mark the whole gap as attempted.
-            scanned_now.update(remaining_univ["stock_id"].astype(str))
-
-            # Stocks in the gap that returned NO price data at all → add to persistent blacklist.
-            _got_data = set(breadth.get("scanned_ids") or set())
-            _new_no_data = set(remaining_univ["stock_id"].astype(str)) - _got_data
-            if _new_no_data:
-                no_data_ids.update(_new_no_data)
-                pd.DataFrame({"stock_id": sorted(no_data_ids)}).to_csv(
-                    no_data_csv, index=False, encoding="utf-8-sig"
-                )
+            if _ip_throttled:
+                # Success rate < 50% → likely IP throttling mid-scan.
+                # Only mark stocks that actually returned data as done;
+                # leave un-fetched stocks for the next account to retry.
+                _throttled_count = len(remaining_univ) - len(scanned_now)
                 _safe_print(
-                    f"[sequential] 帳號 {token_idx}: 新增 {len(_new_no_data)} 支到空資料黑名單"
-                    f"（黑名單共 {len(no_data_ids)} 支）"
+                    f"[sequential] 帳號 {token_idx}: 成功率低 ({_success_ratio:.0%}，"
+                    f"{n_actual}/{len(remaining_univ)})，疑似 IP 限流，"
+                    f"{_throttled_count} 支未掃留給下一帳號重試"
                 )
+                if os.getenv("DISCORD_WEBHOOK_URL"):
+                    send_discord_messages([
+                        f"⚠️ **帳號 {token_idx} IP 限流** · {_cst_now()} CST\n"
+                        f"成功率 {_success_ratio:.0%} ({n_actual}/{len(remaining_univ)})，"
+                        f"{_throttled_count} 支未掃，交由下一帳號重試"
+                    ])
+                # scanned_now already contains only scanned_ids — no further update needed
+            else:
+                # Normal completion: mark all remaining_univ as attempted.
+                scanned_now.update(remaining_univ["stock_id"].astype(str))
+
+                # Stocks that returned NO price data → persistent blacklist.
+                _got_data = set(breadth.get("scanned_ids") or set())
+                _new_no_data = set(remaining_univ["stock_id"].astype(str)) - _got_data
+                if _new_no_data:
+                    no_data_ids.update(_new_no_data)
+                    pd.DataFrame({"stock_id": sorted(no_data_ids)}).to_csv(
+                        no_data_csv, index=False, encoding="utf-8-sig"
+                    )
+                    _safe_print(
+                        f"[sequential] 帳號 {token_idx}: 新增 {len(_new_no_data)} 支到空資料黑名單"
+                        f"（黑名單共 {len(no_data_ids)} 支）"
+                    )
         elif not _quota_hit and n_actual == 0 and len(remaining_univ) > 0:
             _safe_print(
                 f"[sequential] 帳號 {token_idx}: 本輪 0 支有效掃描，"
@@ -1903,6 +1933,13 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             if _cooldown > 0:
                 _safe_print(f"[sequential] 帳號切換冷卻 {_cooldown}s（讓 IP 限流清除）...")
                 time.sleep(_cooldown)
+        elif _ip_throttled:
+            # IP throttle caused partial scan — brief cooldown before next account.
+            _ip_cooldown = max(15, int(os.getenv("ACCOUNT_SWITCH_COOLDOWN", "60")) // 4)
+            _safe_print(
+                f"[sequential] 帳號 {token_idx}: IP 限流冷卻 {_ip_cooldown}s 後切換下一帳號..."
+            )
+            time.sleep(_ip_cooldown)
         elif n_actual == 0 and len(remaining_univ) > 0:
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚠️ 實際掃 0 支（API 可能靜默限流），本輪略過儲存")
         _safe_print(
