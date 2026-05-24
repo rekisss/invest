@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import os
@@ -2697,7 +2698,14 @@ def run_partial_aggregate(args: argparse.Namespace) -> None:
 def run_aggregate(args: argparse.Namespace) -> None:
     """Merge all batch_NN.csv files from output/full_scan/ and send top-N to Discord."""
     batch_dir = Path(args.output) / "full_scan"
-    csvs = sorted(batch_dir.glob("batch_*.csv")) if batch_dir.exists() else []
+    _all_csvs = sorted(batch_dir.glob("batch_*.csv")) if batch_dir.exists() else []
+    _date_pat = re.compile(r"(\d{4}-\d{2}-\d{2})")
+    _dates = [m.group(1) for f in _all_csvs if (m := _date_pat.search(f.name))]
+    if _dates:
+        _latest = max(_dates)
+        csvs = [f for f in _all_csvs if _latest in f.name]
+    else:
+        csvs = _all_csvs
     if not csvs:
         msg = f"⚠️ **全市場彙整失敗** · {args.end}\n找不到批次結果（{batch_dir}），請確認掃描已執行。"
         _safe_print(msg)
