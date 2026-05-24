@@ -1890,6 +1890,13 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     f"掃到 `{n_actual}` 支後中止，切換下一帳號\n"
                     f"（若三帳號皆立即耗盡，請確認三個 FINMIND_TOKEN 是否為不同帳號）"
                 ])
+            # Wait for IP-level throttle to clear before next account starts.
+            # Heavy scanning from this account may have triggered per-IP rate limiting
+            # that would silently affect the next account if it starts immediately.
+            _cooldown = int(os.getenv("ACCOUNT_SWITCH_COOLDOWN", "60"))
+            if _cooldown > 0:
+                _safe_print(f"[sequential] 帳號切換冷卻 {_cooldown}s（讓 IP 限流清除）...")
+                time.sleep(_cooldown)
         elif n_actual == 0 and len(remaining_univ) > 0:
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚠️ 實際掃 0 支（API 可能靜默限流），本輪略過儲存")
         _safe_print(
