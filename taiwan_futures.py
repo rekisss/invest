@@ -193,6 +193,109 @@ def build_futures_features(
     return f[feat_cols].reset_index(drop=True)
 
 
+# ── Night session ────────────────────────────────────────────────────────────
+
+def fetch_night_session(
+    client: "FinMindClient",
+    date_str: str,
+    code: str = "TX",
+) -> dict:
+    """Fetch TX night session summary for the given trade date.
+
+    Returns dict(close, change, high, low, last_hour_trend) or empty dict on failure.
+    The night session for trade date D runs 15:00 on D-1 through 05:00 on D.
+    We fetch the daily row for date_str and look for a night-session indicator;
+    if the dataset has no session split, returns an empty dict (graceful skip).
+    """
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanFuturesDaily",
+            data_id=code,
+            start_date=date_str,
+            end_date=date_str,
+        )
+    except Exception as exc:
+        print(f"[futures] 夜盤資料取得失敗（graceful skip）: {exc}")
+        return {}
+
+    if frame.empty:
+        return {}
+
+    frame = frame.copy()
+    frame.columns = [c.lower().strip() for c in frame.columns]
+    frame["date"] = pd.to_datetime(frame["date"])
+
+    # Check if there's a session column (FinMind sometimes splits day/night)
+    session_col = next(
+        (c for c in frame.columns if "session" in c or "trading_session" in c or "夜盤" in c),
+        None,
+    )
+    if session_col is not None:
+        night_rows = frame[frame[session_col].astype(str).str.contains("night|夜|2", case=False, na=False)]
+        if night_rows.empty:
+            return {}
+        row = night_rows.iloc[-1]
+    elif len(frame) > 1:
+        # Multiple rows for same date → second row is often night session
+        row = frame.iloc[-1]
+    else:
+        return {}
+
+    def _n(col: str) -> float:
+        v = row.get(col)
+        if v is None:
+            return float("nan")
+        try:
+            f = float(v)
+            return f if not (math.isnan(f) or math.isinf(f)) else float("nan")
+        except (ValueError, TypeError):
+            return float("nan")
+
+    rename = {"max": "high", "min": "low"}
+    for old, new in rename.items():
+        if old in row.index and new not in row.index:
+            row = row.rename({old: new})
+
+    close = _n("close")
+    high  = _n("high")
+    low   = _n("low")
+    if math.isnan(close):
+        return {}
+
+    # Derive change from previous day's daily close if open is available
+    open_ = _n("open")
+    change = close - open_ if not math.isnan(open_) else float("nan")
+
+    # last_hour_trend: compare close to high — if close is near high it's up
+    last_hour_trend = "—"
+    if not math.isnan(high) and not math.isnan(low) and high != low:
+        pct_from_high = (high - close) / (high - low)
+        last_hour_trend = "↓ 走弱" if pct_from_high > 0.4 else "↑ 偏強"
+
+    return {
+        "close": close,
+        "change": change,
+        "high": high,
+        "low": low,
+        "last_hour_trend": last_hour_trend,
+    }
+
+
+def format_night_session_block(night: dict) -> str:
+    """Format night session dict as a Discord line. Returns '' if night is empty."""
+    if not night or math.isnan(_sf(night.get("close"))):
+        return ""
+    close = int(_sf(night["close"]))
+    change = _sf(night.get("change"))
+    trend = night.get("last_hour_trend", "—")
+    change_str = f"漲 `{change:+.0f}`" if not math.isnan(change) else ""
+    parts = [f"收 `{close:,}`"]
+    if change_str:
+        parts.append(change_str)
+    parts.append(f"末段 `{trend}`")
+    return "🌙 **夜盤**  " + " · ".join(parts)
+
+
 # ── Discord formatter ─────────────────────────────────────────────────────────
 
 def format_futures_block(futures_df: pd.DataFrame) -> str:

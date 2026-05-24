@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import os
@@ -34,6 +35,7 @@ from data_loader import (
     fetch_market_index,
     fetch_market_institutional,
     fetch_market_margin,
+    fetch_options_pcr,
     fetch_stock_info,
     fetch_stock_kbar,
     fetch_stock_prices,
@@ -57,10 +59,14 @@ from strategy import (
 )
 from universe import build_auto_universe
 from notion_sync import confidence_score as _confidence_score, notion_enabled, recommend_observation_period, sync_scan_results
-from market_predictor import MarketPredictor, fetch_us_features, format_prediction_block
+from market_predictor import (
+    MarketPredictor, fetch_us_features, format_prediction_block,
+    generate_scenario_analysis, format_us_block,
+)
 from taiwan_futures import (
     fetch_futures_daily, fetch_futures_institutional,
     build_futures_features, format_futures_block,
+    fetch_night_session, format_night_session_block,
 )
 from economic_calendar import fetch_upcoming_events, format_calendar_block
 
@@ -2479,19 +2485,23 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         return
 
     # Fetch auxiliary data in parallel (all graceful-degrade on failure)
-    with ThreadPoolExecutor(max_workers=6) as _pool:
+    with ThreadPoolExecutor(max_workers=8) as _pool:
         _f_us       = _pool.submit(fetch_us_features, train_start, today)
         _f_futures  = _pool.submit(fetch_futures_daily, client, train_start, today)
         _f_inst     = _pool.submit(fetch_futures_institutional, client, train_start, today)
         _f_calendar = _pool.submit(fetch_upcoming_events)
         _f_mkinst   = _pool.submit(fetch_market_institutional, client, train_start, today)
         _f_margin   = _pool.submit(fetch_market_margin, client, train_start, today)
+        _f_pcr      = _pool.submit(fetch_options_pcr, client, train_start, today)
+        _f_night    = _pool.submit(fetch_night_session, client, today)
         us_df           = _f_us.result()
         futures_raw     = _f_futures.result()
         inst_raw        = _f_inst.result()
         calendar_events = _f_calendar.result()
         mkinst_df       = _f_mkinst.result()
         margin_df       = _f_margin.result()
+        pcr_df          = _f_pcr.result()
+        night_data      = _f_night.result()
 
     futures_df = build_futures_features(market_df, futures_raw, inst_raw)
 
@@ -2522,11 +2532,67 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         inst_feat_df if inst_feat_df is not None and not inst_feat_df.empty else None,
     )
 
+    # Build structured market_data JSON for Claude scenario analysis
+    def _safe_float(val: object) -> object:
+        import math as _math
+        try:
+            f = float(val)  # type: ignore[arg-type]
+            return None if (_math.isnan(f) or _math.isinf(f)) else round(f, 4)
+        except (TypeError, ValueError):
+            return None
+
+    _us_row = us_df.iloc[-1] if not us_df.empty else {}
+    _ft_row = futures_df.iloc[-1] if not futures_df.empty else {}
+    _mk_row = mkinst_df.iloc[-1] if not mkinst_df.empty else {}
+    _pcr_val = float(pcr_df["pcr"].iloc[-1]) if not pcr_df.empty else None
+
+    market_data_json: dict = {
+        "us_market": {
+            "nasdaq_ret": _safe_float(_us_row.get("nasdaq_ret1")),
+            "sox_ret":    _safe_float(_us_row.get("sox_ret1")),
+            "sp500_ret":  _safe_float(_us_row.get("sp500_ret1")),
+            "tsm_adr_ret": _safe_float(_us_row.get("tsm_adr_ret1")),
+            "nvda_ret":   _safe_float(_us_row.get("nvda_ret1")),
+            "vix":        _safe_float(_us_row.get("vix")),
+            "us10y_ret":  _safe_float(_us_row.get("us10y_ret1")),
+            "dxy_ret":    _safe_float(_us_row.get("dxy_ret1")),
+        },
+        "night_session": night_data if night_data else None,
+        "foreign_capital": {
+            "futures_net":  _safe_float(_ft_row.get("foreign_futures_net")),
+            "cash_norm":    _safe_float(_mk_row.get("foreign_inst_norm")),
+            "pcr":          round(_pcr_val, 3) if _pcr_val is not None else None,
+        },
+        "xgb_prob_up": round(pred["prob_up"], 3),
+        "xgb_label":   pred["label"],
+    }
+    scenario_text = generate_scenario_analysis(market_data_json)
+
+    # Build chipset block (PCR + foreign futures)
+    _chipset_parts: list[str] = []
+    if not futures_df.empty:
+        _fn = _safe_float(_ft_row.get("foreign_futures_net"))
+        if _fn is not None:
+            _chipset_parts.append(f"外資期貨 `{int(_fn):+,}口`")
+    if not mkinst_df.empty:
+        _fni = _safe_float(_mk_row.get("foreign_inst_norm"))
+        if _fni is not None:
+            _chipset_parts.append(f"現貨 `{_fni*100:+.0f}%`（標準化）")
+    if _pcr_val is not None:
+        _chipset_parts.append(f"PCR `{_pcr_val:.2f}`")
+    chipset_block = ("💼 **籌碼**\n   " + " | ".join(_chipset_parts)) if _chipset_parts else ""
+
+    scenario_block = ("🎯 **AI 劇本分析**（Claude）\n   " + scenario_text.replace("\n", "\n   ")) if scenario_text else ""
+
     latest_date = pd.Timestamp(market_df["date"].max()).strftime("%Y-%m-%d")
     header = f"🌅 **盤前預測** · {latest_date} · {_cst_now()} CST"
     pred_block = format_prediction_block(
         pred,
+        us_block=format_us_block(us_df if not us_df.empty else None),
+        night_block=format_night_session_block(night_data),
+        chipset_block=chipset_block,
         futures_block=format_futures_block(futures_df),
+        scenario_block=scenario_block,
         news_block=format_market_news_block(market_news),
         calendar_block=format_calendar_block(calendar_events),
     )
@@ -2697,7 +2763,14 @@ def run_partial_aggregate(args: argparse.Namespace) -> None:
 def run_aggregate(args: argparse.Namespace) -> None:
     """Merge all batch_NN.csv files from output/full_scan/ and send top-N to Discord."""
     batch_dir = Path(args.output) / "full_scan"
-    csvs = sorted(batch_dir.glob("batch_*.csv")) if batch_dir.exists() else []
+    _all_csvs = sorted(batch_dir.glob("batch_*.csv")) if batch_dir.exists() else []
+    _date_pat = re.compile(r"(\d{4}-\d{2}-\d{2})")
+    _dates = [m.group(1) for f in _all_csvs if (m := _date_pat.search(f.name))]
+    if _dates:
+        _latest = max(_dates)
+        csvs = [f for f in _all_csvs if _latest in f.name]
+    else:
+        csvs = _all_csvs
     if not csvs:
         msg = f"⚠️ **全市場彙整失敗** · {args.end}\n找不到批次結果（{batch_dir}），請確認掃描已執行。"
         _safe_print(msg)
@@ -2732,6 +2805,26 @@ def run_aggregate(args: argparse.Namespace) -> None:
         return
 
     all_candidates = pd.concat(frames, ignore_index=True)
+
+    # ── 乾淨化 ──────────────────────────────────────────────────────────────
+    # 1. 過濾 data 欄位非最新日期的殘留列
+    if "date" in all_candidates.columns:
+        all_candidates["date"] = pd.to_datetime(all_candidates["date"])
+        _data_latest = all_candidates["date"].max()
+        _before = len(all_candidates)
+        all_candidates = all_candidates[all_candidates["date"] == _data_latest]
+        if (_removed := _before - len(all_candidates)) > 0:
+            _safe_print(f"[aggregate] 移除非最新日期資料 {_removed} 筆（非 {_data_latest.date()}）")
+    # 2. 移除收盤價為 0 / inf / NaN
+    if "close" in all_candidates.columns:
+        _close_num = pd.to_numeric(all_candidates["close"], errors="coerce")
+        _before = len(all_candidates)
+        all_candidates = all_candidates[
+            _close_num.notna() & (_close_num > 0) & np.isfinite(_close_num)
+        ]
+        if (_removed := _before - len(all_candidates)) > 0:
+            _safe_print(f"[aggregate] 移除價格異常（0/inf/NaN）資料 {_removed} 筆")
+
     total_stocks = int(all_candidates["stock_id"].nunique()) if "stock_id" in all_candidates.columns else len(all_candidates)
     all_candidates = (
         all_candidates

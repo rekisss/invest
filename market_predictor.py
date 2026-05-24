@@ -37,12 +37,13 @@ _US_TICKERS = {
     "vix":     "^VIX",
     "dxy":     "DX-Y.NYB",
     "us10y":   "^TNX",
-    # Global macro additions
     "gold":    "GC=F",
     "oil":     "CL=F",
     "us2y":    "^IRX",
     "usdcny":  "CNY=X",
     "twd":     "TWD=X",
+    "tsm_adr": "TSM",
+    "nvda":    "NVDA",
 }
 
 
@@ -122,6 +123,7 @@ _US_FEATURES = [
     "sp500_ret1", "sp500_ret5", "nasdaq_ret1", "vix",
     "sox_ret1", "dxy_ret1", "us10y_ret1",
     "gold_ret1", "oil_ret1", "us2y_ret1", "usdcny_ret1", "twd_ret1",
+    "tsm_adr_ret1", "nvda_ret1",
 ]
 
 _FUTURES_FEATURES = [
@@ -337,6 +339,214 @@ def generate_analysis_text(pred: dict[str, Any], breadth: dict[str, object] | No
     return "\n".join(lines)
 
 
+# ── Claude scenario analysis ───────────────────────────────────────────────────
+
+def generate_scenario_analysis(market_data: dict) -> str:
+    """Rule-based TX scenario analysis from structured market data.
+
+    Evaluates US market, night session, and capital flow signals to output
+    a 5-line qualitative scenario without any external API dependency.
+    """
+    import math as _math
+
+    def _f(path: str, default: float = float("nan")) -> float:
+        keys = path.split(".")
+        node: Any = market_data
+        for k in keys:
+            if not isinstance(node, dict):
+                return default
+            node = node.get(k)
+        try:
+            v = float(node)  # type: ignore[arg-type]
+            return default if (_math.isnan(v) or _math.isinf(v)) else v
+        except (TypeError, ValueError):
+            return default
+
+    sox        = _f("us_market.sox_ret")
+    tsm_adr    = _f("us_market.tsm_adr_ret")
+    nvda       = _f("us_market.nvda_ret")
+    nasdaq     = _f("us_market.nasdaq_ret")
+    vix        = _f("us_market.vix")
+    night_chg  = _f("night_session.change") if market_data.get("night_session") else float("nan")
+    night_trend = (market_data.get("night_session") or {}).get("last_hour_trend", "—")
+    fut_net    = _f("foreign_capital.futures_net")
+    pcr        = _f("foreign_capital.pcr")
+    prob_up    = _f("xgb_prob_up", 0.5)
+
+    # ── 訊號計分（+1 多方、-1 空方）─────────────────────────────────────────
+    bull_score = 0
+    bear_score = 0
+    risk_notes: list[str] = []
+
+    # 費半 / TSM ADR / NVDA（台股最強連動）
+    if not _math.isnan(sox):
+        if sox >= 0.025:
+            bull_score += 2
+        elif sox >= 0.01:
+            bull_score += 1
+        elif sox <= -0.02:
+            bear_score += 2
+        elif sox <= -0.01:
+            bear_score += 1
+
+    if not _math.isnan(tsm_adr):
+        if tsm_adr >= 0.03:
+            bull_score += 2
+        elif tsm_adr >= 0.01:
+            bull_score += 1
+        elif tsm_adr <= -0.02:
+            bear_score += 2
+        elif tsm_adr <= -0.01:
+            bear_score += 1
+
+    if not _math.isnan(nvda):
+        if nvda >= 0.03:
+            bull_score += 1
+        elif nvda <= -0.03:
+            bear_score += 1
+
+    # VIX 恐慌指數
+    if not _math.isnan(vix):
+        if vix >= 30:
+            bear_score += 2
+            risk_notes.append("VIX 恐慌指數偏高，波動劇烈謹慎操作")
+        elif vix >= 22:
+            bear_score += 1
+            risk_notes.append("VIX 偏高，注意假突破風險")
+
+    # 夜盤變化
+    if not _math.isnan(night_chg):
+        if night_chg >= 100:
+            bull_score += 1
+        elif night_chg <= -100:
+            bear_score += 1
+
+    # 夜盤末段走向
+    if "走弱" in night_trend:
+        bear_score += 1
+        risk_notes.append("夜盤末段收弱，追價動能不足")
+    elif "偏強" in night_trend:
+        bull_score += 1
+
+    # 外資期貨未平倉
+    if not _math.isnan(fut_net):
+        if fut_net >= 10000:
+            bull_score += 1
+        elif fut_net <= -10000:
+            bear_score += 1
+
+    # PCR
+    if not _math.isnan(pcr):
+        if pcr >= 1.3:
+            bull_score += 1
+        elif pcr <= 0.7:
+            bear_score += 1
+            risk_notes.append("PCR 偏低，空方籌碼偏多")
+
+    # XGBoost 預測
+    if prob_up >= 0.6:
+        bull_score += 1
+    elif prob_up <= 0.4:
+        bear_score += 1
+
+    # ── 判斷今日偏向 ───────────────────────────────────────────────────────
+    net = bull_score - bear_score
+    if vix >= 30 and not _math.isnan(vix):
+        bias = "偏空（高波動警戒）"
+    elif net >= 3:
+        bias = "偏多"
+    elif net >= 1:
+        bias = "小幅偏多"
+    elif net <= -3:
+        bias = "偏空"
+    elif net <= -1:
+        bias = "小幅偏空"
+    else:
+        bias = "震盪"
+
+    # ── 劇本判斷 ──────────────────────────────────────────────────────────
+    strong_us = (not _math.isnan(sox) and sox >= 0.02) or (not _math.isnan(tsm_adr) and tsm_adr >= 0.025)
+    night_up  = not _math.isnan(night_chg) and night_chg >= 50
+    night_down = not _math.isnan(night_chg) and night_chg <= -50
+    night_weak_end = "走弱" in night_trend
+
+    if strong_us and night_up and not night_weak_end:
+        scenario = "開高走高（美股強勢 + 夜盤正面）"
+    elif strong_us and night_weak_end:
+        scenario = "開高走低（美股強但夜盤末段收弱，追價力道不足）"
+    elif strong_us and not night_up and not night_down:
+        scenario = "開高震盪（美股偏強，等待現貨確認）"
+    elif night_down and not strong_us:
+        scenario = "開低走低（夜盤弱勢）"
+    elif night_down and strong_us:
+        scenario = "開低走高（夜盤跌但美股相對強，注意低接）"
+    elif net >= 2:
+        scenario = "溫和偏多，無明顯跳空"
+    elif net <= -2:
+        scenario = "溫和偏空，無明顯跳空"
+    else:
+        scenario = "方向不明，區間震盪"
+
+    # ── ORB 建議 ──────────────────────────────────────────────────────────
+    if not _math.isnan(vix) and vix >= 28:
+        orb = "不交易（波動過大）"
+    elif "開高走低" in scenario or "假突破" in scenario:
+        orb = "做回測（小心開高走低）"
+    elif net >= 3 and not night_weak_end:
+        orb = "做突破（多方強勢格局）"
+    elif net <= -3:
+        orb = "做空突破（空方格局）"
+    else:
+        orb = "觀察開盤15分鐘再決策"
+
+    # ── 風險提示 ──────────────────────────────────────────────────────────
+    if not risk_notes:
+        if abs(net) <= 1:
+            risk_notes.append("多空訊號不明確，輕倉觀察")
+        elif net >= 3:
+            risk_notes.append("訊號偏多但避免追高，等回測確認")
+        else:
+            risk_notes.append("訊號偏空，注意反彈陷阱")
+
+    lines = [
+        f"今日：{bias}",
+        f"劇本：{scenario}",
+        f"ORB：{orb}",
+        f"風險：{risk_notes[0]}",
+    ]
+    return "\n".join(lines)
+
+
+def format_us_block(us_df: "pd.DataFrame") -> str:
+    """Format latest US market snapshot as a Discord block. Returns '' if no data."""
+    if us_df is None or us_df.empty:
+        return ""
+    row = us_df.iloc[-1]
+
+    def _pct(col: str) -> str:
+        v = row.get(col)
+        if v is None or (hasattr(v, "__float__") and __import__("math").isnan(float(v))):
+            return "N/A"
+        return f"{float(v)*100:+.1f}%"
+
+    def _val(col: str, decimals: int = 1) -> str:
+        v = row.get(col)
+        if v is None or (hasattr(v, "__float__") and __import__("math").isnan(float(v))):
+            return "N/A"
+        return f"{float(v):.{decimals}f}"
+
+    line1_parts = []
+    for label, col in [("S&P", "sp500_ret1"), ("NASDAQ", "nasdaq_ret1"), ("SOX", "sox_ret1")]:
+        line1_parts.append(f"{label} `{_pct(col)}`")
+    line2_parts = []
+    for label, col in [("TSM ADR", "tsm_adr_ret1"), ("NVDA", "nvda_ret1")]:
+        line2_parts.append(f"{label} `{_pct(col)}`")
+    line2_parts.append(f"VIX `{_val('vix', 1)}`")
+
+    lines = ["📊 **美股（昨收）**", "   " + " | ".join(line1_parts), "   " + " | ".join(line2_parts)]
+    return "\n".join(lines)
+
+
 # ── Discord formatter ──────────────────────────────────────────────────────────
 
 _CONF_EMOJI = {"high": "🟢", "medium": "🟡", "low": "⚪"}
@@ -350,6 +560,10 @@ def format_prediction_block(
     futures_block: str = "",
     news_block: str = "",
     calendar_block: str = "",
+    us_block: str = "",
+    night_block: str = "",
+    chipset_block: str = "",
+    scenario_block: str = "",
 ) -> str:
     if not pred.get("trained"):
         return ""
@@ -368,6 +582,15 @@ def format_prediction_block(
         f"`{label}` · 多方 `{prob_pct}` {_CONF_EMOJI.get(conf, '⚪')}",
         f"   `{bar}` 空方 `{(1-prob)*100:.0f}%`",
     ]
+    if us_block:
+        lines.append("")
+        lines.append(us_block)
+    if night_block:
+        lines.append("")
+        lines.append(night_block)
+    if chipset_block:
+        lines.append("")
+        lines.append(chipset_block)
     if futures_block:
         lines.append("")
         lines.append(futures_block)
@@ -375,6 +598,9 @@ def format_prediction_block(
     if analysis:
         lines.append("")
         lines.append(analysis)
+    if scenario_block:
+        lines.append("")
+        lines.append(scenario_block)
     if news_block:
         lines.append("")
         lines.append(news_block)

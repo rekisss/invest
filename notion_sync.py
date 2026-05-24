@@ -300,6 +300,107 @@ def _sync_row(
     return f"fail:{stock_id}:max_retries"
 
 
+# ── Date summary page ─────────────────────────────────────────────────────────
+
+def _upsert_date_summary(
+    database_id: str,
+    date: str,
+    title_prop: str,
+    top_rows: list[dict],
+    total_scanned: int,
+    entry_count: int,
+) -> None:
+    """Create or update a date-summary page in the Notion database."""
+    existing_id: str | None = None
+    try:
+        resp = _session.post(
+            f"{NOTION_API}/databases/{database_id}/query",
+            headers=_headers(),
+            json={
+                "filter": {
+                    "and": [
+                        {"property": "日期",  "date":   {"equals": date}},
+                        {"property": "類型",  "select": {"equals": "每日摘要"}},
+                    ]
+                },
+                "page_size": 1,
+            },
+            timeout=30,
+        )
+        if resp.ok:
+            results = resp.json().get("results", [])
+            if results:
+                existing_id = results[0]["id"]
+    except Exception:
+        pass
+
+    top_lines = "\n".join(
+        f"{i+1:2d}. {r.get('stock_id', '')} {r.get('name', ''):<10s}"
+        f"  分數 {_sf(r.get('entry_score')):5.1f}"
+        f"  RSI {_sf(r.get('rsi14')):5.1f}"
+        f"  ADX {_sf(r.get('adx14')):5.1f}"
+        f"  {str(r.get('industry_category', ''))}"
+        for i, r in enumerate(top_rows)
+    )
+    summary_line = f"掃描 {total_scanned} 支 · 進場 {entry_count} 支 · TOP {len(top_rows)}"
+
+    properties = {
+        title_prop: {"title": [{"text": {"content": f"📅 {date} 掃描摘要"}}]},
+        "日期":     {"date": {"start": date}},
+        "類型":     {"select": {"name": "每日摘要"}},
+        "條件達成": {"rich_text": _rt(summary_line)},
+    }
+    children = [
+        {
+            "object": "block", "type": "heading_2",
+            "heading_2": {"rich_text": [{"text": {"content": f"🏆 TOP {len(top_rows)} 進場候選"}}]},
+        },
+        {
+            "object": "block", "type": "code",
+            "code": {
+                "rich_text": [{"text": {"content": top_lines[:1900]}}],
+                "language": "plain text",
+            },
+        },
+        {"object": "block", "type": "divider", "divider": {}},
+        {
+            "object": "block", "type": "paragraph",
+            "paragraph": {"rich_text": [{"text": {"content": summary_line}}]},
+        },
+    ]
+
+    if existing_id:
+        _session.patch(
+            f"{NOTION_API}/pages/{existing_id}",
+            headers=_headers(), json={"properties": properties}, timeout=30,
+        )
+        try:
+            old = _session.get(
+                f"{NOTION_API}/blocks/{existing_id}/children",
+                headers=_headers(), timeout=30,
+            ).json().get("results", [])
+            for blk in old:
+                _session.delete(f"{NOTION_API}/blocks/{blk['id']}",
+                                headers=_headers(), timeout=15)
+        except Exception:
+            pass
+        _session.patch(
+            f"{NOTION_API}/blocks/{existing_id}/children",
+            headers=_headers(), json={"children": children}, timeout=30,
+        )
+    else:
+        _session.post(
+            f"{NOTION_API}/pages",
+            headers=_headers(),
+            json={
+                "parent": {"database_id": database_id},
+                "properties": properties,
+                "children": children,
+            },
+            timeout=30,
+        ).raise_for_status()
+
+
 # ── Main sync entry point ─────────────────────────────────────────────────────
 
 def sync_scan_results(
@@ -309,15 +410,15 @@ def sync_scan_results(
     news_map: dict[str, Any] | None = None,
     market_regime: str = "",
     top_stock_ids: set[str] | None = None,
-) -> None:
-    """Upsert all scan results into Notion.
+) -> tuple[int, int]:
+    """Upsert scan results into Notion (TOP 20 + 候選進場 only; skip 無訊號).
 
-    Stocks in ``top_stock_ids`` are tagged "TOP 20"; everything else is
-    "全部掃描". Existing pages for the same date are updated (no duplicates).
+    Creates/updates a date-summary page in addition to individual stock pages.
+    Returns (ok_count, fail_count).
     """
     database_id = os.getenv("NOTION_DATABASE_ID", "").strip()
     if not database_id:
-        return
+        return 0, 0
     news_map = news_map or {}
     top_ids  = top_stock_ids or set()
 
@@ -327,24 +428,25 @@ def sync_scan_results(
     except Exception as exc:
         print(f"[Notion] schema setup warning: {exc}")
 
-    # Fetch existing pages for today to enable upsert (no duplicates)
     existing = _query_existing_for_date(database_id, date)
-    total_in = len(candidates) + len(watchlist)
-    print(f"[Notion] {date} 已有 {len(existing)} 筆，本次同步 {total_in} 筆（含無訊號）+ {len(watchlist)} 筆觀察")
 
-    # Build row list: each candidate appears once, type based on top_ids and entry_signal
+    # Only upload TOP 20 + 候選進場; skip 無訊號 to keep database clean
     rows: list[tuple[Any, str]] = []
+    entry_count = 0
     for _, row in candidates.iterrows():
         sid = str(row.get("stock_id", ""))
         if sid in top_ids:
-            row_type = "TOP 20"
+            rows.append((row, "TOP 20"))
+            entry_count += 1
         elif row.get("entry_signal", False):
-            row_type = "全部掃描"
-        else:
-            row_type = "無訊號"
-        rows.append((row, row_type))
+            rows.append((row, "候選進場"))
+            entry_count += 1
+        # 無訊號 → skip
     for _, row in watchlist.iterrows():
         rows.append((row, "觀察名單"))
+
+    total_candidates = len(candidates)
+    print(f"[Notion] {date} 上傳 {len(rows)} 筆（TOP 20 + 候選進場，略過 {total_candidates - entry_count} 筆無訊號）")
 
     ok_count = fail_count = 0
 
@@ -363,4 +465,15 @@ def sync_scan_results(
                 print(f"[Notion] {result}")
 
     print(f"[Notion] 完成：成功 {ok_count} 筆，失敗 {fail_count} 筆")
+
+    # Build/update date-summary page
+    top_list = [r.to_dict() for _, r in candidates.iterrows()
+                if str(r.get("stock_id", "")) in top_ids]
+    try:
+        _upsert_date_summary(database_id, date, title_prop, top_list,
+                             total_candidates, entry_count)
+        print(f"[Notion] 日期摘要頁已更新：{date}")
+    except Exception as exc:
+        print(f"[Notion] 日期摘要頁更新失敗（graceful skip）: {exc}")
+
     return ok_count, fail_count
