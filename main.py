@@ -1633,7 +1633,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         (2, os.getenv("FINMIND_TOKEN_3")),
     ]
     token_list = [(i, t) for i, t in token_list if t]
-    _chunk_size = max(1, int(os.getenv("SEQUENTIAL_CHUNK_SIZE", "30") or "30"))
+    _chunk_size = max(1, int(os.getenv("SEQUENTIAL_CHUNK_SIZE", "600") or "600"))
     # Detect duplicated tokens (same account key copied into multiple env vars).
     _token_to_idxs: dict[str, list[int]] = {}
     for _i, _t in token_list:
@@ -1685,6 +1685,9 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     for token_idx, token in token_list:
         if not remaining_ids:
             break
+        if token_idx in zero_quota_accounts:
+            _safe_print(f"[sequential] 帳號 {token_idx}: 本輪已確認配額耗盡，略過")
+            continue
         _remaining_before = len(remaining_ids)
 
         # Never hard-skip a token in sequential mode based on pre-probe signals.
