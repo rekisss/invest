@@ -1565,7 +1565,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         ("FINMIND_TOKEN_3", os.getenv("FINMIND_TOKEN_3")),
     ]
     _orig_token_env = os.environ.get("FINMIND_TOKEN", "")
-    _quota_exhausted_keys: set[str] = set()  # env var names already confirmed quota-empty
+    _quota_exhausted_keys: set[str] = set()  # legacy marker; no hard-skip in sequential mode
     full_univ = None
     try:
         for _env_key, _env_val in _all_env_tokens:
@@ -1584,8 +1584,9 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 # Only mark as quota-exhausted for permanent daily limit errors.
                 # Transient rate-limits ("transient rate-limit", "rate limit (402)") must NOT
                 # be treated as permanent — the account may still have quota for the scan.
-                if any(k in _exc_s for k in ("配額已耗盡", "upper limit")):
-                    _quota_exhausted_keys.add(_env_key)
+                # Do not hard-mark this token as exhausted here.
+                # TaiwanStockInfo probe can be transiently throttled and does not always
+                # reflect true per-account scan availability at handoff time.
                 _safe_print(f"[sequential] 取股票清單失敗（{_env_key}）：{_e}，嘗試下一個 token")
                 if os.getenv("DISCORD_WEBHOOK_URL"):
                     send_discord_messages([
@@ -1632,8 +1633,23 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         (2, os.getenv("FINMIND_TOKEN_3")),
     ]
     token_list = [(i, t) for i, t in token_list if t]
+    _chunk_size = max(1, int(os.getenv("SEQUENTIAL_CHUNK_SIZE", "30") or "30"))
+    # Detect duplicated tokens (same account key copied into multiple env vars).
+    _token_to_idxs: dict[str, list[int]] = {}
+    for _i, _t in token_list:
+        _token_to_idxs.setdefault(str(_t), []).append(_i)
+    _dup_groups = [idxs for idxs in _token_to_idxs.values() if len(idxs) > 1]
+    if _dup_groups:
+        _dup_msg = "；".join([",".join([str(x) for x in g]) for g in _dup_groups])
+        _safe_print(f"[sequential] ⚠️ 偵測到重複 token（帳號索引：{_dup_msg}），可能不是三個不同帳號")
+        if os.getenv("DISCORD_WEBHOOK_URL"):
+            send_discord_messages([
+                f"⚠️ **偵測到重複 FINMIND_TOKEN** · {_cst_now()} CST\n"
+                f"帳號索引 `{_dup_msg}` 使用相同 token，請確認三個帳號是否不同"
+            ])
 
     round_new = 0
+    zero_quota_accounts: set[int] = set()
     orig_env_token = os.environ.get("FINMIND_TOKEN", "")
 
     _env_key_map = {0: "FINMIND_TOKEN", 1: "FINMIND_TOKEN_2", 2: "FINMIND_TOKEN_3"}
@@ -1644,77 +1660,58 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     for _pi, _pt in token_list:
         _pk = _env_key_map.get(_pi, f"FINMIND_TOKEN_{_pi}")
         if _pk in _quota_exhausted_keys:
-            _quota_probe_cache[_pi] = (False, "取清單時已確認配額不足")
-            _quota_lines.append(f"帳號 {_pi}: ❌ 取清單時配額不足")
+            _quota_probe_cache[_pi] = (False, "取清單時疑似配額不足（僅提示）")
+            _quota_lines.append(f"帳號 {_pi}: ⚠️ 疑似不足（取清單）")
             continue
         os.environ["FINMIND_TOKEN"] = _pt
         _pc = FinMindClient(cache_dir=client.cache_dir)
         _pok, _pmsg = probe_batch_quota(_pc)
         os.environ["FINMIND_TOKEN"] = orig_env_token
         _quota_probe_cache[_pi] = (_pok, _pmsg)
-        _quota_lines.append(f"帳號 {_pi}: {'✅ 有額度' if _pok else f'❌ 無額度'}")
+        _quota_lines.append(f"帳號 {_pi}: {'✅ 可用（探測）' if _pok else '⚠️ 疑似不足（探測）'}")
     _safe_print(f"[sequential] 帳號配額預檢：{' | '.join(_quota_lines)}")
     if os.getenv("DISCORD_WEBHOOK_URL"):
         send_discord_messages([
             f"📊 **帳號配額預檢** · {_cst_now()} CST\n" + "\n".join(_quota_lines)
         ])
 
+    # Multi-pass budget:
+    # If precheck says N accounts are available, run up to N passes in the same job
+    # (i.e., re-run whole sequential flow N-1 extra times) to improve handoff success.
+    _pre_ok_cnt = sum(1 for _ok, _ in _quota_probe_cache.values() if _ok)
+    _planned_budget = max(0, _pre_ok_cnt - 1)
+    _pass_budget = int(getattr(args, "_sequential_reentry_budget", _planned_budget) or 0)
+
     for token_idx, token in token_list:
         if not remaining_ids:
             break
+        _remaining_before = len(remaining_ids)
 
-        # Skip immediately if this token already confirmed quota-exhausted via fetch_stock_info
-        if _env_key_map.get(token_idx) in _quota_exhausted_keys:
-            _safe_print(f"[sequential] 帳號 {token_idx}: 取股票清單時已確認配額不足，略過")
-            if os.getenv("DISCORD_WEBHOOK_URL"):
-                send_discord_messages([
-                    f"⏰ **帳號 {token_idx} 略過（已確認配額不足）** · {_cst_now()} CST"
-                ])
-            continue
+        # Never hard-skip a token in sequential mode based on pre-probe signals.
+        # Each account always gets a real scan attempt.
 
-        # After account 0 makes hundreds of rapid calls, FinMind may temporarily block
-        # the runner's IP even for a different token. Wait 90 s first, then probe.
-        # If probe shows IP still throttled (not permanent quota exhaustion), wait-and-retry
-        # up to _IP_RETRY_MAX_SECS so this account can actually scan and return data
-        # rather than being skipped entirely.
-        if token_idx > 0:
-            _safe_print(f"[sequential] 帳號 {token_idx}: 等待 90 秒讓 FinMind IP 限流冷卻…")
-            time.sleep(90)
-
+        # 直接切換到下一個帳號，不做固定等待。
+        # 若遇到 IP 限流，交由下方 probe + retry 機制處理。
         os.environ["FINMIND_TOKEN"] = token
         token_client = FinMindClient(cache_dir=client.cache_dir)
 
-        _IP_RETRY_INTERVAL = 60   # seconds between each probe retry
-        _IP_RETRY_MAX_SECS = 480  # give up after 8 minutes of IP-throttle retries
-        _ip_waited = 0
-        _re_ok, _re_msg = probe_batch_quota(token_client)
-        while not _re_ok and "IP 限流" in _re_msg and _ip_waited < _IP_RETRY_MAX_SECS:
-            _safe_print(
-                f"[sequential] 帳號 {token_idx}: IP 仍在限流（{_re_msg}），"
-                f"等待 {_IP_RETRY_INTERVAL}s 後再探測…（已等 {_ip_waited}s / 上限 {_IP_RETRY_MAX_SECS}s）"
-            )
+        # 每次帳號正式開掃前都重新探測一次該帳號配額（使用最新狀態）。
+        # 注意：此探測結果只做提示，不作硬性跳過。實務上 FinMind 在帳號切換
+        # 當下可能回傳暫時性 402，若直接略過會錯失可用帳號。
+        _pre_ok, _pre_msg = probe_batch_quota(token_client)
+        if not _pre_ok and ("配額已耗盡" in _pre_msg or "upper limit" in _pre_msg.lower()):
+            _safe_print(f"[sequential] 帳號 {token_idx}: 開掃前配額檢查顯示不足（{_pre_msg}），仍嘗試實掃確認")
             if os.getenv("DISCORD_WEBHOOK_URL"):
                 send_discord_messages([
-                    f"⏳ **帳號 {token_idx} IP 限流中** · {_cst_now()} CST\n"
-                    f"已等 `{_ip_waited}s`，再等 `{_IP_RETRY_INTERVAL}s` 後重試探測"
+                    f"⚠️ **帳號 {token_idx} 開掃前配額疑似不足** · {_cst_now()} CST\n"
+                    f"{_pre_msg}\n改以實際掃描再確認，避免誤判略過"
                 ])
-            time.sleep(_IP_RETRY_INTERVAL)
-            _ip_waited += _IP_RETRY_INTERVAL
-            token_client = FinMindClient(cache_dir=client.cache_dir)
-            _re_ok, _re_msg = probe_batch_quota(token_client)
 
-        if not _re_ok:
-            # Permanent quota exhaustion (or IP still throttled after 8 min — rare)
-            _is_ip = "IP 限流" in _re_msg
-            _reason = f"IP 限流超時（等待 {_ip_waited}s 仍未冷卻）" if _is_ip else f"配額已耗盡（{_re_msg}）"
-            _safe_print(f"[sequential] 帳號 {token_idx}: {_reason}，跳過")
-            if os.getenv("DISCORD_WEBHOOK_URL"):
-                send_discord_messages([
-                    f"⏰ **帳號 {token_idx} 跳過** · {_cst_now()} CST\n{_reason}"
-                ])
-            os.environ["FINMIND_TOKEN"] = orig_env_token
-            continue
 
+
+        # 不再用切換前 probe 決定跳過，避免誤判「有額度帳號」為無額度。
+        # 直接進入實際掃描；若途中真的配額耗盡，build_daily_snapshot 會回報
+        # quota_exhausted，並由後續邏輯切換下一帳號。
         n_rem = len(remaining_ids)
         _safe_print(f"[sequential] 帳號 {token_idx}: 額度正常，開始掃描 {n_rem} 支")
         if os.getenv("DISCORD_WEBHOOK_URL"):
@@ -1723,7 +1720,13 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 f"剩餘 `{n_rem}/{total}` 支待掃"
             ])
 
-        remaining_univ = full_univ[full_univ["stock_id"].astype(str).isin(remaining_ids)]
+        remaining_univ_all = full_univ[full_univ["stock_id"].astype(str).isin(remaining_ids)]
+        remaining_univ = remaining_univ_all.head(_chunk_size)
+        if len(remaining_univ_all) > len(remaining_univ):
+            _safe_print(
+                f"[sequential] 帳號 {token_idx}: 本輪採用 chunk 掃描 {len(remaining_univ)} 支"
+                f"（尚有 {len(remaining_univ_all) - len(remaining_univ)} 支待後續接力）"
+            )
         gap_file = scan_dir / f"_seq_{token_idx}.csv"
         remaining_univ.to_csv(gap_file, index=False)
 
@@ -1738,11 +1741,18 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         scan_args.checkpoint_csv = str(_ckpt_csv)
 
         _scan_failed = False
+        _scan_exc = None
         try:
             candidates, watchlist, _, breadth = build_daily_snapshot(scan_args, token_client, config)
-        except Exception as _scan_exc:
+        except Exception as _e:
             _scan_failed = True
-            _exc_str = str(_scan_exc).lower()
+            _scan_exc = _e
+        finally:
+            gap_file.unlink(missing_ok=True)
+            os.environ["FINMIND_TOKEN"] = orig_env_token
+
+        if _scan_failed:
+            _exc_str = str(_scan_exc).lower() if _scan_exc is not None else ""
             _is_quota = (
                 "402" in _exc_str
                 or "upper limit" in _exc_str
@@ -1758,12 +1768,35 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     ])
             else:
                 _safe_print(f"[sequential] 帳號 {token_idx}: 掃描異常（{_scan_exc}），切換下一帳號")
-        finally:
-            gap_file.unlink(missing_ok=True)
-            os.environ["FINMIND_TOKEN"] = orig_env_token
-
-        if _scan_failed:
             continue
+
+        _quota_hit = bool(breadth.get("quota_exhausted"))
+        n_actual = int(breadth.get("total_stocks", 0))
+        if _quota_hit and n_actual == 0 and len(remaining_univ) > 0:
+            _safe_print(f"[sequential] 帳號 {token_idx}: 首次掃描即 0 支且回報配額耗盡，等待 20 秒後重試一次")
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"⏳ **帳號 {token_idx} 觸發 0 支配額耗盡保護** · {_cst_now()} CST\n"
+                    f"等待 `20s` 後重試一次，避免誤判"
+                ])
+            time.sleep(20)
+            os.environ["FINMIND_TOKEN"] = token
+            token_client = FinMindClient(cache_dir=client.cache_dir)
+            gap_file = scan_dir / f"_seq_{token_idx}.csv"
+            remaining_univ.to_csv(gap_file, index=False)
+            _ckpt_csv = scan_dir / f"_ckpt_seq{token_idx}_{today}.csv"
+            _ckpt_csv.unlink(missing_ok=True)
+            scan_args.checkpoint_csv = str(_ckpt_csv)
+            try:
+                candidates, watchlist, _, breadth = build_daily_snapshot(scan_args, token_client, config)
+            except Exception as _scan_exc2:
+                _safe_print(f"[sequential] 帳號 {token_idx}: 重試仍失敗（{_scan_exc2}），切換下一帳號")
+                gap_file.unlink(missing_ok=True)
+                os.environ["FINMIND_TOKEN"] = orig_env_token
+                continue
+            finally:
+                gap_file.unlink(missing_ok=True)
+                os.environ["FINMIND_TOKEN"] = orig_env_token
 
         # Determine which stocks were actually attempted this scan.
         # breadth["scanned_ids"] only contains stocks that returned price data
@@ -1776,14 +1809,13 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         # If quota WAS exhausted, only the fetched stocks are safe to mark as done;
         # the rest were skipped by the quota event and must be retried.
         _quota_hit = bool(breadth.get("quota_exhausted"))
+        n_actual = int(breadth.get("total_stocks", 0))
         scanned_now: set[str] = set(breadth.get("scanned_ids") or set())
-        if not _quota_hit:
-            # All stocks in the gap were processed — include empty-data ones too
+        if not _quota_hit and n_actual > 0:
+            # Only when this token really scanned data do we mark the whole gap as attempted.
             scanned_now.update(remaining_univ["stock_id"].astype(str))
 
             # Stocks in the gap that returned NO price data at all → add to persistent blacklist.
-            # These are delisted, have insufficient history, or FinMind has no records for them.
-            # They will be skipped on all future days without wasting API calls.
             _got_data = set(breadth.get("scanned_ids") or set())
             _new_no_data = set(remaining_univ["stock_id"].astype(str)) - _got_data
             if _new_no_data:
@@ -1795,6 +1827,11 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     f"[sequential] 帳號 {token_idx}: 新增 {len(_new_no_data)} 支到空資料黑名單"
                     f"（黑名單共 {len(no_data_ids)} 支）"
                 )
+        elif not _quota_hit and n_actual == 0 and len(remaining_univ) > 0:
+            _safe_print(
+                f"[sequential] 帳號 {token_idx}: 本輪 0 支有效掃描，"
+                "不將剩餘股票標記為已嘗試，交給下一帳號/下一輪"
+            )
 
         if scanned_now:
             already_scanned.update(scanned_now)
@@ -1827,6 +1864,8 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             raw_df = pd.concat([prev, raw_df], ignore_index=True).drop_duplicates(subset=["stock_id"])
         raw_df.to_csv(token_csv, index=False, encoding="utf-8-sig")
         raw_df.to_excel(token_csv.with_suffix(".xlsx"), index=False, engine="openpyxl")
+        _remaining_after = len(remaining_ids)
+        _delta_done = _remaining_before - _remaining_after
 
         if raw_df.empty and len(remaining_univ) > 0:
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚠️ 掃描 0 支有效資料（IP 仍在限流中），本輪略過")
@@ -1836,10 +1875,11 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     f"IP 仍在限流中或配額不足，已略過儲存，下輪繼續接力"
                 ])
 
-        n_actual = int(breadth.get("total_stocks", 0))
         _cand_n = len(candidates)
         _watch_n = len(watchlist)
         if _quota_hit:
+            if n_actual == 0:
+                zero_quota_accounts.add(token_idx)
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚡ 配額耗盡，掃到 {n_actual} 支後提前中止，切換下一帳號")
             if os.getenv("DISCORD_WEBHOOK_URL"):
                 send_discord_messages([
@@ -1851,7 +1891,8 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚠️ 實際掃 0 支（API 可能靜默限流），本輪略過儲存")
         _safe_print(
             f"[sequential] 帳號 {token_idx}: 完成，實際掃 {n_actual} 支，"
-            f"候選 {_cand_n}，觀察 {_watch_n}，累計嘗試 {len(already_scanned)}/{total}"
+            f"候選 {_cand_n}，觀察 {_watch_n}，"
+            f"本帳號接續完成 {_delta_done} 支，累計嘗試 {len(already_scanned)}/{total}"
         )
         if os.getenv("DISCORD_WEBHOOK_URL"):
             _status = "✅" if _cand_n > 0 else "🔵"
@@ -1859,8 +1900,30 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             send_discord_messages([
                 f"{_status} **帳號 {token_idx} 完成{_quota_note}** · {_cst_now()} CST\n"
                 f"掃 `{n_actual}` 支 | 候選 `{_cand_n}` | 觀察 `{_watch_n}`\n"
+                f"接續完成 `{_delta_done}` 支（{_remaining_before} → {_remaining_after}）\n"
                 f"全局累計 `{len(already_scanned)}/{total}` 支"
             ])
+
+    # If this round made progress and reentry budget remains, run another full pass.
+    # Example:
+    #   precheck 2 accounts available -> budget 1 (run once more)
+    #   precheck 3 accounts available -> budget 2 (run twice more)
+    if remaining_ids and round_new > 0 and _pass_budget > 0:
+        _safe_print(
+            f"[sequential] 本輪有進度 {round_new} 支，剩餘 {len(remaining_ids)} 支，"
+            f"啟動整輪重跑（剩餘重跑次數 {_pass_budget}）"
+        )
+        if os.getenv("DISCORD_WEBHOOK_URL"):
+            send_discord_messages([
+                f"🔁 **啟動一次整輪重跑** · {_cst_now()} CST\n"
+                f"本輪新掃 `{round_new}` 支，仍剩 `{len(remaining_ids)}` 支\n"
+                f"依預檢可用帳號策略，將再重跑一次（剩餘重跑次數 `{_pass_budget}`）"
+            ])
+        time.sleep(20)
+        rerun_args = _copy.copy(args)
+        setattr(rerun_args, "_sequential_reentry_budget", _pass_budget - 1)
+        run_sequential_scan(rerun_args, client, config)
+        return
 
     # Round summary
     if not remaining_ids:
