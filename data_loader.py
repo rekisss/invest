@@ -175,10 +175,10 @@ class FinMindClient:
                         raise RuntimeError(
                             f"FinMind 每日配額已耗盡，明天自動重置。(HTTP 402 {dataset})"
                         ) from exc
-                    # Transient rate-limit: retry up to 2 more times (5 s, 10 s)
-                    if attempt < 2:
+                    # Transient rate-limit: retry once briefly then give up fast
+                    if attempt < 1:
                         last_error = exc
-                        time.sleep(5.0 * (attempt + 1))
+                        time.sleep(2.0)
                         continue
                     # Still 402 after retries but body never said "upper limit" →
                     # treat as transient (not permanent quota), caller should skip + continue
@@ -199,12 +199,12 @@ class FinMindClient:
                 # "rate limit" / "limit" alone is just transient throttling → retry
                 if "upper limit" in str(msg).lower():
                     raise RuntimeError(f"FinMind 每日配額已耗盡，明天自動重置。({msg})")
-                # Otherwise transient rate-limit — back off and retry
+                # Otherwise transient rate-limit — retry once briefly then give up fast
                 last_error = RuntimeError(
                     f"FinMind rate limit (402) for {dataset}, attempt {attempt + 1}"
                 )
-                if attempt < 3:
-                    time.sleep(2 ** attempt * 5 + random.uniform(0, 3))
+                if attempt < 1:
+                    time.sleep(2.0)
                 continue
             if api_status is not None and api_status != 200:
                 raise RuntimeError(
