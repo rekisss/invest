@@ -2995,6 +2995,16 @@ def run_aggregate(args: argparse.Namespace) -> None:
             )
 
     message = "\n".join(lines)
+
+    # ── Claude AI 精選推薦 ────────────────────────────────────────────────────
+    try:
+        from claude_insight import generate_daily_picks as _gen_picks
+        _ai_text = _gen_picks(top_stocks=top.to_dict("records"))
+        if _ai_text:
+            message += f"\n\n🤖 **AI 精選推薦**\n━━━━━━━━━━━━━━━━━━━━\n{_ai_text}"
+    except Exception as _ai_exc:
+        _safe_print(f"[Claude] AI 區塊略過: {_ai_exc}")
+
     _safe_print(message)
     if args.notify:
         send_discord_messages(split_message(message))

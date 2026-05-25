@@ -54,7 +54,9 @@ jobs:
         run: |
           DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
           rm -f "output/full_scan/_attempted_${DATE}.csv"
-          echo "已刪除 _attempted_${DATE}.csv，將從頭開始掃描"
+          rm -f "output/full_scan/batch_seq"*"_${DATE}.csv"
+          rm -f "output/full_scan/batch_seq"*"_${DATE}.xlsx"
+          echo "已刪除今日進度（_attempted_ + batch_seq），將完全重新掃描"
 
       - name: 檢查今日是否已全部掃完
         id: check_done

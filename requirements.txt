@@ -9,3 +9,4 @@ xgboost>=2.0.0
 yfinance>=0.2.40
 discord.py>=2.3.0
 pyarrow>=14.0
+anthropic>=0.40.0
