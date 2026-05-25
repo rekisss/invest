@@ -1686,7 +1686,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     # If precheck says N accounts are available, run up to N passes in the same job
     # (i.e., re-run whole sequential flow N-1 extra times) to improve handoff success.
     _pre_ok_cnt = sum(1 for _ok, _ in _quota_probe_cache.values() if _ok)
-    _planned_budget = max(0, _pre_ok_cnt - 1)
+    _planned_budget = 0  # single pass only — no recursive re-run within the same job
     _pass_budget = int(getattr(args, "_sequential_reentry_budget", _planned_budget) or 0)
 
     for token_idx, token in token_list:
