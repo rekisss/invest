@@ -24,6 +24,7 @@ if _env_path.exists():
 from datetime import datetime, timezone, timedelta
 
 import pandas as pd
+import numpy as np
 
 from backtest import run_backtest
 from data_loader import (
