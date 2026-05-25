@@ -430,7 +430,7 @@ def sync_scan_results(
 
     existing = _query_existing_for_date(database_id, date)
 
-    # Only upload TOP 20 + 候選進場; skip 無訊號 to keep database clean
+    # Upload all stocks: TOP 20 / 候選進場 / 無訊號
     rows: list[tuple[Any, str]] = []
     entry_count = 0
     for _, row in candidates.iterrows():
@@ -441,12 +441,13 @@ def sync_scan_results(
         elif row.get("entry_signal", False):
             rows.append((row, "候選進場"))
             entry_count += 1
-        # 無訊號 → skip
+        else:
+            rows.append((row, "無訊號"))
     for _, row in watchlist.iterrows():
         rows.append((row, "觀察名單"))
 
     total_candidates = len(candidates)
-    print(f"[Notion] {date} 上傳 {len(rows)} 筆（TOP 20 + 候選進場，略過 {total_candidates - entry_count} 筆無訊號）")
+    print(f"[Notion] {date} 上傳 {len(rows)} 筆（TOP 20: {len(top_ids)}，候選: {entry_count - len(top_ids)}，無訊號: {total_candidates - entry_count}）")
 
     ok_count = fail_count = 0
 
