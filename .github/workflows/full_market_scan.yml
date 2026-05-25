@@ -6,8 +6,6 @@ name: 全市場掃描 (接力掃描，每小時繼續)
 # 20:00 CST 由 full_market_aggregate.yml 彙整 TOP 20 → Discord
 
 on:
-  schedule:
-    - cron: "0 3,4,5,6,7,8,9,10,11,12 * * 2-6"  # 11:00~20:00 CST 週二~週六
   workflow_dispatch:
     inputs:
       force_rescan:
