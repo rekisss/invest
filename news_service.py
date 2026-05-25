@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
@@ -110,6 +111,24 @@ NEGATIVE_KEYWORDS = [
 ]
 
 
+_EVENT_KEYWORDS: dict[str, list[str]] = {
+    "Fed/聯準會": ["Fed", "FOMC", "聯準會", "升息", "降息", "利率", "鮑爾", "貨幣政策"],
+    "台積電":     ["台積電", "TSMC", "法說", "CoWoS", "先進封裝", "3nm", "2nm", "N3", "N2"],
+    "AI供應鏈":   ["AI", "人工智慧", "輝達", "NVIDIA", "CoWoS", "HBM", "算力", "GB200"],
+    "地緣政治":   ["貿易戰", "關稅", "制裁", "台海", "兩岸", "軍演", "出口管制"],
+    "半導體":     ["費半", "SOX", "晶片", "半導體", "記憶體", "DRAM", "HBM", "晶圓"],
+    "美股":       ["道瓊", "S&P", "那斯達克", "美股", "標普", "史坦普"],
+}
+
+
+def _classify_event(title: str) -> str:
+    """Classify a news title into a market event category."""
+    for event_type, keywords in _EVENT_KEYWORDS.items():
+        if any(kw in title for kw in keywords):
+            return event_type
+    return ""
+
+
 @dataclass
 class NewsClient:
     cache_dir: Path
@@ -175,6 +194,7 @@ class NewsClient:
                     "link": link,
                     "published_at": published_at.isoformat() if published_at else None,
                     "sentiment": _classify_sentiment(title),
+                    "event_type": _classify_event(title),
                 }
             )
             if len(rows) >= limit:
@@ -232,11 +252,12 @@ def summarize_news(news_items: Iterable[dict[str, object]]) -> dict[str, object]
         if sentiment not in counts:
             sentiment = "neutral"
         counts[sentiment] += 1
-        if len(top_headlines) < 3 and item.get("title"):
+        if len(top_headlines) < 5 and item.get("title"):
             top_headlines.append({
                 "title": str(item.get("title") or ""),
                 "snippet": str(item.get("snippet") or ""),
                 "sentiment": str(item.get("sentiment") or "neutral"),
+                "event_type": str(item.get("event_type") or _classify_event(str(item.get("title") or ""))),
                 "source": str(item.get("source") or ""),
                 "published_at": str(item.get("published_at") or ""),
                 "link": str(item.get("link") or ""),
@@ -266,12 +287,56 @@ def summarize_news(news_items: Iterable[dict[str, object]]) -> dict[str, object]
     }
 
 
+def fetch_finmind_market_news(
+    finmind_client: object,
+    top_stocks: list[str] | None = None,
+    days: int = 2,
+) -> list[dict[str, object]]:
+    """Fetch market news from FinMind TaiwanStockNews for key stocks (best-effort)."""
+    if top_stocks is None:
+        top_stocks = ["2330", "2317", "2454", "3008", "2382"]
+    start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    end = datetime.now().strftime("%Y-%m-%d")
+    rows: list[dict[str, object]] = []
+    for stock_id in top_stocks:
+        try:
+            df = finmind_client.fetch_dataset(  # type: ignore[union-attr]
+                "TaiwanStockNews",
+                params={"data_id": stock_id, "start_date": start, "end_date": end},
+                use_cache=True,
+                cache_ttl_days=0.25,
+            )
+            if df.empty:
+                continue
+            title_col = next((c for c in ("title", "description", "content") if c in df.columns), None)
+            date_col = next((c for c in ("date", "published_at", "created_at") if c in df.columns), None)
+            for _, r in df.iterrows():
+                title = str(r[title_col]) if title_col else ""
+                if not title:
+                    continue
+                rows.append({
+                    "title": title[:80],
+                    "snippet": title,
+                    "source": "FinMind",
+                    "published_at": str(r[date_col]) if date_col else "",
+                    "sentiment": _classify_sentiment(title),
+                    "event_type": _classify_event(title),
+                })
+        except Exception as exc:
+            print(f"[news] FinMind news {stock_id} 失敗（skip）: {exc}", file=sys.stderr)
+    return rows
+
+
 def fetch_market_news_sentiment(
     news_client: "NewsClient",
-    days: int = 7,
+    days: int = 2,
     limit: int = 20,
+    finmind_client: object = None,
 ) -> dict[str, object]:
-    """Fetch aggregate news sentiment for the Taiwan stock market overall."""
+    """Fetch aggregate news sentiment combining Google RSS and FinMind news."""
+    all_items: list[dict[str, object]] = []
+
+    # Source 1: Google News RSS
     try:
         news = news_client.fetch_stock_news(
             stock_id="TAIEX",
@@ -279,12 +344,32 @@ def fetch_market_news_sentiment(
             days=days,
             limit=limit,
         )
-        if news.empty:
-            return {}
-        return summarize_news(news.to_dict("records"))
+        if not news.empty:
+            all_items.extend(news.to_dict("records"))
     except Exception as exc:
-        print(f"[news] 台股大盤情緒取得失敗（graceful skip）: {exc}")
+        print(f"[news] Google RSS 取得失敗（graceful skip）: {exc}", file=sys.stderr)
+
+    # Source 2: FinMind TaiwanStockNews (optional)
+    if finmind_client is not None:
+        try:
+            fm_items = fetch_finmind_market_news(finmind_client, days=days)
+            all_items.extend(fm_items)
+        except Exception as exc:
+            print(f"[news] FinMind 新聞合併失敗（graceful skip）: {exc}", file=sys.stderr)
+
+    if not all_items:
         return {}
+
+    # Deduplicate by title prefix (first 20 chars)
+    seen: set[str] = set()
+    deduped: list[dict[str, object]] = []
+    for item in all_items:
+        key = str(item.get("title") or "")[:20]
+        if key and key not in seen:
+            seen.add(key)
+            deduped.append(item)
+
+    return summarize_news(deduped)
 
 
 def format_market_news_block(sentiment: dict[str, object]) -> str:
@@ -300,7 +385,33 @@ def format_market_news_block(sentiment: dict[str, object]) -> str:
     overall = str(sentiment.get("sentiment", "neutral"))
     label = {"positive": "偏多", "negative": "偏空"}.get(overall, "中性")
     emoji = {"positive": "📈", "negative": "📉"}.get(overall, "→")
-    return f"📰 **市場情緒**（近7天台股新聞）\n   正面 `{pos}` 則 | 負面 `{neg}` 則 | {emoji} **{label}**"
+
+    _SENT_EMOJI = {"positive": "🟢", "negative": "🔴", "neutral": "⚪"}
+    lines = ["📰 **市場新聞**（近48小時）"]
+
+    headlines = list(sentiment.get("top_headlines") or [])[:5]
+    for h in headlines:
+        title = str(h.get("title") or "")[:38]
+        sent = str(h.get("sentiment") or "neutral")
+        event = str(h.get("event_type") or "")
+        s_emoji = _SENT_EMOJI.get(sent, "⚪")
+        event_tag = f" `[{event}]`" if event else ""
+        # Relative time
+        time_str = ""
+        pub = str(h.get("published_at") or "")
+        if pub:
+            try:
+                pub_dt = datetime.fromisoformat(pub)
+                now = datetime.now(pub_dt.tzinfo) if pub_dt.tzinfo else datetime.now()
+                h_ago = int((now - pub_dt).total_seconds() / 3600)
+                time_str = f" · {h_ago}h前" if 0 <= h_ago < 48 else ""
+            except Exception:
+                pass
+        lines.append(f"   {s_emoji} {title}{time_str}{event_tag}")
+
+    lines.append(f"   {'─' * 22}")
+    lines.append(f"   正面 `{pos}` 則 | 負面 `{neg}` 則 | {emoji} **{label}**")
+    return "\n".join(lines)
 
 
 def _is_recent(value: object) -> bool:

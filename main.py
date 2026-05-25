@@ -2550,9 +2550,9 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         else:
             inst_feat_df = _frames[0].merge(_frames[1], on="date", how="outer")
 
-    # Market-level news sentiment (quick RSS fetch)
+    # Market-level news sentiment (Google RSS + FinMind combined)
     news_client = NewsClient(Path(args.output) / "news_cache")
-    market_news = fetch_market_news_sentiment(news_client)
+    market_news = fetch_market_news_sentiment(news_client, finmind_client=client)
 
     predictor = MarketPredictor(horizon=5)
     predictor.fit(
