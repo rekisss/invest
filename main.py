@@ -2550,9 +2550,9 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         else:
             inst_feat_df = _frames[0].merge(_frames[1], on="date", how="outer")
 
-    # Market-level news sentiment (quick RSS fetch)
+    # Market-level news sentiment (Google RSS + FinMind combined)
     news_client = NewsClient(Path(args.output) / "news_cache")
-    market_news = fetch_market_news_sentiment(news_client)
+    market_news = fetch_market_news_sentiment(news_client, finmind_client=client)
 
     predictor = MarketPredictor(horizon=5)
     predictor.fit(
@@ -2618,7 +2618,7 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         _chipset_parts.append(f"PCR `{_pcr_val:.2f}`")
     chipset_block = ("💼 **籌碼**\n   " + " | ".join(_chipset_parts)) if _chipset_parts else ""
 
-    scenario_block = ("🎯 **AI 劇本分析**（Claude）\n   " + scenario_text.replace("\n", "\n   ")) if scenario_text else ""
+    scenario_block = ("🎯 **市場結構分析**\n   " + scenario_text.replace("\n", "\n   ")) if scenario_text else ""
 
     latest_date = pd.Timestamp(market_df["date"].max()).strftime("%Y-%m-%d")
     header = f"🌅 **盤前預測** · {latest_date} · {_cst_now()} CST"

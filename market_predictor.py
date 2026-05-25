@@ -487,7 +487,107 @@ def generate_scenario_analysis(market_data: dict) -> str:
     else:
         scenario = "方向不明，區間震盪"
 
-    # ── ORB 建議 ──────────────────────────────────────────────────────────
+    # ── 市場類型分類 ───────────────────────────────────────────────────────
+    heavy_short = not _math.isnan(fut_net) and fut_net <= -35000
+    extreme_short = not _math.isnan(fut_net) and fut_net <= -45000
+    if not _math.isnan(vix) and vix >= 30:
+        mkt_type = "⚡ 極端波動日"
+    elif abs(net) >= 4 and strong_us and not night_weak_end:
+        mkt_type = "🔥 強趨勢日"
+    elif heavy_short and strong_us and night_weak_end:
+        mkt_type = "⚠️ 假突破日（軋空風險）"
+    elif net <= -2 and not _math.isnan(night_chg) and night_chg <= -100:
+        mkt_type = "📉 開低走低（偏空趨勢）"
+    elif net >= 2 and not _math.isnan(night_chg) and night_chg >= 100:
+        mkt_type = "📈 開高走高（偏多趨勢）"
+    elif (not _math.isnan(vix) and vix >= 22) or (not _math.isnan(fut_net) and abs(fut_net) >= 30000):
+        mkt_type = "🔄 多空雙巴日"
+    else:
+        mkt_type = "😴 低波動震盪日"
+
+    # ── 主力劇本 ──────────────────────────────────────────────────────────
+    if not _math.isnan(fut_net):
+        fut_net_str = f"{int(fut_net):+,}"
+        if fut_net <= -40000 and net >= 0:
+            main_scenario = (
+                f"外資空單 {fut_net_str} 口（極重），若開盤未大跌可能先軋空拉高，"
+                "之後再轉弱，禁止追多反彈"
+            )
+        elif fut_net <= -30000 and net < 0:
+            main_scenario = (
+                f"外資空單 {fut_net_str} 口，大方向偏空。"
+                "早盤小幅反彈屬空方回補，非真正轉多，等 ORB 確認再做空"
+            )
+        elif fut_net >= 20000 and net > 0:
+            main_scenario = (
+                f"外資多單 {fut_net_str} 口，偏多格局。"
+                "回測支撐低接，避免追高"
+            )
+        elif net >= 3:
+            main_scenario = "多方訊號強，趨勢做多，但留意過熱後的急跌洗盤"
+        elif net <= -3:
+            main_scenario = "空方訊號強，趨勢做空，反彈視為加碼機會"
+        else:
+            main_scenario = "多空訊號混雜，區間操作為主，等突破確認再順勢"
+    else:
+        main_scenario = "外資籌碼資料不足，依技術面操作"
+
+    # ── 最佳策略 ──────────────────────────────────────────────────────────
+    if not _math.isnan(vix) and vix >= 28:
+        best_strategy = "不交易（VIX 過高，波動難控）"
+    elif "假突破" in mkt_type:
+        best_strategy = "反彈至 VWAP 附近做空 / 等開盤15分鐘觀察方向"
+    elif "開高走低" in scenario:
+        best_strategy = "等開高後回測 ORB 低點確認做空"
+    elif net >= 3 and not night_weak_end:
+        best_strategy = "ORB 上破即做多，回測 ORB 高點加碼"
+    elif net <= -3:
+        best_strategy = "ORB 下破即做空，反彈 VWAP 附近加空"
+    else:
+        best_strategy = "觀察開盤15分鐘，等 ORB 突破方向再進場"
+
+    # ── 危險訊號 ──────────────────────────────────────────────────────────
+    dangers: list[str] = []
+    if extreme_short:
+        dangers.append(f"軋空風險極高（外資空單 {int(fut_net):,} 口）")
+    elif heavy_short:
+        dangers.append(f"軋空風險（外資空單 {int(fut_net):,} 口過重）")
+    if not _math.isnan(vix) and vix >= 25:
+        dangers.append(f"VIX {vix:.0f} 偏高，注意假突破洗盤")
+    if not _math.isnan(pcr) and pcr > 1.5:
+        dangers.append(f"PCR {pcr:.2f} 恐慌偏高，留意技術反彈")
+    if not _math.isnan(night_chg) and abs(night_chg) > 200:
+        dir_str = "向上" if night_chg > 0 else "向下"
+        dangers.append(f"夜盤缺口 {int(night_chg):+} 點（{dir_str}跳空過大，易反轉）")
+    if not dangers:
+        dangers.append("無重大警示，正常操作")
+    danger_str = " · ".join(dangers)
+
+    # ── 禁止交易條件 ──────────────────────────────────────────────────────
+    forbidden: list[str] = []
+    if not _math.isnan(vix) and vix >= 28:
+        forbidden.append("禁止 ORB 策略（VIX 過高）")
+    if not _math.isnan(night_chg) and abs(night_chg) > 200:
+        dir_str = "多" if night_chg > 0 else "空"
+        forbidden.append(f"禁止追{dir_str}缺口超過 200 點")
+    if fut_net <= -40000 and not _math.isnan(fut_net):
+        forbidden.append("禁止反彈高點追多（軋空陷阱）")
+    if not forbidden:
+        forbidden.append("無特別限制")
+    forbidden_str = " · ".join(forbidden)
+
+    # ── 勝率估計 ──────────────────────────────────────────────────────────
+    win_base = 50 + net * 6
+    if "趨勢" in mkt_type:
+        win_base += 8
+    if "雙巴" in mkt_type or "假突破" in mkt_type:
+        win_base -= 10
+    if not _math.isnan(vix) and vix >= 28:
+        win_base -= 8
+    win_rate = max(30, min(72, round(win_base)))
+    direction_label = "偏多" if net > 0 else "偏空" if net < 0 else "中性"
+
+    # ── ORB 建議（向後相容）───────────────────────────────────────────────
     if not _math.isnan(vix) and vix >= 28:
         orb = "不交易（波動過大）"
     elif "開高走低" in scenario or "假突破" in scenario:
@@ -509,10 +609,12 @@ def generate_scenario_analysis(market_data: dict) -> str:
             risk_notes.append("訊號偏空，注意反彈陷阱")
 
     lines = [
-        f"今日：{bias}",
-        f"劇本：{scenario}",
-        f"ORB：{orb}",
-        f"風險：{risk_notes[0]}",
+        f"📊 市場類型：{mkt_type}",
+        f"📋 主力劇本：{main_scenario}",
+        f"🎯 最佳策略：{best_strategy}",
+        f"⚡ 危險訊號：{danger_str}",
+        f"🚫 禁止交易：{forbidden_str}",
+        f"📈 勝率估計：{direction_label}策略 ~{win_rate}%",
     ]
     return "\n".join(lines)
 
