@@ -147,6 +147,7 @@ class FinMindClient:
                 cache_path.unlink(missing_ok=True)
 
         request_params: dict[str, str] = {"dataset": dataset}
+        time.sleep(0.3)  # rate-limit guard: spread requests to avoid IP throttling
         for key, value in params.items():
             if value is not None:
                 request_params[key] = value
