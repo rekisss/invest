@@ -1899,11 +1899,16 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
             else:
                 raw_df = candidates.copy()
         if token_csv.exists():
-            # Merge with previous run's data for the same account (fill-gaps / re-run)
-            prev = pd.read_csv(token_csv, encoding="utf-8-sig")
-            raw_df = pd.concat([prev, raw_df], ignore_index=True).drop_duplicates(subset=["stock_id"])
-        raw_df.to_csv(token_csv, index=False, encoding="utf-8-sig")
-        raw_df.to_excel(token_csv.with_suffix(".xlsx"), index=False, engine="openpyxl")
+            try:
+                if token_csv.stat().st_size > 0:
+                    prev = pd.read_csv(token_csv, encoding="utf-8-sig")
+                    if not prev.empty:
+                        raw_df = pd.concat([prev, raw_df], ignore_index=True).drop_duplicates(subset=["stock_id"])
+            except Exception as _csv_exc:
+                _safe_print(f"[sequential] ⚠️ 無法讀取 {token_csv.name}（{_csv_exc}），略過合併")
+        if not raw_df.empty:
+            raw_df.to_csv(token_csv, index=False, encoding="utf-8-sig")
+            raw_df.to_excel(token_csv.with_suffix(".xlsx"), index=False, engine="openpyxl")
         _remaining_after = len(remaining_ids)
         _delta_done = _remaining_before - _remaining_after
 
@@ -1957,6 +1962,20 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 f"接續完成 `{_delta_done}` 支（{_remaining_before} → {_remaining_after}）\n"
                 f"全局累計 `{len(already_scanned)}/{total}` 支"
             ])
+
+    # If all accounts returned 0 results (weekend/holiday/no data), mark remaining
+    # stocks as attempted today so the hourly job doesn't retry indefinitely.
+    # They will be rescanned tomorrow (daily _attempted_ file is date-scoped).
+    if round_new == 0 and remaining_ids:
+        _safe_print(
+            f"[sequential] ⚠️ 本輪所有帳號均返回 0 支有效資料，"
+            f"將剩餘 {len(remaining_ids)} 支標記為今日已嘗試（週末/假日/無資料保護）"
+        )
+        already_scanned.update(remaining_ids)
+        remaining_ids.clear()
+        pd.DataFrame({"stock_id": sorted(already_scanned)}).to_csv(
+            attempted_csv, index=False, encoding="utf-8-sig"
+        )
 
     # If this round made progress and reentry budget remains, run another full pass.
     # Example:
