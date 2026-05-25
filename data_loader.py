@@ -173,6 +173,13 @@ class FinMindClient:
                     except Exception:
                         pass
                     if "upper limit" in body.lower() or "每日" in body or "daily" in body.lower():
+                        # FinMind IP throttle sometimes returns the same 402 body as real
+                        # quota exhaustion. Retry once after a wait to distinguish them:
+                        # if it recovers → was just IP throttle; if it fails again → real quota.
+                        if attempt < 1:
+                            last_error = exc
+                            time.sleep(20)
+                            continue
                         raise RuntimeError(
                             f"FinMind 每日配額已耗盡，明天自動重置。(HTTP 402 {dataset})"
                         ) from exc
@@ -199,6 +206,11 @@ class FinMindClient:
                 # Only "upper limit" means permanent daily quota exhaustion;
                 # "rate limit" / "limit" alone is just transient throttling → retry
                 if "upper limit" in str(msg).lower():
+                    # Same ambiguity as HTTP 402: retry once with wait before giving up.
+                    if attempt < 1:
+                        last_error = RuntimeError(f"FinMind 疑似配額耗盡，等待重試… ({msg})")
+                        time.sleep(20)
+                        continue
                     raise RuntimeError(f"FinMind 每日配額已耗盡，明天自動重置。({msg})")
                 # Otherwise transient rate-limit — retry once briefly then give up fast
                 last_error = RuntimeError(
