@@ -2844,14 +2844,15 @@ def run_aggregate(args: argparse.Namespace) -> None:
     all_candidates = pd.concat(frames, ignore_index=True)
 
     # ── 乾淨化 ──────────────────────────────────────────────────────────────
-    # 1. 過濾 data 欄位非最新日期的殘留列
+    # 1. 過濾超過 7 天的極舊資料（允許跨週末/假日的資料日期差異）
     if "date" in all_candidates.columns:
         all_candidates["date"] = pd.to_datetime(all_candidates["date"])
         _data_latest = all_candidates["date"].max()
+        _cutoff = _data_latest - pd.Timedelta(days=7)
         _before = len(all_candidates)
-        all_candidates = all_candidates[all_candidates["date"] == _data_latest]
+        all_candidates = all_candidates[all_candidates["date"] >= _cutoff]
         if (_removed := _before - len(all_candidates)) > 0:
-            _safe_print(f"[aggregate] 移除非最新日期資料 {_removed} 筆（非 {_data_latest.date()}）")
+            _safe_print(f"[aggregate] 移除過期資料（7天前）{_removed} 筆")
     # 2. 移除收盤價為 0 / inf / NaN
     if "close" in all_candidates.columns:
         _close_num = pd.to_numeric(all_candidates["close"], errors="coerce")
