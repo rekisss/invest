@@ -1972,7 +1972,6 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 f"本輪新掃 `{round_new}` 支，仍剩 `{len(remaining_ids)}` 支\n"
                 f"依預檢可用帳號策略，將再重跑一次（剩餘重跑次數 `{_pass_budget}`）"
             ])
-        time.sleep(20)
         rerun_args = _copy.copy(args)
         setattr(rerun_args, "_sequential_reentry_budget", _pass_budget - 1)
         run_sequential_scan(rerun_args, client, config)
