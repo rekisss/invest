@@ -114,7 +114,7 @@ jobs:
             --mode sequential-scan \
             --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
             --lookback-days 420 \
-            --max-universe 1000 \
+            --max-universe 1800 \
             --top-n 50 \
             --workers 2 \
             --output output
