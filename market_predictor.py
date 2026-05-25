@@ -665,6 +665,7 @@ def format_prediction_block(
     us_block: str = "",
     night_block: str = "",
     chipset_block: str = "",
+    taiex_block: str = "",
     scenario_block: str = "",
 ) -> str:
     if not pred.get("trained"):
@@ -693,13 +694,12 @@ def format_prediction_block(
     if chipset_block:
         lines.append("")
         lines.append(chipset_block)
+    if taiex_block:
+        lines.append("")
+        lines.append(taiex_block)
     if futures_block:
         lines.append("")
         lines.append(futures_block)
-    analysis = generate_analysis_text(pred, breadth)
-    if analysis:
-        lines.append("")
-        lines.append(analysis)
     if scenario_block:
         lines.append("")
         lines.append(scenario_block)

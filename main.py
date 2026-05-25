@@ -2640,6 +2640,53 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
 
     scenario_block = ("🎯 **市場結構分析**\n   " + scenario_text.replace("\n", "\n   ")) if scenario_text else ""
 
+    # ── TAIEX 技術指標 (RSI / MACD 直方 / 距MA60) ─────────────────────────────
+    from indicators import add_rsi, add_macd
+    _close = market_df["close"].astype(float)
+    _taiex_tech: dict[str, float | None] = {"rsi14": None, "macd_hist": None, "dist_ma60": None}
+    try:
+        _rsi_s = add_rsi(_close, 14)
+        _taiex_tech["rsi14"] = float(_rsi_s.iloc[-1]) if not _rsi_s.empty else None
+    except Exception:
+        pass
+    try:
+        _macd_df = add_macd(_close)
+        _taiex_tech["macd_hist"] = float(_macd_df["macd_hist"].iloc[-1]) if not _macd_df.empty else None
+    except Exception:
+        pass
+    try:
+        if len(_close) >= 60:
+            _ma60 = _close.rolling(60).mean().iloc[-1]
+            _last_close = _close.iloc[-1]
+            _taiex_tech["dist_ma60"] = (_last_close / _ma60 - 1) * 100 if _ma60 else None
+    except Exception:
+        pass
+
+    _tech_parts: list[str] = []
+    if _taiex_tech["rsi14"] is not None:
+        _tech_parts.append(f"RSI `{_taiex_tech['rsi14']:.0f}`")
+    if _taiex_tech["macd_hist"] is not None:
+        _tech_parts.append(f"MACD直方 `{_taiex_tech['macd_hist']:+.1f}`")
+    if _taiex_tech["dist_ma60"] is not None:
+        _tech_parts.append(f"距MA60 `{_taiex_tech['dist_ma60']:+.1f}%`")
+    taiex_block = ("📈 **加權技術**\n   " + " | ".join(_tech_parts)) if _tech_parts else ""
+
+    # ── Claude 盤前解讀 ────────────────────────────────────────────────────────
+    from claude_insight import generate_premarket_insight
+    _pm_market = {
+        "xgb_prob_up":  pred["prob_up"],
+        "futures_net":  _safe_float(_ft_row.get("foreign_futures_net")),
+        "vix":          _safe_float(_us_row.get("vix")),
+        "night_change": night_data.get("price_change") if night_data else None,
+        "night_trend":  night_data.get("trend", "") if night_data else "",
+        "cash_norm":    _safe_float(_mk_row.get("foreign_inst_norm")),
+        "pcr":          _pcr_val,
+        "nasdaq_ret":   _safe_float(_us_row.get("nasdaq_ret1")),
+        "sox_ret":      _safe_float(_us_row.get("sox_ret1")),
+        "tsm_adr_ret":  _safe_float(_us_row.get("tsm_adr_ret1")),
+    }
+    ai_insight = generate_premarket_insight(_pm_market, _taiex_tech)
+
     latest_date = pd.Timestamp(market_df["date"].max()).strftime("%Y-%m-%d")
     header = f"🌅 **盤前預測** · {latest_date} · {_cst_now()} CST"
     pred_block = format_prediction_block(
@@ -2647,12 +2694,15 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         us_block=format_us_block(us_df if not us_df.empty else None),
         night_block=format_night_session_block(night_data),
         chipset_block=chipset_block,
+        taiex_block=taiex_block,
         futures_block=format_futures_block(futures_df),
         scenario_block=scenario_block,
         news_block=format_market_news_block(market_news),
         calendar_block=format_calendar_block(calendar_events),
     )
     message = header + "\n\n" + (pred_block if pred_block else "⚠️ AI 模型訓練資料不足，無法產生預測。")
+    if ai_insight:
+        message += f"\n\n🤖 **今日操盤要點**\n{ai_insight}"
     _safe_print(message)
     if args.notify:
         send_discord_messages([message])
