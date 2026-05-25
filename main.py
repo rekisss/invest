@@ -2797,6 +2797,44 @@ def run_partial_aggregate(args: argparse.Namespace) -> None:
         send_discord_messages(split_message(message))
 
 
+def _load_historical_top(
+    batch_dir: "Path",
+    today_str: str,
+    past_days: int = 5,
+    top_k: int = 50,
+) -> "dict[str, list[dict]]":
+    """Return {stock_id: [{date, score, rank}, ...]} for stocks in top_k over past_days."""
+    import pandas as _pd
+    history: dict[str, list[dict]] = {}
+    today = _pd.Timestamp(today_str)
+    for delta in range(1, past_days + 1):
+        day = (today - _pd.Timedelta(days=delta)).strftime("%Y-%m-%d")
+        day_files = sorted(batch_dir.glob(f"batch_seq*_{day}.csv"))
+        if not day_files:
+            continue
+        frames = []
+        for p in day_files:
+            try:
+                df = _pd.read_csv(p, encoding="utf-8-sig")
+                if not df.empty and "entry_score" in df.columns and "stock_id" in df.columns:
+                    frames.append(df)
+            except Exception:
+                continue
+        if not frames:
+            continue
+        merged = (
+            _pd.concat(frames, ignore_index=True)
+            .sort_values("entry_score", ascending=False)
+            .drop_duplicates(subset=["stock_id"])
+        )
+        for rank, (_, row) in enumerate(merged.head(top_k).iterrows(), 1):
+            sid = str(row["stock_id"])
+            if sid not in history:
+                history[sid] = []
+            history[sid].append({"date": day, "score": float(row["entry_score"]), "rank": rank})
+    return history
+
+
 def run_aggregate(args: argparse.Namespace) -> None:
     """Merge all batch_NN.csv files from output/full_scan/ and send top-N to Discord."""
     batch_dir = Path(args.output) / "full_scan"
@@ -2907,6 +2945,35 @@ def run_aggregate(args: argparse.Namespace) -> None:
         lines.append(f"📊 {rsi_txt} | {adx_txt} | {vr_txt}{trend_inline}")
         lines.append(f"🏦 外資連買 `{foreign_streak}d`{invest_txt}")
         lines.append(f"⏱ {obs}")
+
+    # ── 跨日持續強勢 ──────────────────────────────────────────────────────────────
+    _hist = _load_historical_top(batch_dir, args.end, past_days=5, top_k=50)
+    _today_top50 = all_candidates.head(50)
+    _persistence_rows = []
+    for _, row in _today_top50.iterrows():
+        sid = str(row.get("stock_id", ""))
+        hist_entries = _hist.get(sid, [])
+        days_count = len(hist_entries)
+        if days_count >= 2:
+            prev_score = hist_entries[-1]["score"]
+            today_score = float(row.get("entry_score", 0))
+            _persistence_rows.append({
+                "stock_id": sid,
+                "name": row.get("name", ""),
+                "today_score": today_score,
+                "days_in_top": days_count + 1,
+                "score_delta": today_score - prev_score,
+            })
+    _persistence_rows.sort(key=lambda x: (-x["days_in_top"], -x["today_score"]))
+    if _persistence_rows:
+        lines.append("")
+        lines.append("📅 **連續入榜（近5天 TOP 50）**")
+        for i, p in enumerate(_persistence_rows[:8], 1):
+            arrow = "↑" if p["score_delta"] > 0 else ("↓" if p["score_delta"] < 0 else "→")
+            delta_str = f" {arrow} `{abs(p['score_delta']):.0f}`" if p["score_delta"] != 0 else ""
+            lines.append(
+                f"   {i}. **{p['stock_id']}** {p['name']}  連續 `{p['days_in_top']}` 天 | 分 `{p['today_score']:.0f}`{delta_str}"
+            )
 
     message = "\n".join(lines)
     _safe_print(message)
