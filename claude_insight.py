@@ -65,3 +65,73 @@ def generate_daily_picks(
     except Exception as exc:
         print(f"[Claude] AI 解讀生成失敗（graceful skip）: {exc}")
         return ""
+
+
+def generate_premarket_insight(
+    market_data: dict[str, Any],
+    taiex_tech: dict[str, Any] | None = None,
+) -> str:
+    """Call Claude Haiku to generate 3-bullet pre-market trading points.
+
+    Reads PREMARKET_AI_KEY env variable (set separately from aggregate's ANTHROPIC_API_KEY
+    so each can be enabled/disabled independently in GitHub Actions).
+
+    market_data keys: xgb_prob_up, futures_net, vix, night_change, night_trend,
+                      cash_norm, pcr, nasdaq_ret, sox_ret, tsm_adr_ret
+    taiex_tech keys:  rsi14, macd_hist, dist_ma60
+
+    Returns Traditional Chinese bullet points, or "" on failure/missing key.
+    """
+    api_key = os.getenv("PREMARKET_AI_KEY", "").strip()
+    if not api_key:
+        return ""
+
+    try:
+        import anthropic
+    except ImportError:
+        return ""
+
+    md = market_data or {}
+    tech = taiex_tech or {}
+
+    def _fmt(v: Any, fmt: str = ".1f", suffix: str = "") -> str:
+        try:
+            return f"{float(v):{fmt}}{suffix}" if v is not None else "-"
+        except (TypeError, ValueError):
+            return "-"
+
+    prob_up = md.get("xgb_prob_up", 0.5)
+    lines_ctx = [
+        f"AI上漲機率 {prob_up:.0%}",
+        f"外資期貨 {_fmt(md.get('futures_net'), '+,.0f', '口')}",
+        f"VIX {_fmt(md.get('vix'), '.1f')}",
+        f"夜盤 {_fmt(md.get('night_change'), '+.0f', '點')} {md.get('night_trend', '')}".strip(),
+        f"外資現貨 {_fmt(md.get('cash_norm'), '+.0%')} | PCR {_fmt(md.get('pcr'), '.2f')}",
+        f"NQ {_fmt(md.get('nasdaq_ret'), '+.1%')} | SOX {_fmt(md.get('sox_ret'), '+.1%')} | TSM {_fmt(md.get('tsm_adr_ret'), '+.1%')}",
+    ]
+    if tech:
+        lines_ctx.append(
+            f"加權RSI {_fmt(tech.get('rsi14'), '.0f')} | "
+            f"MACD直方 {_fmt(tech.get('macd_hist'), '+.1f')} | "
+            f"距MA60 {_fmt(tech.get('dist_ma60'), '+.1f', '%')}"
+        )
+
+    context = "\n".join(lines_ctx)
+    prompt = (
+        "你是台股盤前分析師。根據以下資料，用繁體中文輸出「今日操盤要點」，"
+        "恰好 3 條，每條以「・」開頭，一行內完成。\n"
+        "要求：聚焦「今天要注意什麼、如何應對」，避免重複數字，語氣簡潔專業。\n\n"
+        f"{context}"
+    )
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return msg.content[0].text.strip()
+    except Exception as exc:
+        print(f"[Claude] 盤前解讀生成失敗（graceful skip）: {exc}")
+        return ""

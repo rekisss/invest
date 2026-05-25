@@ -37,6 +37,7 @@ jobs:
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PREMARKET_AI_KEY: ${{ secrets.PREMARKET_AI_KEY }}
         run: |
           python main.py \
             --mode predict \

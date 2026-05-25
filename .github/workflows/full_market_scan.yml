@@ -1,16 +1,10 @@
-name: 全市場掃描 (接力掃描，每小時繼續)
-
-# 架構：每小時觸發一次，3 個帳號依序掃描剩餘股票
-# 每個帳號 ~120 支 × 5 API calls ≈ 600 calls（在限額內）
-# API 每小時重置後接力，最多 5 小時掃完全部 1800 支
-# 進度存於 output/full_scan/batch_daily_YYYY-MM-DD.csv（跨輪次共用）
-# 20:00 CST 由 full_market_aggregate.yml 彙整 TOP 20 → Discord
+name: 全市場掃描（單次）
 
 on:
   workflow_dispatch:
     inputs:
       force_rescan:
-        description: "強制重置今日進度重新掃描（忽略 cache）"
+        description: "強制重置今日進度重新掃描"
         required: false
         default: "false"
         type: choice
@@ -24,7 +18,7 @@ env:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 65
+    timeout-minutes: 110
     permissions:
       contents: write
 
@@ -41,14 +35,6 @@ jobs:
         id: date
         run: echo "date=$(TZ=Asia/Taipei date +%Y-%m-%d)" >> $GITHUB_OUTPUT
 
-      - name: Restore scan cache（掃描進度）
-        uses: actions/cache/restore@v4
-        with:
-          path: output/full_scan
-          key: finmind-scan-${{ steps.date.outputs.date }}-${{ github.run_id }}
-          restore-keys: |
-            finmind-scan-${{ steps.date.outputs.date }}-
-
       - name: 強制重置今日進度（force_rescan=true 時）
         if: ${{ inputs.force_rescan == 'true' }}
         run: |
@@ -56,55 +42,18 @@ jobs:
           rm -f "output/full_scan/_attempted_${DATE}.csv"
           rm -f "output/full_scan/batch_seq"*"_${DATE}.csv"
           rm -f "output/full_scan/batch_seq"*"_${DATE}.xlsx"
-          echo "已刪除今日進度（_attempted_ + batch_seq），將完全重新掃描"
-
-      - name: 檢查今日是否已全部掃完
-        id: check_done
-        run: |
-          DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
-          ATTEMPTED=$(tail -n +2 "output/full_scan/_attempted_${DATE}.csv" 2>/dev/null | wc -l || echo 0)
-          echo "today_attempted=${ATTEMPTED}"
-          if [ "$ATTEMPTED" -ge 1750 ]; then
-            echo "done=true" >> $GITHUB_OUTPUT
-          else
-            echo "done=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: 今日掃描已完成，通知並略過
-        if: steps.check_done.outputs.done == 'true'
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          TS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
-          curl -s -H "Content-Type: application/json" \
-            -d "{\"content\": \"✅ **今日全市場掃描已完成** · ${TS} CST · 略過本輪\"}" \
-            "$DISCORD_WEBHOOK_URL" || true
+          echo "已刪除今日進度，將完全重新掃描"
 
       - name: Set up Python
-        if: steps.check_done.outputs.done != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
-        if: steps.check_done.outputs.done != 'true'
         run: pip install -r requirements.txt
 
-      - name: 判斷是否需要掃描
-        id: guard
-        if: steps.check_done.outputs.done != 'true'
-        run: |
-          EVENT="${{ github.event_name }}"
-          if [ "$EVENT" != "schedule" ] && [ "$EVENT" != "workflow_dispatch" ]; then
-            echo "非排程或手動觸發（event=$EVENT），略過"
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: 接力掃描（依序使用三帳號，額度用完自動切換）
-        if: steps.guard.outputs.skip == 'false'
+      - name: 全市場掃描
         continue-on-error: true
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
@@ -121,7 +70,7 @@ jobs:
             --workers 2 \
             --output output
 
-      - name: 上傳每日掃描 Excel（Artifacts）
+      - name: 上傳掃描 Excel（Artifacts）
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -130,62 +79,28 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Commit 掃描進度
-        if: steps.check_done.outputs.done != 'true' && steps.guard.outputs.skip == 'false'
+      - name: Commit 掃描結果
         continue-on-error: true
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
-          # -X theirs: in rebase context "theirs" = our local commits being
-          # replayed (cache-restored, most complete version); auto-resolves
-          # conflicts in _attempted_*.csv without getting stuck mid-rebase.
           git pull --rebase -X theirs origin main || true
           git add output/full_scan/ || true
           CTS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
-          git diff --staged --quiet || git commit -m "scan: 接力掃描 ${CTS} CST"
-          # Retry git push up to 4 times with exponential backoff.
-          # Each retry re-aborts any pending rebase, re-pulls (-X theirs to
-          # auto-resolve conflicts), then re-stages and re-commits in case the
-          # initial commit was lost inside a mid-rebase state.
-          PUSHED=false
+          git diff --staged --quiet || git commit -m "scan: 全市場掃描 ${CTS} CST"
           for i in 1 2 3 4; do
-            if git push; then
-              PUSHED=true
-              break
-            fi
-            echo "Push attempt $i failed, retrying in $((i * 10))s..."
+            git push && break
             sleep $((i * 10))
-            git rebase --abort 2>/dev/null || true
             git pull --rebase -X theirs origin main || true
             git add output/full_scan/ || true
-            CTS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
-            git diff --staged --quiet || git commit -m "scan: 接力掃描 ${CTS} CST" || true
+            git diff --staged --quiet || git commit -m "scan: 全市場掃描 ${CTS} CST" || true
           done
-          if [ "$PUSHED" = "false" ]; then
-            echo "⚠️ git push failed after 4 attempts — progress may be lost next run"
-            if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-              TS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
-              curl -s -H "Content-Type: application/json" \
-                -d "{\"content\": \"⚠️ **掃描進度 push 失敗** · ${TS} CST · Actions Cache 已備份，下次 run 仍可從 cache 接續\"}" \
-                "$DISCORD_WEBHOOK_URL" || true
-            fi
-          fi
-
-      - name: Save scan cache（掃描進度）
-        if: steps.check_done.outputs.done != 'true' && steps.guard.outputs.skip == 'false'
-        uses: actions/cache/save@v4
-        with:
-          path: output/full_scan
-          key: finmind-scan-${{ steps.date.outputs.date }}-${{ github.run_id }}
 
       - name: Notify Discord on failure
         if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          TS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
           curl -s -H "Content-Type: application/json" \
-            -d "{\"content\": \"⚠️ **接力掃描失敗** · ${TS} CST · 請檢查 Actions logs\"}" \
+            -d "{\"content\": \"⚠️ **全市場掃描失敗** · $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST · 請檢查 Actions logs\"}" \
             "$DISCORD_WEBHOOK_URL" || true

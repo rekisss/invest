@@ -4,6 +4,12 @@ import numpy as np
 import pandas as pd
 from numpy.lib.stride_tricks import sliding_window_view
 
+try:
+    import pandas_ta as _pta
+    _HAS_PTA = True
+except ImportError:
+    _HAS_PTA = False
+
 
 def add_ema(series: pd.Series, span: int) -> pd.Series:
     return series.ewm(span=span, adjust=False).mean()
@@ -24,6 +30,13 @@ def add_sma(series: pd.Series, window: int) -> pd.Series:
 
 
 def add_macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:
+    if _HAS_PTA:
+        r = _pta.macd(close, fast=fast, slow=slow, signal=signal)
+        # columns: MACD_f_s_sig, MACDs_f_s_sig, MACDh_f_s_sig
+        return pd.DataFrame(
+            {"macd": r.iloc[:, 0].values, "macd_signal": r.iloc[:, 1].values, "macd_hist": r.iloc[:, 2].values},
+            index=close.index,
+        )
     macd_arr = (
         close.ewm(span=fast, adjust=False).mean().to_numpy(dtype=float)
         - close.ewm(span=slow, adjust=False).mean().to_numpy(dtype=float)
@@ -36,6 +49,9 @@ def add_macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) 
 
 
 def add_rsi(close: pd.Series, period: int = 14) -> pd.Series:
+    if _HAS_PTA:
+        r = _pta.rsi(close, length=period)
+        return pd.Series(r.values, index=close.index)
     delta = np.diff(close.to_numpy(dtype=float), prepend=np.nan)
     alpha = 1 / period
     ag = pd.Series(np.maximum(delta, 0.0)).ewm(alpha=alpha, min_periods=period, adjust=False).mean().to_numpy(dtype=float)
@@ -48,6 +64,10 @@ def add_rsi(close: pd.Series, period: int = 14) -> pd.Series:
 
 
 def add_adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    if _HAS_PTA:
+        r = _pta.adx(high, low, close, length=period)
+        # columns: ADX_n, DMP_n, DMN_n
+        return pd.Series(r.iloc[:, 0].values, index=high.index)
     h = high.to_numpy(dtype=float)
     l = low.to_numpy(dtype=float)
     c = close.to_numpy(dtype=float)
@@ -55,9 +75,7 @@ def add_adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14)
     dn = -np.diff(l, prepend=np.nan)
     plus_dm_arr = np.where((up > dn) & (up > 0), up, 0.0)
     minus_dm_arr = np.where((dn > up) & (dn > 0), dn, 0.0)
-    _pc = np.empty_like(c)
-    _pc[0] = np.nan
-    _pc[1:] = c[:-1]
+    _pc = np.empty_like(c); _pc[0] = np.nan; _pc[1:] = c[:-1]
     tr_arr = np.fmax(np.fmax(h - l, np.abs(h - _pc)), np.abs(l - _pc))
     alpha = 1 / period
     atr_arr = pd.Series(tr_arr).ewm(alpha=alpha, min_periods=period, adjust=False).mean().to_numpy(dtype=float)
@@ -75,6 +93,20 @@ def add_adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14)
 
 
 def add_bollinger_bands(close: pd.Series, window: int = 20, num_std: float = 2.0) -> pd.DataFrame:
+    if _HAS_PTA:
+        r = _pta.bbands(close, length=window, std=num_std)
+        # columns order: BBL, BBM, BBU, BBB, BBP
+        lower = r.iloc[:, 0].values
+        mid   = r.iloc[:, 1].values
+        upper = r.iloc[:, 2].values
+        pct_b = r.iloc[:, 4].values
+        bw = upper - lower
+        safe_mid = np.where(mid == 0, np.nan, mid)
+        return pd.DataFrame(
+            {"bb_upper": upper, "bb_mid": mid, "bb_lower": lower,
+             "bb_pct_b": pct_b, "bb_bandwidth": bw / safe_mid},
+            index=close.index,
+        )
     close_arr = close.to_numpy(dtype=float)
     n = len(close_arr)
     cs1 = np.empty(n + 1); cs1[0] = 0.0; np.cumsum(close_arr, out=cs1[1:])
@@ -100,6 +132,13 @@ def add_bollinger_bands(close: pd.Series, window: int = 20, num_std: float = 2.0
 
 
 def add_stochastic(high: pd.Series, low: pd.Series, close: pd.Series, k_period: int = 9, d_period: int = 3) -> pd.DataFrame:
+    if _HAS_PTA:
+        r = _pta.stoch(high, low, close, k=k_period, d=d_period)
+        # columns: STOCHk_k_d_3, STOCHd_k_d_3
+        return pd.DataFrame(
+            {"stoch_k": r.iloc[:, 0].values, "stoch_d": r.iloc[:, 1].values},
+            index=close.index,
+        )
     hh = high.rolling(window=k_period, min_periods=k_period).max().to_numpy(dtype=float)
     ll = low.rolling(window=k_period, min_periods=k_period).min().to_numpy(dtype=float)
     c = close.to_numpy(dtype=float)
@@ -118,6 +157,9 @@ def add_stochastic(high: pd.Series, low: pd.Series, close: pd.Series, k_period: 
 
 
 def add_obv(close: pd.Series, volume: pd.Series) -> pd.Series:
+    if _HAS_PTA:
+        r = _pta.obv(close, volume)
+        return pd.Series(r.values, index=close.index)
     c = close.to_numpy(dtype=float)
     v = volume.to_numpy(dtype=float)
     direction = np.empty_like(c)
@@ -128,12 +170,13 @@ def add_obv(close: pd.Series, volume: pd.Series) -> pd.Series:
 
 
 def add_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    if _HAS_PTA:
+        r = _pta.atr(high, low, close, length=period)
+        return pd.Series(r.values, index=high.index)
     h = high.to_numpy(dtype=float)
     l = low.to_numpy(dtype=float)
     c = close.to_numpy(dtype=float)
-    _pc = np.empty_like(c)
-    _pc[0] = np.nan
-    _pc[1:] = c[:-1]
+    _pc = np.empty_like(c); _pc[0] = np.nan; _pc[1:] = c[:-1]
     tr_arr = np.fmax(np.fmax(h - l, np.abs(h - _pc)), np.abs(l - _pc))
     return pd.Series(
         pd.Series(tr_arr).ewm(alpha=1 / period, min_periods=period, adjust=False).mean().to_numpy(dtype=float),
@@ -143,6 +186,13 @@ def add_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14)
 
 def add_adx_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.DataFrame:
     """Compute ADX and ATR together, sharing the True Range calculation."""
+    if _HAS_PTA:
+        adx_r = _pta.adx(high, low, close, length=period)
+        atr_r = _pta.atr(high, low, close, length=period)
+        return pd.DataFrame(
+            {"adx14": adx_r.iloc[:, 0].values, "atr14": atr_r.values},
+            index=high.index,
+        )
     h = high.to_numpy(dtype=float)
     l = low.to_numpy(dtype=float)
     c = close.to_numpy(dtype=float)
@@ -150,9 +200,7 @@ def add_adx_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int =
     dn = -np.diff(l, prepend=np.nan)
     plus_dm_arr = np.where((up > dn) & (up > 0), up, 0.0)
     minus_dm_arr = np.where((dn > up) & (dn > 0), dn, 0.0)
-    _pc = np.empty_like(c)
-    _pc[0] = np.nan
-    _pc[1:] = c[:-1]
+    _pc = np.empty_like(c); _pc[0] = np.nan; _pc[1:] = c[:-1]
     tr_arr = np.fmax(np.fmax(h - l, np.abs(h - _pc)), np.abs(l - _pc))
     alpha = 1 / period
     atr_arr = pd.Series(tr_arr).ewm(alpha=alpha, min_periods=period, adjust=False).mean().to_numpy(dtype=float)
@@ -167,15 +215,10 @@ def add_adx_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int =
     return pd.DataFrame({"adx14": adx_arr, "atr14": atr_arr}, index=high.index)
 
 
-def consecutive_positive(series: pd.Series) -> pd.Series:
-    raw = series.to_numpy(dtype=float)
-    arr = np.where(np.isnan(raw) | (raw <= 0), np.int64(0), np.int64(1))
-    cumsum = np.cumsum(arr)
-    running_max_reset = np.maximum.accumulate(np.where(arr == 0, cumsum, np.int64(0)))
-    return pd.Series(arr * (cumsum - running_max_reset), index=series.index)
-
-
 def add_mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int = 14) -> pd.Series:
+    if _HAS_PTA:
+        r = _pta.mfi(high, low, close, volume, length=period)
+        return pd.Series(r.fillna(50.0).values, index=close.index)
     h = high.to_numpy(dtype=float)
     l = low.to_numpy(dtype=float)
     c = close.to_numpy(dtype=float)
@@ -192,6 +235,45 @@ def add_mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series
     safe_neg = np.where(neg_sum == 0, np.nan, neg_sum)
     mfi = 100.0 - 100.0 / (1.0 + pos_sum / safe_neg)
     return pd.Series(np.where(np.isnan(mfi), 50.0, mfi), index=close.index)
+
+
+def add_williams_r(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    if _HAS_PTA:
+        r = _pta.willr(high, low, close, length=period)
+        return pd.Series(r.values, index=close.index)
+    hh = high.rolling(window=period, min_periods=period).max().to_numpy(dtype=float)
+    ll = low.rolling(window=period, min_periods=period).min().to_numpy(dtype=float)
+    c = close.to_numpy(dtype=float)
+    safe_range = np.where(hh - ll == 0, np.nan, hh - ll)
+    return pd.Series(-100 * (hh - c) / safe_range, index=close.index)
+
+
+def add_cci(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 20) -> pd.Series:
+    if _HAS_PTA:
+        r = _pta.cci(high, low, close, length=period)
+        return pd.Series(r.values, index=close.index)
+    tp = (high.to_numpy(dtype=float) + low.to_numpy(dtype=float) + close.to_numpy(dtype=float)) / 3.0
+    n = len(tp)
+    result = np.full(n, np.nan)
+    if n >= period:
+        wins = sliding_window_view(tp, period)
+        means = wins.mean(axis=1)
+        mad = np.abs(wins - means[:, np.newaxis]).mean(axis=1)
+        denom = 0.015 * np.where(mad == 0, np.nan, mad)
+        result[period - 1:] = (tp[period - 1:] - means) / denom
+    return pd.Series(result, index=close.index)
+
+
+# ── Custom implementations kept as-is ────────────────────────────────────────
+# These are not in pandas-ta or require specific behavior:
+#   consecutive_positive, add_ichimoku, add_ichimoku_cloud, add_lr_slope, add_lr_slopes
+
+def consecutive_positive(series: pd.Series) -> pd.Series:
+    raw = series.to_numpy(dtype=float)
+    arr = np.where(np.isnan(raw) | (raw <= 0), np.int64(0), np.int64(1))
+    cumsum = np.cumsum(arr)
+    running_max_reset = np.maximum.accumulate(np.where(arr == 0, cumsum, np.int64(0)))
+    return pd.Series(arr * (cumsum - running_max_reset), index=series.index)
 
 
 def add_ichimoku(high: pd.Series, low: pd.Series, tenkan_period: int = 9, kijun_period: int = 26, senkou_b_period: int = 52) -> pd.DataFrame:
@@ -214,10 +296,8 @@ def add_ichimoku(high: pd.Series, low: pd.Series, tenkan_period: int = 9, kijun_
     if n > k:
         chikou_arr[:n - k] = high.to_numpy(dtype=float)[k:]
     return pd.DataFrame({
-        "ichi_tenkan": tenkan_arr,
-        "ichi_kijun": kijun_arr,
-        "ichi_senkou_a": senkou_a_arr,
-        "ichi_senkou_b": senkou_b_arr,
+        "ichi_tenkan": tenkan_arr, "ichi_kijun": kijun_arr,
+        "ichi_senkou_a": senkou_a_arr, "ichi_senkou_b": senkou_b_arr,
         "ichi_chikou": chikou_arr,
     }, index=high.index)
 
@@ -240,76 +320,42 @@ def add_ichimoku_cloud(high: pd.Series, low: pd.Series, tenkan_period: int = 9, 
     return pd.DataFrame({"ichi_senkou_a": senkou_a, "ichi_senkou_b": senkou_b}, index=high.index)
 
 
-def add_williams_r(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
-    hh = high.rolling(window=period, min_periods=period).max().to_numpy(dtype=float)
-    ll = low.rolling(window=period, min_periods=period).min().to_numpy(dtype=float)
-    c = close.to_numpy(dtype=float)
-    safe_range = np.where(hh - ll == 0, np.nan, hh - ll)
-    return pd.Series(-100 * (hh - c) / safe_range, index=close.index)
-
-
-def add_cci(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 20) -> pd.Series:
-    tp = (high.to_numpy(dtype=float) + low.to_numpy(dtype=float) + close.to_numpy(dtype=float)) / 3.0
-    n = len(tp)
-    result = np.full(n, np.nan)
-    if n >= period:
-        wins = sliding_window_view(tp, period)
-        means = wins.mean(axis=1)
-        mad = np.abs(wins - means[:, np.newaxis]).mean(axis=1)
-        denom = 0.015 * np.where(mad == 0, np.nan, mad)
-        result[period - 1:] = (tp[period - 1:] - means) / denom
-    return pd.Series(result, index=close.index)
-
-
 def add_lr_slope(close: pd.Series, window: int = 20) -> pd.Series:
-    """Linear regression slope on log-price, returned as % per day.
-
-    Fully vectorized via cumsum — no Python loop per window.
-    For x=[0..n-1]: slope = (n*Sxy - Sx*Sy) / (n*Sxx - Sx^2)
-    """
+    """Linear regression slope on log-price, returned as % per day."""
     n = window
     raw = close.to_numpy(dtype=float)
     log_c = np.log(np.where(np.isnan(raw) | (raw < 1e-9), np.nan, raw))
     nan_mask = np.isnan(log_c)
     safe = np.where(nan_mask, 0.0, log_c)
     pos = np.arange(len(log_c), dtype=float)
-
     Sx: float = n * (n - 1) / 2
     Sxx: float = n * (n - 1) * (2 * n - 1) / 6
     denom: float = n * Sxx - Sx ** 2
-
     m = len(safe)
     cum_y = np.empty(m + 1); cum_y[0] = 0.0; np.cumsum(safe, out=cum_y[1:])
     cum_py = np.empty(m + 1); cum_py[0] = 0.0; np.cumsum(pos * safe, out=cum_py[1:])
     cum_nan = np.empty(m + 1, dtype=np.int32); cum_nan[0] = 0; np.cumsum(nan_mask.view(np.int8), out=cum_nan[1:])
-
     t = np.arange(n - 1, len(log_c))
     s = t - n + 1
     has_nan = (cum_nan[t + 1] - cum_nan[s]) > 0
     Sy = cum_y[t + 1] - cum_y[s]
     Sxy = (cum_py[t + 1] - cum_py[s]) - s * Sy
     slope = np.where(has_nan, np.nan, (n * Sxy - Sx * Sy) / denom * 100)
-
     result = np.full(len(log_c), np.nan)
     result[n - 1:] = slope
     return pd.Series(result, index=close.index)
 
 
 def add_lr_slopes(close: pd.Series, windows: tuple[int, ...] = (20, 60)) -> pd.DataFrame:
-    """Compute linear-regression slopes for multiple windows in one pass.
-
-    Shares the log/cumsum prefix computation across all requested windows.
-    """
+    """Compute linear-regression slopes for multiple windows in one pass."""
     raw = close.to_numpy(dtype=float)
     log_c = np.log(np.where(np.isnan(raw) | (raw < 1e-9), np.nan, raw))
     nan_mask = np.isnan(log_c)
     safe = np.where(nan_mask, 0.0, log_c)
     pos = np.arange(len(log_c), dtype=float)
-
     cum_y = np.empty(len(safe) + 1); cum_y[0] = 0.0; np.cumsum(safe, out=cum_y[1:])
     cum_py = np.empty(len(safe) + 1); cum_py[0] = 0.0; np.cumsum(pos * safe, out=cum_py[1:])
     cum_nan_arr = np.empty(len(nan_mask) + 1, dtype=np.int32); cum_nan_arr[0] = 0; np.cumsum(nan_mask.view(np.int8), out=cum_nan_arr[1:])
-
     cols: dict[str, np.ndarray] = {}
     for n in windows:
         Sx: float = n * (n - 1) / 2
