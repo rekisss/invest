@@ -67,6 +67,28 @@ jobs:
           rm -f "output/full_scan/batch_seq"*"_${DATE}.xlsx"
           echo "已刪除今日進度（_attempted_ + batch_seq），將完全重新掃描"
 
+      - name: 清除凌晨無資料的進度檔（避免零進度保護誤標）
+        run: |
+          DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
+          ATTEMPTED="output/full_scan/_attempted_${DATE}.csv"
+          if [ -f "$ATTEMPTED" ]; then
+            LINES=$(wc -l < "$ATTEMPTED")
+            # 凌晨掃描若觸發零進度保護，會把 1700+ 支全部標為已嘗試，但
+            # batch_seq 卻幾乎沒有資料。偵測方式：_attempted_ 行數 > 1500
+            # 但 batch_seq 總筆數 < 200，代表是凌晨無資料導致的假進度。
+            BATCH_LINES=0
+            for f in output/full_scan/batch_seq*_${DATE}.csv; do
+              [ -f "$f" ] && BATCH_LINES=$((BATCH_LINES + $(wc -l < "$f") - 1))
+            done
+            echo "今日 _attempted_: $((LINES-1)) 支，batch 實際資料: $BATCH_LINES 筆"
+            if [ "$((LINES-1))" -gt 1500 ] && [ "$BATCH_LINES" -lt 200 ]; then
+              echo "⚠️ 偵測到凌晨假進度：_attempted_ 遠多於 batch 資料，自動清除重掃"
+              rm -f "$ATTEMPTED"
+              rm -f "output/full_scan/batch_seq"*"_${DATE}.csv"
+              rm -f "output/full_scan/batch_seq"*"_${DATE}.xlsx"
+            fi
+          fi
+
       - name: 檢查今日是否已全部掃完
         id: check_done
         run: |

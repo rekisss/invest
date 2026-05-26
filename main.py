@@ -1963,19 +1963,45 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 f"全局累計 `{len(already_scanned)}/{total}` 支"
             ])
 
-    # If all accounts returned 0 results (weekend/holiday/no data), mark remaining
-    # stocks as attempted today so the hourly job doesn't retry indefinitely.
-    # They will be rescanned tomorrow (daily _attempted_ file is date-scoped).
+    # If all accounts returned 0 results, decide whether to mark as done based on
+    # day-of-week. On weekends/holidays FinMind has no data for the whole day →
+    # mark remaining as attempted so relay doesn't retry indefinitely.
+    # On weekdays, 0 results usually means the scan ran too early (before FinMind
+    # updates EOD data, e.g. midnight) → do NOT mark, just exit so the next
+    # scheduled run (07:30+ CST) can retry with data available.
     if round_new == 0 and remaining_ids:
-        _safe_print(
-            f"[sequential] ⚠️ 本輪所有帳號均返回 0 支有效資料，"
-            f"將剩餘 {len(remaining_ids)} 支標記為今日已嘗試（週末/假日/無資料保護）"
-        )
-        already_scanned.update(remaining_ids)
-        remaining_ids.clear()
-        pd.DataFrame({"stock_id": sorted(already_scanned)}).to_csv(
-            attempted_csv, index=False, encoding="utf-8-sig"
-        )
+        import datetime as _dt
+        _cst_now_dt = _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=8)))
+        _is_weekend = _cst_now_dt.weekday() >= 5  # Saturday=5, Sunday=6
+        if _is_weekend:
+            _safe_print(
+                f"[sequential] ⚠️ 週末/假日：本輪所有帳號均返回 0 支有效資料，"
+                f"將剩餘 {len(remaining_ids)} 支標記為今日已嘗試（明日重新掃）"
+            )
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"📅 **週末/假日無資料** · {_cst_now()} CST\n"
+                    f"剩餘 `{len(remaining_ids)}` 支標記為今日已嘗試，明日重新開始"
+                ])
+            already_scanned.update(remaining_ids)
+            remaining_ids.clear()
+            pd.DataFrame({"stock_id": sorted(already_scanned)}).to_csv(
+                attempted_csv, index=False, encoding="utf-8-sig"
+            )
+        else:
+            # Weekday: 0 results = scan ran too early or transient API issue.
+            # Do NOT pre-mark stocks as done — next scheduled run will retry.
+            _safe_print(
+                f"[sequential] ⚠️ 平日本輪 0 支有效資料（時間太早或 API 暫時無資料），"
+                f"不標記已嘗試，下次接力繼續"
+            )
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"⚠️ **本輪 0 支資料（平日）** · {_cst_now()} CST\n"
+                    f"可能是時間太早（FinMind 尚未更新）或 API 暫時異常\n"
+                    f"不標記已嘗試，等待下次接力自動重試"
+                ])
+            remaining_ids.clear()  # 結束本輪迴圈，但不持久化
 
     # If this round made progress and reentry budget remains, run another full pass.
     # Example:
