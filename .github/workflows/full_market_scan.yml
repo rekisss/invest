@@ -81,8 +81,10 @@ jobs:
               [ -f "$f" ] && BATCH_LINES=$((BATCH_LINES + $(wc -l < "$f") - 1))
             done
             echo "今日 _attempted_: $((LINES-1)) 支，batch 實際資料: $BATCH_LINES 筆"
-            if [ "$((LINES-1))" -gt 1500 ] && [ "$BATCH_LINES" -lt 200 ]; then
-              echo "⚠️ 偵測到凌晨假進度：_attempted_ 遠多於 batch 資料，自動清除重掃"
+            # 若 _attempted_ > 1500 且 batch 筆數 < attempted 的 30%，視為凌晨假進度
+            # 整數算法：batch*100 < attempted*30 等同 batch/attempted < 30%
+            if [ "$((LINES-1))" -gt 1500 ] && [ "$((BATCH_LINES * 100))" -lt "$((((LINES-1)) * 30))" ]; then
+              echo "⚠️ 偵測到凌晨假進度：batch($BATCH_LINES) < attempted($((LINES-1)))×30%，自動清除重掃"
               rm -f "$ATTEMPTED"
               rm -f "output/full_scan/batch_seq"*"_${DATE}.csv"
               rm -f "output/full_scan/batch_seq"*"_${DATE}.xlsx"
