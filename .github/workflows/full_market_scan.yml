@@ -33,12 +33,17 @@ jobs:
 
       - name: 強制重置今日進度（force_rescan=true 時）
         if: ${{ inputs.force_rescan == 'true' }}
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
           rm -f "output/full_scan/_attempted_${DATE}.csv"
           rm -f "output/full_scan/batch_seq"*"_${DATE}.csv"
           rm -f "output/full_scan/batch_seq"*"_${DATE}.xlsx"
-          echo "已刪除今日進度，將完全重新掃描"
+          echo "已刪除今日進度 ${DATE}，將完全重新掃描"
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"🔄 **已重置今日進度** · $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST · 即將從頭掃描\"}" \
+            "$DISCORD_WEBHOOK_URL" || true
 
       - name: Set up Python
         uses: actions/setup-python@v5

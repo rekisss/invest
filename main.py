@@ -1632,9 +1632,10 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
 
     _safe_print(f"[sequential] 今日已嘗試 {len(already_scanned)}/{total}，剩餘未掃 {len(remaining_ids)} 支")
     if os.getenv("DISCORD_WEBHOOK_URL"):
+        _nd_note = f"（已過濾 `{len(no_data_ids)}` 支歷史無資料）" if no_data_ids else ""
         send_discord_messages([
-            f"🚀 **接力掃描啟動** · {_cst_now()} CST · {today}\n"
-            f"已掃 `{len(already_scanned)}/{total}` | 本輪待掃 `{len(remaining_ids)}` 支"
+            f"🚀 **掃描啟動** · {_cst_now()} CST · {today}\n"
+            f"今日已掃 `{len(already_scanned)}/{total}` | 本輪待掃 `{len(remaining_ids)}` 支 {_nd_note}"
         ])
 
     if not remaining_ids:
