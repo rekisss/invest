@@ -2561,14 +2561,13 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
 
     futures_df = build_futures_features(market_df, futures_raw, inst_raw)
 
-    # Merge 三大法人 + 融資融券 into a single inst_df for MarketPredictor
+    # Merge 三大法人 + 融資融券 + PCR into a single inst_df for MarketPredictor
     inst_feat_df: pd.DataFrame | None = None
-    if not mkinst_df.empty or not margin_df.empty:
-        _frames = [df for df in (mkinst_df, margin_df) if not df.empty]
-        if len(_frames) == 1:
-            inst_feat_df = _frames[0]
-        else:
-            inst_feat_df = _frames[0].merge(_frames[1], on="date", how="outer")
+    _inst_frames = [df for df in (mkinst_df, margin_df, pcr_df) if not df.empty]
+    if _inst_frames:
+        inst_feat_df = _inst_frames[0]
+        for _f in _inst_frames[1:]:
+            inst_feat_df = inst_feat_df.merge(_f, on="date", how="outer")
 
     # Market-level news sentiment (Google RSS + FinMind combined)
     news_client = NewsClient(Path(args.output) / "news_cache")
