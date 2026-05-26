@@ -1963,19 +1963,30 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 f"全局累計 `{len(already_scanned)}/{total}` 支"
             ])
 
-    # If all accounts returned 0 results (weekend/holiday/no data), mark remaining
-    # stocks as attempted today so the hourly job doesn't retry indefinitely.
-    # They will be rescanned tomorrow (daily _attempted_ file is date-scoped).
+    # If all accounts returned 0 results, check weekday vs weekend.
+    # On weekends/holidays: mark all as attempted (no data all day, avoid infinite retry).
+    # On weekdays: FinMind likely hasn't updated EOD data yet (early morning scan).
+    #   Do NOT mark as attempted — let the next relay cron retry when data is available.
     if round_new == 0 and remaining_ids:
-        _safe_print(
-            f"[sequential] ⚠️ 本輪所有帳號均返回 0 支有效資料，"
-            f"將剩餘 {len(remaining_ids)} 支標記為今日已嘗試（週末/假日/無資料保護）"
-        )
-        already_scanned.update(remaining_ids)
-        remaining_ids.clear()
-        pd.DataFrame({"stock_id": sorted(already_scanned)}).to_csv(
-            attempted_csv, index=False, encoding="utf-8-sig"
-        )
+        import datetime as _dt
+        _cst_now_dt = _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=8)))
+        _is_weekend = _cst_now_dt.weekday() >= 5  # Saturday=5, Sunday=6
+        if _is_weekend:
+            _safe_print(
+                f"[sequential] ⚠️ 週末/假日本輪 0 支有效資料，"
+                f"將剩餘 {len(remaining_ids)} 支標記為今日已嘗試（防無限重試）"
+            )
+            already_scanned.update(remaining_ids)
+            remaining_ids.clear()
+            pd.DataFrame({"stock_id": sorted(already_scanned)}).to_csv(
+                attempted_csv, index=False, encoding="utf-8-sig"
+            )
+        else:
+            _safe_print(
+                f"[sequential] ⚠️ 平日本輪 0 支有效資料（時間太早或 API 暫時無資料），"
+                f"不標記已嘗試，下次接力繼續（{len(remaining_ids)} 支待掃）"
+            )
+            remaining_ids.clear()  # exit loop without persisting
 
     # If this round made progress and reentry budget remains, run another full pass.
     # Example:
