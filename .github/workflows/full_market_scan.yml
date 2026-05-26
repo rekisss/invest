@@ -6,6 +6,9 @@ name: 全市場掃描（接力）
 # 每日 20:30 CST 由 full_market_aggregate.yml 彙整 TOP 20 → Discord
 
 on:
+  push:
+    branches: [main]
+    paths: ['.trigger-scan']
   schedule:
     # 每2小時掃一輪（CST 07:30 / 09:30 / 11:30 / 13:30 / 15:30 / 17:30）
     - cron: '30 23 * * 0-4'   # 07:30 CST  Mon-Fri（UTC: Sun-Thu 23:30）
