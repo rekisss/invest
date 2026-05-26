@@ -1612,6 +1612,16 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
 
     remaining_ids = set(full_univ["stock_id"].astype(str)) - already_scanned
 
+    # Segment mode: --batch-index N --batch-count 3 → each parallel job scans 1/3 of universe
+    _seg_idx = getattr(args, "batch_index", -1)
+    _seg_cnt = max(1, getattr(args, "batch_count", 1))
+    if _seg_idx >= 0 and _seg_cnt > 1:
+        _sorted_ids = sorted(full_univ["stock_id"].astype(str))
+        _sz = (len(_sorted_ids) + _seg_cnt - 1) // _seg_cnt
+        _segment_ids = set(_sorted_ids[_seg_idx * _sz: (_seg_idx + 1) * _sz])
+        remaining_ids = remaining_ids & _segment_ids
+        _safe_print(f"[sequential] 分段 {_seg_idx}/{_seg_cnt}：共 {len(_segment_ids)} 支，剩餘 {len(remaining_ids)} 未掃")
+
     # Filter out stocks confirmed empty on a previous day (delisted / no price data ever)
     if no_data_ids:
         _before_nd = len(remaining_ids)
