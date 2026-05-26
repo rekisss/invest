@@ -1998,16 +1998,18 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         return
 
     # Round summary
+    _pct = f"{len(already_scanned) / max(total, 1):.0%}"
     if not remaining_ids:
         msg = (
             f"🎉 **今日全部掃完！** · {_cst_now()} CST · {today}\n"
-            f"全部 `{total}` 支已覆蓋 | 本輪新掃 `{round_new}` 支"
+            f"全部 `{total}` 支已覆蓋（100%） | 本輪新掃 `{round_new}` 支"
         )
     else:
+        _passes_left = max(1, round(len(remaining_ids) / max(round_new, 1)))
         msg = (
             f"⏸ **本輪結束** · {_cst_now()} CST · {today}\n"
-            f"本輪新掃 `{round_new}` 支 | 累計 `{len(already_scanned)}/{total}` | "
-            f"剩餘 `{len(remaining_ids)}` 支（下小時繼續）"
+            f"本輪新掃 `{round_new}` 支 | 累計 `{len(already_scanned)}/{total}`（{_pct}）\n"
+            f"剩餘 `{len(remaining_ids)}` 支 · 預估還需約 `{_passes_left}` 輪（每2小時自動接力）"
         )
     _safe_print(msg)
     if os.getenv("DISCORD_WEBHOOK_URL"):
