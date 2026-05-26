@@ -1,7 +1,5 @@
 name: 全市場掃描
 
-# 3 個平行 Job，各用不同 runner（不同 IP），workers=2，約 20-30 分鐘掃完全部 1800 支
-
 on:
   workflow_dispatch:
     inputs:
@@ -20,17 +18,9 @@ env:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 110
     permissions:
       contents: write
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - segment: 0
-          - segment: 1
-          - segment: 2
 
     steps:
       - name: Checkout
@@ -59,14 +49,12 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: 掃描（segment ${{ matrix.segment }}/3）
+      - name: 全市場掃描（3帳號依序，額度用完換下一個）
         continue-on-error: true
         env:
-          # 每個 job 只給自己的 token，不跨帳號
-          FINMIND_TOKEN: >-
-            ${{ matrix.segment == 0 && secrets.FINMIND_TOKEN ||
-                matrix.segment == 1 && secrets.FINMIND_TOKEN_2 ||
-                secrets.FINMIND_TOKEN_3 }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          FINMIND_TOKEN_2: ${{ secrets.FINMIND_TOKEN_2 }}
+          FINMIND_TOKEN_3: ${{ secrets.FINMIND_TOKEN_3 }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           python main.py \
@@ -76,15 +64,13 @@ jobs:
             --max-universe 1800 \
             --top-n 50 \
             --workers 2 \
-            --batch-index ${{ matrix.segment }} \
-            --batch-count 3 \
             --output output
 
       - name: 上傳掃描 Excel（Artifacts）
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: scan-seg${{ matrix.segment }}-${{ github.run_number }}
+          name: daily-scan-${{ github.run_number }}
           path: output/full_scan/batch_seq*.xlsx
           if-no-files-found: ignore
           retention-days: 14
@@ -97,14 +83,14 @@ jobs:
           git pull --rebase -X theirs origin main || true
           git add output/full_scan/ || true
           CTS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
-          git diff --staged --quiet || git commit -m "scan: seg${{ matrix.segment }} ${CTS} CST"
+          git diff --staged --quiet || git commit -m "scan: 全市場掃描 ${CTS} CST"
           for i in 1 2 3 4; do
             git push && break
-            sleep $((i * 15))
+            sleep $((i * 10))
             git pull --rebase -X theirs origin main || true
             git add output/full_scan/ || true
             CTS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
-            git diff --staged --quiet || git commit -m "scan: seg${{ matrix.segment }} ${CTS} CST" || true
+            git diff --staged --quiet || git commit -m "scan: 全市場掃描 ${CTS} CST" || true
           done
 
       - name: Notify Discord on failure
@@ -113,5 +99,5 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           curl -s -H "Content-Type: application/json" \
-            -d "{\"content\": \"⚠️ **掃描失敗 seg${{ matrix.segment }}** · $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST\"}" \
+            -d "{\"content\": \"⚠️ **全市場掃描失敗** · $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST · 請檢查 Actions logs\"}" \
             "$DISCORD_WEBHOOK_URL" || true
