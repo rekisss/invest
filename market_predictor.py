@@ -98,10 +98,11 @@ def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
 
 def _build_taiex_features(df: pd.DataFrame) -> pd.DataFrame:
     c = df["close"]
-    for n in (1, 5, 10, 20):
+    for n in (1, 5, 10, 20, 60):
         df[f"ret_{n}d"] = c.pct_change(n)
     df["vol_10d"] = c.pct_change(1).rolling(10, min_periods=3).std()
-    for n in (10, 20, 60):
+    df["vol_20d"] = c.pct_change(1).rolling(20, min_periods=5).std()
+    for n in (10, 20, 60, 120):
         ma = c.rolling(n, min_periods=1).mean()
         df[f"dist_ma{n}"] = (c - ma) / ma.replace(0, np.nan)
     df["above_ma60"] = (c > c.rolling(60, min_periods=1).mean()).astype(float)
@@ -115,8 +116,8 @@ def _build_taiex_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 _BASE_FEATURES = [
-    "ret_1d", "ret_5d", "ret_10d", "ret_20d", "vol_10d",
-    "dist_ma10", "dist_ma20", "dist_ma60", "above_ma60",
+    "ret_1d", "ret_5d", "ret_10d", "ret_20d", "ret_60d", "vol_10d", "vol_20d",
+    "dist_ma10", "dist_ma20", "dist_ma60", "dist_ma120", "above_ma60",
     "rsi14", "macd_hist",
 ]
 _US_FEATURES = [
@@ -134,6 +135,7 @@ _FUTURES_FEATURES = [
 _INST_FEATURES = [
     "foreign_inst_norm", "trust_inst_norm",
     "margin_purchase_chg", "short_sale_chg",
+    "pcr",
 ]
 
 
@@ -210,11 +212,16 @@ class MarketPredictor:
         self._medians = df_clean.median()
         X = df_clean.values
 
+        neg = int((y == 0).sum())
+        pos = int((y == 1).sum())
+        spw = neg / pos if pos > 0 else 1.0
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             self._model = XGBClassifier(
-                n_estimators=100, max_depth=3, learning_rate=0.1,
+                n_estimators=300, max_depth=4, learning_rate=0.05,
                 subsample=0.8, colsample_bytree=0.8,
+                scale_pos_weight=spw,
                 eval_metric="logloss", verbosity=0, random_state=42,
             ).fit(X, y)
 

@@ -11,10 +11,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import random
 import sys
 import time
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -30,6 +31,105 @@ from indicators import (
 from strategy import StrategyConfig, prepare_market_frame
 
 _UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+_FINMIND_URL = "https://api.finmindtrade.com/api/v4/data"
+
+
+# ── Institutional data (FinMind bulk fetch) ───────────────────────────────────
+
+def _fetch_bulk_institutional(start_date: str, end_date: str) -> dict[str, pd.DataFrame]:
+    """Fetch 三大法人 buy/sell for ALL stocks via one FinMind call.
+
+    Returns dict {stock_id: DataFrame(date, foreign_net, invest_trust_net, dealer_net)}.
+    Returns {} if FINMIND_TOKEN not set or on any error.
+    """
+    token = os.getenv("FINMIND_TOKEN", "").strip()
+    if not token:
+        return {}
+    print(f"\n📊 從 FinMind 批量下載三大法人資料（{start_date} ~ {end_date}）...")
+    try:
+        resp = requests.get(
+            _FINMIND_URL,
+            params={
+                "dataset": "TaiwanStockInstitutionalInvestorsBuySell",
+                "start_date": start_date,
+                "end_date": end_date,
+                "token": token,
+            },
+            timeout=180,
+        )
+        if not resp.ok:
+            print(f"   ⚠️ FinMind 回應 {resp.status_code}，略過三大法人")
+            return {}
+        payload = resp.json()
+        if payload.get("status") != 200 or not payload.get("data"):
+            print(f"   ⚠️ FinMind 無資料（status={payload.get('status')}），略過三大法人")
+            return {}
+        frame = pd.DataFrame(payload["data"])
+    except Exception as exc:
+        print(f"   ⚠️ FinMind 三大法人下載失敗（{exc}），略過")
+        return {}
+
+    frame.columns = [c.lower().strip() for c in frame.columns]
+    frame["date"] = pd.to_datetime(frame["date"])
+    frame["buy"]  = pd.to_numeric(frame.get("buy",  0), errors="coerce").fillna(0)
+    frame["sell"] = pd.to_numeric(frame.get("sell", 0), errors="coerce").fillna(0)
+    frame["net"]  = frame["buy"] - frame["sell"]
+
+    name_col = frame["name"].astype(str) if "name" in frame.columns else pd.Series("", index=frame.index)
+    foreign_mask = name_col.str.contains("外資|外國", na=False)
+    trust_mask   = name_col.str.contains("投信", na=False)
+    dealer_mask  = name_col.str.contains("自營", na=False)
+
+    result: dict[str, pd.DataFrame] = {}
+    if "stock_id" not in frame.columns:
+        return {}
+
+    for sid, grp in frame.groupby("stock_id"):
+        sid = str(sid)
+        dates = grp["date"].drop_duplicates().sort_values()
+        base = dates.rename("date").to_frame().reset_index(drop=True)
+        grp_mask_f = foreign_mask.reindex(grp.index, fill_value=False)
+        grp_mask_t = trust_mask.reindex(grp.index, fill_value=False)
+        grp_mask_d = dealer_mask.reindex(grp.index, fill_value=False)
+        for col, m in [("foreign_net", grp_mask_f), ("invest_trust_net", grp_mask_t), ("dealer_net", grp_mask_d)]:
+            agg = grp.loc[m].groupby("date", as_index=False)["net"].sum().rename(columns={"net": col})
+            base = base.merge(agg, on="date", how="left")
+        base[["foreign_net", "invest_trust_net", "dealer_net"]] = base[["foreign_net", "invest_trust_net", "dealer_net"]].fillna(0)
+        result[sid] = base.sort_values("date").reset_index(drop=True)
+
+    print(f"   三大法人資料：{len(result)} 支股票")
+    return result
+
+
+def _compute_inst_features(inst_df: pd.DataFrame, price_df_dates: pd.Series) -> pd.DataFrame:
+    """Compute streak and 3-day accumulation features from institutional net buy/sell.
+
+    Returns DataFrame with columns: date, foreign_buy_streak, invest_trust_streak,
+    dealer_buy_streak, foreign_buy_3d, invest_trust_buy_2d, dealer_buy_3d
+    """
+    price_dates = pd.to_datetime(price_df_dates).dt.normalize()
+    inst = inst_df.copy()
+    inst["date"] = pd.to_datetime(inst["date"]).dt.normalize()
+    inst = inst.set_index("date").reindex(price_dates).fillna(0)
+
+    out = pd.DataFrame({"date": price_dates.values})
+
+    for col, streak_col, acc_col, acc_days in [
+        ("foreign_net",       "foreign_buy_streak",  "foreign_buy_3d",      3),
+        ("invest_trust_net",  "invest_trust_streak", "invest_trust_buy_2d", 2),
+        ("dealer_net",        "dealer_buy_streak",   "dealer_buy_3d",       3),
+    ]:
+        net = inst.get(col, pd.Series(0.0, index=inst.index))
+        streak = np.zeros(len(net), dtype=int)
+        for i in range(1, len(net)):
+            if net.iloc[i] > 0:
+                streak[i] = streak[i - 1] + 1
+            elif net.iloc[i] < 0:
+                streak[i] = streak[i - 1] - 1
+        out[streak_col] = streak
+        out[acc_col] = (net.rolling(acc_days, min_periods=1).sum() > 0).values
+
+    return out
 
 
 # ── Stock list ────────────────────────────────────────────────────────────────
@@ -173,7 +273,8 @@ def download_stocks_batch(tickers: list[str], period: str) -> dict[str, pd.DataF
 # ── Indicator & feature computation ──────────────────────────────────────────
 
 def compute_features(df: pd.DataFrame, market: pd.DataFrame,
-                     sid: str, config: StrategyConfig) -> pd.DataFrame:
+                     sid: str, config: StrategyConfig,
+                     inst_df: pd.DataFrame | None = None) -> pd.DataFrame:
     """Compute all technical indicators + strategy conditions + forward labels."""
     frame = df.copy()
     n = len(frame)
@@ -313,13 +414,19 @@ def compute_features(df: pd.DataFrame, market: pd.DataFrame,
     frame["open_high_close_low"]    = (op > p_cl * 1.02) & (cl < op)
     frame["gap_chase_after_blowout"]= (p_vr > config.volume_multiplier) & ((op / p_cl - 1) > 0.03)
 
-    # Institutional stubs (no FinMind data available)
-    frame["foreign_buy_streak"]  = 0
-    frame["invest_trust_streak"] = 0
-    frame["dealer_buy_streak"]   = 0
-    frame["foreign_buy_3d"]      = False
-    frame["invest_trust_buy_2d"] = False
-    frame["dealer_buy_3d"]       = False
+    # Institutional flows (real data if available, else zeros)
+    if inst_df is not None and not inst_df.empty:
+        _inst_feat = _compute_inst_features(inst_df, frame["date"])
+        for _col in ["foreign_buy_streak", "invest_trust_streak", "dealer_buy_streak",
+                     "foreign_buy_3d", "invest_trust_buy_2d", "dealer_buy_3d"]:
+            frame[_col] = _inst_feat[_col].values if _col in _inst_feat.columns else 0
+    else:
+        frame["foreign_buy_streak"]  = 0
+        frame["invest_trust_streak"] = 0
+        frame["dealer_buy_streak"]   = 0
+        frame["foreign_buy_3d"]      = False
+        frame["invest_trust_buy_2d"] = False
+        frame["dealer_buy_3d"]       = False
 
     _hard = ["macd_golden_cross", "above_ema60", "ema60_gt_ema120",
              "volume_break", "rsi_strong", "breakout_20d"]
@@ -458,6 +565,11 @@ def main() -> None:
             sys.exit(1)
         print(f"   大盤 {len(market)} 個交易日（{market['date'].min().date()} ~ {market['date'].max().date()}）")
 
+    # 2b. Bulk institutional data (optional, needs FINMIND_TOKEN)
+    _inst_start = (date.today() - timedelta(days=365)).strftime("%Y-%m-%d")
+    _inst_end   = date.today().strftime("%Y-%m-%d")
+    inst_dict: dict[str, pd.DataFrame] = _fetch_bulk_institutional(_inst_start, _inst_end)
+
     # 3. Batch download + feature computation
     total_batches = (len(tickers) + args.batch_size - 1) // args.batch_size
     all_frames: list[pd.DataFrame] = []
@@ -473,7 +585,7 @@ def main() -> None:
 
         ok = skip = 0
         for sid, df in stock_data.items():
-            feat = compute_features(df, market, sid, config)
+            feat = compute_features(df, market, sid, config, inst_df=inst_dict.get(sid))
             if not feat.empty:
                 # Keep only defined output columns that exist
                 keep = [c for c in _OUTPUT_COLS if c in feat.columns]
