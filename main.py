@@ -306,6 +306,70 @@ def _entry_stop_target(close: float, atr: float | None, stop_pct: float = 0.05, 
     return f"{close:.2f}–{entry_hi:.2f}", f"{stop:.2f}", f"{target:.2f}", f"{rr}:1"
 
 
+_EXCEL_SUMMARY_COLS = [
+    ("stock_id",            "股票代號"),
+    ("name",                "名稱"),
+    ("industry_category",   "產業"),
+    ("entry_score",         "進場分數"),
+    ("close",               "收盤價"),
+    ("date",                "資料日期"),
+    ("entry_signal",        "進場訊號"),
+    ("rsi14",               "RSI14"),
+    ("adx14",               "ADX14"),
+    ("volume_ratio",        "量比"),
+    ("foreign_buy_streak",  "外資連買日"),
+    ("invest_trust_streak", "投信連買日"),
+    ("f_score",             "F-Score"),
+    ("macd_hist",           "MACD直方"),
+    ("entry_reason",        "進場原因"),
+]
+
+
+def _write_summary_excel(df: pd.DataFrame, path: "Path") -> None:
+    """Write a clean summary Excel: key columns only, sorted by entry_score, green rows for signals."""
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+
+        src_cols = [c for c, _ in _EXCEL_SUMMARY_COLS if c in df.columns]
+        zh_headers = {c: zh for c, zh in _EXCEL_SUMMARY_COLS if c in df.columns}
+        out = df[src_cols].copy()
+        if "entry_score" in out.columns:
+            out = out.sort_values("entry_score", ascending=False)
+        out = out.rename(columns=zh_headers)
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "掃描結果"
+        header_fill = PatternFill("solid", fgColor="1F4E79")
+        signal_fill = PatternFill("solid", fgColor="E2EFDA")
+
+        for ci, col_name in enumerate(out.columns, 1):
+            cell = ws.cell(row=1, column=ci, value=col_name)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+
+        has_signal_col = "進場訊號" in out.columns
+        for ri, row in enumerate(out.itertuples(index=False), 2):
+            has_signal = bool(getattr(row, "進場訊號", False)) if has_signal_col else False
+            for ci, val in enumerate(row, 1):
+                cell = ws.cell(row=ri, column=ci, value=val)
+                if has_signal:
+                    cell.fill = signal_fill
+                cell.alignment = Alignment(horizontal="center")
+
+        for col in ws.columns:
+            max_len = max((len(str(c.value or "")) for c in col), default=8)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 30)
+
+        ws.freeze_panes = "A2"
+        wb.save(path)
+    except Exception as exc:
+        _safe_print(f"[excel] summary 寫入失敗（graceful skip）: {exc}")
+        df.to_excel(path, index=False, engine="openpyxl")
+
+
 def _safe_print(message: str = "") -> None:
     try:
         print(message)
@@ -1795,13 +1859,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         _quota_hit = bool(breadth.get("quota_exhausted"))
         n_actual = int(breadth.get("total_stocks", 0))
         if _quota_hit and n_actual == 0 and len(remaining_univ) > 0:
-            _safe_print(f"[sequential] 帳號 {token_idx}: 首次掃描即 0 支且回報配額耗盡，等待 20 秒後重試一次")
-            if os.getenv("DISCORD_WEBHOOK_URL"):
-                send_discord_messages([
-                    f"⏳ **帳號 {token_idx} 觸發 0 支配額耗盡保護** · {_cst_now()} CST\n"
-                    f"等待 `20s` 後重試一次，避免誤判"
-                ])
-            time.sleep(20)
+            _safe_print(f"[sequential] 帳號 {token_idx}: 首次掃描即 0 支且回報配額耗盡，立即重試一次")
             os.environ["FINMIND_TOKEN"] = token
             token_client = FinMindClient(cache_dir=client.cache_dir)
             gap_file = scan_dir / f"_seq_{token_idx}.csv"
@@ -1910,7 +1968,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 _safe_print(f"[sequential] ⚠️ 無法讀取 {token_csv.name}（{_csv_exc}），略過合併")
         if not raw_df.empty:
             raw_df.to_csv(token_csv, index=False, encoding="utf-8-sig")
-            raw_df.to_excel(token_csv.with_suffix(".xlsx"), index=False, engine="openpyxl")
+            _write_summary_excel(raw_df, token_csv.with_suffix(".xlsx"))
         _remaining_after = len(remaining_ids)
         _delta_done = _remaining_before - _remaining_after
 
@@ -1934,20 +1992,8 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     f"掃到 `{n_actual}` 支後中止，切換下一帳號\n"
                     f"（若三帳號皆立即耗盡，請確認三個 FINMIND_TOKEN 是否為不同帳號）"
                 ])
-            # Wait for IP-level throttle to clear before next account starts.
-            # Heavy scanning from this account may have triggered per-IP rate limiting
-            # that would silently affect the next account if it starts immediately.
-            _cooldown = int(os.getenv("ACCOUNT_SWITCH_COOLDOWN", "60"))
-            if _cooldown > 0:
-                _safe_print(f"[sequential] 帳號切換冷卻 {_cooldown}s（讓 IP 限流清除）...")
-                time.sleep(_cooldown)
         elif _ip_throttled:
-            # IP throttle caused partial scan — brief cooldown before next account.
-            _ip_cooldown = max(15, int(os.getenv("ACCOUNT_SWITCH_COOLDOWN", "60")) // 4)
-            _safe_print(
-                f"[sequential] 帳號 {token_idx}: IP 限流冷卻 {_ip_cooldown}s 後切換下一帳號..."
-            )
-            time.sleep(_ip_cooldown)
+            _safe_print(f"[sequential] 帳號 {token_idx}: IP 限流，直接切換下一帳號")
         elif n_actual == 0 and len(remaining_univ) > 0:
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚠️ 實際掃 0 支（API 可能靜默限流），本輪略過儲存")
         _safe_print(
