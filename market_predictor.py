@@ -210,11 +210,17 @@ class MarketPredictor:
         self._medians = df_clean.median()
         X = df_clean.values
 
+        neg = int((y == 0).sum())
+        pos = int((y == 1).sum())
+        # Only boost the UP class when it's the minority; when UP is majority, spw=1.0
+        spw = neg / pos if pos > 0 and neg > pos else 1.0
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             self._model = XGBClassifier(
-                n_estimators=100, max_depth=3, learning_rate=0.1,
+                n_estimators=300, max_depth=4, learning_rate=0.05,
                 subsample=0.8, colsample_bytree=0.8,
+                scale_pos_weight=spw,
                 eval_metric="logloss", verbosity=0, random_state=42,
             ).fit(X, y)
 
