@@ -1,14 +1,14 @@
-name: 全市場掃描（接力）
+name: 全市場掃描
 
-# 架構：每2小時觸發一次，3帳號依序用完配額，進度跨輪累積
-# 每輪 ~360 支（3帳號 × 120支），6輪涵蓋全部 1800 支
-# workers=1 → 完全序列請求，消除 IP 並發限流
+# 架構：3 個平行 job，各帶自己的帳號掃 1/3 宇宙
+# seg0(帳號1) + seg1(帳號2) + seg2(帳號3) 同時跑
+# 每輪 ~360 支（3×120），5 輪涵蓋全部 1800 支（vs 單 job 8 輪）
 # 每日 20:30 CST 由 full_market_aggregate.yml 彙整 TOP 20 → Discord
 
 on:
   schedule:
     # 每2小時掃一輪（CST 07:30 / 09:30 / 11:30 / 13:30 / 15:30 / 17:30）
-    - cron: '30 23 * * 0-4'   # 07:30 CST  Mon-Fri（UTC: Sun-Thu 23:30）
+    - cron: '30 23 * * 0-4'   # 07:30 CST  Mon-Fri
     - cron: '30 1 * * 1-5'    # 09:30 CST  Mon-Fri
     - cron: '30 3 * * 1-5'    # 11:30 CST  Mon-Fri
     - cron: '30 5 * * 1-5'    # 13:30 CST  Mon-Fri
@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       force_rescan:
-        description: "強制重置今日進度重新掃描（忽略 cache）"
+        description: "強制重置今日進度重新掃描"
         required: false
         default: "false"
         type: choice
@@ -27,13 +27,18 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  # 帳號切換冷卻：讓 IP 限流在換帳號前清除（秒）
-  ACCOUNT_SWITCH_COOLDOWN: "120"
 
 jobs:
   scan:
+    strategy:
+      matrix:
+        include:
+          - seg: 0
+          - seg: 1
+          - seg: 2
+      fail-fast: false
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 110
     permissions:
       contents: write
 
@@ -46,93 +51,40 @@ jobs:
       - name: Pull latest scan progress
         run: git pull --rebase origin main || true
 
-      - name: Get current date (CST)
-        id: date
-        run: echo "date=$(TZ=Asia/Taipei date +%Y-%m-%d)" >> $GITHUB_OUTPUT
-
-      - name: Restore scan cache（掃描進度）
-        uses: actions/cache/restore@v4
-        with:
-          path: output/full_scan
-          key: finmind-scan-${{ steps.date.outputs.date }}-${{ github.run_id }}
-          restore-keys: |
-            finmind-scan-${{ steps.date.outputs.date }}-
-
       - name: 強制重置今日進度（force_rescan=true 時）
         if: ${{ inputs.force_rescan == 'true' }}
-        run: |
-          DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
-          rm -f "output/full_scan/_attempted_${DATE}.csv"
-          rm -f "output/full_scan/batch_seq"*"_${DATE}.csv"
-          rm -f "output/full_scan/batch_seq"*"_${DATE}.xlsx"
-          echo "已刪除今日進度（_attempted_ + batch_seq），將完全重新掃描"
-
-      - name: 清除凌晨無資料的進度檔（避免零進度保護誤標）
-        run: |
-          DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
-          ATTEMPTED="output/full_scan/_attempted_${DATE}.csv"
-          if [ -f "$ATTEMPTED" ]; then
-            LINES=$(wc -l < "$ATTEMPTED")
-            # 凌晨掃描若觸發零進度保護，會把 1700+ 支全部標為已嘗試，但
-            # batch_seq 卻幾乎沒有資料。偵測方式：_attempted_ 行數 > 1500
-            # 但 batch_seq 總筆數 < 200，代表是凌晨無資料導致的假進度。
-            BATCH_LINES=0
-            for f in output/full_scan/batch_seq*_${DATE}.csv; do
-              [ -f "$f" ] && BATCH_LINES=$((BATCH_LINES + $(wc -l < "$f") - 1))
-            done
-            echo "今日 _attempted_: $((LINES-1)) 支，batch 實際資料: $BATCH_LINES 筆"
-            # 若 _attempted_ > 1500 且 batch 筆數 < attempted 的 30%，視為凌晨假進度
-            # 整數算法：batch*100 < attempted*30 等同 batch/attempted < 30%
-            if [ "$((LINES-1))" -gt 1500 ] && [ "$((BATCH_LINES * 100))" -lt "$((((LINES-1)) * 30))" ]; then
-              echo "⚠️ 偵測到凌晨假進度：batch($BATCH_LINES) < attempted($((LINES-1)))×30%，自動清除重掃"
-              rm -f "$ATTEMPTED"
-              rm -f "output/full_scan/batch_seq"*"_${DATE}.csv"
-              rm -f "output/full_scan/batch_seq"*"_${DATE}.xlsx"
-            fi
-          fi
-
-      - name: 檢查今日是否已全部掃完
-        id: check_done
-        run: |
-          DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
-          ATTEMPTED=$(tail -n +2 "output/full_scan/_attempted_${DATE}.csv" 2>/dev/null | wc -l || echo 0)
-          echo "today_attempted=${ATTEMPTED}"
-          if [ "$ATTEMPTED" -ge 1750 ]; then
-            echo "done=true" >> $GITHUB_OUTPUT
-          else
-            echo "done=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: 今日掃描已完成，通知並略過
-        if: steps.check_done.outputs.done == 'true'
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          TS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
-          curl -s -H "Content-Type: application/json" \
-            -d "{\"content\": \"✅ **今日全市場已掃完** · ${TS} CST · 略過本輪\"}" \
-            "$DISCORD_WEBHOOK_URL" || true
+          DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
+          rm -f "output/full_scan/_attempted_${DATE}.csv"
+          rm -f "output/full_scan/_attempted_${DATE}_seg*.csv"
+          rm -f "output/full_scan/batch_seq"*"_${DATE}.csv"
+          rm -f "output/full_scan/batch_seq"*"_${DATE}.xlsx"
+          echo "已刪除今日進度 ${DATE} (seg ${{ matrix.seg }})，將重新掃描"
+          # 只有 seg0 才發 Discord 通知（避免重複）
+          if [ "${{ matrix.seg }}" = "0" ]; then
+            curl -s -H "Content-Type: application/json" \
+              -d "{\"content\": \"🔄 **已重置今日進度** · $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST · 3 段平行重新掃描\"}" \
+              "$DISCORD_WEBHOOK_URL" || true
+          fi
 
       - name: Set up Python
-        if: steps.check_done.outputs.done != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
-        if: steps.check_done.outputs.done != 'true'
         run: pip install -r requirements.txt
 
-      - name: 接力掃描（workers=1 序列請求，避免 IP 限流）
-        if: steps.check_done.outputs.done != 'true'
+      - name: 掃描 seg${{ matrix.seg }}（專用帳號，1/3 宇宙）
         continue-on-error: true
         env:
-          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
-          FINMIND_TOKEN_2: ${{ secrets.FINMIND_TOKEN_2 }}
-          FINMIND_TOKEN_3: ${{ secrets.FINMIND_TOKEN_3 }}
+          FINMIND_TOKEN:   ${{ matrix.seg == 0 && secrets.FINMIND_TOKEN   || '' }}
+          FINMIND_TOKEN_2: ${{ matrix.seg == 1 && secrets.FINMIND_TOKEN_2 || '' }}
+          FINMIND_TOKEN_3: ${{ matrix.seg == 2 && secrets.FINMIND_TOKEN_3 || '' }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          ACCOUNT_SWITCH_COOLDOWN: ${{ env.ACCOUNT_SWITCH_COOLDOWN }}
         run: |
           python main.py \
             --mode sequential-scan \
@@ -140,57 +92,37 @@ jobs:
             --lookback-days 420 \
             --max-universe 1800 \
             --top-n 50 \
-            --workers 1 \
+            --workers 2 \
+            --batch-index ${{ matrix.seg }} \
+            --batch-count 3 \
             --output output
 
       - name: 上傳掃描 Excel（Artifacts）
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: daily-scan-run${{ github.run_number }}
-          path: output/full_scan/batch_seq*.xlsx
+          name: daily-scan-seg${{ matrix.seg }}-${{ github.run_number }}
+          path: output/full_scan/batch_seq${{ matrix.seg }}*.xlsx
           if-no-files-found: ignore
           retention-days: 14
 
       - name: Commit 掃描進度
-        if: steps.check_done.outputs.done != 'true'
         continue-on-error: true
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git pull --rebase -X theirs origin main || true
           git add output/full_scan/ || true
           CTS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
-          git diff --staged --quiet || git commit -m "scan: 接力掃描 ${CTS} CST"
-          PUSHED=false
+          git diff --staged --quiet || git commit -m "scan: seg${{ matrix.seg }} ${CTS} CST"
           for i in 1 2 3 4; do
-            if git push; then
-              PUSHED=true
-              break
-            fi
+            git push && break
             sleep $((i * 10))
             git pull --rebase -X theirs origin main || true
             git add output/full_scan/ || true
             CTS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
-            git diff --staged --quiet || git commit -m "scan: 接力掃描 ${CTS} CST" || true
+            git diff --staged --quiet || git commit -m "scan: seg${{ matrix.seg }} ${CTS} CST" || true
           done
-          if [ "$PUSHED" = "false" ]; then
-            if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-              TS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
-              curl -s -H "Content-Type: application/json" \
-                -d "{\"content\": \"⚠️ **掃描進度 push 失敗** · ${TS} CST\"}" \
-                "$DISCORD_WEBHOOK_URL" || true
-            fi
-          fi
-
-      - name: Save scan cache（掃描進度）
-        if: steps.check_done.outputs.done != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: output/full_scan
-          key: finmind-scan-${{ steps.date.outputs.date }}-${{ github.run_id }}
 
       - name: Notify Discord on failure
         if: failure()
@@ -198,5 +130,5 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           curl -s -H "Content-Type: application/json" \
-            -d "{\"content\": \"⚠️ **接力掃描失敗** · $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST · 請檢查 Actions logs\"}" \
+            -d "{\"content\": \"⚠️ **掃描失敗** seg${{ matrix.seg }} · $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST · 請檢查 Actions logs\"}" \
             "$DISCORD_WEBHOOK_URL" || true

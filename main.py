@@ -1540,7 +1540,9 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     today = args.end
     scan_dir = Path(args.output) / "full_scan"
     scan_dir.mkdir(parents=True, exist_ok=True)
-    attempted_csv = scan_dir / f"_attempted_{today}.csv"
+    _seg_idx = getattr(args, "batch_index", -1)
+    _seg_suffix = f"_seg{_seg_idx}" if _seg_idx >= 0 else ""
+    attempted_csv = scan_dir / f"_attempted_{today}{_seg_suffix}.csv"
     no_data_csv = scan_dir / "_no_data_stocks.csv"  # persistent cross-day blacklist
 
     # Load which stocks were already attempted today (all fetched, incl. no-signal)
