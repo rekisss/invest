@@ -2582,6 +2582,22 @@ def run_walk_forward(args: argparse.Namespace, client: FinMindClient, config: St
         consistency = int((wf_frame["total_return_pct"] > 0).sum())
         _safe_print(f"  Positive folds: {consistency}/{len(fold_rows)}")
 
+        # ── Enhanced metrics via backtest_pkg ────────────────────────────────────
+        try:
+            from backtest_pkg.metrics import confusion_matrix_summary, sharpe_ratio as _sharpe, max_drawdown as _mdd
+            _returns = wf_frame["total_return_pct"].values / 100
+            _eq_curve = np.cumprod(1 + _returns) * 100
+            _sr = _sharpe(_returns, periods_per_year=len(_returns))
+            _mdd_val = _mdd(_eq_curve)
+            _win = int((wf_frame["total_return_pct"] > 0).sum())
+            _n = len(wf_frame)
+            _safe_print(f"\n[backtest_pkg] Cross-fold summary:")
+            _safe_print(f"  Sharpe (annualised): {_sr:.3f}")
+            _safe_print(f"  Max drawdown (fold equity): {_mdd_val:.1%}")
+            _safe_print(f"  Win rate (folds): {_win}/{_n} = {_win/_n:.0%}")
+        except Exception as _bm_exc:
+            _safe_print(f"[backtest_pkg] metrics 計算失敗（skip）: {_bm_exc}")
+
         output_path = Path(args.output)
         output_path.mkdir(parents=True, exist_ok=True)
         wf_frame.to_csv(output_path / "walk_forward_results.csv", index=False)
@@ -2663,6 +2679,23 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         futures_df   if not futures_df.empty   else None,
         inst_feat_df if inst_feat_df is not None and not inst_feat_df.empty else None,
     )
+
+    # ── Log prediction to persistent history (PredictionStore) ───────────────────
+    try:
+        from storage.sqlite import PredictionStore
+        from config.settings import get_settings
+        _settings = get_settings()
+        _pred_store = PredictionStore(_settings.db_path)
+        _pred_store.log_prediction(
+            date=today,
+            prob_up=pred["prob_up"],
+            predicted_up=pred["prob_up"] >= 0.5,
+            model="market_xgb",
+            stock_id="TAIEX",
+        )
+        _safe_print(f"[predict] 預測紀錄已存入 PredictionStore (prob_up={pred['prob_up']:.3f})")
+    except Exception as _ps_exc:
+        _safe_print(f"[predict] PredictionStore 記錄失敗（skip）: {_ps_exc}")
 
     # Build structured market_data JSON for Claude scenario analysis
     def _safe_float(val: object) -> object:
@@ -2779,6 +2812,73 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
     message = header + "\n\n" + (pred_block if pred_block else "⚠️ AI 模型訓練資料不足，無法產生預測。")
     if ai_insight:
         message += f"\n\n🤖 **今日操盤要點**\n{ai_insight}"
+
+    # ── Market Regime Classification (新模組) ─────────────────────────────────────
+    try:
+        from market_regime.classifier import MarketRegimeClassifier
+        from market_regime.scenario import generate_scenario
+        _vix_val = float(_us_row.get("vix", 20) or 20)
+        _fut_net = int(_safe_float(_ft_row.get("foreign_futures_net")) or 0)
+        _night_chg = float(night_data.get("price_change", 0) if night_data else 0)
+        _adv_ratio = 0.5  # breadth not available in predict mode; use neutral
+        _tech_str = float(_safe_float(_us_row.get("nasdaq_ret1")) or 0) * 30 + \
+                    float(_safe_float(_us_row.get("sox_ret1")) or 0) * 20
+        _regime = MarketRegimeClassifier().classify(
+            vix=_vix_val,
+            futures_net=_fut_net,
+            night_change=_night_chg,
+            us_tech_strength=min(5, max(-5, _tech_str)),
+            advance_ratio=_adv_ratio,
+            xgb_prob_up=pred["prob_up"],
+            pcr=_pcr_val or 1.0,
+        )
+        _scenario = generate_scenario(
+            regime_label=_regime.label,
+            regime_zh=_regime.label_zh,
+            win_rate=_regime.win_rate_estimate,
+            vix=_vix_val,
+            futures_net=_fut_net,
+            night_change=_night_chg,
+            us_tech_strength=min(5, max(-5, _tech_str)),
+            pcr=_pcr_val or 1.0,
+            xgb_prob_up=pred["prob_up"],
+        )
+        message += f"\n\n{_scenario.format_discord()}"
+    except Exception as _re_exc:
+        _safe_print(f"[predict] 市場 regime 分類失敗（skip）: {_re_exc}")
+
+    # ── Risk Assessment (新模組) ──────────────────────────────────────────────────
+    try:
+        from risk_engine.monitor import RiskMonitor
+        _risk = RiskMonitor().assess(
+            trade_date=today,
+            vix=_vix_val,
+            vix_change=float(_safe_float(_us_row.get("vix")) or 0) - float(_safe_float(_us_row.get("vix_prev")) or _vix_val),
+            futures_net=_fut_net,
+            night_change=_night_chg,
+            advance_ratio=_adv_ratio,
+            pcr=_pcr_val or 1.0,
+            xgb_prob_up=pred["prob_up"],
+            upcoming_events=calendar_events if calendar_events else [],
+        )
+        message += f"\n\n{_risk.format_discord()}"
+    except Exception as _risk_exc:
+        _safe_print(f"[predict] 風險評估失敗（skip）: {_risk_exc}")
+
+    # ── News Sentiment (新模組) ───────────────────────────────────────────────────
+    try:
+        from news_engine.market_news import fetch_market_sentiment
+        _news_result = fetch_market_sentiment(
+            news_client=news_client if "news_client" in dir() else None,
+            finmind_client=client,
+            days=2,
+        )
+        _news_block = _news_result.format_discord()
+        if _news_block:
+            message += f"\n\n{_news_block}"
+    except Exception as _ne_exc:
+        _safe_print(f"[predict] 新聞情緒分析失敗（skip）: {_ne_exc}")
+
     _safe_print(message)
     if args.notify:
         send_discord_messages([message])
