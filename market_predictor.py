@@ -214,7 +214,8 @@ class MarketPredictor:
 
         neg = int((y == 0).sum())
         pos = int((y == 1).sum())
-        spw = neg / pos if pos > 0 else 1.0
+        # Only boost the UP class when it's the minority; when UP is majority, spw=1.0
+        spw = neg / pos if pos > 0 and neg > pos else 1.0
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
