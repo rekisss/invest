@@ -302,7 +302,9 @@ def fetch_finmind_market_news(
         try:
             df = finmind_client.fetch_dataset(  # type: ignore[union-attr]
                 "TaiwanStockNews",
-                params={"data_id": stock_id, "start_date": start, "end_date": end},
+                data_id=stock_id,
+                start_date=start,
+                end_date=end,
                 use_cache=True,
                 cache_ttl_days=0.25,
             )

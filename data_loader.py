@@ -396,12 +396,12 @@ def fetch_market_institutional(
 ) -> pd.DataFrame:
     """Fetch 三大法人現貨市場合計買賣超. Returns empty DataFrame on failure.
 
-    Uses FinMind TaiwanStockInstitutionalInvestors (market-level aggregate, no stock_id).
+    Uses FinMind TaiwanStockTotalInstitutionalInvestors (market-level aggregate, no stock_id).
     Returns columns: date, foreign_inst_norm, trust_inst_norm (rolling-normalised to [-1,1]).
     """
     try:
         frame = client.fetch_dataset(
-            "TaiwanStockInstitutionalInvestors",
+            "TaiwanStockTotalInstitutionalInvestors",
             start_date=start_date,
             end_date=end_date,
         )
