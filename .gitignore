@@ -16,3 +16,5 @@ sponsor_log.txt
 training_data/*.csv
 web/node_modules/
 web/dist/
+*.db
+logs/

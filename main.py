@@ -306,6 +306,70 @@ def _entry_stop_target(close: float, atr: float | None, stop_pct: float = 0.05, 
     return f"{close:.2f}–{entry_hi:.2f}", f"{stop:.2f}", f"{target:.2f}", f"{rr}:1"
 
 
+_EXCEL_SUMMARY_COLS = [
+    ("stock_id",            "股票代號"),
+    ("name",                "名稱"),
+    ("industry_category",   "產業"),
+    ("entry_score",         "進場分數"),
+    ("close",               "收盤價"),
+    ("date",                "資料日期"),
+    ("entry_signal",        "進場訊號"),
+    ("rsi14",               "RSI14"),
+    ("adx14",               "ADX14"),
+    ("volume_ratio",        "量比"),
+    ("foreign_buy_streak",  "外資連買日"),
+    ("invest_trust_streak", "投信連買日"),
+    ("f_score",             "F-Score"),
+    ("macd_hist",           "MACD直方"),
+    ("entry_reason",        "進場原因"),
+]
+
+
+def _write_summary_excel(df: pd.DataFrame, path: "Path") -> None:
+    """Write a clean summary Excel: key columns only, sorted by entry_score, green rows for signals."""
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+
+        src_cols = [c for c, _ in _EXCEL_SUMMARY_COLS if c in df.columns]
+        zh_headers = {c: zh for c, zh in _EXCEL_SUMMARY_COLS if c in df.columns}
+        out = df[src_cols].copy()
+        if "entry_score" in out.columns:
+            out = out.sort_values("entry_score", ascending=False)
+        out = out.rename(columns=zh_headers)
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "掃描結果"
+        header_fill = PatternFill("solid", fgColor="1F4E79")
+        signal_fill = PatternFill("solid", fgColor="E2EFDA")
+
+        for ci, col_name in enumerate(out.columns, 1):
+            cell = ws.cell(row=1, column=ci, value=col_name)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+
+        has_signal_col = "進場訊號" in out.columns
+        for ri, row in enumerate(out.itertuples(index=False), 2):
+            has_signal = bool(getattr(row, "進場訊號", False)) if has_signal_col else False
+            for ci, val in enumerate(row, 1):
+                cell = ws.cell(row=ri, column=ci, value=val)
+                if has_signal:
+                    cell.fill = signal_fill
+                cell.alignment = Alignment(horizontal="center")
+
+        for col in ws.columns:
+            max_len = max((len(str(c.value or "")) for c in col), default=8)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 30)
+
+        ws.freeze_panes = "A2"
+        wb.save(path)
+    except Exception as exc:
+        _safe_print(f"[excel] summary 寫入失敗（graceful skip）: {exc}")
+        df.to_excel(path, index=False, engine="openpyxl")
+
+
 def _safe_print(message: str = "") -> None:
     try:
         print(message)
@@ -1540,7 +1604,9 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     today = args.end
     scan_dir = Path(args.output) / "full_scan"
     scan_dir.mkdir(parents=True, exist_ok=True)
-    attempted_csv = scan_dir / f"_attempted_{today}.csv"
+    _seg_idx = getattr(args, "batch_index", -1)
+    _seg_suffix = f"_seg{_seg_idx}" if _seg_idx >= 0 else ""
+    attempted_csv = scan_dir / f"_attempted_{today}{_seg_suffix}.csv"
     no_data_csv = scan_dir / "_no_data_stocks.csv"  # persistent cross-day blacklist
 
     # Load which stocks were already attempted today (all fetched, incl. no-signal)
@@ -1804,13 +1870,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         _quota_hit = bool(breadth.get("quota_exhausted"))
         n_actual = int(breadth.get("total_stocks", 0))
         if _quota_hit and n_actual == 0 and len(remaining_univ) > 0:
-            _safe_print(f"[sequential] 帳號 {token_idx}: 首次掃描即 0 支且回報配額耗盡，等待 20 秒後重試一次")
-            if os.getenv("DISCORD_WEBHOOK_URL"):
-                send_discord_messages([
-                    f"⏳ **帳號 {token_idx} 觸發 0 支配額耗盡保護** · {_cst_now()} CST\n"
-                    f"等待 `20s` 後重試一次，避免誤判"
-                ])
-            time.sleep(20)
+            _safe_print(f"[sequential] 帳號 {token_idx}: 首次掃描即 0 支且回報配額耗盡，立即重試一次")
             os.environ["FINMIND_TOKEN"] = token
             token_client = FinMindClient(cache_dir=client.cache_dir)
             gap_file = scan_dir / f"_seq_{token_idx}.csv"
@@ -1919,7 +1979,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 _safe_print(f"[sequential] ⚠️ 無法讀取 {token_csv.name}（{_csv_exc}），略過合併")
         if not raw_df.empty:
             raw_df.to_csv(token_csv, index=False, encoding="utf-8-sig")
-            raw_df.to_excel(token_csv.with_suffix(".xlsx"), index=False, engine="openpyxl")
+            _write_summary_excel(raw_df, token_csv.with_suffix(".xlsx"))
         _remaining_after = len(remaining_ids)
         _delta_done = _remaining_before - _remaining_after
 
@@ -1943,20 +2003,8 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                     f"掃到 `{n_actual}` 支後中止，切換下一帳號\n"
                     f"（若三帳號皆立即耗盡，請確認三個 FINMIND_TOKEN 是否為不同帳號）"
                 ])
-            # Wait for IP-level throttle to clear before next account starts.
-            # Heavy scanning from this account may have triggered per-IP rate limiting
-            # that would silently affect the next account if it starts immediately.
-            _cooldown = int(os.getenv("ACCOUNT_SWITCH_COOLDOWN", "60"))
-            if _cooldown > 0:
-                _safe_print(f"[sequential] 帳號切換冷卻 {_cooldown}s（讓 IP 限流清除）...")
-                time.sleep(_cooldown)
         elif _ip_throttled:
-            # IP throttle caused partial scan — brief cooldown before next account.
-            _ip_cooldown = max(15, int(os.getenv("ACCOUNT_SWITCH_COOLDOWN", "60")) // 4)
-            _safe_print(
-                f"[sequential] 帳號 {token_idx}: IP 限流冷卻 {_ip_cooldown}s 後切換下一帳號..."
-            )
-            time.sleep(_ip_cooldown)
+            _safe_print(f"[sequential] 帳號 {token_idx}: IP 限流，直接切換下一帳號")
         elif n_actual == 0 and len(remaining_univ) > 0:
             _safe_print(f"[sequential] 帳號 {token_idx}: ⚠️ 實際掃 0 支（API 可能靜默限流），本輪略過儲存")
         _safe_print(
@@ -1974,30 +2022,45 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 f"全局累計 `{len(already_scanned)}/{total}` 支"
             ])
 
-    # If all accounts returned 0 results, check weekday vs weekend.
-    # On weekends/holidays: mark all as attempted (no data all day, avoid infinite retry).
-    # On weekdays: FinMind likely hasn't updated EOD data yet (early morning scan).
-    #   Do NOT mark as attempted — let the next relay cron retry when data is available.
+    # If all accounts returned 0 results, decide whether to mark as done based on
+    # day-of-week. On weekends/holidays FinMind has no data for the whole day →
+    # mark remaining as attempted so relay doesn't retry indefinitely.
+    # On weekdays, 0 results usually means the scan ran too early (before FinMind
+    # updates EOD data, e.g. midnight) → do NOT mark, just exit so the next
+    # scheduled run (07:30+ CST) can retry with data available.
     if round_new == 0 and remaining_ids:
         import datetime as _dt
         _cst_now_dt = _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=8)))
         _is_weekend = _cst_now_dt.weekday() >= 5  # Saturday=5, Sunday=6
         if _is_weekend:
             _safe_print(
-                f"[sequential] ⚠️ 週末/假日本輪 0 支有效資料，"
-                f"將剩餘 {len(remaining_ids)} 支標記為今日已嘗試（防無限重試）"
+                f"[sequential] ⚠️ 週末/假日：本輪所有帳號均返回 0 支有效資料，"
+                f"將剩餘 {len(remaining_ids)} 支標記為今日已嘗試（明日重新掃）"
             )
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"📅 **週末/假日無資料** · {_cst_now()} CST\n"
+                    f"剩餘 `{len(remaining_ids)}` 支標記為今日已嘗試，明日重新開始"
+                ])
             already_scanned.update(remaining_ids)
             remaining_ids.clear()
             pd.DataFrame({"stock_id": sorted(already_scanned)}).to_csv(
                 attempted_csv, index=False, encoding="utf-8-sig"
             )
         else:
+            # Weekday: 0 results = scan ran too early or transient API issue.
+            # Do NOT pre-mark stocks as done — next scheduled run will retry.
             _safe_print(
                 f"[sequential] ⚠️ 平日本輪 0 支有效資料（時間太早或 API 暫時無資料），"
-                f"不標記已嘗試，下次接力繼續（{len(remaining_ids)} 支待掃）"
+                f"不標記已嘗試，下次接力繼續"
             )
-            remaining_ids.clear()  # exit loop without persisting
+            if os.getenv("DISCORD_WEBHOOK_URL"):
+                send_discord_messages([
+                    f"⚠️ **本輪 0 支資料（平日）** · {_cst_now()} CST\n"
+                    f"可能是時間太早（FinMind 尚未更新）或 API 暫時異常\n"
+                    f"不標記已嘗試，等待下次接力自動重試"
+                ])
+            remaining_ids.clear()  # 結束本輪迴圈，但不持久化
 
     # If this round made progress and reentry budget remains, run another full pass.
     # Example:
@@ -2020,16 +2083,18 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         return
 
     # Round summary
+    _pct = f"{len(already_scanned) / max(total, 1):.0%}"
     if not remaining_ids:
         msg = (
             f"🎉 **今日全部掃完！** · {_cst_now()} CST · {today}\n"
-            f"全部 `{total}` 支已覆蓋 | 本輪新掃 `{round_new}` 支"
+            f"全部 `{total}` 支已覆蓋（100%） | 本輪新掃 `{round_new}` 支"
         )
     else:
+        _passes_left = max(1, round(len(remaining_ids) / max(round_new, 1)))
         msg = (
             f"⏸ **本輪結束** · {_cst_now()} CST · {today}\n"
-            f"本輪新掃 `{round_new}` 支 | 累計 `{len(already_scanned)}/{total}` | "
-            f"剩餘 `{len(remaining_ids)}` 支（下小時繼續）"
+            f"本輪新掃 `{round_new}` 支 | 累計 `{len(already_scanned)}/{total}`（{_pct}）\n"
+            f"剩餘 `{len(remaining_ids)}` 支 · 預估還需約 `{_passes_left}` 輪（每2小時自動接力）"
         )
     _safe_print(msg)
     if os.getenv("DISCORD_WEBHOOK_URL"):
@@ -2528,6 +2593,22 @@ def run_walk_forward(args: argparse.Namespace, client: FinMindClient, config: St
         consistency = int((wf_frame["total_return_pct"] > 0).sum())
         _safe_print(f"  Positive folds: {consistency}/{len(fold_rows)}")
 
+        # ── Enhanced metrics via backtest_pkg ────────────────────────────────────
+        try:
+            from backtest_pkg.metrics import confusion_matrix_summary, sharpe_ratio as _sharpe, max_drawdown as _mdd
+            _returns = wf_frame["total_return_pct"].values / 100
+            _eq_curve = np.cumprod(1 + _returns) * 100
+            _sr = _sharpe(_returns, periods_per_year=len(_returns))
+            _mdd_val = _mdd(_eq_curve)
+            _win = int((wf_frame["total_return_pct"] > 0).sum())
+            _n = len(wf_frame)
+            _safe_print(f"\n[backtest_pkg] Cross-fold summary:")
+            _safe_print(f"  Sharpe (annualised): {_sr:.3f}")
+            _safe_print(f"  Max drawdown (fold equity): {_mdd_val:.1%}")
+            _safe_print(f"  Win rate (folds): {_win}/{_n} = {_win/_n:.0%}")
+        except Exception as _bm_exc:
+            _safe_print(f"[backtest_pkg] metrics 計算失敗（skip）: {_bm_exc}")
+
         output_path = Path(args.output)
         output_path.mkdir(parents=True, exist_ok=True)
         wf_frame.to_csv(output_path / "walk_forward_results.csv", index=False)
@@ -2608,6 +2689,23 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         futures_df   if not futures_df.empty   else None,
         inst_feat_df if inst_feat_df is not None and not inst_feat_df.empty else None,
     )
+
+    # ── Log prediction to persistent history (PredictionStore) ───────────────────
+    try:
+        from storage.sqlite import PredictionStore
+        from config.settings import get_settings
+        _settings = get_settings()
+        _pred_store = PredictionStore(_settings.db_path)
+        _pred_store.log_prediction(
+            date=today,
+            prob_up=pred["prob_up"],
+            predicted_up=pred["prob_up"] >= 0.5,
+            model="market_xgb",
+            stock_id="TAIEX",
+        )
+        _safe_print(f"[predict] 預測紀錄已存入 PredictionStore (prob_up={pred['prob_up']:.3f})")
+    except Exception as _ps_exc:
+        _safe_print(f"[predict] PredictionStore 記錄失敗（skip）: {_ps_exc}")
 
     # Build structured market_data JSON for Claude scenario analysis
     def _safe_float(val: object) -> object:
@@ -2724,6 +2822,73 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
     message = header + "\n\n" + (pred_block if pred_block else "⚠️ AI 模型訓練資料不足，無法產生預測。")
     if ai_insight:
         message += f"\n\n🤖 **今日操盤要點**\n{ai_insight}"
+
+    # ── Market Regime Classification (新模組) ─────────────────────────────────────
+    try:
+        from market_regime.classifier import MarketRegimeClassifier
+        from market_regime.scenario import generate_scenario
+        _vix_val = float(_us_row.get("vix", 20) or 20)
+        _fut_net = int(_safe_float(_ft_row.get("foreign_futures_net")) or 0)
+        _night_chg = float(night_data.get("price_change", 0) if night_data else 0)
+        _adv_ratio = 0.5  # breadth not available in predict mode; use neutral
+        _tech_str = float(_safe_float(_us_row.get("nasdaq_ret1")) or 0) * 30 + \
+                    float(_safe_float(_us_row.get("sox_ret1")) or 0) * 20
+        _regime = MarketRegimeClassifier().classify(
+            vix=_vix_val,
+            futures_net=_fut_net,
+            night_change=_night_chg,
+            us_tech_strength=min(5, max(-5, _tech_str)),
+            advance_ratio=_adv_ratio,
+            xgb_prob_up=pred["prob_up"],
+            pcr=_pcr_val or 1.0,
+        )
+        _scenario = generate_scenario(
+            regime_label=_regime.label,
+            regime_zh=_regime.label_zh,
+            win_rate=_regime.win_rate_estimate,
+            vix=_vix_val,
+            futures_net=_fut_net,
+            night_change=_night_chg,
+            us_tech_strength=min(5, max(-5, _tech_str)),
+            pcr=_pcr_val or 1.0,
+            xgb_prob_up=pred["prob_up"],
+        )
+        message += f"\n\n{_scenario.format_discord()}"
+    except Exception as _re_exc:
+        _safe_print(f"[predict] 市場 regime 分類失敗（skip）: {_re_exc}")
+
+    # ── Risk Assessment (新模組) ──────────────────────────────────────────────────
+    try:
+        from risk_engine.monitor import RiskMonitor
+        _risk = RiskMonitor().assess(
+            trade_date=today,
+            vix=_vix_val,
+            vix_change=float(_safe_float(_us_row.get("vix")) or 0) - float(_safe_float(_us_row.get("vix_prev")) or _vix_val),
+            futures_net=_fut_net,
+            night_change=_night_chg,
+            advance_ratio=_adv_ratio,
+            pcr=_pcr_val or 1.0,
+            xgb_prob_up=pred["prob_up"],
+            upcoming_events=calendar_events if calendar_events else [],
+        )
+        message += f"\n\n{_risk.format_discord()}"
+    except Exception as _risk_exc:
+        _safe_print(f"[predict] 風險評估失敗（skip）: {_risk_exc}")
+
+    # ── News Sentiment (新模組) ───────────────────────────────────────────────────
+    try:
+        from news_engine.market_news import fetch_market_sentiment
+        _news_result = fetch_market_sentiment(
+            news_client=news_client if "news_client" in dir() else None,
+            finmind_client=client,
+            days=2,
+        )
+        _news_block = _news_result.format_discord()
+        if _news_block:
+            message += f"\n\n{_news_block}"
+    except Exception as _ne_exc:
+        _safe_print(f"[predict] 新聞情緒分析失敗（skip）: {_ne_exc}")
+
     _safe_print(message)
     if args.notify:
         send_discord_messages([message])

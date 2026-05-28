@@ -219,12 +219,27 @@ class MarketPredictor:
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            self._model = XGBClassifier(
+            base_model = XGBClassifier(
                 n_estimators=300, max_depth=4, learning_rate=0.05,
                 subsample=0.8, colsample_bytree=0.8,
                 scale_pos_weight=spw,
                 eval_metric="logloss", verbosity=0, random_state=42,
-            ).fit(X, y)
+            )
+            # Apply isotonic calibration when enough data; prevents overconfident probabilities
+            _use_calibration = len(X) >= 100
+            if _use_calibration:
+                try:
+                    from models.calibration import CalibratedPredictor
+                    _cal = CalibratedPredictor(base_model, method="isotonic", cv=3)
+                    _cal.fit(pd.DataFrame(X, columns=valid_cols), pd.Series(y))
+                    self._model = _cal
+                    self._calibrated = True
+                except Exception:
+                    self._model = base_model.fit(X, y)
+                    self._calibrated = False
+            else:
+                self._model = base_model.fit(X, y)
+                self._calibrated = False
 
         self._trained = True
         return self
@@ -248,7 +263,12 @@ class MarketPredictor:
             df = self._merge_external(df, inst_df, _INST_FEATURES)
 
         row = df[self._feature_cols].iloc[[-1]].replace([np.inf, -np.inf], np.nan).fillna(self._medians)
-        prob = float(self._model.predict_proba(row.values)[0, 1])
+        _row_df = pd.DataFrame(row.values, columns=self._feature_cols)
+        _calibrated = getattr(self, "_calibrated", False)
+        if _calibrated:
+            prob = float(self._model.predict_proba(_row_df)[0, 1])
+        else:
+            prob = float(self._model.predict_proba(row.values)[0, 1])
 
         if prob >= 0.63:
             conf, label = "high", "看多"
