@@ -1686,7 +1686,9 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         _sz = (len(_sorted_ids) + _seg_cnt - 1) // _seg_cnt
         _segment_ids = set(_sorted_ids[_seg_idx * _sz: (_seg_idx + 1) * _sz])
         remaining_ids = remaining_ids & _segment_ids
+        total = len(_segment_ids)  # show segment total, not full 1800
         _safe_print(f"[sequential] 分段 {_seg_idx}/{_seg_cnt}：共 {len(_segment_ids)} 支，剩餘 {len(remaining_ids)} 未掃")
+    _seg_label = f" [段{_seg_idx}]" if _seg_idx >= 0 else ""
 
     # Filter out stocks confirmed empty on a previous day (delisted / no price data ever)
     if no_data_ids:
@@ -1700,7 +1702,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     if os.getenv("DISCORD_WEBHOOK_URL"):
         _nd_note = f"（已過濾 `{len(no_data_ids)}` 支歷史無資料）" if no_data_ids else ""
         send_discord_messages([
-            f"🚀 **掃描啟動** · {_cst_now()} CST · {today}\n"
+            f"🚀 **掃描啟動{_seg_label}** · {_cst_now()} CST · {today}\n"
             f"今日已掃 `{len(already_scanned)}/{total}` | 本輪待掃 `{len(remaining_ids)}` 支 {_nd_note}"
         ])
 
@@ -1813,7 +1815,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         _safe_print(f"[sequential] 帳號 {token_idx}: 額度正常，開始掃描 {n_rem} 支")
         if os.getenv("DISCORD_WEBHOOK_URL"):
             send_discord_messages([
-                f"🔄 **帳號 {token_idx} 開始** · {_cst_now()} CST\n"
+                f"🔄 **帳號 {token_idx} 開始{_seg_label}** · {_cst_now()} CST\n"
                 f"剩餘 `{n_rem}/{total}` 支待掃"
             ])
 
@@ -2019,7 +2021,7 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
                 f"{_status} **帳號 {token_idx} 完成{_quota_note}** · {_cst_now()} CST\n"
                 f"掃 `{n_actual}` 支 | 候選 `{_cand_n}` | 觀察 `{_watch_n}`\n"
                 f"接續完成 `{_delta_done}` 支（{_remaining_before} → {_remaining_after}）\n"
-                f"全局累計 `{len(already_scanned)}/{total}` 支"
+                f"本段累計 `{len(already_scanned)}/{total}` 支"
             ])
 
     # If all accounts returned 0 results, decide whether to mark as done based on
@@ -2086,13 +2088,13 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     _pct = f"{len(already_scanned) / max(total, 1):.0%}"
     if not remaining_ids:
         msg = (
-            f"🎉 **今日全部掃完！** · {_cst_now()} CST · {today}\n"
+            f"🎉 **今日全部掃完{_seg_label}！** · {_cst_now()} CST · {today}\n"
             f"全部 `{total}` 支已覆蓋（100%） | 本輪新掃 `{round_new}` 支"
         )
     else:
         _passes_left = max(1, round(len(remaining_ids) / max(round_new, 1)))
         msg = (
-            f"⏸ **本輪結束** · {_cst_now()} CST · {today}\n"
+            f"⏸ **本輪結束{_seg_label}** · {_cst_now()} CST · {today}\n"
             f"本輪新掃 `{round_new}` 支 | 累計 `{len(already_scanned)}/{total}`（{_pct}）\n"
             f"剩餘 `{len(remaining_ids)}` 支 · 預估還需約 `{_passes_left}` 輪（每2小時自動接力）"
         )
