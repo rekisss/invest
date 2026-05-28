@@ -4,6 +4,19 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - 全市場掃描
+      - 全市場彙整 TOP 20 (20:00 CST 週二~週六)
+      - 盤前預測 (08:00 CST)
+      - 盤後總結 (14:15 CST)
+      - 每日選股掃描 (19:00 CST)
+      - 即時 TOP N 預覽 (手動觸發)
+      - 回測 / 參數掃描 (手動觸發)
+      - Collect Training Data (yfinance)
+      - Train ML Model
+      - 盤中事件監控 (09:00–13:30 CST)
+    types: [completed]
 
 permissions:
   contents: read
@@ -17,6 +30,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
 
