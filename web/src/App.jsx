@@ -80,7 +80,7 @@ export default function App() {
           </div>
         )}
         {!loading && tab === 'dashboard' && <Dashboard data={data} error={error} />}
-        {!loading && tab === 'news' && <NewsFeed news={data?.news} />}
+        {!loading && tab === 'news' && <NewsFeed staticNews={data?.news} />}
         {!loading && tab === 'predict' && <PredictionPanel prediction={data?.prediction} />}
         {!loading && tab === 'ai' && (
           apiKey
