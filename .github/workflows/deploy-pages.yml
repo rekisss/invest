@@ -3,8 +3,6 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
-    paths:
-      - 'web/**'
   workflow_dispatch:
 
 permissions:
@@ -31,6 +29,10 @@ jobs:
       - name: Install dependencies
         working-directory: web
         run: npm ci
+
+      - name: Build scan data JSON
+        working-directory: web
+        run: node scripts/build-data.mjs
 
       - name: Build
         working-directory: web
