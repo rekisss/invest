@@ -48,6 +48,9 @@ _FEATURE_COLS = [
     "volume_break", "rsi_strong", "adx_trending",
     "kd_golden_cross", "bb_squeeze_breakout", "breakout_volume_confirm",
     "williams_r_recovery", "cci_momentum", "mfi_strong", "stronger_than_market",
+    # Institutional investor flows (三大法人)
+    "foreign_buy_streak", "invest_trust_streak", "dealer_buy_streak",
+    "foreign_buy_3d", "invest_trust_buy_2d", "dealer_buy_3d",
 ]
 
 
@@ -103,7 +106,9 @@ def load_and_prepare(data_path: str | Path, target: str) -> tuple[pd.DataFrame, 
 
     missing = [c for c in _FEATURE_COLS if c not in df.columns]
     if missing:
-        raise ValueError(f"Missing feature columns: {missing}")
+        print(f"   ⚠️ 缺少欄位（填 0）：{missing}")
+        for col in missing:
+            df[col] = 0
 
     X = df[_FEATURE_COLS].copy()
     for col in X.select_dtypes(include="bool").columns:

@@ -1678,6 +1678,16 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
 
     remaining_ids = set(full_univ["stock_id"].astype(str)) - already_scanned
 
+    # Segment mode: --batch-index N --batch-count 3 → each parallel job scans 1/3 of universe
+    _seg_idx = getattr(args, "batch_index", -1)
+    _seg_cnt = max(1, getattr(args, "batch_count", 1))
+    if _seg_idx >= 0 and _seg_cnt > 1:
+        _sorted_ids = sorted(full_univ["stock_id"].astype(str))
+        _sz = (len(_sorted_ids) + _seg_cnt - 1) // _seg_cnt
+        _segment_ids = set(_sorted_ids[_seg_idx * _sz: (_seg_idx + 1) * _sz])
+        remaining_ids = remaining_ids & _segment_ids
+        _safe_print(f"[sequential] 分段 {_seg_idx}/{_seg_cnt}：共 {len(_segment_ids)} 支，剩餘 {len(remaining_ids)} 未掃")
+
     # Filter out stocks confirmed empty on a previous day (delisted / no price data ever)
     if no_data_ids:
         _before_nd = len(remaining_ids)
@@ -1688,9 +1698,10 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
 
     _safe_print(f"[sequential] 今日已嘗試 {len(already_scanned)}/{total}，剩餘未掃 {len(remaining_ids)} 支")
     if os.getenv("DISCORD_WEBHOOK_URL"):
+        _nd_note = f"（已過濾 `{len(no_data_ids)}` 支歷史無資料）" if no_data_ids else ""
         send_discord_messages([
-            f"🚀 **接力掃描啟動** · {_cst_now()} CST · {today}\n"
-            f"已掃 `{len(already_scanned)}/{total}` | 本輪待掃 `{len(remaining_ids)}` 支"
+            f"🚀 **掃描啟動** · {_cst_now()} CST · {today}\n"
+            f"今日已掃 `{len(already_scanned)}/{total}` | 本輪待掃 `{len(remaining_ids)}` 支 {_nd_note}"
         ])
 
     if not remaining_ids:
@@ -2653,14 +2664,13 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
 
     futures_df = build_futures_features(market_df, futures_raw, inst_raw)
 
-    # Merge 三大法人 + 融資融券 into a single inst_df for MarketPredictor
+    # Merge 三大法人 + 融資融券 + PCR into a single inst_df for MarketPredictor
     inst_feat_df: pd.DataFrame | None = None
-    if not mkinst_df.empty or not margin_df.empty:
-        _frames = [df for df in (mkinst_df, margin_df) if not df.empty]
-        if len(_frames) == 1:
-            inst_feat_df = _frames[0]
-        else:
-            inst_feat_df = _frames[0].merge(_frames[1], on="date", how="outer")
+    _inst_frames = [df for df in (mkinst_df, margin_df, pcr_df) if not df.empty]
+    if _inst_frames:
+        inst_feat_df = _inst_frames[0]
+        for _f in _inst_frames[1:]:
+            inst_feat_df = inst_feat_df.merge(_f, on="date", how="outer")
 
     # Market-level news sentiment (Google RSS + FinMind combined)
     news_client = NewsClient(Path(args.output) / "news_cache")
