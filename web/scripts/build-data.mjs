@@ -172,6 +172,27 @@ function processScanData() {
   return { dates, scans }
 }
 
+// ── FinMind quota ────────────────────────────────────────────────────────────
+async function fetchFinMindQuota() {
+  const tokens = [
+    { key: process.env.FINMIND_TOKEN,   label: '帳號1' },
+    { key: process.env.FINMIND_TOKEN_2, label: '帳號2' },
+    { key: process.env.FINMIND_TOKEN_3, label: '帳號3' },
+  ].filter(t => t.key)
+  const results = []
+  for (const { key, label } of tokens) {
+    try {
+      const body = await fetchUrl(`https://api.finmindtrade.com/api/v4/user_info?token=${encodeURIComponent(key)}`, 6000)
+      const json = JSON.parse(body)
+      if (json.status === 200 && json.data) {
+        results.push({ label, limit: json.data.api_request_limit, used: json.data.api_request_count })
+        console.log(`  FinMind [${label}]: ${json.data.api_request_count}/${json.data.api_request_limit}`)
+      }
+    } catch (e) { console.warn(`  FinMind [${label}] quota failed: ${e.message}`) }
+  }
+  return results
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 const { dates, scans } = processScanData()
 console.log(`Scan data: ${dates.length} dates, latest=${dates[0]}, stocks=${scans[dates[0]]?.total_scanned ?? 0}`)
@@ -183,6 +204,10 @@ console.log('Fetching news...')
 const news = await fetchNews()
 console.log(`News: ${news.length} total items`)
 
+console.log('Fetching FinMind quota...')
+const quota = await fetchFinMindQuota()
+console.log(`Quota: ${quota.length} accounts`)
+
 mkdirSync(PUBLIC_DIR, { recursive: true })
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, news }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, news, quota }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
