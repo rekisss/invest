@@ -1,6 +1,4 @@
-import { useState, useEffect } from 'react'
-
-const BASE = import.meta.env.BASE_URL || '/'
+import { useState } from 'react'
 
 function StatCard({ label, value, sub, color }) {
   return (
@@ -149,30 +147,8 @@ function PersistentSection({ items }) {
   )
 }
 
-export default function Dashboard() {
-  const [data, setData] = useState(null)
-  const [selectedDate, setSelectedDate] = useState(null)
-  const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetch(`${BASE}data.json?t=${Date.now()}`)
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.json() })
-      .then(d => {
-        setData(d)
-        setSelectedDate(d.dates?.[0] || null)
-        setLoading(false)
-      })
-      .catch(e => { setError(e.message); setLoading(false) })
-  }, [])
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--muted)' }}>
-        載入中…
-      </div>
-    )
-  }
+export default function Dashboard({ data, error }) {
+  const [selectedDate, setSelectedDate] = useState(() => data?.dates?.[0] || null)
 
   if (error || !data || !data.dates || data.dates.length === 0) {
     return (
@@ -214,7 +190,6 @@ export default function Dashboard() {
           <StatCard label="掃描總數" value={scan.total_scanned?.toLocaleString() || '—'} />
           <StatCard label="進場訊號" value={scan.entry_count ?? '—'} color={scan.entry_count > 0 ? 'var(--green)' : 'var(--muted)'} />
           <StatCard label="TOP 50 顯示" value={stocks.length} />
-          <StatCard label="資料更新" value={data.generated_at ? data.generated_at.slice(0, 10) : '—'} sub={data.generated_at ? data.generated_at.slice(11, 16) + ' UTC' : ''} />
         </div>
       </div>
 
