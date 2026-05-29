@@ -4,6 +4,7 @@ import NewsFeed from './components/NewsFeed.jsx'
 import PredictionPanel from './components/PredictionPanel.jsx'
 import ApiKeyInput from './components/ApiKeyInput.jsx'
 import AgentPanel from './components/AgentPanel.jsx'
+import QuotaPanel from './components/QuotaPanel.jsx'
 
 const BASE = import.meta.env.BASE_URL || '/'
 
@@ -11,6 +12,7 @@ const TABS = [
   { key: 'dashboard', label: '📊 掃描結果' },
   { key: 'news',      label: '📰 市場新聞' },
   { key: 'predict',   label: '🔮 盤前預測' },
+  { key: 'quota',     label: '📡 配額狀態' },
   { key: 'ai',        label: '🤖 AI 助手' },
 ]
 
@@ -85,6 +87,7 @@ export default function App() {
         {!loading && tab === 'dashboard' && <Dashboard data={data} error={error} />}
         {!loading && tab === 'news' && <NewsFeed staticNews={data?.news} />}
         {!loading && tab === 'predict' && <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />}
+        {!loading && tab === 'quota' && <QuotaPanel quota={data?.quota} />}
         {!loading && tab === 'ai' && (
           apiKey
             ? <AgentPanel apiKey={apiKey} onClearKey={() => { sessionStorage.removeItem('anthropic_key'); setApiKey('') }} />
