@@ -11,8 +11,8 @@ const AGG_FILE  = resolve(__dirname, '../../output/aggregate_latest.json')
 const PUBLIC_DIR = resolve(__dirname, '../public')
 const OUTPUT_FILE = join(PUBLIC_DIR, 'data.json')
 const TOP_N = 50
-const MAX_DATES = 14
-const MIN_VALID_STOCKS = 500   // fewer than this = incomplete scan (1 account only), skip as primary date
+const MAX_DATES = 30
+const MIN_VALID_STOCKS = 100   // fewer than this = very incomplete scan, skip as primary date (partial scans still shown)
 
 // ── CSV parser ──────────────────────────────────────────────────────────────
 function parseCSVLine(line) {
@@ -276,7 +276,7 @@ function processScanData() {
       .filter(r => toNum(r.limit_down_streak) >= 3)
       .sort((a, b) => toNum(b.limit_down_streak) - toNum(a.limit_down_streak))
       .map(r => mapStock(r))
-    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, limit_down_alerts: limitDownAlerts }
+    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, limit_down_alerts: limitDownAlerts, is_partial: allStocks.length < 500 }
     for (const stock of topStocks) {
       const sid = stock.stock_id
       if (!stockHistory[sid]) stockHistory[sid] = { name: stock.name, industry_category: stock.industry_category, scores: [] }
@@ -393,9 +393,15 @@ async function fetchNotionStocks() {
 // ── FinMind quota ────────────────────────────────────────────────────────────
 async function fetchFinMindQuota() {
   const tokens = [
-    { key: process.env.FINMIND_TOKEN,   label: '帳號1' },
-    { key: process.env.FINMIND_TOKEN_2, label: '帳號2' },
-    { key: process.env.FINMIND_TOKEN_3, label: '帳號3' },
+    { key: process.env.FINMIND_TOKEN,   label: '帳號1（600）' },
+    { key: process.env.FINMIND_TOKEN_2, label: '帳號2（600）' },
+    { key: process.env.FINMIND_TOKEN_3, label: '帳號3（600）' },
+    { key: process.env.FINMIND_TOKEN_4, label: '帳號4（600）' },
+    { key: process.env.FINMIND_TOKEN_5, label: '帳號5（600）' },
+    { key: process.env.FINMIND_TOKEN_6, label: '帳號6（300）' },
+    { key: process.env.FINMIND_TOKEN_7, label: '帳號7（300）' },
+    { key: process.env.FINMIND_TOKEN_8, label: '帳號8（300）' },
+    { key: process.env.FINMIND_TOKEN_9, label: '帳號9（300）' },
   ].filter(t => t.key)
   const results = []
   for (const { key, label } of tokens) {
