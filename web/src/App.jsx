@@ -56,11 +56,14 @@ export default function App() {
           <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', letterSpacing: 0.5 }}>
             台股 AI 助手
           </div>
-          {data?.generated_at && (
-            <div style={{ fontSize: 10, color: 'var(--muted)' }}>
-              更新 {data.generated_at.slice(0, 10)} {data.generated_at.slice(11, 16)} UTC
-            </div>
-          )}
+          {data?.generated_at && (() => {
+            const d = new Date(data.generated_at)
+            const tw = new Intl.DateTimeFormat('zh-TW', {
+              timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', hour12: false,
+            }).format(d).replace('/', '/').replace(' ', ' ')
+            return <div style={{ fontSize: 10, color: 'var(--muted)' }}>更新 {tw} 台灣時間</div>
+          })()}
         </div>
         {/* Tab bar */}
         <div style={{ display: 'flex', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>

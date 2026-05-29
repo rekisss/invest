@@ -20,18 +20,15 @@ const KEYWORD_RULES = [
 const STOCK_CODE_RE = /\b([2-9]\d{3})\b/g
 
 const QUERIES = [
-  { q: '台灣股市 大盤 指數 when:3d' },
-  { q: '台積電 2330 半導體 when:3d' },
-  { q: '外資 法人 台指期貨 when:3d' },
-  { q: '美股 那斯達克 費半 when:3d' },
-  { q: 'AI 人工智慧 科技股 GPU when:3d' },
-  { q: '生技 新藥 醫療 FDA when:3d' },
-  { q: '匯率 新台幣 美元 聯準會 when:3d' },
+  { q: '台灣股市 大盤 指數' },
+  { q: '台積電 2330 半導體' },
+  { q: '外資 法人 台指期貨' },
+  { q: '美股 那斯達克 費半' },
+  { q: 'AI 人工智慧 科技股 GPU' },
 ]
 
-const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
-
 async function fetchRSS(rssUrl) {
+  // Primary: rss2json.com — dedicated RSS→JSON with CORS, faster and more reliable
   const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=8`
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 7000)
@@ -40,6 +37,7 @@ async function fetchRSS(rssUrl) {
     if (r.ok) {
       const j = await r.json()
       if (j.status === 'ok' && j.items?.length) {
+        // Convert rss2json format to our internal format
         return j.items.map(item => ({
           title: item.title || '',
           url: item.link || '',
@@ -52,6 +50,7 @@ async function fetchRSS(rssUrl) {
   } catch (_) { /* fall through to proxy */ } finally {
     clearTimeout(timer)
   }
+  // Fallback: corsproxy.io with raw RSS
   const ctrl2 = new AbortController()
   const timer2 = setTimeout(() => ctrl2.abort(), 6000)
   try {
@@ -65,6 +64,7 @@ async function fetchRSS(rssUrl) {
   }
   return []
 }
+
 function detectTags(title, summary = '') {
   const text = title + ' ' + summary
   const matched = []
@@ -123,29 +123,18 @@ async function loadLiveNews() {
   const results = await Promise.allSettled(
     QUERIES.map(async ({ q }) => {
       const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`
-      const resp = await fetch(`https://corsproxy.io/?${encodeURIComponent(rssUrl)}`, {
-        signal: AbortSignal.timeout(12000),
-      })
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-      const xml = await resp.text()
-      return parseRSS(xml).slice(0, 8)
+      return (await fetchRSS(rssUrl)).slice(0, 8)
     })
   )
   for (const r of results) {
     if (r.status === 'fulfilled') allNews.push(...r.value)
   }
-  const cutoff = Date.now() - THREE_DAYS_MS
   const seen = new Set()
   return allNews
     .filter(item => {
       const key = item.title.slice(0, 30)
       if (seen.has(key)) return false
       seen.add(key)
-      // filter out articles older than 3 days
-      if (item.published) {
-        const age = Date.now() - new Date(item.published).getTime()
-        if (age > THREE_DAYS_MS) return false
-      }
       return true
     })
     .map(item => {
@@ -154,6 +143,54 @@ async function loadLiveNews() {
     })
     .sort((a, b) => new Date(b.published || 0) - new Date(a.published || 0))
     .slice(0, 60)
+}
+
+function buildTrending(news) {
+  const tagCount = {}, stockCount = {}
+  for (const item of news) {
+    for (const tag of (item.tags || [])) {
+      if (tag !== '其他') tagCount[tag] = (tagCount[tag] || 0) + 1
+    }
+    for (const [, code] of item.title.matchAll(STOCK_CODE_RE)) {
+      stockCount[code] = (stockCount[code] || 0) + 1
+    }
+  }
+  const topTags = Object.entries(tagCount).sort((a, b) => b[1] - a[1]).slice(0, 6)
+  const topStocks = Object.entries(stockCount).sort((a, b) => b[1] - a[1]).slice(0, 4)
+  return { topTags, topStocks }
+}
+
+function TrendingBar({ news, onFilter }) {
+  const { topTags, topStocks } = buildTrending(news)
+  if (topTags.length === 0 && topStocks.length === 0) return null
+  return (
+    <div style={{ padding: '8px 14px 10px', background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 6, letterSpacing: 0.5 }}>🔥 熱門趨勢</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {topTags.map(([tag, count]) => {
+          const rule = KEYWORD_RULES.find(r => r.tag === tag)
+          const color = rule?.color || 'var(--muted)'
+          return (
+            <button key={tag} onClick={() => onFilter(tag)} style={{
+              fontSize: 11, color, background: `${color}20`, border: `1px solid ${color}40`,
+              borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontWeight: 600,
+            }}>
+              {rule?.icon} {tag} <span style={{ opacity: 0.65 }}>·{count}</span>
+            </button>
+          )
+        })}
+        {topStocks.map(([code, count]) => (
+          <span key={code} style={{
+            fontSize: 11, color: 'var(--accent)', background: 'var(--accent)18',
+            border: '1px solid var(--accent)40', borderRadius: 4,
+            padding: '2px 8px', fontWeight: 700,
+          }}>
+            {code} <span style={{ opacity: 0.65 }}>·{count}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function buildDynamicTabs(news) {
@@ -311,6 +348,11 @@ export default function NewsFeed({ staticNews }) {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Trending bar */}
+      {news.length > 0 && (
+        <TrendingBar news={news} onFilter={tag => { setFilter(tag); setOpenIdx(null) }} />
+      )}
+
       {/* Dynamic tab bar */}
       <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <div style={{ display: 'flex', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>

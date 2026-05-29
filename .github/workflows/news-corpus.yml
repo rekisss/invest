@@ -1,0 +1,41 @@
+name: 更新新聞語料庫
+
+on:
+  schedule:
+    - cron: '0 1,7,13,19 * * *'   # 每6小時一次 UTC（台灣 09:00/15:00/21:00/03:00）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch and update news corpus
+        env:
+          FINMIND_TOKEN:   ${{ secrets.FINMIND_TOKEN }}
+          FINMIND_TOKEN_2: ${{ secrets.FINMIND_TOKEN_2 }}
+          FINMIND_TOKEN_3: ${{ secrets.FINMIND_TOKEN_3 }}
+        run: python scripts/news_corpus_builder.py
+
+      - name: Commit corpus
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          git pull --rebase origin main || true
+          git add output/news_corpus.json
+          git diff --staged --quiet && echo "No changes" && exit 0
+          git commit -m "news: 更新語料庫 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST"
+          for i in 1 2 3; do git push && break; sleep $((i*5)); git pull --rebase origin main || true; done

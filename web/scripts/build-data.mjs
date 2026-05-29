@@ -79,7 +79,26 @@ function parseRSS(xml) {
   return items
 }
 
-// ── Fetch news ───────────────────────────────────────────────────────────────
+// ── Read news corpus ─────────────────────────────────────────────────────────
+function readNewsCorpus() {
+  const corpusFile = resolve(__dirname, '../../output/news_corpus.json')
+  if (!existsSync(corpusFile)) return []
+  try {
+    const data = JSON.parse(readFileSync(corpusFile, 'utf-8'))
+    const cutoff = new Date(Date.now() - 3 * 86400 * 1000)
+    const articles = (data.articles || []).filter(a => {
+      if (!a.published_at) return true
+      try { return new Date(a.published_at) > cutoff } catch { return true }
+    })
+    console.log(`  Corpus: ${articles.length} articles (updated ${data.updated_at?.slice(0,16) || '?'})`)
+    return articles.slice(0, 300)
+  } catch (e) {
+    console.warn('  Corpus read failed:', e.message)
+    return []
+  }
+}
+
+// ── Fetch news (fallback if no corpus) ───────────────────────────────────────
 async function fetchNews() {
   const queries = [
     { q: '台灣股市 大盤', category: 'market', label: '大盤' },
@@ -134,12 +153,15 @@ function processScanData() {
     .filter(f => /^batch_seq\d+_\d{4}-\d{2}-\d{2}\.csv$/.test(f)).sort()
   const dateMap = {}
   for (const file of files) {
-    const match = file.match(/(\d{4}-\d{2}-\d{2})/)
-    if (!match) continue
-    const date = match[1]
-    if (!dateMap[date]) dateMap[date] = []
-    try { dateMap[date].push(...parseCSV(readFileSync(join(SCAN_DIR, file), 'utf-8'))) }
-    catch (e) { console.warn(`Skip ${file}: ${e.message}`) }
+    try {
+      const rows = parseCSV(readFileSync(join(SCAN_DIR, file), 'utf-8'))
+      for (const row of rows) {
+        const date = (row.date || '').slice(0, 10)   // use actual data date, not filename
+        if (!date || date < '2020-01-01' || date > '2099-12-31') continue
+        if (!dateMap[date]) dateMap[date] = []
+        dateMap[date].push(row)
+      }
+    } catch (e) { console.warn(`Skip ${file}: ${e.message}`) }
   }
   const dates = Object.keys(dateMap).sort().reverse().slice(0, MAX_DATES)
   const scans = {}
@@ -210,8 +232,12 @@ const prediction = readPrediction()
 const predictionHistory = readPredictionHistory()
 console.log(`Prediction: ${prediction ? prediction.date : 'none'}, history: ${predictionHistory.length} entries`)
 
-console.log('Fetching news...')
-const news = await fetchNews()
+console.log('Reading news corpus...')
+let news = readNewsCorpus()
+if (news.length === 0) {
+  console.log('Corpus empty, fetching live news...')
+  news = await fetchNews()
+}
 console.log(`News: ${news.length} total items`)
 
 console.log('Fetching FinMind quota...')
