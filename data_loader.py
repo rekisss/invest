@@ -521,6 +521,60 @@ def fetch_market_margin(
     return out.reset_index(drop=True)
 
 
+def fetch_all_margin_data(
+    client: "FinMindClient",
+    end_date: str,
+    lookback: int = 10,
+) -> pd.DataFrame:
+    """Batch fetch margin/short today-balance for ALL stocks (one API call).
+
+    Returns columns: stock_id, date, MarginPurchaseTodayBalance, ShortSaleTodayBalance.
+    """
+    start = (pd.Timestamp(end_date) - pd.Timedelta(days=lookback)).strftime("%Y-%m-%d")
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockMarginPurchaseShortSale",
+            start_date=start,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 全市場融資資料取得失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+    if frame.empty:
+        return pd.DataFrame()
+
+    frame = frame.copy()
+    frame.columns = [c.lower().strip() for c in frame.columns]
+    frame["date"] = pd.to_datetime(frame["date"])
+
+    margin_col = next(
+        (c for c in frame.columns if "marginpurchasetodaybalance" in c
+         or ("margin" in c and "today" in c and "balance" in c and "short" not in c)),
+        None,
+    )
+    short_col = next(
+        (c for c in frame.columns if "shortsaletodaybalance" in c
+         or ("short" in c and "today" in c and "balance" in c)),
+        None,
+    )
+
+    if "stock_id" not in frame.columns or margin_col is None:
+        return pd.DataFrame()
+
+    keep = ["stock_id", "date", margin_col]
+    rename = {margin_col: "MarginPurchaseTodayBalance"}
+    if short_col:
+        keep.append(short_col)
+        rename[short_col] = "ShortSaleTodayBalance"
+
+    result = frame[keep].rename(columns=rename)
+    result["MarginPurchaseTodayBalance"] = pd.to_numeric(result["MarginPurchaseTodayBalance"], errors="coerce").fillna(0)
+    if "ShortSaleTodayBalance" in result.columns:
+        result["ShortSaleTodayBalance"] = pd.to_numeric(result["ShortSaleTodayBalance"], errors="coerce").fillna(0)
+    return result.sort_values(["stock_id", "date"]).reset_index(drop=True)
+
+
 def fetch_options_pcr(
     client: "FinMindClient",
     start_date: str,

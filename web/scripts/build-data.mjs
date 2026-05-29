@@ -7,10 +7,12 @@ import http from 'http'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SCAN_DIR = resolve(__dirname, '../../output/full_scan')
 const PRED_FILE = resolve(__dirname, '../../output/prediction_latest.json')
+const AGG_FILE  = resolve(__dirname, '../../output/aggregate_latest.json')
 const PUBLIC_DIR = resolve(__dirname, '../public')
 const OUTPUT_FILE = join(PUBLIC_DIR, 'data.json')
 const TOP_N = 50
 const MAX_DATES = 14
+const MIN_VALID_STOCKS = 500   // fewer than this = incomplete scan (1 account only), skip as primary date
 
 // ── CSV parser ──────────────────────────────────────────────────────────────
 function parseCSVLine(line) {
@@ -54,6 +56,29 @@ function fetchUrl(url, timeoutMs = 8000) {
     })
     req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error('timeout')) })
     req.on('error', reject)
+  })
+}
+
+function postJson(url, body, headers = {}, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body)
+    const parsed = new URL(url)
+    const opts = {
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...headers },
+    }
+    const req = https.request(opts, res => {
+      const chunks = []
+      res.on('data', c => chunks.push(c))
+      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
+      res.on('error', reject)
+    })
+    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error('timeout')) })
+    req.on('error', reject)
+    req.write(payload)
+    req.end()
   })
 }
 
@@ -129,6 +154,20 @@ async function fetchNews() {
   }).sort((a, b) => new Date(b.published || 0) - new Date(a.published || 0)).slice(0, 40)
 }
 
+// ── Read aggregate latest JSON ───────────────────────────────────────────────
+function readAggregateLatest() {
+  if (!existsSync(AGG_FILE)) return null
+  try {
+    const data = JSON.parse(readFileSync(AGG_FILE, 'utf-8'))
+    if (!data.date || !data.top_stocks) return null
+    console.log(`  Aggregate JSON: date=${data.date}, scanned=${data.total_scanned}, top=${data.top_stocks.length}`)
+    return data
+  } catch (e) {
+    console.warn('  Aggregate JSON read failed:', e.message)
+    return null
+  }
+}
+
 // ── Read prediction ──────────────────────────────────────────────────────────
 function readPrediction() {
   if (!existsSync(PRED_FILE)) return null
@@ -163,9 +202,39 @@ function processScanData() {
       }
     } catch (e) { console.warn(`Skip ${file}: ${e.message}`) }
   }
-  const dates = Object.keys(dateMap).sort().reverse().slice(0, MAX_DATES)
+  // Filter out dates with too few unique stocks (incomplete / partial scans)
+  const uniqueCountPerDate = {}
+  for (const [date, rows] of Object.entries(dateMap)) {
+    uniqueCountPerDate[date] = new Set(rows.map(r => r.stock_id)).size
+  }
+  const dates = Object.keys(dateMap).sort().reverse()
+    .filter(d => uniqueCountPerDate[d] >= MIN_VALID_STOCKS)
+    .slice(0, MAX_DATES)
   const scans = {}
   const stockHistory = {}
+
+  // Collect OHLCV price history per stock across all available dates (chronological)
+  const priceHistoryMap = {}
+  for (const date of [...dates].reverse()) {
+    const seen = new Set()
+    for (const row of (dateMap[date] || [])) {
+      const sid = row.stock_id
+      if (seen.has(sid)) continue
+      seen.add(sid)
+      const c = toNum(row.close)
+      if (c <= 0) continue
+      if (!priceHistoryMap[sid]) priceHistoryMap[sid] = []
+      priceHistoryMap[sid].push({
+        time: date,
+        open: toNum(row.open) || c,
+        high: toNum(row.high) || c,
+        low: toNum(row.low) || c,
+        close: c,
+        volume: toNum(row.volume),
+      })
+    }
+  }
+
   for (const date of dates) {
     const stockMap = {}
     for (const row of dateMap[date]) {
@@ -173,8 +242,9 @@ function processScanData() {
       if (!stockMap[sid] || score > toNum(stockMap[sid].entry_score)) stockMap[sid] = row
     }
     const allStocks = Object.values(stockMap).sort((a, b) => toNum(b.entry_score) - toNum(a.entry_score))
-    const topStocks = allStocks.slice(0, TOP_N).map((row, i) => ({
-      rank: i + 1, stock_id: row.stock_id, name: row.name || '',
+    const isLatest = date === dates[0]
+    const mapStock = (row, extra = {}) => ({
+      stock_id: row.stock_id, name: row.name || '',
       industry_category: row.industry_category || '',
       close: toNum(row.close), volume_ratio: toNum(row.volume_ratio),
       rsi14: toNum(row.rsi14), adx14: toNum(row.adx14),
@@ -182,9 +252,31 @@ function processScanData() {
       entry_signal: toBool(row.entry_signal),
       foreign_buy_streak: toNum(row.foreign_buy_streak),
       invest_trust_streak: toNum(row.invest_trust_streak),
+      dealer_buy_streak: toNum(row.dealer_buy_streak),
       f_score: toNum(row.f_score), condition_count: toNum(row.condition_count),
-    }))
-    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks }
+      margin_change_5d: toNum(row.margin_change_5d),
+      short_ratio: toNum(row.short_ratio),
+      entry_reason: row.entry_reason || '',
+      limit_down_streak: toNum(row.limit_down_streak),
+      // extra technical fields for detail panel
+      macd: toNum(row.macd), macd_signal: toNum(row.macd_signal), macd_hist: toNum(row.macd_hist),
+      bb_pct_b: toNum(row.bb_pct_b), stoch_k: toNum(row.stoch_k), stoch_d: toNum(row.stoch_d),
+      rsi14: toNum(row.rsi14), adx14: toNum(row.adx14), atr14: toNum(row.atr14),
+      ema20: toNum(row.ema20), ema60: toNum(row.ema60),
+      foreign_net: toNum(row.foreign_net), invest_trust_net: toNum(row.invest_trust_net), dealer_net: toNum(row.dealer_net),
+      momentum_score: toNum(row.momentum_score), relative_strength_5d: toNum(row.relative_strength_5d),
+      return_5d: toNum(row.return_5d), day_return: toNum(row.day_return),
+      skip_reason: row.skip_reason || '',
+      // attach price history only for latest date (to keep JSON lean)
+      price_history: isLatest ? (priceHistoryMap[row.stock_id] || []) : undefined,
+      ...extra,
+    })
+    const topStocks = allStocks.slice(0, TOP_N).map((row, i) => ({ rank: i + 1, ...mapStock(row) }))
+    const limitDownAlerts = allStocks
+      .filter(r => toNum(r.limit_down_streak) >= 3)
+      .sort((a, b) => toNum(b.limit_down_streak) - toNum(a.limit_down_streak))
+      .map(r => mapStock(r))
+    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, limit_down_alerts: limitDownAlerts }
     for (const stock of topStocks) {
       const sid = stock.stock_id
       if (!stockHistory[sid]) stockHistory[sid] = { name: stock.name, industry_category: stock.industry_category, scores: [] }
@@ -201,6 +293,101 @@ function processScanData() {
     .sort((a, b) => b.days_in_top - a.days_in_top || b.latest_score - a.latest_score).slice(0, 20)
   if (dates.length > 0 && scans[dates[0]]) scans[dates[0]].persistent = persistent
   return { dates, scans }
+}
+
+// ── Notion stocks ────────────────────────────────────────────────────────────
+async function fetchNotionStocks() {
+  const token = (process.env.NOTION_TOKEN || '').trim()
+  const dbId  = (process.env.NOTION_DATABASE_ID || '').trim()
+  if (!token || !dbId) { console.log('  Notion: no token/db — skipping'); return { notionMap: {}, notionFullStocks: [] } }
+
+  const cutoff = new Date(Date.now() - 30 * 86400 * 1000).toISOString().slice(0, 10)
+  const headers = { 'Authorization': `Bearer ${token}`, 'Notion-Version': '2022-06-28' }
+  const notionMap = {}
+  const notionFullStocks = []
+  let cursor = null
+  let pageCount = 0
+  const MAX_PAGES = 20  // ~2000 stocks max to avoid build timeout
+
+  const getRich = (props, key) => props[key]?.rich_text?.[0]?.text?.content || ''
+  const getSelect = (props, key) => props[key]?.select?.name || ''
+  const getNum = (props, key) => props[key]?.number ?? null
+  const getDate = (props, key) => props[key]?.date?.start || ''
+
+  try {
+    do {
+      const body = {
+        filter: { property: '日期', date: { on_or_after: cutoff } },
+        sorts: [{ property: '日期', direction: 'descending' }],
+        page_size: 100,
+      }
+      if (cursor) body.start_cursor = cursor
+      const raw = await postJson(`https://api.notion.com/v1/databases/${dbId}/query`, body, headers, 12000)
+      const data = JSON.parse(raw)
+      pageCount++
+
+      for (const page of (data.results || [])) {
+        const props = page.properties || {}
+        const sid   = getRich(props, '股票代號')
+        if (!sid) continue
+        const date  = getDate(props, '日期')
+
+        // notionMap: keep most recent entry per stock (for detail panel)
+        if (!notionMap[sid] || (notionMap[sid].date || '') < date) {
+          notionMap[sid] = {
+            notion_url: page.url || '',
+            type:       getSelect(props, '類型'),
+            note:       getRich(props, '觀察建議'),
+            regime:     getSelect(props, '市場氛圍'),
+            confidence: getNum(props, '信心分數'),
+            date,
+          }
+        }
+
+        // notionFullStocks: full indicator data for fallback scan
+        const score = getNum(props, '分數') || 0
+        const close = getNum(props, '收盤價') || 0
+        if (score > 0 && date) {
+          // Page title is "2330 台積電" — strip stock ID prefix to get name
+          const titleProp = Object.values(props).find(p => p.type === 'title')
+          const fullTitle = titleProp?.title?.[0]?.text?.content || sid
+          const name = fullTitle.startsWith(sid) ? fullTitle.slice(sid.length).trim() : fullTitle
+
+          const condStr   = getRich(props, '條件達成')   // e.g. "5/23"
+          const condCount = parseInt((condStr || '').split('/')[0]) || 0
+          const status    = getSelect(props, '狀態')
+
+          notionFullStocks.push({
+            stock_id: sid, name, date,
+            entry_score: score, close,
+            rsi14: getNum(props, 'RSI') || 0,
+            adx14: getNum(props, 'ADX') || 0,
+            stoch_k: getNum(props, 'KD值') || 0,
+            condition_count: condCount,
+            industry_category: getRich(props, '產業別'),
+            foreign_buy_streak: getNum(props, '外資連買天數') || 0,
+            invest_trust_streak: getNum(props, '投信連買天數') || 0,
+            dealer_buy_streak: getNum(props, '自營連買天數') || 0,
+            volume_ratio: getNum(props, '成交量比') || 0,
+            return_5d: (getNum(props, '5日漲幅%') || 0) / 100,
+            relative_strength_5d: (getNum(props, '相對強度') || 0) / 100,
+            bb_pct_b: (getNum(props, 'BB位置%') || 0) / 100,
+            entry_signal: status === 'TOP 20 進場' || status === '候選進場',
+            // Fields not stored in Notion — zero-fill
+            f_score: 0, margin_change_5d: 0, short_ratio: 0, limit_down_streak: 0,
+            macd: 0, macd_signal: 0, macd_hist: 0, atr14: 0, ema20: 0, ema60: 0,
+            foreign_net: 0, invest_trust_net: 0, dealer_net: 0,
+            momentum_score: 0, day_return: 0, entry_reason: '', skip_reason: '',
+          })
+        }
+      }
+      cursor = data.has_more && pageCount < MAX_PAGES ? data.next_cursor : null
+    } while (cursor)
+    console.log(`  Notion: ${Object.keys(notionMap).length} map entries, ${notionFullStocks.length} full records (${pageCount} pages, last 30d)`)
+  } catch (e) {
+    console.warn(`  Notion fetch failed: ${e.message}`)
+  }
+  return { notionMap, notionFullStocks }
 }
 
 // ── FinMind quota ────────────────────────────────────────────────────────────
@@ -228,6 +415,71 @@ async function fetchFinMindQuota() {
 const { dates, scans } = processScanData()
 console.log(`Scan data: ${dates.length} dates, latest=${dates[0]}, stocks=${scans[dates[0]]?.total_scanned ?? 0}`)
 
+// Merge aggregate_latest.json: if its date is newer or not in CSV dates, inject it
+console.log('Reading aggregate_latest.json...')
+const aggregateLatest = readAggregateLatest()
+if (aggregateLatest) {
+  const aggDate = aggregateLatest.date
+  const isNewer = !dates.length || aggDate >= dates[0]
+  const isMissing = !scans[aggDate]
+  const aggSufficient = (aggregateLatest.total_scanned || 0) >= MIN_VALID_STOCKS
+  if ((isNewer || isMissing) && aggSufficient) {
+    // Build scan entry from aggregate JSON (matches processScanData output format)
+    const aggTopStocks = (aggregateLatest.top_stocks || []).map((r, i) => ({
+      rank: i + 1,
+      stock_id: String(r.stock_id || ''),
+      name: r.name || '',
+      industry_category: r.industry_category || '',
+      close: r.close || 0,
+      volume_ratio: r.volume_ratio || 0,
+      rsi14: r.rsi14 || 0,
+      adx14: r.adx14 || 0,
+      entry_score: Math.round(r.entry_score || 0),
+      entry_signal: !!r.entry_signal,
+      foreign_buy_streak: r.foreign_buy_streak || 0,
+      invest_trust_streak: r.invest_trust_streak || 0,
+      dealer_buy_streak: r.dealer_buy_streak || 0,
+      f_score: r.f_score ?? 0,
+      condition_count: r.condition_count || 0,
+      margin_change_5d: r.margin_change_5d || 0,
+      short_ratio: r.short_ratio || 0,
+      entry_reason: r.entry_reason || '',
+      limit_down_streak: r.limit_down_streak || 0,
+      // technical fields
+      macd: r.macd || 0, macd_signal: r.macd_signal || 0, macd_hist: r.macd_hist || 0,
+      bb_pct_b: r.bb_pct_b || 0, stoch_k: r.stoch_k || 0, stoch_d: r.stoch_d || 0,
+      atr14: r.atr14 || 0, ema20: r.ema20 || 0, ema60: r.ema60 || 0,
+      foreign_net: r.foreign_net || 0, invest_trust_net: r.invest_trust_net || 0, dealer_net: r.dealer_net || 0,
+      momentum_score: r.momentum_score || 0, relative_strength_5d: r.relative_strength_5d || 0,
+      return_5d: r.return_5d || 0, day_return: r.day_return || 0,
+      skip_reason: r.skip_reason || '',
+      price_history: undefined,   // no OHLCV history in aggregate JSON (CSV already deleted)
+    }))
+    const aggLimitDown = (aggregateLatest.limit_down_alerts || []).map(r => ({
+      stock_id: String(r.stock_id || ''), name: r.name || '',
+      industry_category: r.industry_category || '',
+      close: r.close || 0, limit_down_streak: r.limit_down_streak || 0,
+      entry_signal: !!r.entry_signal, entry_score: Math.round(r.entry_score || 0),
+    }))
+    scans[aggDate] = {
+      total_scanned: aggregateLatest.total_scanned || aggTopStocks.length,
+      entry_count: aggregateLatest.entry_count || 0,
+      top_stocks: aggTopStocks,
+      limit_down_alerts: aggLimitDown,
+      persistent: (aggregateLatest.persistent_strong || []).map(p => ({
+        stock_id: p.stock_id, name: p.name, industry_category: p.industry_category,
+        days_in_top: p.days_in_top, latest_score: p.today_score || p.latest_score || 0,
+        score_trend: p.score_delta || 0,
+      })),
+      margin_stats: aggregateLatest.margin_stats || {},
+      ai_picks_text: aggregateLatest.ai_picks_text || '',
+      from_aggregate_json: true,
+    }
+    if (!dates.includes(aggDate)) dates.unshift(aggDate)
+    console.log(`  Injected aggregate date ${aggDate}: ${aggregateLatest.total_scanned} stocks, ai=${!!aggregateLatest.ai_picks_text}`)
+  }
+}
+
 const prediction = readPrediction()
 const predictionHistory = readPredictionHistory()
 console.log(`Prediction: ${prediction ? prediction.date : 'none'}, history: ${predictionHistory.length} entries`)
@@ -244,6 +496,44 @@ console.log('Fetching FinMind quota...')
 const quota = await fetchFinMindQuota()
 console.log(`Quota: ${quota.length} accounts`)
 
+console.log('Fetching Notion stocks...')
+const { notionMap, notionFullStocks } = await fetchNotionStocks()
+console.log(`Notion: ${Object.keys(notionMap).length} map entries, ${notionFullStocks.length} full records`)
+
+// Build Notion fallback scan if primary data is insufficient (e.g., only 1 account had quota)
+const latestScan = scans[dates[0]]
+if ((!latestScan || latestScan.total_scanned < MIN_VALID_STOCKS) && notionFullStocks.length >= 100) {
+  console.log(`Primary data insufficient (${latestScan?.total_scanned ?? 0} stocks). Building Notion fallback...`)
+  // Group stocks by date
+  const dateGroups = {}
+  for (const s of notionFullStocks) {
+    if (!s.date) continue
+    if (!dateGroups[s.date]) dateGroups[s.date] = []
+    dateGroups[s.date].push(s)
+  }
+  // Find most recent date with enough stocks
+  const bestFallbackDate = Object.keys(dateGroups)
+    .filter(d => dateGroups[d].length >= 100)
+    .sort().pop()
+  if (bestFallbackDate) {
+    const fallbackStocks = dateGroups[bestFallbackDate].sort((a, b) => b.entry_score - a.entry_score)
+    scans[bestFallbackDate] = {
+      total_scanned: fallbackStocks.length,
+      entry_count: fallbackStocks.filter(s => s.entry_signal).length,
+      top_stocks: fallbackStocks.slice(0, TOP_N).map((s, i) => ({ rank: i + 1, ...s })),
+      limit_down_alerts: [],
+      from_notion_fallback: true,
+    }
+    if (!dates.includes(bestFallbackDate)) dates.unshift(bestFallbackDate)
+    else if (dates[0] !== bestFallbackDate) { dates.splice(dates.indexOf(bestFallbackDate), 1); dates.unshift(bestFallbackDate) }
+    console.log(`  Notion fallback scan: ${bestFallbackDate}, ${fallbackStocks.length} stocks`)
+  } else {
+    console.warn(`⚠️  No Notion fallback date found with 100+ stocks`)
+  }
+} else if (!latestScan || latestScan.total_scanned < MIN_VALID_STOCKS) {
+  console.warn(`⚠️  Data warning: latest date ${dates[0]} has only ${latestScan?.total_scanned ?? 0} stocks. Neither aggregate nor Notion has sufficient data.`)
+}
+
 mkdirSync(PUBLIC_DIR, { recursive: true })
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, predictionHistory, news, quota }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)

@@ -30,6 +30,7 @@ from backtest import run_backtest
 from data_loader import (
     FinMindClient,
     clean_cache,
+    fetch_all_margin_data,
     fetch_financial_statement_dates,
     fetch_fundamentals,
     fetch_institutional_data,
@@ -586,6 +587,7 @@ def collect_signals(
     end_date: str,
     workers: int,
     checkpoint_path: "str | None" = None,
+    margin_df: "pd.DataFrame | None" = None,
 ) -> tuple[dict[str, pd.DataFrame], list[pd.DataFrame], list[str], bool]:
     """Returns (signals_by_stock, signal_frames, load_errors, quota_exhausted).
 
@@ -633,6 +635,7 @@ def collect_signals(
             frame = prepare_stock_signals(
                 stock, prices, market, institutional, config,
                 earnings_dates=earnings, f_score=stock_f_score,
+                margin_df=margin_df,
             )
             return sid, frame
         except Exception as error:
@@ -655,7 +658,8 @@ def collect_signals(
         "dealer_buy_streak", "dealer_buy_3d",
         "williams_r", "cci20", "mfi14", "mfi_strong", "above_ichimoku_cloud",
         "lr_slope_20", "lr_slope_60",
-        "f_score",
+        "f_score", "limit_down_streak",
+        "margin_change_5d", "short_ratio",
     ]
     _signal_cols_present: list[str] = []  # resolved on first result
     _checkpoint_written = False           # tracks whether checkpoint header was written
@@ -711,10 +715,19 @@ def build_daily_snapshot(
         raise RuntimeError("Unable to download TAIEX market data from FinMind.")
     market = prepare_market_frame(market_raw, config)
 
+    _all_margin_df = pd.DataFrame()
+    try:
+        _all_margin_df = fetch_all_margin_data(client, end_date_text, lookback=10)
+        if not _all_margin_df.empty:
+            print(f"[build_daily_snapshot] 融資資料：{len(_all_margin_df)} 筆")
+    except Exception as _me:
+        print(f"[build_daily_snapshot] ⚠️ 融資資料抓取失敗（降級）：{_me}", file=sys.stderr)
+
     universe = load_universe(args, client)
     signals_by_stock, _, load_errors, quota_exhausted = collect_signals(
         universe, client, market, config, start_date, end_date_text, args.workers,
         checkpoint_path=getattr(args, "checkpoint_csv", None),
+        margin_df=_all_margin_df if not _all_margin_df.empty else None,
     )
     snapshot = latest_signal_snapshot(signals_by_stock)
     breadth = compute_market_breadth(snapshot)
@@ -3108,6 +3121,12 @@ def run_partial_aggregate(args: argparse.Namespace) -> None:
         trend_inline = _trend_label(row)
         obs = recommend_observation_period(row, is_candidate=True)
         invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
+        _margin_chg = _float_or(row.get("margin_change_5d"))
+        _margin_tag = ""
+        if _margin_chg < -3.0:
+            _margin_tag = f" 📉融資 `-{abs(_margin_chg):.1f}%`"
+        elif _margin_chg > 5.0:
+            _margin_tag = f" ⚠️融資 `+{_margin_chg:.1f}%`"
         lines.append("━━━━━━━━━━━━━━━━━━━━")
         lines.append(
             f"**#{rank} {row.get('stock_id')}** {row.get('name', '')}{ind_tag}{price_note}{f_tag}"
@@ -3115,7 +3134,7 @@ def run_partial_aggregate(args: argparse.Namespace) -> None:
         )
         lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
         lines.append(f"📊 {rsi_txt} | {adx_txt} | {vr_txt}{trend_inline}")
-        lines.append(f"🏦 外資連買 `{foreign_streak}d`{invest_txt}")
+        lines.append(f"🏦 外資連買 `{foreign_streak}d`{invest_txt}{_margin_tag}")
         lines.append(f"⏱ {obs}")
 
     message = "\n".join(lines)
@@ -3273,6 +3292,12 @@ def run_aggregate(args: argparse.Namespace) -> None:
         trend_inline = _trend_label(row)
         obs = recommend_observation_period(row, is_candidate=True)
         invest_txt = f" | 投信 `{invest_streak}d`" if invest_streak >= 1 else ""
+        _margin_chg = _float_or(row.get("margin_change_5d"))
+        _margin_tag = ""
+        if _margin_chg < -3.0:
+            _margin_tag = f" 📉融資 `-{abs(_margin_chg):.1f}%`"
+        elif _margin_chg > 5.0:
+            _margin_tag = f" ⚠️融資 `+{_margin_chg:.1f}%`"
         lines.append("━━━━━━━━━━━━━━━━━━━━")
         lines.append(
             f"**#{rank} {row.get('stock_id')}** {row.get('name', '')}{ind_tag}{price_note}{f_tag}"
@@ -3280,7 +3305,7 @@ def run_aggregate(args: argparse.Namespace) -> None:
         )
         lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
         lines.append(f"📊 {rsi_txt} | {adx_txt} | {vr_txt}{trend_inline}")
-        lines.append(f"🏦 外資連買 `{foreign_streak}d`{invest_txt}")
+        lines.append(f"🏦 外資連買 `{foreign_streak}d`{invest_txt}{_margin_tag}")
         lines.append(f"⏱ {obs}")
 
     # ── 跨日持續強勢 ──────────────────────────────────────────────────────────────
@@ -3311,6 +3336,15 @@ def run_aggregate(args: argparse.Namespace) -> None:
             lines.append(
                 f"   {i}. **{p['stock_id']}** {p['name']}  連續 `{p['days_in_top']}` 天 | 分 `{p['today_score']:.0f}`{delta_str}"
             )
+
+    # ── 融資籌碼統計（TOP N 範圍）────────────────────────────────────────────
+    if "margin_change_5d" in all_candidates.columns:
+        _top_margin = top["margin_change_5d"].apply(_float_or) if "margin_change_5d" in top.columns else pd.Series(dtype=float)
+        _clean_cnt = int((_top_margin < -3.0).sum())
+        _surge_cnt = int((_top_margin > 5.0).sum())
+        if _clean_cnt > 0 or _surge_cnt > 0:
+            lines.append("")
+            lines.append(f"📉 融資籌碼乾淨（5日縮>3%）：`{_clean_cnt}` 支 ｜ ⚠️ 融資暴增（>5%）：`{_surge_cnt}` 支")
 
     message = "\n".join(lines)
 
@@ -3377,6 +3411,47 @@ def run_aggregate(args: argparse.Namespace) -> None:
                     f"錯誤：`{_exc}`\n"
                     f"請確認：1) Notion database 已連結 Integration  2) NOTION_DATABASE_ID 正確"
                 ])
+
+    # ── 存 aggregate_latest.json（網頁讀取用，在刪 CSV 前）──────────────────────
+    try:
+        import json as _agg_json_lib
+
+        def _to_py(v):
+            if isinstance(v, (np.integer,)): return int(v)
+            if isinstance(v, (np.floating,)): return None if (np.isnan(v) or np.isinf(v)) else float(v)
+            if isinstance(v, float) and (v != v or v == float('inf') or v == float('-inf')): return None
+            return v
+
+        def _row_to_dict(row):
+            return {k: _to_py(v) for k, v in row.items()}
+
+        _ld_col = "limit_down_streak"
+        _ld_alerts = []
+        if _ld_col in all_candidates.columns:
+            _ld_df = all_candidates[all_candidates[_ld_col].apply(lambda x: _float_or(x)) >= 3]
+            _ld_alerts = [_row_to_dict(r) for _, r in _ld_df.sort_values(_ld_col, ascending=False).head(20).iterrows()]
+
+        _entry_cnt = int((all_candidates["entry_signal"] == True).sum()) if "entry_signal" in all_candidates.columns else 0
+
+        _agg_payload = {
+            "date": args.end,
+            "generated_at": _cst_now(),
+            "total_scanned": total_stocks,
+            "entry_count": _entry_cnt,
+            "top_stocks": [_row_to_dict(r) for _, r in top.iterrows()],
+            "limit_down_alerts": _ld_alerts,
+            "persistent_strong": _persistence_rows[:20] if "_persistence_rows" in dir() else [],
+            "margin_stats": {
+                "clean_count": _clean_cnt if "_clean_cnt" in dir() else 0,
+                "surge_count": _surge_cnt if "_surge_cnt" in dir() else 0,
+            },
+            "ai_picks_text": _ai_text if "_ai_text" in dir() else "",
+        }
+        _agg_out = Path(args.output) / "aggregate_latest.json"
+        _agg_out.write_text(_agg_json_lib.dumps(_agg_payload, ensure_ascii=False, default=str), encoding="utf-8")
+        _safe_print(f"[aggregate] 已存 aggregate_latest.json（{total_stocks} 支股票）")
+    except Exception as _aj_exc:
+        _safe_print(f"[aggregate] aggregate_latest.json 寫入失敗（無妨）: {_aj_exc}")
 
     # Clean up batch files after successful aggregation
     for p in csvs:

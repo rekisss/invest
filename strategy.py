@@ -176,6 +176,7 @@ def prepare_stock_signals(
     config: StrategyConfig,
     earnings_dates: pd.DataFrame | None = None,
     f_score: int = -1,
+    margin_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     frame = stock_df.sort_values("date").reset_index(drop=True)
     frame["stock_id"] = stock_info["stock_id"]
@@ -251,6 +252,31 @@ def prepare_stock_signals(
             merged[col] = 0.0
     merged[_inst_fill_cols] = merged[_inst_fill_cols].fillna(0)
     merged["relative_strength_5d"] = merged["return_5d"] - merged["market_return_5d"]
+
+    # ── 融資餘額 ──────────────────────────────────────────────────────────────
+    _margin_chg_5d = 0.0
+    _short_ratio_val = 0.0
+    if margin_df is not None and not margin_df.empty and "stock_id" in margin_df.columns:
+        _sid_str = str(stock_info.get("stock_id", ""))
+        _stk_mg = margin_df[margin_df["stock_id"].astype(str) == _sid_str].sort_values("date")
+        if len(_stk_mg) >= 2 and "MarginPurchaseTodayBalance" in _stk_mg.columns:
+            _mg_latest = float(_stk_mg["MarginPurchaseTodayBalance"].iloc[-1])
+            _mg_prev5 = float(_stk_mg["MarginPurchaseTodayBalance"].iloc[max(0, len(_stk_mg) - 6)])
+            _margin_chg_5d = round((_mg_latest - _mg_prev5) / max(_mg_prev5, 1) * 100, 2) if _mg_prev5 > 0 else 0.0
+            if "ShortSaleTodayBalance" in _stk_mg.columns:
+                _short_bal = float(_stk_mg["ShortSaleTodayBalance"].iloc[-1])
+                _short_ratio_val = round(_short_bal / max(_mg_latest, 1) * 100, 2) if _mg_latest > 0 else 0.0
+    merged["margin_change_5d"] = _margin_chg_5d
+    merged["short_ratio"] = _short_ratio_val
+
+    # ── 跌停連續天數 ──────────────────────────────────────────────────────────
+    # Taiwan daily limit ≈ 10%; use -9.5% threshold to account for rounding
+    _dr_np = np.nan_to_num(merged["day_return"].to_numpy(dtype=float), nan=0.0)
+    _is_ld = _dr_np <= -0.095
+    _ld_streak = np.zeros(len(merged), dtype=np.int32)
+    for _i in range(1, len(merged)):
+        _ld_streak[_i] = (_ld_streak[_i - 1] + 1) if _is_ld[_i] else 0
+    merged["limit_down_streak"] = _ld_streak
 
     # ── Core signals ──────────────────────────────────────────────────────────
     _n = len(merged)
@@ -398,6 +424,7 @@ def prepare_stock_signals(
     _vol_ratio = _vr_arr.copy(); np.nan_to_num(_vol_ratio, nan=0.0, posinf=50.0, neginf=0.0, copy=False)
     _adx14 = _adx_arr.copy(); np.nan_to_num(_adx14, nan=0.0, posinf=100.0, neginf=0.0, copy=False)
     _f_bonus = 50.0 if f_score >= 7 else (25.0 if f_score >= 5 else 0.0)
+    _margin_bonus = 25.0 if _margin_chg_5d < -3.0 else (10.0 if _margin_chg_5d < -1.0 else 0.0)
     merged["entry_score"] = (
         _cond_count.astype(np.float64) * 100
         + _rs5d * 100
@@ -405,6 +432,7 @@ def prepare_stock_signals(
         + _adx14
         + _soft_matrix @ _SOFT_SCORE_WEIGHTS
         + _f_bonus
+        + _margin_bonus
     )
 
     # Momentum score (0-100): 量能 40% + 波動度 30% + 尾盤強度 30%
@@ -439,6 +467,10 @@ def prepare_stock_signals(
 
     merged["entry_reason"] = _sparse_reasons(_entry_arr, _ENTRY_COLS_ARR)
     merged["skip_reason"] = _sparse_reasons(_skip_arr, _SKIP_COLS_ARR)
+    if _margin_chg_5d > 5.0:
+        merged["skip_reason"] = merged["skip_reason"].apply(
+            lambda x: (x + ", 融資暴增") if x else "融資暴增"
+        )
     merged["base_exit_reason"] = _sparse_reasons(_exit_arr, _EXIT_COLS_ARR)
     return merged
 

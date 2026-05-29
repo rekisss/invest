@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import StockDetailModal from './StockDetailModal'
 
 function StatCard({ label, value, sub, color }) {
   return (
@@ -34,9 +35,7 @@ function ScoreCell({ score, entry_signal }) {
   return <span style={{ color, fontWeight: entry_signal ? 700 : 400, fontFamily: 'var(--font-mono)' }}>{score.toLocaleString()}</span>
 }
 
-function StockTable({ stocks }) {
-  const [expanded, setExpanded] = useState(null)
-
+function StockTable({ stocks, onSelect, notionMap = {} }) {
   if (!stocks || stocks.length === 0) {
     return <div style={{ color: 'var(--muted)', padding: 24, textAlign: 'center' }}>無資料</div>
   }
@@ -53,6 +52,7 @@ function StockTable({ stocks }) {
     { key: 'volume_ratio', label: '量比', width: 48 },
     { key: 'foreign_buy_streak', label: '外資', width: 48 },
     { key: 'invest_trust_streak', label: '投信', width: 48 },
+    { key: 'notion', label: 'N', width: 24 },
   ]
 
   return (
@@ -71,43 +71,84 @@ function StockTable({ stocks }) {
         </thead>
         <tbody>
           {stocks.map(s => (
-            <>
-              <tr
-                key={s.stock_id}
-                onClick={() => setExpanded(expanded === s.stock_id ? null : s.stock_id)}
-                style={{
-                  borderBottom: '1px solid var(--border)',
-                  background: s.entry_signal ? 'rgba(63,185,80,0.06)' : 'transparent',
-                  cursor: 'pointer',
-                }}
-              >
-                <td style={{ padding: '7px 6px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>{s.rank}</td>
-                <td style={{ padding: '7px 6px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--accent)' }}>{s.stock_id}</td>
-                <td style={{ padding: '7px 6px', textAlign: 'left', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</td>
-                <td style={{ padding: '7px 6px', textAlign: 'center' }}><ScoreCell score={s.entry_score} entry_signal={s.entry_signal} /></td>
-                <td style={{ padding: '7px 6px', textAlign: 'center' }}><SignalBadge entry_signal={s.entry_signal} /></td>
-                <td style={{ padding: '7px 6px', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{s.close.toFixed(1)}</td>
-                <td style={{ padding: '7px 6px', textAlign: 'center', color: s.rsi14 > 70 ? 'var(--red)' : s.rsi14 < 30 ? 'var(--green)' : 'var(--text)', fontFamily: 'var(--font-mono)' }}>{s.rsi14.toFixed(0)}</td>
-                <td style={{ padding: '7px 6px', textAlign: 'center', color: s.adx14 > 25 ? 'var(--yellow)' : 'var(--text)', fontFamily: 'var(--font-mono)' }}>{s.adx14.toFixed(0)}</td>
-                <td style={{ padding: '7px 6px', textAlign: 'center', color: s.volume_ratio > 2 ? 'var(--orange)' : 'var(--text)', fontFamily: 'var(--font-mono)' }}>{s.volume_ratio.toFixed(1)}x</td>
-                <td style={{ padding: '7px 6px', textAlign: 'center' }}><StreakBadge value={s.foreign_buy_streak} /></td>
-                <td style={{ padding: '7px 6px', textAlign: 'center' }}><StreakBadge value={s.invest_trust_streak} /></td>
-              </tr>
-              {expanded === s.stock_id && (
-                <tr key={s.stock_id + '_detail'} style={{ background: 'var(--surface)' }}>
-                  <td colSpan={cols.length} style={{ padding: '10px 12px' }}>
-                    <div style={{ color: 'var(--muted)', fontSize: 11, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                      <span>產業：<b style={{ color: 'var(--text)' }}>{s.industry_category || '—'}</b></span>
-                      <span>F-Score：<b style={{ color: 'var(--text)' }}>{s.f_score}</b></span>
-                      <span>條件達成：<b style={{ color: 'var(--text)' }}>{s.condition_count}</b></span>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </>
+            <tr
+              key={s.stock_id}
+              onClick={() => onSelect && onSelect(s)}
+              style={{
+                borderBottom: '1px solid var(--border)',
+                background: s.entry_signal ? 'rgba(63,185,80,0.06)' : 'transparent',
+                cursor: 'pointer',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(96,165,250,0.07)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = s.entry_signal ? 'rgba(63,185,80,0.06)' : 'transparent' }}
+            >
+              <td style={{ padding: '7px 6px', textAlign: 'center', color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>{s.rank}</td>
+              <td style={{ padding: '7px 6px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--accent)' }}>{s.stock_id}</td>
+              <td style={{ padding: '7px 6px', textAlign: 'left', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</td>
+              <td style={{ padding: '7px 6px', textAlign: 'center' }}><ScoreCell score={s.entry_score} entry_signal={s.entry_signal} /></td>
+              <td style={{ padding: '7px 6px', textAlign: 'center' }}><SignalBadge entry_signal={s.entry_signal} /></td>
+              <td style={{ padding: '7px 6px', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{s.close.toFixed(1)}</td>
+              <td style={{ padding: '7px 6px', textAlign: 'center', color: s.rsi14 > 70 ? 'var(--red)' : s.rsi14 < 30 ? 'var(--green)' : 'var(--text)', fontFamily: 'var(--font-mono)' }}>{s.rsi14.toFixed(0)}</td>
+              <td style={{ padding: '7px 6px', textAlign: 'center', color: s.adx14 > 25 ? 'var(--yellow)' : 'var(--text)', fontFamily: 'var(--font-mono)' }}>{s.adx14.toFixed(0)}</td>
+              <td style={{ padding: '7px 6px', textAlign: 'center', color: s.volume_ratio > 2 ? 'var(--orange)' : 'var(--text)', fontFamily: 'var(--font-mono)' }}>{s.volume_ratio.toFixed(1)}x</td>
+              <td style={{ padding: '7px 6px', textAlign: 'center' }}><StreakBadge value={s.foreign_buy_streak} /></td>
+              <td style={{ padding: '7px 6px', textAlign: 'center' }}><StreakBadge value={s.invest_trust_streak} /></td>
+              <td style={{ padding: '7px 6px', textAlign: 'center' }}>
+                {notionMap[s.stock_id] && (
+                  <span title={notionMap[s.stock_id].type || 'Notion'} style={{ fontSize: 10, color: '#60a5fa' }}>N</span>
+                )}
+              </td>
+            </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function LimitDownSection({ items, onSelect }) {
+  if (!items || items.length === 0) return null
+  return (
+    <div style={{ marginTop: 24 }}>
+      <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--red)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+        🔴 連續跌停警示（≥3天）
+        <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--muted)', marginLeft: 4 }}>共 {items.length} 支</span>
+      </h3>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 400 }}>
+          <thead>
+            <tr style={{ background: 'rgba(239,68,68,0.08)' }}>
+              {['股號', '名稱', '收盤', '連跌天數', '產業'].map(h => (
+                <th key={h} style={{ padding: '7px 8px', textAlign: 'center', color: 'var(--muted)', fontSize: 11, borderBottom: '1px solid var(--border)' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((s, i) => (
+              <tr
+                key={s.stock_id}
+                onClick={() => onSelect && onSelect(s)}
+                style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)', cursor: 'pointer' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}
+              >
+                <td style={{ padding: '7px 8px', textAlign: 'center', fontFamily: 'var(--font-mono)', color: 'var(--red)', fontWeight: 600 }}>{s.stock_id}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'center' }}>{s.name}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{s.close?.toFixed(2)}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'center' }}>
+                  <span style={{
+                    color: '#fff',
+                    background: s.limit_down_streak >= 5 ? '#7f1d1d' : s.limit_down_streak >= 4 ? '#b91c1c' : '#ef4444',
+                    borderRadius: 4, padding: '2px 8px', fontWeight: 700, fontSize: 12, fontFamily: 'var(--font-mono)',
+                  }}>↓{s.limit_down_streak}天</span>
+                </td>
+                <td style={{ padding: '7px 8px', textAlign: 'center', color: 'var(--muted)', fontSize: 11 }}>{s.industry_category || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -149,6 +190,8 @@ function PersistentSection({ items }) {
 
 export default function Dashboard({ data, error }) {
   const [selectedDate, setSelectedDate] = useState(() => data?.dates?.[0] || null)
+  const [selectedStock, setSelectedStock] = useState(null)
+  const notionMap = data?.notionMap || {}
 
   if (error || !data || !data.dates || data.dates.length === 0) {
     return (
@@ -164,7 +207,11 @@ export default function Dashboard({ data, error }) {
   const scan = data.scans[selectedDate] || {}
   const stocks = scan.top_stocks || []
   const persistent = scan.persistent || []
+  const limitDownAlerts = scan.limit_down_alerts || []
   const entryStocks = stocks.filter(s => s.entry_signal)
+  const pred = data.prediction || null
+  const aiText = scan.ai_picks_text || ''
+  const marginStats = scan.margin_stats || {}
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -213,13 +260,70 @@ export default function Dashboard({ data, error }) {
 
       {/* Table area */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 24px 0' }}>
+
+        {/* Market summary (from prediction + aggregate) */}
+        {pred && (
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(30,41,59,0.6)' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: pred.scenario ? 8 : 0 }}>
+              <span style={{ fontSize: 12, color: pred.xgb_label === '偏多' ? 'var(--red)' : pred.xgb_label === '偏空' ? 'var(--green)' : 'var(--muted)', fontWeight: 700 }}>
+                {pred.xgb_label === '偏多' ? '📈' : pred.xgb_label === '偏空' ? '📉' : '➡'} 大盤預測 {Math.round((pred.xgb_prob_up || 0) * 100)}% 上漲
+              </span>
+              {pred.market_data?.vix != null && <span style={{ fontSize: 11, color: 'var(--muted)' }}>VIX {pred.market_data.vix}</span>}
+              {pred.market_data?.futures_net != null && <span style={{ fontSize: 11, color: pred.market_data.futures_net < 0 ? 'var(--green)' : 'var(--red)' }}>外資期貨 {pred.market_data.futures_net?.toLocaleString()}口</span>}
+              {pred.market_data?.night_change != null && <span style={{ fontSize: 11, color: pred.market_data.night_change > 0 ? 'var(--red)' : 'var(--green)' }}>夜盤 {pred.market_data.night_change > 0 ? '+' : ''}{pred.market_data.night_change}點</span>}
+              {pred.regime?.label_zh && <span style={{ fontSize: 11, color: 'var(--accent)', background: 'rgba(96,165,250,0.1)', borderRadius: 4, padding: '1px 6px' }}>{pred.regime.label_zh}</span>}
+            </div>
+            {pred.scenario?.main_scenario && (
+              <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>
+                <b style={{ color: '#e2e8f0' }}>主力劇本：</b>{pred.scenario.main_scenario}
+              </div>
+            )}
+            {pred.scenario?.best_strategy && (
+              <div style={{ fontSize: 11, color: '#86efac', marginTop: 3 }}>
+                <b>最佳策略：</b>{pred.scenario.best_strategy}
+              </div>
+            )}
+            {pred.scenario?.forbidden_actions?.length > 0 && (
+              <div style={{ fontSize: 11, color: '#fca5a5', marginTop: 2 }}>
+                <b>🚫 禁止：</b>{pred.scenario.forbidden_actions.join(' · ')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* AI picks */}
+        {aiText && (
+          <div style={{ padding: '10px 16px', background: 'rgba(15,23,42,0.8)', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa', marginBottom: 6 }}>🤖 AI 精選推薦</div>
+            <pre style={{ fontSize: 11, color: '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, fontFamily: 'inherit', lineHeight: 1.6 }}>{aiText}</pre>
+          </div>
+        )}
+
+        {/* Margin chip stats */}
+        {(marginStats.clean_count > 0 || marginStats.surge_count > 0) && (
+          <div style={{ padding: '6px 16px', fontSize: 11, color: 'var(--muted)', background: 'rgba(30,41,59,0.4)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16 }}>
+            {marginStats.clean_count > 0 && <span>📉 融資籌碼乾淨（5日縮&gt;3%）：<b style={{ color: '#4ade80' }}>{marginStats.clean_count}</b> 支</span>}
+            {marginStats.surge_count > 0 && <span>⚠️ 融資暴增警告：<b style={{ color: '#fca5a5' }}>{marginStats.surge_count}</b> 支</span>}
+          </div>
+        )}
+
         {entryStocks.length > 0 && (
-          <div style={{ padding: '12px 16px 4px', fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>
+          <div style={{ padding: '10px 16px 4px', fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>
             ✓ 進場訊號（{entryStocks.length} 支）
           </div>
         )}
+        {scan.from_aggregate_json && (
+          <div style={{ padding: '4px 16px', fontSize: 11, color: 'var(--accent)', opacity: 0.7 }}>
+            ℹ 資料來源：彙整結果（全掃描已合併）
+          </div>
+        )}
+        {scan.from_notion_fallback && (
+          <div style={{ padding: '4px 16px', fontSize: 11, color: 'var(--yellow)', opacity: 0.8 }}>
+            ℹ 資料來源：Notion 歷史同步（今日掃描尚未完成，顯示最近完整掃描）
+          </div>
+        )}
         <div style={{ padding: '0 8px' }}>
-          <StockTable stocks={stocks} />
+          <StockTable stocks={stocks} onSelect={setSelectedStock} notionMap={notionMap} />
         </div>
 
         {persistent.length > 0 && (
@@ -228,10 +332,22 @@ export default function Dashboard({ data, error }) {
           </div>
         )}
 
+        {limitDownAlerts.length > 0 && (
+          <div style={{ padding: '0 16px' }}>
+            <LimitDownSection items={limitDownAlerts} onSelect={setSelectedStock} />
+          </div>
+        )}
+
         <div style={{ padding: '16px', color: 'var(--muted)', fontSize: 11 }}>
-          點擊任一列可展開詳細資訊 · 分數 ✓ 綠色 = 進場訊號 · 外資/投信欄為連買天數
+          點擊任一列查看詳細資料與K線圖 · 分數 ✓ 綠色 = 進場訊號 · 外資/投信欄為連買天數
         </div>
       </div>
+
+      <StockDetailModal
+        stock={selectedStock}
+        notionInfo={selectedStock ? notionMap[selectedStock.stock_id] : null}
+        onClose={() => setSelectedStock(null)}
+      />
     </div>
   )
 }
