@@ -31,6 +31,8 @@ from data_loader import (
     FinMindClient,
     clean_cache,
     fetch_all_margin_data,
+    fetch_all_monthly_revenue,
+    fetch_disposition_stocks,
     fetch_financial_statement_dates,
     fetch_fundamentals,
     fetch_institutional_data,
@@ -41,6 +43,7 @@ from data_loader import (
     fetch_stock_info,
     fetch_stock_kbar,
     fetch_stock_prices,
+    fetch_suspended_stocks,
     load_stock_list,
     probe_batch_quota,
     validate_finmind_token,
@@ -588,6 +591,7 @@ def collect_signals(
     workers: int,
     checkpoint_path: "str | None" = None,
     margin_df: "pd.DataFrame | None" = None,
+    revenue_df: "pd.DataFrame | None" = None,
 ) -> tuple[dict[str, pd.DataFrame], list[pd.DataFrame], list[str], bool]:
     """Returns (signals_by_stock, signal_frames, load_errors, quota_exhausted).
 
@@ -636,6 +640,7 @@ def collect_signals(
                 stock, prices, market, institutional, config,
                 earnings_dates=earnings, f_score=stock_f_score,
                 margin_df=margin_df,
+                revenue_df=revenue_df,
             )
             return sid, frame
         except Exception as error:
@@ -660,6 +665,7 @@ def collect_signals(
         "lr_slope_20", "lr_slope_60",
         "f_score", "limit_down_streak",
         "margin_change_5d", "short_ratio",
+        "revenue_yoy", "revenue_mom", "revenue_3m_yoy",
     ]
     _signal_cols_present: list[str] = []  # resolved on first result
     _checkpoint_written = False           # tracks whether checkpoint header was written
@@ -723,11 +729,18 @@ def build_daily_snapshot(
     except Exception as _me:
         print(f"[build_daily_snapshot] ⚠️ 融資資料抓取失敗（降級）：{_me}", file=sys.stderr)
 
+    _all_revenue_df = pd.DataFrame()
+    try:
+        _all_revenue_df = fetch_all_monthly_revenue(client, end_date_text, lookback_months=13)
+    except Exception as _re:
+        print(f"[build_daily_snapshot] ⚠️ 月營收資料抓取失敗（降級）：{_re}", file=sys.stderr)
+
     universe = load_universe(args, client)
     signals_by_stock, _, load_errors, quota_exhausted = collect_signals(
         universe, client, market, config, start_date, end_date_text, args.workers,
         checkpoint_path=getattr(args, "checkpoint_csv", None),
         margin_df=_all_margin_df if not _all_margin_df.empty else None,
+        revenue_df=_all_revenue_df if not _all_revenue_df.empty else None,
     )
     snapshot = latest_signal_snapshot(signals_by_stock)
     breadth = compute_market_breadth(snapshot)
@@ -1710,6 +1723,25 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         _skipped_nd = _before_nd - len(remaining_ids)
         if _skipped_nd > 0:
             _safe_print(f"[sequential] 過濾 {_skipped_nd} 支歷史空資料股票（黑名單共 {len(no_data_ids)} 支）")
+
+    # Filter out disposition + suspended stocks (risk management)
+    _skip_ids: set[str] = set()
+    try:
+        _disp_ids = fetch_disposition_stocks(client, today)
+        _skip_ids.update(_disp_ids)
+    except Exception as _de:
+        _safe_print(f"[sequential] ⚠️ 處置股資料取得失敗（無妨）：{_de}")
+    try:
+        _susp_ids = fetch_suspended_stocks(client, today)
+        _skip_ids.update(_susp_ids)
+    except Exception as _se:
+        _safe_print(f"[sequential] ⚠️ 暫停交易資料取得失敗（無妨）：{_se}")
+    if _skip_ids:
+        _before_skip = len(remaining_ids)
+        remaining_ids -= _skip_ids
+        _skipped = _before_skip - len(remaining_ids)
+        if _skipped > 0:
+            _safe_print(f"[sequential] 過濾 {_skipped} 支處置/暫停交易股票（共 {len(_skip_ids)} 支在名單中）")
 
     _safe_print(f"[sequential] 今日已嘗試 {len(already_scanned)}/{total}，剩餘未掃 {len(remaining_ids)} 支")
     if os.getenv("DISCORD_WEBHOOK_URL"):
