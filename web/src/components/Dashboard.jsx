@@ -317,6 +317,11 @@ export default function Dashboard({ data, error }) {
             ℹ 資料來源：彙整結果（全掃描已合併）
           </div>
         )}
+        {scan.from_notion_fallback && (
+          <div style={{ padding: '4px 16px', fontSize: 11, color: 'var(--yellow)', opacity: 0.8 }}>
+            ℹ 資料來源：Notion 歷史同步（今日掃描尚未完成，顯示最近完整掃描）
+          </div>
+        )}
         <div style={{ padding: '0 8px' }}>
           <StockTable stocks={stocks} onSelect={setSelectedStock} notionMap={notionMap} />
         </div>

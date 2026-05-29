@@ -1,6 +1,3 @@
-import { useEffect, useRef } from 'react'
-import { createChart, CandlestickSeries } from 'lightweight-charts'
-
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
 const pct = (v) => (v == null || isNaN(v) ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
 const colorNum = (v, pos = '#ef4444', neg = '#4ade80') => {
@@ -9,50 +6,36 @@ const colorNum = (v, pos = '#ef4444', neg = '#4ade80') => {
   return n > 0 ? pos : neg
 }
 
-function ChartPane({ priceHistory }) {
-  const ref = useRef(null)
-  const chartRef = useRef(null)
+// Taiwan stocks: TWSE for main board, TPEX for OTC
+// Stock IDs starting with 4, 6, 8 (4000-4999, 6000-6999, 8000-8999) are often OTC
+function tvSymbol(stockId) {
+  const id = String(stockId)
+  const n = parseInt(id, 10)
+  // OTC (TPEX): roughly 4000-4999, 6000-6999, 8000-8999, some 5000s
+  const isOTC = (n >= 4000 && n <= 4999) || (n >= 6000 && n <= 6999) || (n >= 8000 && n <= 8999)
+  return `${isOTC ? 'TPEX' : 'TWSE'}:${id}`
+}
 
-  useEffect(() => {
-    if (!ref.current || !priceHistory || priceHistory.length === 0) return
-    const el = ref.current
-    const chart = createChart(el, {
-      width: el.clientWidth,
-      height: 240,
-      layout: { background: { color: '#0f172a' }, textColor: '#94a3b8' },
-      grid: { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
-      crosshair: { mode: 1 },
-      rightPriceScale: { borderColor: '#334155' },
-      timeScale: { borderColor: '#334155', timeVisible: false },
-    })
-    chartRef.current = chart
-
-    const series = chart.addSeries(CandlestickSeries, {
-      upColor: '#ef4444',       // Taiwan: 紅 = 漲
-      downColor: '#22c55e',     // Taiwan: 綠 = 跌
-      borderUpColor: '#ef4444',
-      borderDownColor: '#22c55e',
-      wickUpColor: '#ef4444',
-      wickDownColor: '#22c55e',
-    })
-    series.setData(priceHistory)
-    chart.timeScale().fitContent()
-
-    const ro = new ResizeObserver(() => {
-      if (chartRef.current) chartRef.current.resize(el.clientWidth, 240)
-    })
-    ro.observe(el)
-    return () => { ro.disconnect(); chart.remove(); chartRef.current = null }
-  }, [priceHistory])
-
-  if (!priceHistory || priceHistory.length === 0) {
-    return (
-      <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 13 }}>
-        尚無K線資料（需有多日掃描資料）
+function TradingViewChart({ stockId }) {
+  const sym = tvSymbol(stockId)
+  const src = `https://www.tradingview.com/widgetembed/?hideideas=1&symbol=${encodeURIComponent(sym)}&interval=D&theme=dark&style=1&locale=zh_TW&allow_symbol_change=1&saveimage=0&hide_top_toolbar=0&hide_legend=0`
+  return (
+    <div style={{ width: '100%', borderRadius: 8, overflow: 'hidden', background: '#0f172a' }}>
+      <iframe
+        key={stockId}
+        src={src}
+        style={{ width: '100%', height: 360, border: 'none', display: 'block' }}
+        allowTransparency="true"
+        frameBorder="0"
+        scrolling="no"
+        allowFullScreen
+        title={`TradingView ${stockId}`}
+      />
+      <div style={{ fontSize: 10, color: '#334155', padding: '2px 6px', textAlign: 'right' }}>
+        TradingView · 可切換時間框架
       </div>
-    )
-  }
-  return <div ref={ref} style={{ width: '100%', borderRadius: 8, overflow: 'hidden' }} />
+    </div>
+  )
 }
 
 function Row({ label, value, valueStyle }) {
@@ -91,7 +74,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: 'min(420px, 100vw)',
+          width: 'min(460px, 100vw)',
           height: '100vh',
           background: '#0f172a',
           overflowY: 'auto',
@@ -116,14 +99,9 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           >✕</button>
         </div>
 
-        {/* K-line chart */}
-        <Section title="K 線圖（台股色：紅漲綠跌）">
-          <ChartPane priceHistory={s.price_history} />
-          {s.price_history && s.price_history.length > 0 && (
-            <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>
-              {s.price_history.length} 個交易日資料
-            </div>
-          )}
+        {/* TradingView chart */}
+        <Section title={`K 線圖 · ${tvSymbol(s.stock_id)}`}>
+          <TradingViewChart stockId={s.stock_id} />
         </Section>
 
         {/* Notion 連結 */}
