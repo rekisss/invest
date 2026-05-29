@@ -468,22 +468,68 @@ def prepare_stock_signals(
     _rs5d = _rs5d_arr.copy(); np.nan_to_num(_rs5d, nan=-99.0, posinf=10.0, neginf=-99.0, copy=False)
     _vol_ratio = _vr_arr.copy(); np.nan_to_num(_vol_ratio, nan=0.0, posinf=50.0, neginf=0.0, copy=False)
     _adx14 = _adx_arr.copy(); np.nan_to_num(_adx14, nan=0.0, posinf=100.0, neginf=0.0, copy=False)
+    _rsi14 = _rsi_arr.copy(); np.nan_to_num(_rsi14, nan=50.0, posinf=100.0, neginf=0.0, copy=False)
+
+    # ── 1. 硬性條件：× 60（上限 540），避免技術條件數量主宰模型 ──────────────
+    _hard_score = _cond_count.astype(np.float64) * 60
+
+    # ── 2. 相對大盤強度：分段計分（上限 100），替代不穩定的連續乘法 ──────────
+    _rs_score = np.where(_rs5d > 0.10, 100.0,
+                np.where(_rs5d > 0.05,  70.0,
+                np.where(_rs5d > 0.02,  40.0,
+                np.where(_rs5d > 0.00,  15.0, -30.0))))
+
+    # ── 3. 量比：封頂 5 倍（上限 50），避免爆量股無限加分 ─────────────────────
+    _vol_score = np.clip(_vol_ratio, 0.0, 5.0) * 10.0
+
+    # ── 4. ADX：分段計分（上限 40），移除原始值直接加分避免重複 ──────────────
+    _adx_score = np.where(_adx14 > 35, 40.0,
+                 np.where(_adx14 > 25, 25.0,
+                 np.where(_adx14 > 20, 10.0, 0.0)))
+
+    # ── 5. 基本面加成 ──────────────────────────────────────────────────────────
     _f_bonus = 50.0 if f_score >= 7 else (25.0 if f_score >= 5 else 0.0)
+
+    # ── 6. 融資籌碼加成 ────────────────────────────────────────────────────────
     _margin_bonus = 25.0 if _margin_chg_5d < -3.0 else (10.0 if _margin_chg_5d < -1.0 else 0.0)
+
+    # ── 7. 月營收加成 ──────────────────────────────────────────────────────────
     _revenue_bonus = (
         40.0 if _revenue_yoy > 0.10 else
         (20.0 if _revenue_yoy > 0.00 else
          (-30.0 if _revenue_yoy < -0.10 else 0.0))
     )
+
+    # ── 8. 風險扣分 ────────────────────────────────────────────────────────────
+    # RSI 過熱：已追高，短線回檔風險高
+    _rsi_penalty = np.where(_rsi14 > 90, -80.0,
+                   np.where(_rsi14 > 85, -60.0, 0.0))
+    # MA20 乖離過大：避免追高（close 距離 EMA20 > 15%）
+    _safe_ema20 = np.where(_ema20_arr > 0, _ema20_arr, np.nan)
+    _dist_ma20 = np.nan_to_num((_close_arr - _safe_ema20) / _safe_ema20, nan=0.0)
+    _dist_penalty = np.where(_dist_ma20 > 0.25, -60.0,
+                    np.where(_dist_ma20 > 0.15, -40.0, 0.0))
+    # 爆量長上影：放量卻收黑，出貨訊號
+    _blowout_penalty = np.where(
+        (merged["long_upper_shadow"].to_numpy(dtype=bool)) & (_vol_ratio > 2.0),
+        -50.0, 0.0,
+    )
+    # 融資暴增：散戶追買，籌碼不乾淨
+    _margin_chg_penalty = -40.0 if _margin_chg_5d > 20.0 else 0.0
+
     merged["entry_score"] = (
-        _cond_count.astype(np.float64) * 100
-        + _rs5d * 100
-        + _vol_ratio * 10
-        + _adx14
+        _hard_score
+        + _rs_score
+        + _vol_score
+        + _adx_score
         + _soft_matrix @ _SOFT_SCORE_WEIGHTS
         + _f_bonus
         + _margin_bonus
         + _revenue_bonus
+        + _rsi_penalty
+        + _dist_penalty
+        + _blowout_penalty
+        + _margin_chg_penalty
     )
 
     # Momentum score (0-100): 量能 40% + 波動度 30% + 尾盤強度 30%

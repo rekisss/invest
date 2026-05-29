@@ -212,6 +212,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--f-score-min", type=int, default=0, help="Minimum Piotroski F-Score to qualify for entry (0 = disabled, 6 = recommended).")
     parser.add_argument("--batch-index", type=int, default=-1, help="0-based batch index for full-market scan (-1 = no batching).")
     parser.add_argument("--batch-count", type=int, default=8, help="Total number of batches for full-market scan (default 8).")
+    parser.add_argument("--segment-start", type=int, default=-1, help="Explicit start position in sorted universe (for weighted multi-quota splits).")
+    parser.add_argument("--segment-size", type=int, default=-1, help="Explicit segment size (number of stocks). Overrides equal --batch-count division.")
     parser.add_argument("--positions", default="positions.csv", help="Path to open positions CSV for monitoring (default positions.csv).")
     # StrategyConfig overrides (for parallel backtest experiments)
     parser.add_argument("--rsi-threshold", type=float, default=None, help="RSI threshold for rsi_strong signal (default 55.0).")
@@ -1662,6 +1664,12 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         ("FINMIND_TOKEN",   os.getenv("FINMIND_TOKEN")),
         ("FINMIND_TOKEN_2", os.getenv("FINMIND_TOKEN_2")),
         ("FINMIND_TOKEN_3", os.getenv("FINMIND_TOKEN_3")),
+        ("FINMIND_TOKEN_4", os.getenv("FINMIND_TOKEN_4")),
+        ("FINMIND_TOKEN_5", os.getenv("FINMIND_TOKEN_5")),
+        ("FINMIND_TOKEN_6", os.getenv("FINMIND_TOKEN_6")),
+        ("FINMIND_TOKEN_7", os.getenv("FINMIND_TOKEN_7")),
+        ("FINMIND_TOKEN_8", os.getenv("FINMIND_TOKEN_8")),
+        ("FINMIND_TOKEN_9", os.getenv("FINMIND_TOKEN_9")),
     ]
     _orig_token_env = os.environ.get("FINMIND_TOKEN", "")
     _quota_exhausted_keys: set[str] = set()  # legacy marker; no hard-skip in sequential mode
@@ -1704,10 +1712,22 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
 
     remaining_ids = set(full_univ["stock_id"].astype(str)) - already_scanned
 
-    # Segment mode: --batch-index N --batch-count 3 → each parallel job scans 1/3 of universe
+    # Segment mode: explicit start/size takes priority (weighted multi-quota splits),
+    # falling back to equal --batch-count division.
     _seg_idx = getattr(args, "batch_index", -1)
     _seg_cnt = max(1, getattr(args, "batch_count", 1))
-    if _seg_idx >= 0 and _seg_cnt > 1:
+    _seg_start = getattr(args, "segment_start", -1)
+    _seg_size = getattr(args, "segment_size", -1)
+    if _seg_start >= 0 and _seg_size > 0:
+        _sorted_ids = sorted(full_univ["stock_id"].astype(str))
+        _segment_ids = set(_sorted_ids[_seg_start: _seg_start + _seg_size])
+        remaining_ids = remaining_ids & _segment_ids
+        total = len(_segment_ids)
+        _safe_print(
+            f"[sequential] 加權分段 seg{_seg_idx}：第 {_seg_start}～{_seg_start + _seg_size - 1} 位，"
+            f"共 {len(_segment_ids)} 支，剩餘 {len(remaining_ids)} 未掃"
+        )
+    elif _seg_idx >= 0 and _seg_cnt > 1:
         _sorted_ids = sorted(full_univ["stock_id"].astype(str))
         _sz = (len(_sorted_ids) + _seg_cnt - 1) // _seg_cnt
         _segment_ids = set(_sorted_ids[_seg_idx * _sz: (_seg_idx + 1) * _sz])
@@ -1762,6 +1782,12 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         (0, os.getenv("FINMIND_TOKEN")),
         (1, os.getenv("FINMIND_TOKEN_2")),
         (2, os.getenv("FINMIND_TOKEN_3")),
+        (3, os.getenv("FINMIND_TOKEN_4")),
+        (4, os.getenv("FINMIND_TOKEN_5")),
+        (5, os.getenv("FINMIND_TOKEN_6")),
+        (6, os.getenv("FINMIND_TOKEN_7")),
+        (7, os.getenv("FINMIND_TOKEN_8")),
+        (8, os.getenv("FINMIND_TOKEN_9")),
     ]
     token_list = [(i, t) for i, t in token_list if t]
     _chunk_size = max(1, int(os.getenv("SEQUENTIAL_CHUNK_SIZE", "600") or "600"))
@@ -1783,7 +1809,11 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     zero_quota_accounts: set[int] = set()
     orig_env_token = os.environ.get("FINMIND_TOKEN", "")
 
-    _env_key_map = {0: "FINMIND_TOKEN", 1: "FINMIND_TOKEN_2", 2: "FINMIND_TOKEN_3"}
+    _env_key_map = {
+        0: "FINMIND_TOKEN",   1: "FINMIND_TOKEN_2", 2: "FINMIND_TOKEN_3",
+        3: "FINMIND_TOKEN_4", 4: "FINMIND_TOKEN_5", 5: "FINMIND_TOKEN_6",
+        6: "FINMIND_TOKEN_7", 7: "FINMIND_TOKEN_8", 8: "FINMIND_TOKEN_9",
+    }
 
     # ── 掃描前一次預檢所有帳號配額，結果快取供迴圈重用（避免重複消耗 API 呼叫）──
     _quota_probe_cache: dict[int, tuple[bool, str]] = {}

@@ -1,8 +1,9 @@
 name: 全市場掃描
 
-# 架構：3 個平行 job，各帶自己的帳號掃 1/3 宇宙
-# seg0(帳號1) + seg1(帳號2) + seg2(帳號3) 同時跑
-# 每輪 ~360 支（3×120），5 輪涵蓋全部 1800 支（vs 單 job 8 輪）
+# 架構：9 個平行 job，加權分配 1800 支股票
+# 帳號 1-5（600/hr）× 256 支 = 1280 支 → ~51 分鐘
+# 帳號 6-9（300/hr）× 130 支 =  520 支 → ~52 分鐘
+# 全部完成：約 52 分鐘（原 3 段需 ~2 小時）
 # 每日 20:30 CST 由 full_market_aggregate.yml 彙整 TOP 20 → Discord
 
 on:
@@ -25,12 +26,20 @@ jobs:
     strategy:
       matrix:
         include:
-          - seg: 0
-          - seg: 1
-          - seg: 2
+          # 高額度帳號（600/hr）：每段 256 支，完成時間 ~51 分鐘
+          - { seg: 0, start: 0,    size: 256 }
+          - { seg: 1, start: 256,  size: 256 }
+          - { seg: 2, start: 512,  size: 256 }
+          - { seg: 3, start: 768,  size: 256 }
+          - { seg: 4, start: 1024, size: 256 }
+          # 低額度帳號（300/hr）：每段 130 支，完成時間 ~52 分鐘
+          - { seg: 5, start: 1280, size: 130 }
+          - { seg: 6, start: 1410, size: 130 }
+          - { seg: 7, start: 1540, size: 130 }
+          - { seg: 8, start: 1670, size: 130 }
       fail-fast: false
     runs-on: ubuntu-latest
-    timeout-minutes: 110
+    timeout-minutes: 90
     permissions:
       contents: write
 
@@ -51,19 +60,16 @@ jobs:
           SEG=${{ matrix.seg }}
           DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
           YESTERDAY=$(TZ=Asia/Taipei date -d 'yesterday' +%Y-%m-%d)
-          # _attempted_ 進度檔（全段共用 + 各段獨立，* 在引號外才能展開 glob）
           rm -f output/full_scan/_attempted_${DATE}.csv
           rm -f output/full_scan/_attempted_${DATE}_seg*.csv
-          # batch_seq 只刪本 seg 的檔案（避免誤刪其他 seg 的資料）
           rm -f output/full_scan/batch_seq${SEG}_${DATE}.csv
           rm -f output/full_scan/batch_seq${SEG}_${DATE}.xlsx
           rm -f output/full_scan/batch_seq${SEG}_${YESTERDAY}.csv
           rm -f output/full_scan/batch_seq${SEG}_${YESTERDAY}.xlsx
           echo "已刪除 seg${SEG} 進度 ${DATE}（含昨日 ${YESTERDAY}）"
-          # 只有 seg0 才發 Discord 通知（避免重複）
           if [ "${{ matrix.seg }}" = "0" ]; then
             curl -s -H "Content-Type: application/json" \
-              -d "{\"content\": \"🔄 **已重置今日進度** · $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST · 3 段平行重新掃描\"}" \
+              -d "{\"content\": \"🔄 **已重置今日進度** · $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST · 9 段平行重新掃描\"}" \
               "$DISCORD_WEBHOOK_URL" || true
           fi
 
@@ -76,12 +82,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: 掃描 seg${{ matrix.seg }}（專用帳號，1/3 宇宙）
+      - name: 掃描 seg${{ matrix.seg }}（專用帳號，加權分段）
         continue-on-error: true
         env:
           FINMIND_TOKEN:   ${{ matrix.seg == 0 && secrets.FINMIND_TOKEN   || '' }}
           FINMIND_TOKEN_2: ${{ matrix.seg == 1 && secrets.FINMIND_TOKEN_2 || '' }}
           FINMIND_TOKEN_3: ${{ matrix.seg == 2 && secrets.FINMIND_TOKEN_3 || '' }}
+          FINMIND_TOKEN_4: ${{ matrix.seg == 3 && secrets.FINMIND_TOKEN_4 || '' }}
+          FINMIND_TOKEN_5: ${{ matrix.seg == 4 && secrets.FINMIND_TOKEN_5 || '' }}
+          FINMIND_TOKEN_6: ${{ matrix.seg == 5 && secrets.FINMIND_TOKEN_6 || '' }}
+          FINMIND_TOKEN_7: ${{ matrix.seg == 6 && secrets.FINMIND_TOKEN_7 || '' }}
+          FINMIND_TOKEN_8: ${{ matrix.seg == 7 && secrets.FINMIND_TOKEN_8 || '' }}
+          FINMIND_TOKEN_9: ${{ matrix.seg == 8 && secrets.FINMIND_TOKEN_9 || '' }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           python main.py \
@@ -92,7 +104,9 @@ jobs:
             --top-n 50 \
             --workers 2 \
             --batch-index ${{ matrix.seg }} \
-            --batch-count 3 \
+            --batch-count 9 \
+            --segment-start ${{ matrix.start }} \
+            --segment-size ${{ matrix.size }} \
             --output output
 
       - name: 上傳掃描 Excel（Artifacts）
