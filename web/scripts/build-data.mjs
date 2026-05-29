@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs'
 import { join, resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import https from 'https'
@@ -185,6 +185,52 @@ function readPredictionHistory() {
   } catch { return [] }
 }
 
+// ── CSV download helpers ──────────────────────────────────────────────────────
+const TOP50_COLS = ['rank','stock_id','name','industry_category',
+  'entry_score','entry_signal','close','open','high','low','volume','volume_ratio',
+  'rsi14','adx14','atr14','macd','macd_hist','bb_pct_b','stoch_k','stoch_d',
+  'ema20','ema60','foreign_buy_streak','invest_trust_streak','dealer_buy_streak',
+  'foreign_net','invest_trust_net','dealer_net','f_score','condition_count',
+  'margin_change_5d','short_ratio','relative_strength_5d','return_5d','day_return',
+  'momentum_score','revenue_yoy','revenue_mom','entry_reason','skip_reason','limit_down_streak']
+
+const ALL_COLS = ['rank','stock_id','name','industry_category',
+  'entry_score','entry_signal','close','volume_ratio',
+  'rsi14','adx14','foreign_buy_streak','invest_trust_streak','dealer_buy_streak',
+  'f_score','condition_count','margin_change_5d','relative_strength_5d',
+  'return_5d','revenue_yoy','entry_reason','limit_down_streak']
+
+function rowsToCSV(rows, cols) {
+  const esc = v => {
+    if (v == null || v === '') return ''
+    const s = String(v)
+    return (s.includes(',') || s.includes('"') || s.includes('\n'))
+      ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  return '﻿' + [cols.join(','), ...rows.map(r => cols.map(k => esc(r[k])).join(','))].join('\n')
+}
+
+function writeDownloadCSVs(date, allStocksRaw, downloadsDir) {
+  mkdirSync(downloadsDir, { recursive: true })
+  // TOP 50 — full columns
+  const top50 = allStocksRaw.slice(0, 50).map((r, i) => ({ rank: i + 1, ...r }))
+  writeFileSync(join(downloadsDir, `scan_${date}_top50.csv`), rowsToCSV(top50, TOP50_COLS), 'utf-8')
+  // All stocks — key columns
+  const all = allStocksRaw.map((r, i) => ({ rank: i + 1, ...r }))
+  writeFileSync(join(downloadsDir, `scan_${date}_all.csv`), rowsToCSV(all, ALL_COLS), 'utf-8')
+}
+
+function cleanOldDownloads(currentDates, downloadsDir) {
+  if (!existsSync(downloadsDir)) return
+  for (const f of readdirSync(downloadsDir)) {
+    if (!/^scan_\d{4}-\d{2}-\d{2}_(top50|all)\.csv$/.test(f)) continue
+    const d = f.slice(5, 15)  // extract YYYY-MM-DD
+    if (!currentDates.includes(d)) {
+      try { unlinkSync(join(downloadsDir, f)) } catch {}
+    }
+  }
+}
+
 // ── Process scan CSVs ────────────────────────────────────────────────────────
 function processScanData() {
   if (!existsSync(SCAN_DIR)) return { dates: [], scans: {} }
@@ -277,6 +323,11 @@ function processScanData() {
       .sort((a, b) => toNum(b.limit_down_streak) - toNum(a.limit_down_streak))
       .map(r => mapStock(r))
     scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, limit_down_alerts: limitDownAlerts, is_partial: allStocks.length < 500 }
+    // Write static CSV download files (top50 + all) to public/downloads/
+    try {
+      writeDownloadCSVs(date, allStocks, join(PUBLIC_DIR, 'downloads'))
+      console.log(`  CSV: scan_${date}_top50.csv (${topStocks.length}支), scan_${date}_all.csv (${allStocks.length}支)`)
+    } catch (e) { console.warn(`  CSV write failed for ${date}: ${e.message}`) }
     for (const stock of topStocks) {
       const sid = stock.stock_id
       if (!stockHistory[sid]) stockHistory[sid] = { name: stock.name, industry_category: stock.industry_category, scores: [] }
@@ -292,6 +343,7 @@ function processScanData() {
     })
     .sort((a, b) => b.days_in_top - a.days_in_top || b.latest_score - a.latest_score).slice(0, 20)
   if (dates.length > 0 && scans[dates[0]]) scans[dates[0]].persistent = persistent
+  cleanOldDownloads(dates, join(PUBLIC_DIR, 'downloads'))
   return { dates, scans }
 }
 

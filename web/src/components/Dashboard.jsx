@@ -1,28 +1,7 @@
 import { useState } from 'react'
 import StockDetailModal from './StockDetailModal'
 
-function exportCSV(stocks, date) {
-  if (!stocks || stocks.length === 0) return
-  const cols = ['rank','stock_id','name','industry_category','entry_score','entry_signal','close',
-    'rsi14','adx14','volume_ratio','foreign_buy_streak','invest_trust_streak','dealer_buy_streak',
-    'f_score','condition_count','margin_change_5d','short_ratio','entry_reason','skip_reason',
-    'momentum_score','relative_strength_5d','return_5d','day_return','bb_pct_b',
-    'foreign_net','invest_trust_net','dealer_net','ema20','ema60','atr14',
-    'macd','macd_hist','limit_down_streak']
-  const header = cols.join(',')
-  const rows = stocks.map(s => cols.map(k => {
-    const v = s[k]
-    if (v == null) return ''
-    if (typeof v === 'string' && v.includes(',')) return `"${v.replace(/"/g, '""')}"`
-    return String(v)
-  }).join(','))
-  const csv = '﻿' + [header, ...rows].join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url; a.download = `taiwan_scan_${date}.csv`; a.click()
-  URL.revokeObjectURL(url)
-}
+const BASE = import.meta.env.BASE_URL  // '/invest/' on GitHub Pages, '/' in dev
 
 function StatCard({ label, value, sub, color }) {
   return (
@@ -257,14 +236,26 @@ export default function Dashboard({ data, error }) {
                 return <option key={d} value={d}>{d}（{s?.total_scanned ?? 0}支）{partial}</option>
               })}
             </select>
-            <button
-              onClick={() => exportCSV(stocks, selectedDate)}
-              title="下載當日 TOP 50 CSV"
+            <a
+              href={`${BASE}downloads/scan_${selectedDate}_top50.csv`}
+              download
+              title="下載 TOP 50 完整欄位 CSV（Excel 可直接開啟）"
               style={{
                 background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--muted)',
-                borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+                borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+                textDecoration: 'none', display: 'inline-block',
               }}
-            >↓ CSV</button>
+            >↓ TOP 50</a>
+            <a
+              href={`${BASE}downloads/scan_${selectedDate}_all.csv`}
+              download
+              title="下載全部掃描股票 CSV（含所有 key 欄位）"
+              style={{
+                background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--accent)',
+                borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+                textDecoration: 'none', display: 'inline-block',
+              }}
+            >↓ 全部</a>
           </div>
         </div>
         {/* Stats */}

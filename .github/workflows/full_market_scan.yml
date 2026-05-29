@@ -62,6 +62,7 @@ jobs:
           YESTERDAY=$(TZ=Asia/Taipei date -d 'yesterday' +%Y-%m-%d)
           rm -f output/full_scan/_attempted_${DATE}.csv
           rm -f output/full_scan/_attempted_${DATE}_seg*.csv
+          rm -f output/full_scan/_attempted_${YESTERDAY}_seg${SEG}.csv
           rm -f output/full_scan/batch_seq${SEG}_${DATE}.csv
           rm -f output/full_scan/batch_seq${SEG}_${DATE}.xlsx
           rm -f output/full_scan/batch_seq${SEG}_${YESTERDAY}.csv
