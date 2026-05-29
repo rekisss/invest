@@ -166,6 +166,29 @@ function processScanData() {
   const dates = Object.keys(dateMap).sort().reverse().slice(0, MAX_DATES)
   const scans = {}
   const stockHistory = {}
+
+  // Collect OHLCV price history per stock across all available dates (chronological)
+  const priceHistoryMap = {}
+  for (const date of [...dates].reverse()) {
+    const seen = new Set()
+    for (const row of (dateMap[date] || [])) {
+      const sid = row.stock_id
+      if (seen.has(sid)) continue
+      seen.add(sid)
+      const c = toNum(row.close)
+      if (c <= 0) continue
+      if (!priceHistoryMap[sid]) priceHistoryMap[sid] = []
+      priceHistoryMap[sid].push({
+        time: date,
+        open: toNum(row.open) || c,
+        high: toNum(row.high) || c,
+        low: toNum(row.low) || c,
+        close: c,
+        volume: toNum(row.volume),
+      })
+    }
+  }
+
   for (const date of dates) {
     const stockMap = {}
     for (const row of dateMap[date]) {
@@ -173,8 +196,9 @@ function processScanData() {
       if (!stockMap[sid] || score > toNum(stockMap[sid].entry_score)) stockMap[sid] = row
     }
     const allStocks = Object.values(stockMap).sort((a, b) => toNum(b.entry_score) - toNum(a.entry_score))
-    const topStocks = allStocks.slice(0, TOP_N).map((row, i) => ({
-      rank: i + 1, stock_id: row.stock_id, name: row.name || '',
+    const isLatest = date === dates[0]
+    const mapStock = (row, extra = {}) => ({
+      stock_id: row.stock_id, name: row.name || '',
       industry_category: row.industry_category || '',
       close: toNum(row.close), volume_ratio: toNum(row.volume_ratio),
       rsi14: toNum(row.rsi14), adx14: toNum(row.adx14),
@@ -188,16 +212,24 @@ function processScanData() {
       short_ratio: toNum(row.short_ratio),
       entry_reason: row.entry_reason || '',
       limit_down_streak: toNum(row.limit_down_streak),
-    }))
+      // extra technical fields for detail panel
+      macd: toNum(row.macd), macd_signal: toNum(row.macd_signal), macd_hist: toNum(row.macd_hist),
+      bb_pct_b: toNum(row.bb_pct_b), stoch_k: toNum(row.stoch_k), stoch_d: toNum(row.stoch_d),
+      rsi14: toNum(row.rsi14), adx14: toNum(row.adx14), atr14: toNum(row.atr14),
+      ema20: toNum(row.ema20), ema60: toNum(row.ema60),
+      foreign_net: toNum(row.foreign_net), invest_trust_net: toNum(row.invest_trust_net), dealer_net: toNum(row.dealer_net),
+      momentum_score: toNum(row.momentum_score), relative_strength_5d: toNum(row.relative_strength_5d),
+      return_5d: toNum(row.return_5d), day_return: toNum(row.day_return),
+      skip_reason: row.skip_reason || '',
+      // attach price history only for latest date (to keep JSON lean)
+      price_history: isLatest ? (priceHistoryMap[row.stock_id] || []) : undefined,
+      ...extra,
+    })
+    const topStocks = allStocks.slice(0, TOP_N).map((row, i) => ({ rank: i + 1, ...mapStock(row) }))
     const limitDownAlerts = allStocks
       .filter(r => toNum(r.limit_down_streak) >= 3)
       .sort((a, b) => toNum(b.limit_down_streak) - toNum(a.limit_down_streak))
-      .map(r => ({
-        stock_id: r.stock_id, name: r.name || '',
-        industry_category: r.industry_category || '',
-        close: toNum(r.close),
-        limit_down_streak: toNum(r.limit_down_streak),
-      }))
+      .map(r => mapStock(r))
     scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, limit_down_alerts: limitDownAlerts }
     for (const stock of topStocks) {
       const sid = stock.stock_id
