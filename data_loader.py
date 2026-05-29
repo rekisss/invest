@@ -632,6 +632,125 @@ def fetch_options_pcr(
     return result[["date", "pcr"]].dropna().sort_values("date").reset_index(drop=True)
 
 
+def fetch_disposition_stocks(
+    client: "FinMindClient",
+    date: str,
+) -> set[str]:
+    """Return stock_ids currently under TSE/OTC disposition monitoring restrictions.
+
+    Disposition periods can last up to 3 months; we query 90 days back to catch
+    any currently-active period whose start date predates today.
+    """
+    start = (pd.Timestamp(date) - pd.Timedelta(days=90)).strftime("%Y-%m-%d")
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockDispositionSecuritiesPeriod",
+            use_cache=True,
+            start_date=start,
+            end_date=date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 處置股資料取得失敗（graceful skip）: {exc}", file=sys.stderr)
+        return set()
+
+    if frame.empty:
+        return set()
+
+    frame = frame.copy()
+    frame.columns = [c.lower().strip() for c in frame.columns]
+
+    if "stock_id" not in frame.columns:
+        return set()
+
+    # Try to find an end-date column and filter to currently active dispositions
+    end_col = next(
+        (c for c in frame.columns if "end" in c and "date" in c),
+        next((c for c in frame.columns if c in ("end_date", "enddate", "to", "finish_date")), None),
+    )
+    today_ts = pd.Timestamp(date)
+    if end_col:
+        frame[end_col] = pd.to_datetime(frame[end_col], errors="coerce")
+        active = frame[frame[end_col].isna() | (frame[end_col] >= today_ts)]
+    else:
+        active = frame  # conservative: include all found
+
+    result = set(active["stock_id"].astype(str).unique())
+    print(f"[data_loader] 處置股：{len(result)} 支", file=sys.stderr)
+    return result
+
+
+def fetch_suspended_stocks(
+    client: "FinMindClient",
+    date: str,
+) -> set[str]:
+    """Return stock_ids currently suspended from trading."""
+    start = (pd.Timestamp(date) - pd.Timedelta(days=7)).strftime("%Y-%m-%d")
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockSuspended",
+            use_cache=True,
+            start_date=start,
+            end_date=date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 暫停交易資料取得失敗（graceful skip）: {exc}", file=sys.stderr)
+        return set()
+
+    if frame.empty or "stock_id" not in frame.columns:
+        return set()
+
+    result = set(frame["stock_id"].astype(str).unique())
+    print(f"[data_loader] 暫停交易：{len(result)} 支", file=sys.stderr)
+    return result
+
+
+def fetch_all_monthly_revenue(
+    client: "FinMindClient",
+    end_date: str,
+    lookback_months: int = 13,
+) -> pd.DataFrame:
+    """Batch fetch monthly revenue for ALL stocks (one API call).
+
+    Returns DataFrame with columns: stock_id, date, revenue.
+    Revenue is in thousands of NTD (原始單位：千元).
+    """
+    start = (pd.Timestamp(end_date) - pd.DateOffset(months=lookback_months)).strftime("%Y-%m-%d")
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockMonthRevenue",
+            use_cache=True,
+            start_date=start,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 月營收資料取得失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+    if frame.empty:
+        return pd.DataFrame()
+
+    frame = frame.copy()
+    frame.columns = [c.lower().strip() for c in frame.columns]
+
+    if "stock_id" not in frame.columns:
+        return pd.DataFrame()
+
+    rev_col = next(
+        (c for c in frame.columns if "revenue" in c and "year" not in c and "month" not in c),
+        next((c for c in frame.columns if "revenue" in c), None),
+    )
+    if rev_col is None:
+        return pd.DataFrame()
+
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+    frame[rev_col] = pd.to_numeric(frame[rev_col], errors="coerce").fillna(0)
+
+    result = frame[["stock_id", "date", rev_col]].rename(columns={rev_col: "revenue"})
+    result = result.dropna(subset=["date"]).sort_values(["stock_id", "date"]).reset_index(drop=True)
+    print(f"[data_loader] 月營收資料：{len(result)} 筆（{result['stock_id'].nunique()} 支股票）", file=sys.stderr)
+    return result
+
+
 def clean_cache(cache_dir: Path | str, max_age_days: int = 30) -> int:
     """Delete CSV cache files older than max_age_days. Returns count of deleted files."""
     cache_path = Path(cache_dir)

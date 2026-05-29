@@ -62,6 +62,7 @@ _CANDIDATE_COLS = [
     "close_10d_low",
     "lr_slope_20", "lr_slope_60",
     "f_score",
+    "revenue_yoy", "revenue_mom", "revenue_3m_yoy",
     "entry_reason", "skip_reason",
 ]
 _WATCH_COLS = [
@@ -177,6 +178,7 @@ def prepare_stock_signals(
     earnings_dates: pd.DataFrame | None = None,
     f_score: int = -1,
     margin_df: pd.DataFrame | None = None,
+    revenue_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     frame = stock_df.sort_values("date").reset_index(drop=True)
     frame["stock_id"] = stock_info["stock_id"]
@@ -268,6 +270,49 @@ def prepare_stock_signals(
                 _short_ratio_val = round(_short_bal / max(_mg_latest, 1) * 100, 2) if _mg_latest > 0 else 0.0
     merged["margin_change_5d"] = _margin_chg_5d
     merged["short_ratio"] = _short_ratio_val
+
+    # ── 月營收 YoY/MoM/3m-YoY ────────────────────────────────────────────────
+    _revenue_yoy = 0.0
+    _revenue_mom = 0.0
+    _revenue_3m_yoy = 0.0
+    if revenue_df is not None and not revenue_df.empty and "stock_id" in revenue_df.columns:
+        _sid_str = str(stock_info.get("stock_id", ""))
+        _stk_rev = revenue_df[revenue_df["stock_id"].astype(str) == _sid_str].sort_values("date")
+        if not _stk_rev.empty:
+            _latest_rev = float(_stk_rev["revenue"].iloc[-1])
+            _latest_rev_date = pd.Timestamp(_stk_rev["date"].iloc[-1])
+            # YoY: same month one year ago (±31-day tolerance)
+            _yoy_target = _latest_rev_date - pd.DateOffset(years=1)
+            _yoy_window = _stk_rev[
+                (_stk_rev["date"] >= _yoy_target - pd.Timedelta(days=15)) &
+                (_stk_rev["date"] <= _yoy_target + pd.Timedelta(days=31))
+            ]
+            if not _yoy_window.empty:
+                _yoy_rev = float(_yoy_window["revenue"].iloc[-1])
+                if _yoy_rev > 0:
+                    _revenue_yoy = round((_latest_rev - _yoy_rev) / _yoy_rev, 4)
+            # MoM: previous month
+            if len(_stk_rev) >= 2:
+                _prev_rev = float(_stk_rev["revenue"].iloc[-2])
+                if _prev_rev > 0:
+                    _revenue_mom = round((_latest_rev - _prev_rev) / _prev_rev, 4)
+            # 3-month cumulative YoY
+            if len(_stk_rev) >= 3:
+                _3m_sum = float(_stk_rev["revenue"].iloc[-3:].sum())
+                _3m_start_date = pd.Timestamp(_stk_rev["date"].iloc[-3])
+                _yoy_3m_start = _3m_start_date - pd.DateOffset(years=1) - pd.Timedelta(days=15)
+                _yoy_3m_end = _latest_rev_date - pd.DateOffset(years=1) + pd.Timedelta(days=31)
+                _yoy_3m_data = _stk_rev[
+                    (_stk_rev["date"] >= _yoy_3m_start) &
+                    (_stk_rev["date"] <= _yoy_3m_end)
+                ]
+                if len(_yoy_3m_data) >= 3:
+                    _3m_yoy_sum = float(_yoy_3m_data["revenue"].iloc[-3:].sum())
+                    if _3m_yoy_sum > 0:
+                        _revenue_3m_yoy = round((_3m_sum - _3m_yoy_sum) / _3m_yoy_sum, 4)
+    merged["revenue_yoy"] = _revenue_yoy
+    merged["revenue_mom"] = _revenue_mom
+    merged["revenue_3m_yoy"] = _revenue_3m_yoy
 
     # ── 跌停連續天數 ──────────────────────────────────────────────────────────
     # Taiwan daily limit ≈ 10%; use -9.5% threshold to account for rounding
@@ -425,6 +470,11 @@ def prepare_stock_signals(
     _adx14 = _adx_arr.copy(); np.nan_to_num(_adx14, nan=0.0, posinf=100.0, neginf=0.0, copy=False)
     _f_bonus = 50.0 if f_score >= 7 else (25.0 if f_score >= 5 else 0.0)
     _margin_bonus = 25.0 if _margin_chg_5d < -3.0 else (10.0 if _margin_chg_5d < -1.0 else 0.0)
+    _revenue_bonus = (
+        40.0 if _revenue_yoy > 0.10 else
+        (20.0 if _revenue_yoy > 0.00 else
+         (-30.0 if _revenue_yoy < -0.10 else 0.0))
+    )
     merged["entry_score"] = (
         _cond_count.astype(np.float64) * 100
         + _rs5d * 100
@@ -433,6 +483,7 @@ def prepare_stock_signals(
         + _soft_matrix @ _SOFT_SCORE_WEIGHTS
         + _f_bonus
         + _margin_bonus
+        + _revenue_bonus
     )
 
     # Momentum score (0-100): 量能 40% + 波動度 30% + 尾盤強度 30%
