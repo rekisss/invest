@@ -658,7 +658,8 @@ def collect_signals(
         "dealer_buy_streak", "dealer_buy_3d",
         "williams_r", "cci20", "mfi14", "mfi_strong", "above_ichimoku_cloud",
         "lr_slope_20", "lr_slope_60",
-        "f_score",
+        "f_score", "limit_down_streak",
+        "margin_change_5d", "short_ratio",
     ]
     _signal_cols_present: list[str] = []  # resolved on first result
     _checkpoint_written = False           # tracks whether checkpoint header was written

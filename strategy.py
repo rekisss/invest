@@ -269,6 +269,15 @@ def prepare_stock_signals(
     merged["margin_change_5d"] = _margin_chg_5d
     merged["short_ratio"] = _short_ratio_val
 
+    # ── 跌停連續天數 ──────────────────────────────────────────────────────────
+    # Taiwan daily limit ≈ 10%; use -9.5% threshold to account for rounding
+    _dr_np = np.nan_to_num(merged["day_return"].to_numpy(dtype=float), nan=0.0)
+    _is_ld = _dr_np <= -0.095
+    _ld_streak = np.zeros(len(merged), dtype=np.int32)
+    for _i in range(1, len(merged)):
+        _ld_streak[_i] = (_ld_streak[_i - 1] + 1) if _is_ld[_i] else 0
+    merged["limit_down_streak"] = _ld_streak
+
     # ── Core signals ──────────────────────────────────────────────────────────
     _n = len(merged)
     _macd_arr = merged["macd"].to_numpy(dtype=float)
