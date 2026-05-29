@@ -49,11 +49,16 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
-          rm -f "output/full_scan/_attempted_${DATE}.csv"
-          rm -f "output/full_scan/_attempted_${DATE}_seg*.csv"
-          rm -f "output/full_scan/batch_seq"*"_${DATE}.csv"
-          rm -f "output/full_scan/batch_seq"*"_${DATE}.xlsx"
-          echo "已刪除今日進度 ${DATE} (seg ${{ matrix.seg }})，將重新掃描"
+          YESTERDAY=$(TZ=Asia/Taipei date -d 'yesterday' +%Y-%m-%d)
+          # _attempted_ 進度檔（修正：* 必須在引號外才能展開 glob）
+          rm -f output/full_scan/_attempted_${DATE}.csv
+          rm -f output/full_scan/_attempted_${DATE}_seg*.csv
+          # batch_seq 輸出（今天日期 + 昨天日期，因為 filename correction 會重命名）
+          rm -f output/full_scan/batch_seq*_${DATE}.csv
+          rm -f output/full_scan/batch_seq*_${DATE}.xlsx
+          rm -f output/full_scan/batch_seq*_${YESTERDAY}.csv
+          rm -f output/full_scan/batch_seq*_${YESTERDAY}.xlsx
+          echo "已刪除今日進度 ${DATE}（含昨日 ${YESTERDAY} batch_seq）seg ${{ matrix.seg }}"
           # 只有 seg0 才發 Discord 通知（避免重複）
           if [ "${{ matrix.seg }}" = "0" ]; then
             curl -s -H "Content-Type: application/json" \
