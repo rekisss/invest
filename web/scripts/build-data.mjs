@@ -12,7 +12,7 @@ const PUBLIC_DIR = resolve(__dirname, '../public')
 const OUTPUT_FILE = join(PUBLIC_DIR, 'data.json')
 const TOP_N = 50
 const MAX_DATES = 14
-const MIN_VALID_STOCKS = 200   // fewer than this = incomplete scan, skip as primary date
+const MIN_VALID_STOCKS = 500   // fewer than this = incomplete scan (1 account only), skip as primary date
 
 // ── CSV parser ──────────────────────────────────────────────────────────────
 function parseCSVLine(line) {
@@ -299,16 +299,15 @@ function processScanData() {
 async function fetchNotionStocks() {
   const token = (process.env.NOTION_TOKEN || '').trim()
   const dbId  = (process.env.NOTION_DATABASE_ID || '').trim()
-  if (!token || !dbId) { console.log('  Notion: no token/db — skipping'); return {} }
+  if (!token || !dbId) { console.log('  Notion: no token/db — skipping'); return { notionMap: {}, notionFullStocks: [] } }
 
-  const cutoff = new Date(Date.now() - 14 * 86400 * 1000).toISOString().slice(0, 10)
-  const headers = {
-    'Authorization': `Bearer ${token}`,
-    'Notion-Version': '2022-06-28',
-  }
+  const cutoff = new Date(Date.now() - 30 * 86400 * 1000).toISOString().slice(0, 10)
+  const headers = { 'Authorization': `Bearer ${token}`, 'Notion-Version': '2022-06-28' }
   const notionMap = {}
+  const notionFullStocks = []
   let cursor = null
-  let total = 0
+  let pageCount = 0
+  const MAX_PAGES = 20  // ~2000 stocks max to avoid build timeout
 
   const getRich = (props, key) => props[key]?.rich_text?.[0]?.text?.content || ''
   const getSelect = (props, key) => props[key]?.select?.name || ''
@@ -317,34 +316,78 @@ async function fetchNotionStocks() {
 
   try {
     do {
-      const body = { filter: { property: '日期', date: { on_or_after: cutoff } }, page_size: 100 }
+      const body = {
+        filter: { property: '日期', date: { on_or_after: cutoff } },
+        sorts: [{ property: '日期', direction: 'descending' }],
+        page_size: 100,
+      }
       if (cursor) body.start_cursor = cursor
       const raw = await postJson(`https://api.notion.com/v1/databases/${dbId}/query`, body, headers, 12000)
       const data = JSON.parse(raw)
+      pageCount++
+
       for (const page of (data.results || [])) {
         const props = page.properties || {}
-        const sid  = getRich(props, '股票代號')
+        const sid   = getRich(props, '股票代號')
         if (!sid) continue
-        const date = getDate(props, '日期')
-        // keep the most recent entry per stock
-        if (notionMap[sid] && notionMap[sid].date >= date) continue
-        notionMap[sid] = {
-          notion_url:  page.url || '',
-          type:        getSelect(props, '類型'),
-          note:        getRich(props, '觀察建議'),
-          regime:      getSelect(props, '市場氛圍'),
-          confidence:  getNum(props, '信心分數'),
-          date,
+        const date  = getDate(props, '日期')
+
+        // notionMap: keep most recent entry per stock (for detail panel)
+        if (!notionMap[sid] || (notionMap[sid].date || '') < date) {
+          notionMap[sid] = {
+            notion_url: page.url || '',
+            type:       getSelect(props, '類型'),
+            note:       getRich(props, '觀察建議'),
+            regime:     getSelect(props, '市場氛圍'),
+            confidence: getNum(props, '信心分數'),
+            date,
+          }
         }
-        total++
+
+        // notionFullStocks: full indicator data for fallback scan
+        const score = getNum(props, '分數') || 0
+        const close = getNum(props, '收盤價') || 0
+        if (score > 0 && date) {
+          // Page title is "2330 台積電" — strip stock ID prefix to get name
+          const titleProp = Object.values(props).find(p => p.type === 'title')
+          const fullTitle = titleProp?.title?.[0]?.text?.content || sid
+          const name = fullTitle.startsWith(sid) ? fullTitle.slice(sid.length).trim() : fullTitle
+
+          const condStr   = getRich(props, '條件達成')   // e.g. "5/23"
+          const condCount = parseInt((condStr || '').split('/')[0]) || 0
+          const status    = getSelect(props, '狀態')
+
+          notionFullStocks.push({
+            stock_id: sid, name, date,
+            entry_score: score, close,
+            rsi14: getNum(props, 'RSI') || 0,
+            adx14: getNum(props, 'ADX') || 0,
+            stoch_k: getNum(props, 'KD值') || 0,
+            condition_count: condCount,
+            industry_category: getRich(props, '產業別'),
+            foreign_buy_streak: getNum(props, '外資連買天數') || 0,
+            invest_trust_streak: getNum(props, '投信連買天數') || 0,
+            dealer_buy_streak: getNum(props, '自營連買天數') || 0,
+            volume_ratio: getNum(props, '成交量比') || 0,
+            return_5d: (getNum(props, '5日漲幅%') || 0) / 100,
+            relative_strength_5d: (getNum(props, '相對強度') || 0) / 100,
+            bb_pct_b: (getNum(props, 'BB位置%') || 0) / 100,
+            entry_signal: status === 'TOP 20 進場' || status === '候選進場',
+            // Fields not stored in Notion — zero-fill
+            f_score: 0, margin_change_5d: 0, short_ratio: 0, limit_down_streak: 0,
+            macd: 0, macd_signal: 0, macd_hist: 0, atr14: 0, ema20: 0, ema60: 0,
+            foreign_net: 0, invest_trust_net: 0, dealer_net: 0,
+            momentum_score: 0, day_return: 0, entry_reason: '', skip_reason: '',
+          })
+        }
       }
-      cursor = data.has_more ? data.next_cursor : null
+      cursor = data.has_more && pageCount < MAX_PAGES ? data.next_cursor : null
     } while (cursor)
-    console.log(`  Notion: ${Object.keys(notionMap).length} stocks (${total} pages, last 14d)`)
+    console.log(`  Notion: ${Object.keys(notionMap).length} map entries, ${notionFullStocks.length} full records (${pageCount} pages, last 30d)`)
   } catch (e) {
     console.warn(`  Notion fetch failed: ${e.message}`)
   }
-  return notionMap
+  return { notionMap, notionFullStocks }
 }
 
 // ── FinMind quota ────────────────────────────────────────────────────────────
@@ -379,7 +422,8 @@ if (aggregateLatest) {
   const aggDate = aggregateLatest.date
   const isNewer = !dates.length || aggDate >= dates[0]
   const isMissing = !scans[aggDate]
-  if (isNewer || isMissing) {
+  const aggSufficient = (aggregateLatest.total_scanned || 0) >= MIN_VALID_STOCKS
+  if ((isNewer || isMissing) && aggSufficient) {
     // Build scan entry from aggregate JSON (matches processScanData output format)
     const aggTopStocks = (aggregateLatest.top_stocks || []).map((r, i) => ({
       rank: i + 1,
@@ -453,13 +497,41 @@ const quota = await fetchFinMindQuota()
 console.log(`Quota: ${quota.length} accounts`)
 
 console.log('Fetching Notion stocks...')
-const notionMap = await fetchNotionStocks()
-console.log(`Notion: ${Object.keys(notionMap).length} stocks`)
+const { notionMap, notionFullStocks } = await fetchNotionStocks()
+console.log(`Notion: ${Object.keys(notionMap).length} map entries, ${notionFullStocks.length} full records`)
 
-// Sanity check
+// Build Notion fallback scan if primary data is insufficient (e.g., only 1 account had quota)
 const latestScan = scans[dates[0]]
-if (!latestScan || latestScan.total_scanned < MIN_VALID_STOCKS) {
-  console.warn(`⚠️  Data warning: latest date ${dates[0]} has only ${latestScan?.total_scanned ?? 0} stocks (< ${MIN_VALID_STOCKS}). Check if aggregate ran.`)
+if ((!latestScan || latestScan.total_scanned < MIN_VALID_STOCKS) && notionFullStocks.length >= 100) {
+  console.log(`Primary data insufficient (${latestScan?.total_scanned ?? 0} stocks). Building Notion fallback...`)
+  // Group stocks by date
+  const dateGroups = {}
+  for (const s of notionFullStocks) {
+    if (!s.date) continue
+    if (!dateGroups[s.date]) dateGroups[s.date] = []
+    dateGroups[s.date].push(s)
+  }
+  // Find most recent date with enough stocks
+  const bestFallbackDate = Object.keys(dateGroups)
+    .filter(d => dateGroups[d].length >= 100)
+    .sort().pop()
+  if (bestFallbackDate) {
+    const fallbackStocks = dateGroups[bestFallbackDate].sort((a, b) => b.entry_score - a.entry_score)
+    scans[bestFallbackDate] = {
+      total_scanned: fallbackStocks.length,
+      entry_count: fallbackStocks.filter(s => s.entry_signal).length,
+      top_stocks: fallbackStocks.slice(0, TOP_N).map((s, i) => ({ rank: i + 1, ...s })),
+      limit_down_alerts: [],
+      from_notion_fallback: true,
+    }
+    if (!dates.includes(bestFallbackDate)) dates.unshift(bestFallbackDate)
+    else if (dates[0] !== bestFallbackDate) { dates.splice(dates.indexOf(bestFallbackDate), 1); dates.unshift(bestFallbackDate) }
+    console.log(`  Notion fallback scan: ${bestFallbackDate}, ${fallbackStocks.length} stocks`)
+  } else {
+    console.warn(`⚠️  No Notion fallback date found with 100+ stocks`)
+  }
+} else if (!latestScan || latestScan.total_scanned < MIN_VALID_STOCKS) {
+  console.warn(`⚠️  Data warning: latest date ${dates[0]} has only ${latestScan?.total_scanned ?? 0} stocks. Neither aggregate nor Notion has sufficient data.`)
 }
 
 mkdirSync(PUBLIC_DIR, { recursive: true })
