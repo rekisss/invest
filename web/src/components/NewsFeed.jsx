@@ -27,25 +27,42 @@ const QUERIES = [
   { q: 'AI 人工智慧 科技股 GPU' },
 ]
 
-const PROXIES = [
-  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-]
-
 async function fetchRSS(rssUrl) {
+  // Primary: rss2json.com — dedicated RSS→JSON with CORS, faster and more reliable
+  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=8`
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 7000)
   try {
-    return await Promise.any(
-      PROXIES.map(mk =>
-        fetch(mk(rssUrl), { signal: ctrl.signal })
-          .then(r => { if (!r.ok) throw new Error(r.status); return r.text() })
-          .then(t => { if (!t.includes('<item>')) throw new Error('empty'); return t })
-      )
-    )
-  } finally {
+    const r = await fetch(apiUrl, { signal: ctrl.signal })
+    if (r.ok) {
+      const j = await r.json()
+      if (j.status === 'ok' && j.items?.length) {
+        // Convert rss2json format to our internal format
+        return j.items.map(item => ({
+          title: item.title || '',
+          url: item.link || '',
+          source: j.feed?.title || '',
+          published: item.pubDate || '',
+          summary: (item.description || '').replace(/<[^>]+>/g, '').slice(0, 300),
+        }))
+      }
+    }
+  } catch (_) { /* fall through to proxy */ } finally {
     clearTimeout(timer)
   }
+  // Fallback: corsproxy.io with raw RSS
+  const ctrl2 = new AbortController()
+  const timer2 = setTimeout(() => ctrl2.abort(), 6000)
+  try {
+    const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent(rssUrl)}`, { signal: ctrl2.signal })
+    if (r2.ok) {
+      const xml = await r2.text()
+      if (xml.includes('<item>')) return parseRSS(xml)
+    }
+  } catch (_) { /* give up */ } finally {
+    clearTimeout(timer2)
+  }
+  return []
 }
 
 function detectTags(title, summary = '') {
@@ -106,8 +123,7 @@ async function loadLiveNews() {
   const results = await Promise.allSettled(
     QUERIES.map(async ({ q }) => {
       const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`
-      const xml = await fetchRSS(rssUrl)
-      return parseRSS(xml).slice(0, 8)
+      return (await fetchRSS(rssUrl)).slice(0, 8)
     })
   )
   for (const r of results) {

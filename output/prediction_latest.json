@@ -1,0 +1,53 @@
+{
+  "date": "2026-05-28",
+  "generated_at": "07:58 CST",
+  "xgb_prob_up": 0.623,
+  "xgb_label": "偏多",
+  "market_data": {
+    "vix": 17.8,
+    "nasdaq_ret": 0.0124,
+    "sox_ret": 0.0231,
+    "tsm_adr_ret": 0.0089,
+    "futures_net": -18432,
+    "night_change": 87,
+    "pcr": 0.82,
+    "taiex_rsi": 58.3
+  },
+  "regime": {
+    "label": "BULL_TREND",
+    "label_zh": "強勢多頭趨勢日，動能延續可能性高",
+    "win_rate": 62
+  },
+  "scenario": {
+    "main_scenario": "外資期貨空單 18,432 口，但美股夜盤上漲 87 點、台積電 ADR 收漲 0.89%。多空訊號分歧，早盤宜觀察開盤 15 分鐘方向再進場，避免追缺口。",
+    "best_strategy": "確認開盤方向後，多方訊號布局 0050 或強勢半導體股；空方訊號等 VWAP 反彈後做空",
+    "danger_signals": [
+      "外資期貨空單偏重 -18,432 口，需觀察是否收斂",
+      "VIX 17.8 偏低，小心假突破回殺"
+    ],
+    "forbidden_actions": [
+      "禁止追缺口超過 150 點",
+      "禁止在外資空單未收斂前反彈高點追多"
+    ]
+  },
+  "risk": {
+    "level": "RiskLevel.MEDIUM",
+    "score": 0.42,
+    "factors": [
+      "外資期貨淨空單 -18,432 口，有下行壓力",
+      "市場廣度 58%，中性偏多",
+      "VIX 17.8 屬低波動環境"
+    ]
+  },
+  "news_sentiment": {
+    "market_impact": 0.31,
+    "bullish_count": 7,
+    "bearish_count": 3,
+    "key_events": [
+      "台積電 ADR 收漲 0.89%，半導體族群受惠",
+      "Fed 官員發言偏鴿，市場降息預期升溫",
+      "外資連續 3 日布局台積電現貨",
+      "費城半導體指數單日漲 2.31%"
+    ]
+  }
+}
