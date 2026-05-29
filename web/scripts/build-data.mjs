@@ -125,12 +125,15 @@ function processScanData() {
     .filter(f => /^batch_seq\d+_\d{4}-\d{2}-\d{2}\.csv$/.test(f)).sort()
   const dateMap = {}
   for (const file of files) {
-    const match = file.match(/(\d{4}-\d{2}-\d{2})/)
-    if (!match) continue
-    const date = match[1]
-    if (!dateMap[date]) dateMap[date] = []
-    try { dateMap[date].push(...parseCSV(readFileSync(join(SCAN_DIR, file), 'utf-8'))) }
-    catch (e) { console.warn(`Skip ${file}: ${e.message}`) }
+    try {
+      const rows = parseCSV(readFileSync(join(SCAN_DIR, file), 'utf-8'))
+      for (const row of rows) {
+        const date = (row.date || '').slice(0, 10)   // use actual data date, not filename
+        if (!date || date < '2020-01-01' || date > '2099-12-31') continue
+        if (!dateMap[date]) dateMap[date] = []
+        dateMap[date].push(row)
+      }
+    } catch (e) { console.warn(`Skip ${file}: ${e.message}`) }
   }
   const dates = Object.keys(dateMap).sort().reverse().slice(0, MAX_DATES)
   const scans = {}

@@ -25,9 +25,28 @@ const QUERIES = [
   { q: '外資 法人 台指期貨' },
   { q: '美股 那斯達克 費半' },
   { q: 'AI 人工智慧 科技股 GPU' },
-  { q: '生技 新藥 醫療 FDA' },
-  { q: '匯率 新台幣 美元 聯準會' },
 ]
+
+const PROXIES = [
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+]
+
+async function fetchRSS(rssUrl) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 7000)
+  try {
+    return await Promise.any(
+      PROXIES.map(mk =>
+        fetch(mk(rssUrl), { signal: ctrl.signal })
+          .then(r => { if (!r.ok) throw new Error(r.status); return r.text() })
+          .then(t => { if (!t.includes('<item>')) throw new Error('empty'); return t })
+      )
+    )
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 function detectTags(title, summary = '') {
   const text = title + ' ' + summary
@@ -87,11 +106,7 @@ async function loadLiveNews() {
   const results = await Promise.allSettled(
     QUERIES.map(async ({ q }) => {
       const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`
-      const resp = await fetch(`https://corsproxy.io/?${encodeURIComponent(rssUrl)}`, {
-        signal: AbortSignal.timeout(12000),
-      })
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-      const xml = await resp.text()
+      const xml = await fetchRSS(rssUrl)
       return parseRSS(xml).slice(0, 8)
     })
   )
