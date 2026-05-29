@@ -20,16 +20,20 @@ const KEYWORD_RULES = [
 const STOCK_CODE_RE = /\b([2-9]\d{3})\b/g
 
 const QUERIES = [
-  { q: '台灣股市 大盤 指數' },
-  { q: '台積電 2330 半導體' },
-  { q: '外資 法人 台指期貨' },
-  { q: '美股 那斯達克 費半' },
-  { q: 'AI 人工智慧 科技股 GPU' },
+  { q: '台灣股市 大盤 指數 when:1d' },
+  { q: '台積電 2330 TSMC when:1d' },
+  { q: '外資 三大法人 台指期貨 when:1d' },
+  { q: '美股 那斯達克 費半 道瓊 when:1d' },
+  { q: 'AI 人工智慧 晶片 GPU NVIDIA when:1d' },
+  { q: '半導體 CoWoS 先進封裝 when:1d' },
+  { q: '生技 醫療 新藥 FDA when:1d' },
+  { q: '聯準會 Fed 降息 升息 when:1d' },
 ]
 
 async function fetchRSS(rssUrl) {
-  // Primary: rss2json.com — dedicated RSS→JSON with CORS, faster and more reliable
-  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=8`
+  // Primary: rss2json.com with cache-buster (changes every 5 min to force fresh fetch)
+  const bust = Math.floor(Date.now() / 300000)
+  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=10&_t=${bust}`
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 7000)
   try {
@@ -54,7 +58,7 @@ async function fetchRSS(rssUrl) {
   const ctrl2 = new AbortController()
   const timer2 = setTimeout(() => ctrl2.abort(), 6000)
   try {
-    const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent(rssUrl)}`, { signal: ctrl2.signal })
+    const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent(rssUrl)}&_t=${Date.now()}`, { signal: ctrl2.signal })
     if (r2.ok) {
       const xml = await r2.text()
       if (xml.includes('<item>')) return parseRSS(xml)
@@ -330,7 +334,7 @@ export default function NewsFeed({ staticNews }) {
 
   useEffect(() => {
     doFetch(false)
-    const timer = setInterval(() => doFetch(true), 20 * 60 * 1000)
+    const timer = setInterval(() => doFetch(true), 10 * 60 * 1000)
     return () => clearInterval(timer)
   }, [doFetch])
 

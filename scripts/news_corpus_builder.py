@@ -31,7 +31,7 @@ KEY_STOCKS = [
     ("2303", "聯電"), ("2357", "華碩"), ("2395", "研華"),
 ]
 
-# Google News 廣市場查詢（when:3d 限制近3天）
+# Google News 廣市場查詢（when:1d 限制近24小時確保新鮮度）
 GOOGLE_QUERIES = [
     "台灣股市 大盤 指數",
     "台積電 2330 TSMC",
@@ -43,6 +43,10 @@ GOOGLE_QUERIES = [
     "匯率 新台幣 美元",
     "電動車 Tesla EV 電池",
     "供應鏈 庫存 拉貨 缺貨",
+    "金融股 銀行 保險 金控",
+    "台股 漲停 強勢股 多頭",
+    "法說會 財報 EPS 營收",
+    "聯發科 鴻海 廣達 緯創",
 ]
 
 SESSION = requests.Session()
@@ -70,7 +74,7 @@ def _is_recent(article: dict) -> bool:
 
 
 def fetch_google_rss(query: str) -> list[dict]:
-    q = quote(f"{query} when:3d")
+    q = quote(f"{query} when:1d")
     url = f"https://news.google.com/rss/search?q={q}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
     try:
         r = SESSION.get(url, timeout=15)
