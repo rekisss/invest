@@ -2102,6 +2102,29 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
     if os.getenv("DISCORD_WEBHOOK_URL"):
         send_discord_messages([msg])
 
+    # Rename batch_seq files whose name uses the run date but data is from the prior trading day.
+    for _bsf in sorted(scan_dir.glob(f"batch_seq*_{today}.csv")):
+        try:
+            if _bsf.stat().st_size == 0:
+                continue
+            _bsdf = pd.read_csv(_bsf, encoding="utf-8-sig")
+            if "date" not in _bsdf.columns or _bsdf.empty:
+                continue
+            _real = str(pd.to_datetime(_bsdf["date"]).max().strftime("%Y-%m-%d"))
+            if _real >= today or _real <= "2020-01-01":
+                continue
+            _dst = _bsf.parent / _bsf.name.replace(today, _real)
+            if _dst.exists() and _dst.stat().st_size > 0:
+                _old = pd.read_csv(_dst, encoding="utf-8-sig")
+                _bsdf = pd.concat([_bsdf, _old], ignore_index=True).drop_duplicates(subset=["stock_id"], keep="first")
+            _bsdf.to_csv(_dst, index=False, encoding="utf-8-sig")
+            _write_summary_excel(_bsdf, _dst.with_suffix(".xlsx"))
+            _bsf.unlink(missing_ok=True)
+            _bsf.with_suffix(".xlsx").unlink(missing_ok=True)
+            _safe_print(f"[sequential] 📅 {_bsf.name} → {_dst.name} ({len(_bsdf)} 支)")
+        except Exception as _e:
+            _safe_print(f"[sequential] ⚠️ 重命名失敗（無妨）：{_bsf.name} → {_e}")
+
 
 def run_smart_scan(args: argparse.Namespace, config: StrategyConfig) -> None:
     """智能掃描：先顯示進度，依序檢查三個帳號配額，有額度就掃，沒有就換下一個。"""

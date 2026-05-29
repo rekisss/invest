@@ -1,30 +1,64 @@
 import { useState, useEffect, useCallback } from 'react'
 
-const CAT_COLOR = {
-  market: 'var(--accent)',
-  tsmc: 'var(--purple)',
-  institutional: 'var(--yellow)',
-  us: 'var(--orange)',
-  tech: 'var(--green)',
-}
-const CAT_ICON = { market: '📊', tsmc: '🏭', institutional: '🏦', us: '🌎', tech: '💻' }
-
-const CATS = [
-  { key: 'all', label: '全部' },
-  { key: 'market', label: '📊 大盤' },
-  { key: 'tsmc', label: '🏭 台積電' },
-  { key: 'institutional', label: '🏦 外資' },
-  { key: 'us', label: '🌎 美股' },
-  { key: 'tech', label: '💻 科技' },
+const KEYWORD_RULES = [
+  { patterns: ['台積電', 'TSMC', '2330'], tag: '台積電', color: 'var(--accent)', icon: '🏭' },
+  { patterns: ['半導體', 'IC', '晶片', '封測', '晶圓', 'CoWoS', '先進封裝'], tag: '半導體', color: 'var(--purple)', icon: '🔬' },
+  { patterns: ['AI', '人工智慧', 'ChatGPT', 'GPU', '輝達', 'NVIDIA', 'AMD', '大模型'], tag: 'AI', color: 'var(--green)', icon: '🤖' },
+  { patterns: ['外資', '三大法人', '投信', '自營', '法人'], tag: '外資法人', color: 'var(--yellow)', icon: '🏦' },
+  { patterns: ['Fed', '聯準會', '升息', '降息', '利率', 'FOMC', '央行'], tag: '貨幣政策', color: 'var(--orange)', icon: '🏛️' },
+  { patterns: ['期貨', '選擇權', '台指', 'PCR', '夜盤', '結算'], tag: '衍生品', color: '#8b8bff', icon: '📉' },
+  { patterns: ['生技', '醫療', '新藥', 'FDA', '醫材', '解盲', '臨床'], tag: '生技醫療', color: 'var(--red)', icon: '💊' },
+  { patterns: ['金融', '銀行', '保險', '壽險', '金控', '券商'], tag: '金融', color: '#f9c74f', icon: '💳' },
+  { patterns: ['美股', '納指', '道瓊', '標普', '紐約', '費半', '那斯達克'], tag: '美股', color: 'var(--orange)', icon: '🌎' },
+  { patterns: ['供應鏈', '缺貨', '庫存', '原物料', '拉貨', '去化'], tag: '供應鏈', color: '#a8a8a8', icon: '📦' },
+  { patterns: ['電動車', 'EV', 'Tesla', '特斯拉', '電池', '充電'], tag: '電動車', color: 'var(--green)', icon: '🚗' },
+  { patterns: ['匯率', '美元', '日圓', '新台幣', '外匯', '貶值', '升值'], tag: '匯率', color: '#a8a8a8', icon: '💱' },
+  { patterns: ['法說會', '財報', 'EPS', '營收', '獲利', '毛利', '業績'], tag: '基本面', color: 'var(--accent)', icon: '📊' },
+  { patterns: ['大盤', '加權', '指數', '萬點', '封關', '開盤', '收盤'], tag: '大盤', color: 'var(--accent)', icon: '📈' },
 ]
+
+const STOCK_CODE_RE = /\b([2-9]\d{3})\b/g
 
 const QUERIES = [
-  { q: '台灣股市 大盤', category: 'market', label: '大盤' },
-  { q: '台積電 2330', category: 'tsmc', label: '台積電' },
-  { q: '外資 期貨 台指', category: 'institutional', label: '外資法人' },
-  { q: '美股 那斯達克 費半', category: 'us', label: '美股' },
-  { q: '半導體 AI 科技股', category: 'tech', label: '科技半導體' },
+  { q: '台灣股市 大盤 指數' },
+  { q: '台積電 2330 半導體' },
+  { q: '外資 法人 台指期貨' },
+  { q: '美股 那斯達克 費半' },
+  { q: 'AI 人工智慧 科技股 GPU' },
+  { q: '生技 新藥 醫療 FDA' },
+  { q: '匯率 新台幣 美元 聯準會' },
 ]
+
+function detectTags(title, summary = '') {
+  const text = title + ' ' + summary
+  const matched = []
+  for (const rule of KEYWORD_RULES) {
+    if (rule.patterns.some(p => text.includes(p))) {
+      matched.push(rule.tag)
+    }
+  }
+  return matched.length ? matched : ['其他']
+}
+
+function generateHint(title, tags) {
+  if (/外資.*空單|外資.*放空|空單擴大/.test(title)) return '⚠️ 外資空頭部位增加，指數短線承壓'
+  if (/外資.*買超|外資連買|外資買/.test(title)) return '💰 外資買盤進駐，籌碼面轉強'
+  if (/外資.*賣超|外資賣/.test(title)) return '⚠️ 外資賣壓，短線謹慎觀望'
+  if (/FDA|新藥.*過關|核准|解盲/.test(title)) return '💊 生技利多，相關族群留意追蹤'
+  if (/接單|拿下|合約|訂單/.test(title)) return '📦 訂單利多，追蹤後續業績確認'
+  if (/貶值|走貶/.test(title)) return '🌊 台幣走弱，出口族群相對受惠'
+  if (/升值|走升/.test(title)) return '🌊 台幣走強，留意出口股匯損風險'
+  if (/升息|利率上升/.test(title)) return '💸 資金成本上升，留意高本益比股承壓'
+  if (/降息|寬鬆|暫停升息/.test(title)) return '✅ 資金面利多，科技成長股受惠'
+  if (/法說會|財報|EPS|超預期|優於預期/.test(title)) return '📋 基本面事件，確認數字後再決策'
+  if (/上漲|上揚|攀升|勁升|大漲|創高|走強|跳漲|聯袂漲/.test(title)) return '📈 正面消息，留意相關族群機會'
+  if (/下跌|走低|下修|跌停|大跌|重挫|承壓|走弱/.test(title)) return '📉 留意風險，評估停損條件'
+  if (tags.includes('台積電')) return '🏭 台積電動向影響整體半導體族群走勢'
+  if (tags.includes('半導體') || tags.includes('AI')) return '💡 半導體／AI族群，關注本波動能持續性'
+  if (tags.includes('美股')) return '🌎 留意美股走向對台股開盤情緒影響'
+  if (tags.includes('貨幣政策')) return '🏛️ 貨幣政策動向牽動資金流向，密切追蹤'
+  return null
+}
 
 function parseRSS(xml) {
   const items = []
@@ -51,14 +85,14 @@ function parseRSS(xml) {
 async function loadLiveNews() {
   const allNews = []
   const results = await Promise.allSettled(
-    QUERIES.map(async ({ q, category, label }) => {
+    QUERIES.map(async ({ q }) => {
       const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`
       const resp = await fetch(`https://corsproxy.io/?${encodeURIComponent(rssUrl)}`, {
         signal: AbortSignal.timeout(12000),
       })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const xml = await resp.text()
-      return parseRSS(xml).slice(0, 7).map(item => ({ ...item, category, label }))
+      return parseRSS(xml).slice(0, 8)
     })
   )
   for (const r of results) {
@@ -72,8 +106,29 @@ async function loadLiveNews() {
       seen.add(key)
       return true
     })
+    .map(item => {
+      const tags = detectTags(item.title, item.summary)
+      return { ...item, tags }
+    })
     .sort((a, b) => new Date(b.published || 0) - new Date(a.published || 0))
-    .slice(0, 50)
+    .slice(0, 60)
+}
+
+function buildDynamicTabs(news) {
+  const freq = {}
+  for (const item of news) {
+    for (const tag of (item.tags || [])) {
+      if (tag !== '其他') freq[tag] = (freq[tag] || 0) + 1
+    }
+  }
+  const topTags = Object.entries(freq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 7)
+    .map(([tag]) => tag)
+  return [{ key: 'all', label: '全部', icon: '📋' }, ...topTags.map(tag => {
+    const rule = KEYWORD_RULES.find(r => r.tag === tag)
+    return { key: tag, label: tag, icon: rule?.icon || '📌', color: rule?.color }
+  })]
 }
 
 function timeAgo(dateStr) {
@@ -88,8 +143,36 @@ function timeAgo(dateStr) {
   } catch { return '' }
 }
 
+function TagChip({ tag }) {
+  const rule = KEYWORD_RULES.find(r => r.tag === tag)
+  const color = rule?.color || 'var(--muted)'
+  return (
+    <span style={{
+      fontSize: 10, color, background: `${color}22`,
+      padding: '1px 6px', borderRadius: 3, fontWeight: 600, whiteSpace: 'nowrap',
+    }}>
+      {rule?.icon || '📌'} {tag}
+    </span>
+  )
+}
+
+function StockChip({ code }) {
+  return (
+    <span style={{
+      fontSize: 10, color: 'var(--accent)', background: 'var(--accent)11',
+      padding: '1px 6px', borderRadius: 3, fontWeight: 700, fontFamily: 'monospace',
+    }}>
+      {code}
+    </span>
+  )
+}
+
 function NewsItem({ item, isOpen, onToggle }) {
-  const color = CAT_COLOR[item.category] || 'var(--muted)'
+  const mainTag = item.tags?.[0]
+  const rule = mainTag ? KEYWORD_RULES.find(r => r.tag === mainTag) : null
+  const hint = isOpen ? generateHint(item.title, item.tags || []) : null
+  const stockCodes = isOpen ? [...new Set([...item.title.matchAll(STOCK_CODE_RE)].map(m => m[1]))] : []
+
   return (
     <div style={{
       borderBottom: '1px solid var(--border)',
@@ -100,13 +183,11 @@ function NewsItem({ item, isOpen, onToggle }) {
         onClick={onToggle}
         style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start' }}
       >
-        <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{CAT_ICON[item.category] || '📰'}</span>
+        <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{rule?.icon || '📰'}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.5, color: 'var(--text)' }}>{item.title}</div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, color, background: `${color}22`, padding: '1px 6px', borderRadius: 3, fontWeight: 600 }}>
-              {item.label || item.category}
-            </span>
+          <div style={{ display: 'flex', gap: 6, marginTop: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+            {(item.tags || []).slice(0, 3).map(tag => <TagChip key={tag} tag={tag} />)}
             {item.source && <span style={{ fontSize: 10, color: 'var(--muted)' }}>{item.source}</span>}
             <span style={{ fontSize: 10, color: 'var(--muted)' }}>{timeAgo(item.published)}</span>
           </div>
@@ -121,18 +202,22 @@ function NewsItem({ item, isOpen, onToggle }) {
               {item.summary}
             </div>
           )}
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'inline-block', fontSize: 12, color: 'var(--accent)',
-              border: '1px solid var(--accent)', borderRadius: 4, padding: '4px 10px',
-              textDecoration: 'none', fontWeight: 600,
-            }}
-          >
-            閱讀全文 ↗
-          </a>
+          {(item.tags?.length > 0 || stockCodes.length > 0) && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: hint ? 8 : 0 }}>
+              {item.tags.map(tag => <TagChip key={tag} tag={tag} />)}
+              {stockCodes.map(c => <StockChip key={c} code={c} />)}
+            </div>
+          )}
+          {hint && (
+            <div style={{
+              marginTop: 8, fontSize: 12, color: 'var(--text)',
+              background: 'var(--surface2)', borderRadius: 6,
+              padding: '7px 10px', borderLeft: '3px solid var(--accent)',
+              lineHeight: 1.6,
+            }}>
+              {hint}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -170,7 +255,8 @@ export default function NewsFeed({ staticNews }) {
     return () => clearInterval(timer)
   }, [doFetch])
 
-  const filtered = filter === 'all' ? news : news.filter(n => n.category === filter)
+  const tabs = buildDynamicTabs(news)
+  const filtered = filter === 'all' ? news : news.filter(n => (n.tags || []).includes(filter))
 
   if (loading && news.length === 0) {
     return (
@@ -183,28 +269,29 @@ export default function NewsFeed({ staticNews }) {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Category tabs + status bar */}
+      {/* Dynamic tab bar */}
       <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <div style={{ display: 'flex', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          {CATS.map(cat => (
-            <button
-              key={cat.key}
-              onClick={() => { setFilter(cat.key); setOpenIdx(null) }}
-              style={{
-                padding: '10px 14px', fontSize: 12, fontWeight: 600, border: 'none',
-                borderBottom: `2px solid ${filter === cat.key ? 'var(--accent)' : 'transparent'}`,
-                background: 'transparent', color: filter === cat.key ? 'var(--accent)' : 'var(--muted)',
-                cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-              }}
-            >
-              {cat.label}
-              {cat.key !== 'all' && (
-                <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.7 }}>
-                  ({news.filter(n => n.category === cat.key).length})
-                </span>
-              )}
-            </button>
-          ))}
+          {tabs.map(cat => {
+            const isActive = filter === cat.key
+            const count = cat.key === 'all' ? news.length : news.filter(n => (n.tags || []).includes(cat.key)).length
+            return (
+              <button
+                key={cat.key}
+                onClick={() => { setFilter(cat.key); setOpenIdx(null) }}
+                style={{
+                  padding: '10px 12px', fontSize: 12, fontWeight: 600, border: 'none',
+                  borderBottom: `2px solid ${isActive ? (cat.color || 'var(--accent)') : 'transparent'}`,
+                  background: 'transparent',
+                  color: isActive ? (cat.color || 'var(--accent)') : 'var(--muted)',
+                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >
+                {cat.icon} {cat.label}
+                <span style={{ marginLeft: 3, fontSize: 10, opacity: 0.7 }}>({count})</span>
+              </button>
+            )
+          })}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 12px 7px' }}>
           <div style={{ fontSize: 10, color: 'var(--muted)' }}>
