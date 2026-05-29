@@ -182,7 +182,11 @@ function processScanData() {
       entry_signal: toBool(row.entry_signal),
       foreign_buy_streak: toNum(row.foreign_buy_streak),
       invest_trust_streak: toNum(row.invest_trust_streak),
+      dealer_buy_streak: toNum(row.dealer_buy_streak),
       f_score: toNum(row.f_score), condition_count: toNum(row.condition_count),
+      margin_change_5d: toNum(row.margin_change_5d),
+      short_ratio: toNum(row.short_ratio),
+      entry_reason: row.entry_reason || '',
     }))
     scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks }
     for (const stock of topStocks) {

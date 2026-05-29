@@ -100,6 +100,14 @@ function StockTable({ stocks }) {
                       <span>產業：<b style={{ color: 'var(--text)' }}>{s.industry_category || '—'}</b></span>
                       <span>F-Score：<b style={{ color: 'var(--text)' }}>{s.f_score}</b></span>
                       <span>條件達成：<b style={{ color: 'var(--text)' }}>{s.condition_count}</b></span>
+                      {s.dealer_buy_streak > 0 && <span>自營連買：<b style={{ color: 'var(--text)' }}>{s.dealer_buy_streak}d</b></span>}
+                      {s.margin_change_5d !== 0 && (
+                        <span>融資5日變：<b style={{ color: s.margin_change_5d < -3 ? '#4ade80' : s.margin_change_5d > 5 ? '#f87171' : 'var(--text)' }}>
+                          {s.margin_change_5d > 0 ? '+' : ''}{s.margin_change_5d?.toFixed(1)}%
+                        </b></span>
+                      )}
+                      {s.short_ratio > 0 && <span>融券/融資：<b style={{ color: 'var(--text)' }}>{s.short_ratio?.toFixed(1)}%</b></span>}
+                      {s.entry_reason && <span style={{ maxWidth: 300 }}>入場理由：<b style={{ color: 'var(--text)' }}>{s.entry_reason}</b></span>}
                     </div>
                   </td>
                 </tr>
