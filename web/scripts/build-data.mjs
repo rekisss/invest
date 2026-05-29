@@ -137,6 +137,15 @@ function readPrediction() {
   } catch { return null }
 }
 
+function readPredictionHistory() {
+  const histFile = resolve(__dirname, '../../output/prediction_history.json')
+  if (!existsSync(histFile)) return []
+  try {
+    const hist = JSON.parse(readFileSync(histFile, 'utf-8'))
+    return Array.isArray(hist) ? hist.slice(0, 90) : []
+  } catch { return [] }
+}
+
 // ── Process scan CSVs ────────────────────────────────────────────────────────
 function processScanData() {
   if (!existsSync(SCAN_DIR)) return { dates: [], scans: {} }
@@ -220,7 +229,8 @@ const { dates, scans } = processScanData()
 console.log(`Scan data: ${dates.length} dates, latest=${dates[0]}, stocks=${scans[dates[0]]?.total_scanned ?? 0}`)
 
 const prediction = readPrediction()
-console.log(`Prediction: ${prediction ? prediction.date : 'none'}`)
+const predictionHistory = readPredictionHistory()
+console.log(`Prediction: ${prediction ? prediction.date : 'none'}, history: ${predictionHistory.length} entries`)
 
 console.log('Reading news corpus...')
 let news = readNewsCorpus()
@@ -235,5 +245,5 @@ const quota = await fetchFinMindQuota()
 console.log(`Quota: ${quota.length} accounts`)
 
 mkdirSync(PUBLIC_DIR, { recursive: true })
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, news, quota }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, predictionHistory, news, quota }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
