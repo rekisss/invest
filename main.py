@@ -2914,6 +2914,51 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
     except Exception as _ne_exc:
         _safe_print(f"[predict] 新聞情緒分析失敗（skip）: {_ne_exc}")
 
+    # ── Save prediction JSON for web dashboard ────────────────────────────────
+    try:
+        import json as _json
+        _pred_out = Path(args.output) / "prediction_latest.json"
+        _pred_out.parent.mkdir(parents=True, exist_ok=True)
+        _pred_payload: dict = {
+            "date": today,
+            "generated_at": _cst_now(),
+            "xgb_prob_up": round(pred["prob_up"], 3),
+            "xgb_label": pred.get("label", ""),
+            "market_data": {k: (float(v) if isinstance(v, (int, float)) else str(v))
+                            for k, v in market_data_json.items()
+                            if not isinstance(v, (list, dict))},
+        }
+        if "_regime" in dir():
+            _pred_payload["regime"] = {
+                "label": getattr(_regime, "label", ""),
+                "label_zh": getattr(_regime, "label_zh", ""),
+                "win_rate": getattr(_regime, "win_rate_estimate", 0),
+            }
+        if "_scenario" in dir():
+            _pred_payload["scenario"] = {
+                "main_scenario": getattr(_scenario, "main_scenario", ""),
+                "best_strategy": getattr(_scenario, "best_strategy", ""),
+                "danger_signals": list(getattr(_scenario, "danger_signals", [])),
+                "forbidden_actions": list(getattr(_scenario, "forbidden_actions", [])),
+            }
+        if "_risk" in dir():
+            _pred_payload["risk"] = {
+                "level": str(getattr(_risk, "level", "")),
+                "score": float(getattr(_risk, "score", 0)),
+                "factors": list(getattr(_risk, "factors", [])),
+            }
+        if "_news_result" in dir():
+            _pred_payload["news_sentiment"] = {
+                "market_impact": float(getattr(_news_result, "market_impact_score", 0)),
+                "key_events": list(getattr(_news_result, "key_events", [])),
+                "bullish_count": int(getattr(_news_result, "bullish_count", 0)),
+                "bearish_count": int(getattr(_news_result, "bearish_count", 0)),
+            }
+        _pred_out.write_text(_json.dumps(_pred_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        _safe_print(f"[predict] 預測 JSON 已存至 {_pred_out}")
+    except Exception as _pj_exc:
+        _safe_print(f"[predict] 儲存預測 JSON 失敗（skip）: {_pj_exc}")
+
     _safe_print(message)
     if args.notify:
         send_discord_messages([message])
