@@ -7,10 +7,12 @@ import http from 'http'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SCAN_DIR = resolve(__dirname, '../../output/full_scan')
 const PRED_FILE = resolve(__dirname, '../../output/prediction_latest.json')
+const AGG_FILE  = resolve(__dirname, '../../output/aggregate_latest.json')
 const PUBLIC_DIR = resolve(__dirname, '../public')
 const OUTPUT_FILE = join(PUBLIC_DIR, 'data.json')
 const TOP_N = 50
 const MAX_DATES = 14
+const MIN_VALID_STOCKS = 200   // fewer than this = incomplete scan, skip as primary date
 
 // ── CSV parser ──────────────────────────────────────────────────────────────
 function parseCSVLine(line) {
@@ -152,6 +154,20 @@ async function fetchNews() {
   }).sort((a, b) => new Date(b.published || 0) - new Date(a.published || 0)).slice(0, 40)
 }
 
+// ── Read aggregate latest JSON ───────────────────────────────────────────────
+function readAggregateLatest() {
+  if (!existsSync(AGG_FILE)) return null
+  try {
+    const data = JSON.parse(readFileSync(AGG_FILE, 'utf-8'))
+    if (!data.date || !data.top_stocks) return null
+    console.log(`  Aggregate JSON: date=${data.date}, scanned=${data.total_scanned}, top=${data.top_stocks.length}`)
+    return data
+  } catch (e) {
+    console.warn('  Aggregate JSON read failed:', e.message)
+    return null
+  }
+}
+
 // ── Read prediction ──────────────────────────────────────────────────────────
 function readPrediction() {
   if (!existsSync(PRED_FILE)) return null
@@ -186,7 +202,14 @@ function processScanData() {
       }
     } catch (e) { console.warn(`Skip ${file}: ${e.message}`) }
   }
-  const dates = Object.keys(dateMap).sort().reverse().slice(0, MAX_DATES)
+  // Filter out dates with too few unique stocks (incomplete / partial scans)
+  const uniqueCountPerDate = {}
+  for (const [date, rows] of Object.entries(dateMap)) {
+    uniqueCountPerDate[date] = new Set(rows.map(r => r.stock_id)).size
+  }
+  const dates = Object.keys(dateMap).sort().reverse()
+    .filter(d => uniqueCountPerDate[d] >= MIN_VALID_STOCKS)
+    .slice(0, MAX_DATES)
   const scans = {}
   const stockHistory = {}
 
@@ -349,6 +372,70 @@ async function fetchFinMindQuota() {
 const { dates, scans } = processScanData()
 console.log(`Scan data: ${dates.length} dates, latest=${dates[0]}, stocks=${scans[dates[0]]?.total_scanned ?? 0}`)
 
+// Merge aggregate_latest.json: if its date is newer or not in CSV dates, inject it
+console.log('Reading aggregate_latest.json...')
+const aggregateLatest = readAggregateLatest()
+if (aggregateLatest) {
+  const aggDate = aggregateLatest.date
+  const isNewer = !dates.length || aggDate >= dates[0]
+  const isMissing = !scans[aggDate]
+  if (isNewer || isMissing) {
+    // Build scan entry from aggregate JSON (matches processScanData output format)
+    const aggTopStocks = (aggregateLatest.top_stocks || []).map((r, i) => ({
+      rank: i + 1,
+      stock_id: String(r.stock_id || ''),
+      name: r.name || '',
+      industry_category: r.industry_category || '',
+      close: r.close || 0,
+      volume_ratio: r.volume_ratio || 0,
+      rsi14: r.rsi14 || 0,
+      adx14: r.adx14 || 0,
+      entry_score: Math.round(r.entry_score || 0),
+      entry_signal: !!r.entry_signal,
+      foreign_buy_streak: r.foreign_buy_streak || 0,
+      invest_trust_streak: r.invest_trust_streak || 0,
+      dealer_buy_streak: r.dealer_buy_streak || 0,
+      f_score: r.f_score ?? 0,
+      condition_count: r.condition_count || 0,
+      margin_change_5d: r.margin_change_5d || 0,
+      short_ratio: r.short_ratio || 0,
+      entry_reason: r.entry_reason || '',
+      limit_down_streak: r.limit_down_streak || 0,
+      // technical fields
+      macd: r.macd || 0, macd_signal: r.macd_signal || 0, macd_hist: r.macd_hist || 0,
+      bb_pct_b: r.bb_pct_b || 0, stoch_k: r.stoch_k || 0, stoch_d: r.stoch_d || 0,
+      atr14: r.atr14 || 0, ema20: r.ema20 || 0, ema60: r.ema60 || 0,
+      foreign_net: r.foreign_net || 0, invest_trust_net: r.invest_trust_net || 0, dealer_net: r.dealer_net || 0,
+      momentum_score: r.momentum_score || 0, relative_strength_5d: r.relative_strength_5d || 0,
+      return_5d: r.return_5d || 0, day_return: r.day_return || 0,
+      skip_reason: r.skip_reason || '',
+      price_history: undefined,   // no OHLCV history in aggregate JSON (CSV already deleted)
+    }))
+    const aggLimitDown = (aggregateLatest.limit_down_alerts || []).map(r => ({
+      stock_id: String(r.stock_id || ''), name: r.name || '',
+      industry_category: r.industry_category || '',
+      close: r.close || 0, limit_down_streak: r.limit_down_streak || 0,
+      entry_signal: !!r.entry_signal, entry_score: Math.round(r.entry_score || 0),
+    }))
+    scans[aggDate] = {
+      total_scanned: aggregateLatest.total_scanned || aggTopStocks.length,
+      entry_count: aggregateLatest.entry_count || 0,
+      top_stocks: aggTopStocks,
+      limit_down_alerts: aggLimitDown,
+      persistent: (aggregateLatest.persistent_strong || []).map(p => ({
+        stock_id: p.stock_id, name: p.name, industry_category: p.industry_category,
+        days_in_top: p.days_in_top, latest_score: p.today_score || p.latest_score || 0,
+        score_trend: p.score_delta || 0,
+      })),
+      margin_stats: aggregateLatest.margin_stats || {},
+      ai_picks_text: aggregateLatest.ai_picks_text || '',
+      from_aggregate_json: true,
+    }
+    if (!dates.includes(aggDate)) dates.unshift(aggDate)
+    console.log(`  Injected aggregate date ${aggDate}: ${aggregateLatest.total_scanned} stocks, ai=${!!aggregateLatest.ai_picks_text}`)
+  }
+}
+
 const prediction = readPrediction()
 const predictionHistory = readPredictionHistory()
 console.log(`Prediction: ${prediction ? prediction.date : 'none'}, history: ${predictionHistory.length} entries`)
@@ -369,6 +456,12 @@ console.log('Fetching Notion stocks...')
 const notionMap = await fetchNotionStocks()
 console.log(`Notion: ${Object.keys(notionMap).length} stocks`)
 
+// Sanity check
+const latestScan = scans[dates[0]]
+if (!latestScan || latestScan.total_scanned < MIN_VALID_STOCKS) {
+  console.warn(`⚠️  Data warning: latest date ${dates[0]} has only ${latestScan?.total_scanned ?? 0} stocks (< ${MIN_VALID_STOCKS}). Check if aggregate ran.`)
+}
+
 mkdirSync(PUBLIC_DIR, { recursive: true })
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, predictionHistory, news, quota, notionMap }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
