@@ -187,8 +187,18 @@ function processScanData() {
       margin_change_5d: toNum(row.margin_change_5d),
       short_ratio: toNum(row.short_ratio),
       entry_reason: row.entry_reason || '',
+      limit_down_streak: toNum(row.limit_down_streak),
     }))
-    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks }
+    const limitDownAlerts = allStocks
+      .filter(r => toNum(r.limit_down_streak) >= 3)
+      .sort((a, b) => toNum(b.limit_down_streak) - toNum(a.limit_down_streak))
+      .map(r => ({
+        stock_id: r.stock_id, name: r.name || '',
+        industry_category: r.industry_category || '',
+        close: toNum(r.close),
+        limit_down_streak: toNum(r.limit_down_streak),
+      }))
+    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, limit_down_alerts: limitDownAlerts }
     for (const stock of topStocks) {
       const sid = stock.stock_id
       if (!stockHistory[sid]) stockHistory[sid] = { name: stock.name, industry_category: stock.industry_category, scores: [] }

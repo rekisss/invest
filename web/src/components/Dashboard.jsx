@@ -120,6 +120,46 @@ function StockTable({ stocks }) {
   )
 }
 
+function LimitDownSection({ items }) {
+  if (!items || items.length === 0) return null
+  return (
+    <div style={{ marginTop: 24 }}>
+      <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--red)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+        🔴 連續跌停警示（≥3天）
+        <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--muted)', marginLeft: 4 }}>共 {items.length} 支</span>
+      </h3>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 400 }}>
+          <thead>
+            <tr style={{ background: 'rgba(239,68,68,0.08)' }}>
+              {['股號', '名稱', '收盤', '連跌天數', '產業'].map(h => (
+                <th key={h} style={{ padding: '7px 8px', textAlign: 'center', color: 'var(--muted)', fontSize: 11, borderBottom: '1px solid var(--border)' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((s, i) => (
+              <tr key={s.stock_id} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                <td style={{ padding: '7px 8px', textAlign: 'center', fontFamily: 'var(--font-mono)', color: 'var(--red)', fontWeight: 600 }}>{s.stock_id}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'center' }}>{s.name}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{s.close?.toFixed(2)}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'center' }}>
+                  <span style={{
+                    color: '#fff',
+                    background: s.limit_down_streak >= 5 ? '#7f1d1d' : s.limit_down_streak >= 4 ? '#b91c1c' : '#ef4444',
+                    borderRadius: 4, padding: '2px 8px', fontWeight: 700, fontSize: 12, fontFamily: 'var(--font-mono)',
+                  }}>↓{s.limit_down_streak}天</span>
+                </td>
+                <td style={{ padding: '7px 8px', textAlign: 'center', color: 'var(--muted)', fontSize: 11 }}>{s.industry_category || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function PersistentSection({ items }) {
   if (!items || items.length === 0) return null
   return (
@@ -172,6 +212,7 @@ export default function Dashboard({ data, error }) {
   const scan = data.scans[selectedDate] || {}
   const stocks = scan.top_stocks || []
   const persistent = scan.persistent || []
+  const limitDownAlerts = scan.limit_down_alerts || []
   const entryStocks = stocks.filter(s => s.entry_signal)
 
   return (
@@ -233,6 +274,12 @@ export default function Dashboard({ data, error }) {
         {persistent.length > 0 && (
           <div style={{ padding: '0 16px' }}>
             <PersistentSection items={persistent} />
+          </div>
+        )}
+
+        {limitDownAlerts.length > 0 && (
+          <div style={{ padding: '0 16px' }}>
+            <LimitDownSection items={limitDownAlerts} />
           </div>
         )}
 
