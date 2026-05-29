@@ -57,6 +57,29 @@ function fetchUrl(url, timeoutMs = 8000) {
   })
 }
 
+function postJson(url, body, headers = {}, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body)
+    const parsed = new URL(url)
+    const opts = {
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...headers },
+    }
+    const req = https.request(opts, res => {
+      const chunks = []
+      res.on('data', c => chunks.push(c))
+      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
+      res.on('error', reject)
+    })
+    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error('timeout')) })
+    req.on('error', reject)
+    req.write(payload)
+    req.end()
+  })
+}
+
 // ── RSS parser ───────────────────────────────────────────────────────────────
 function parseRSS(xml) {
   const items = []
@@ -249,6 +272,58 @@ function processScanData() {
   return { dates, scans }
 }
 
+// ── Notion stocks ────────────────────────────────────────────────────────────
+async function fetchNotionStocks() {
+  const token = (process.env.NOTION_TOKEN || '').trim()
+  const dbId  = (process.env.NOTION_DATABASE_ID || '').trim()
+  if (!token || !dbId) { console.log('  Notion: no token/db — skipping'); return {} }
+
+  const cutoff = new Date(Date.now() - 14 * 86400 * 1000).toISOString().slice(0, 10)
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'Notion-Version': '2022-06-28',
+  }
+  const notionMap = {}
+  let cursor = null
+  let total = 0
+
+  const getRich = (props, key) => props[key]?.rich_text?.[0]?.text?.content || ''
+  const getSelect = (props, key) => props[key]?.select?.name || ''
+  const getNum = (props, key) => props[key]?.number ?? null
+  const getDate = (props, key) => props[key]?.date?.start || ''
+
+  try {
+    do {
+      const body = { filter: { property: '日期', date: { on_or_after: cutoff } }, page_size: 100 }
+      if (cursor) body.start_cursor = cursor
+      const raw = await postJson(`https://api.notion.com/v1/databases/${dbId}/query`, body, headers, 12000)
+      const data = JSON.parse(raw)
+      for (const page of (data.results || [])) {
+        const props = page.properties || {}
+        const sid  = getRich(props, '股票代號')
+        if (!sid) continue
+        const date = getDate(props, '日期')
+        // keep the most recent entry per stock
+        if (notionMap[sid] && notionMap[sid].date >= date) continue
+        notionMap[sid] = {
+          notion_url:  page.url || '',
+          type:        getSelect(props, '類型'),
+          note:        getRich(props, '觀察建議'),
+          regime:      getSelect(props, '市場氛圍'),
+          confidence:  getNum(props, '信心分數'),
+          date,
+        }
+        total++
+      }
+      cursor = data.has_more ? data.next_cursor : null
+    } while (cursor)
+    console.log(`  Notion: ${Object.keys(notionMap).length} stocks (${total} pages, last 14d)`)
+  } catch (e) {
+    console.warn(`  Notion fetch failed: ${e.message}`)
+  }
+  return notionMap
+}
+
 // ── FinMind quota ────────────────────────────────────────────────────────────
 async function fetchFinMindQuota() {
   const tokens = [
@@ -290,6 +365,10 @@ console.log('Fetching FinMind quota...')
 const quota = await fetchFinMindQuota()
 console.log(`Quota: ${quota.length} accounts`)
 
+console.log('Fetching Notion stocks...')
+const notionMap = await fetchNotionStocks()
+console.log(`Notion: ${Object.keys(notionMap).length} stocks`)
+
 mkdirSync(PUBLIC_DIR, { recursive: true })
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, predictionHistory, news, quota }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, predictionHistory, news, quota, notionMap }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)

@@ -48,9 +48,11 @@ jobs:
       - name: Build scan data JSON
         working-directory: web
         env:
-          FINMIND_TOKEN:   ${{ secrets.FINMIND_TOKEN }}
-          FINMIND_TOKEN_2: ${{ secrets.FINMIND_TOKEN_2 }}
-          FINMIND_TOKEN_3: ${{ secrets.FINMIND_TOKEN_3 }}
+          FINMIND_TOKEN:        ${{ secrets.FINMIND_TOKEN }}
+          FINMIND_TOKEN_2:      ${{ secrets.FINMIND_TOKEN_2 }}
+          FINMIND_TOKEN_3:      ${{ secrets.FINMIND_TOKEN_3 }}
+          NOTION_TOKEN:         ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID:   ${{ secrets.NOTION_DATABASE_ID }}
         run: node scripts/build-data.mjs
 
       - name: Build

@@ -35,7 +35,7 @@ function ScoreCell({ score, entry_signal }) {
   return <span style={{ color, fontWeight: entry_signal ? 700 : 400, fontFamily: 'var(--font-mono)' }}>{score.toLocaleString()}</span>
 }
 
-function StockTable({ stocks, onSelect }) {
+function StockTable({ stocks, onSelect, notionMap = {} }) {
   if (!stocks || stocks.length === 0) {
     return <div style={{ color: 'var(--muted)', padding: 24, textAlign: 'center' }}>無資料</div>
   }
@@ -52,6 +52,7 @@ function StockTable({ stocks, onSelect }) {
     { key: 'volume_ratio', label: '量比', width: 48 },
     { key: 'foreign_buy_streak', label: '外資', width: 48 },
     { key: 'invest_trust_streak', label: '投信', width: 48 },
+    { key: 'notion', label: 'N', width: 24 },
   ]
 
   return (
@@ -93,6 +94,11 @@ function StockTable({ stocks, onSelect }) {
               <td style={{ padding: '7px 6px', textAlign: 'center', color: s.volume_ratio > 2 ? 'var(--orange)' : 'var(--text)', fontFamily: 'var(--font-mono)' }}>{s.volume_ratio.toFixed(1)}x</td>
               <td style={{ padding: '7px 6px', textAlign: 'center' }}><StreakBadge value={s.foreign_buy_streak} /></td>
               <td style={{ padding: '7px 6px', textAlign: 'center' }}><StreakBadge value={s.invest_trust_streak} /></td>
+              <td style={{ padding: '7px 6px', textAlign: 'center' }}>
+                {notionMap[s.stock_id] && (
+                  <span title={notionMap[s.stock_id].type || 'Notion'} style={{ fontSize: 10, color: '#60a5fa' }}>N</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -185,6 +191,7 @@ function PersistentSection({ items }) {
 export default function Dashboard({ data, error }) {
   const [selectedDate, setSelectedDate] = useState(() => data?.dates?.[0] || null)
   const [selectedStock, setSelectedStock] = useState(null)
+  const notionMap = data?.notionMap || {}
 
   if (error || !data || !data.dates || data.dates.length === 0) {
     return (
@@ -256,7 +263,7 @@ export default function Dashboard({ data, error }) {
           </div>
         )}
         <div style={{ padding: '0 8px' }}>
-          <StockTable stocks={stocks} onSelect={setSelectedStock} />
+          <StockTable stocks={stocks} onSelect={setSelectedStock} notionMap={notionMap} />
         </div>
 
         {persistent.length > 0 && (
@@ -276,7 +283,11 @@ export default function Dashboard({ data, error }) {
         </div>
       </div>
 
-      <StockDetailModal stock={selectedStock} onClose={() => setSelectedStock(null)} />
+      <StockDetailModal
+        stock={selectedStock}
+        notionInfo={selectedStock ? notionMap[selectedStock.stock_id] : null}
+        onClose={() => setSelectedStock(null)}
+      />
     </div>
   )
 }

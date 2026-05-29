@@ -73,9 +73,10 @@ function Section({ title, children }) {
   )
 }
 
-export default function StockDetailModal({ stock, onClose }) {
+export default function StockDetailModal({ stock, notionInfo, onClose }) {
   if (!stock) return null
   const s = stock
+  const n = notionInfo || null
   const scoreColor = s.entry_score >= 1800 ? '#facc15' : s.entry_score >= 1500 ? '#fb923c' : '#e2e8f0'
 
   return (
@@ -124,6 +125,32 @@ export default function StockDetailModal({ stock, onClose }) {
             </div>
           )}
         </Section>
+
+        {/* Notion 連結 */}
+        {n && (
+          <Section title="Notion 同步">
+            {n.type && <Row label="類型" value={n.type} valueStyle={{ color: n.type === 'TOP 20' ? '#facc15' : n.type === '候選進場' ? '#4ade80' : '#94a3b8' }} />}
+            {n.regime && <Row label="市場氛圍" value={n.regime} />}
+            {n.confidence != null && <Row label="信心分數" value={`${n.confidence}%`} />}
+            {n.note && <Row label="觀察建議" value={n.note} valueStyle={{ color: '#93c5fd', fontSize: 11 }} />}
+            {n.date && <Row label="同步日期" value={n.date} valueStyle={{ color: '#64748b' }} />}
+            {n.notion_url && (
+              <a
+                href={n.notion_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'block', marginTop: 8, textAlign: 'center',
+                  background: '#1d2b3a', border: '1px solid #334155',
+                  borderRadius: 6, padding: '6px 12px',
+                  color: '#60a5fa', fontSize: 12, textDecoration: 'none',
+                }}
+              >
+                在 Notion 查看 ↗
+              </a>
+            )}
+          </Section>
+        )}
 
         {/* 評分 */}
         <Section title="入場評分">
