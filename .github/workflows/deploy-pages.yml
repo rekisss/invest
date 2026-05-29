@@ -16,6 +16,7 @@ on:
       - Collect Training Data (yfinance)
       - Train ML Model
       - 盤中事件監控 (09:00–13:30 CST)
+      - 更新新聞語料庫
     types: [completed]
 
 permissions:

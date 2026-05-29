@@ -145,6 +145,54 @@ async function loadLiveNews() {
     .slice(0, 60)
 }
 
+function buildTrending(news) {
+  const tagCount = {}, stockCount = {}
+  for (const item of news) {
+    for (const tag of (item.tags || [])) {
+      if (tag !== '其他') tagCount[tag] = (tagCount[tag] || 0) + 1
+    }
+    for (const [, code] of item.title.matchAll(STOCK_CODE_RE)) {
+      stockCount[code] = (stockCount[code] || 0) + 1
+    }
+  }
+  const topTags = Object.entries(tagCount).sort((a, b) => b[1] - a[1]).slice(0, 6)
+  const topStocks = Object.entries(stockCount).sort((a, b) => b[1] - a[1]).slice(0, 4)
+  return { topTags, topStocks }
+}
+
+function TrendingBar({ news, onFilter }) {
+  const { topTags, topStocks } = buildTrending(news)
+  if (topTags.length === 0 && topStocks.length === 0) return null
+  return (
+    <div style={{ padding: '8px 14px 10px', background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 6, letterSpacing: 0.5 }}>🔥 熱門趨勢</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {topTags.map(([tag, count]) => {
+          const rule = KEYWORD_RULES.find(r => r.tag === tag)
+          const color = rule?.color || 'var(--muted)'
+          return (
+            <button key={tag} onClick={() => onFilter(tag)} style={{
+              fontSize: 11, color, background: `${color}20`, border: `1px solid ${color}40`,
+              borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontWeight: 600,
+            }}>
+              {rule?.icon} {tag} <span style={{ opacity: 0.65 }}>·{count}</span>
+            </button>
+          )
+        })}
+        {topStocks.map(([code, count]) => (
+          <span key={code} style={{
+            fontSize: 11, color: 'var(--accent)', background: 'var(--accent)18',
+            border: '1px solid var(--accent)40', borderRadius: 4,
+            padding: '2px 8px', fontWeight: 700,
+          }}>
+            {code} <span style={{ opacity: 0.65 }}>·{count}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function buildDynamicTabs(news) {
   const freq = {}
   for (const item of news) {
@@ -300,6 +348,11 @@ export default function NewsFeed({ staticNews }) {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Trending bar */}
+      {news.length > 0 && (
+        <TrendingBar news={news} onFilter={tag => { setFilter(tag); setOpenIdx(null) }} />
+      )}
+
       {/* Dynamic tab bar */}
       <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <div style={{ display: 'flex', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>

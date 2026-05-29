@@ -79,7 +79,26 @@ function parseRSS(xml) {
   return items
 }
 
-// ── Fetch news ───────────────────────────────────────────────────────────────
+// ── Read news corpus ─────────────────────────────────────────────────────────
+function readNewsCorpus() {
+  const corpusFile = resolve(__dirname, '../../output/news_corpus.json')
+  if (!existsSync(corpusFile)) return []
+  try {
+    const data = JSON.parse(readFileSync(corpusFile, 'utf-8'))
+    const cutoff = new Date(Date.now() - 3 * 86400 * 1000)
+    const articles = (data.articles || []).filter(a => {
+      if (!a.published_at) return true
+      try { return new Date(a.published_at) > cutoff } catch { return true }
+    })
+    console.log(`  Corpus: ${articles.length} articles (updated ${data.updated_at?.slice(0,16) || '?'})`)
+    return articles.slice(0, 300)
+  } catch (e) {
+    console.warn('  Corpus read failed:', e.message)
+    return []
+  }
+}
+
+// ── Fetch news (fallback if no corpus) ───────────────────────────────────────
 async function fetchNews() {
   const queries = [
     { q: '台灣股市 大盤', category: 'market', label: '大盤' },
@@ -203,8 +222,12 @@ console.log(`Scan data: ${dates.length} dates, latest=${dates[0]}, stocks=${scan
 const prediction = readPrediction()
 console.log(`Prediction: ${prediction ? prediction.date : 'none'}`)
 
-console.log('Fetching news...')
-const news = await fetchNews()
+console.log('Reading news corpus...')
+let news = readNewsCorpus()
+if (news.length === 0) {
+  console.log('Corpus empty, fetching live news...')
+  news = await fetchNews()
+}
 console.log(`News: ${news.length} total items`)
 
 console.log('Fetching FinMind quota...')
