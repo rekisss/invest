@@ -1,6 +1,29 @@
 import { useState } from 'react'
 import StockDetailModal from './StockDetailModal'
 
+function exportCSV(stocks, date) {
+  if (!stocks || stocks.length === 0) return
+  const cols = ['rank','stock_id','name','industry_category','entry_score','entry_signal','close',
+    'rsi14','adx14','volume_ratio','foreign_buy_streak','invest_trust_streak','dealer_buy_streak',
+    'f_score','condition_count','margin_change_5d','short_ratio','entry_reason','skip_reason',
+    'momentum_score','relative_strength_5d','return_5d','day_return','bb_pct_b',
+    'foreign_net','invest_trust_net','dealer_net','ema20','ema60','atr14',
+    'macd','macd_hist','limit_down_streak']
+  const header = cols.join(',')
+  const rows = stocks.map(s => cols.map(k => {
+    const v = s[k]
+    if (v == null) return ''
+    if (typeof v === 'string' && v.includes(',')) return `"${v.replace(/"/g, '""')}"`
+    return String(v)
+  }).join(','))
+  const csv = '﻿' + [header, ...rows].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = `taiwan_scan_${date}.csv`; a.click()
+  URL.revokeObjectURL(url)
+}
+
 function StatCard({ label, value, sub, color }) {
   return (
     <div style={{
@@ -31,7 +54,7 @@ function StreakBadge({ value }) {
 }
 
 function ScoreCell({ score, entry_signal }) {
-  const color = entry_signal ? 'var(--green)' : score > 1000 ? 'var(--yellow)' : score > 0 ? 'var(--text)' : 'var(--muted)'
+  const color = entry_signal ? 'var(--green)' : score > 800 ? 'var(--yellow)' : score > 400 ? 'var(--text)' : 'var(--muted)'
   return <span style={{ color, fontWeight: entry_signal ? 700 : 400, fontFamily: 'var(--font-mono)' }}>{score.toLocaleString()}</span>
 }
 
@@ -219,18 +242,30 @@ export default function Dashboard({ data, error }) {
       <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <div style={{ fontWeight: 700, fontSize: 15 }}>📊 台股掃描儀表板</div>
-          <select
-            value={selectedDate || ''}
-            onChange={e => setSelectedDate(e.target.value)}
-            style={{
-              background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text)',
-              borderRadius: 6, padding: '4px 8px', fontSize: 13, cursor: 'pointer',
-            }}
-          >
-            {data.dates.map(d => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <select
+              value={selectedDate || ''}
+              onChange={e => setSelectedDate(e.target.value)}
+              style={{
+                background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text)',
+                borderRadius: 6, padding: '4px 8px', fontSize: 13, cursor: 'pointer',
+              }}
+            >
+              {data.dates.map(d => {
+                const s = data.scans[d]
+                const partial = s?.is_partial ? ' ⚠' : ''
+                return <option key={d} value={d}>{d}（{s?.total_scanned ?? 0}支）{partial}</option>
+              })}
+            </select>
+            <button
+              onClick={() => exportCSV(stocks, selectedDate)}
+              title="下載當日 TOP 50 CSV"
+              style={{
+                background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--muted)',
+                borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >↓ CSV</button>
+          </div>
         </div>
         {/* Stats */}
         <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
@@ -310,6 +345,11 @@ export default function Dashboard({ data, error }) {
         {entryStocks.length > 0 && (
           <div style={{ padding: '10px 16px 4px', fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>
             ✓ 進場訊號（{entryStocks.length} 支）
+          </div>
+        )}
+        {scan.is_partial && (
+          <div style={{ padding: '4px 16px', fontSize: 11, color: 'var(--yellow)', background: 'rgba(234,179,8,0.07)', borderBottom: '1px solid rgba(234,179,8,0.2)' }}>
+            ⚠ 部分掃描（{scan.total_scanned} 支），完整掃描後數字會更新
           </div>
         )}
         {scan.from_aggregate_json && (

@@ -6,33 +6,79 @@ const colorNum = (v, pos = '#ef4444', neg = '#4ade80') => {
   return n > 0 ? pos : neg
 }
 
-// Taiwan stocks: TWSE for main board, TPEX for OTC
-// Stock IDs starting with 4, 6, 8 (4000-4999, 6000-6999, 8000-8999) are often OTC
+import { useEffect, useRef } from 'react'
+
+// Taiwan stock exchange classification
+// TWSE (上市): most 1000-3999, some 4xxx, some larger caps
+// TPEX (上櫃): 4500+, most 5xxx-9xxx small/mid caps
 function tvSymbol(stockId) {
   const id = String(stockId)
   const n = parseInt(id, 10)
-  // OTC (TPEX): roughly 4000-4999, 6000-6999, 8000-8999, some 5000s
-  const isOTC = (n >= 4000 && n <= 4999) || (n >= 6000 && n <= 6999) || (n >= 8000 && n <= 8999)
+  // Conservative: only mark as TPEX if clearly OTC range
+  // Large-cap 4xxx (4904 遠傳, 4938 和碩) are TWSE; small 4xxx and 5xxx+ are TPEX
+  const isOTC = (n >= 4200 && n <= 4999) || (n >= 5000 && n <= 5999) ||
+                (n >= 6000 && n <= 6999) || (n >= 8000 && n <= 8999) ||
+                (n >= 9200 && n <= 9999)
   return `${isOTC ? 'TPEX' : 'TWSE'}:${id}`
 }
 
 function TradingViewChart({ stockId }) {
   const sym = tvSymbol(stockId)
-  const src = `https://www.tradingview.com/widgetembed/?hideideas=1&symbol=${encodeURIComponent(sym)}&interval=D&theme=dark&style=1&locale=zh_TW&allow_symbol_change=1&saveimage=0&hide_top_toolbar=0&hide_legend=0`
+  const containerRef = useRef(null)
+  const containerId = `tv_${stockId}_${Date.now()}`
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    el.innerHTML = ''
+
+    const wrapper = document.createElement('div')
+    wrapper.id = containerId
+    el.appendChild(wrapper)
+
+    const script = document.createElement('script')
+    script.src = 'https://s3.tradingview.com/tv.js'
+    script.async = true
+    script.onload = () => {
+      if (window.TradingView) {
+        new window.TradingView.widget({
+          container_id: containerId,
+          autosize: true,
+          height: 360,
+          symbol: sym,
+          interval: 'D',
+          timezone: 'Asia/Taipei',
+          theme: 'dark',
+          style: '1',
+          locale: 'zh_TW',
+          hide_top_toolbar: false,
+          allow_symbol_change: true,
+          save_image: false,
+          hide_legend: false,
+          studies: [],
+        })
+      }
+    }
+    el.appendChild(script)
+    return () => { if (el) el.innerHTML = '' }
+  }, [sym])
+
+  const yahooUrl = `https://finance.yahoo.com/quote/${stockId}.TW/chart/`
+  const tvSearchUrl = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(sym)}`
+
   return (
-    <div style={{ width: '100%', borderRadius: 8, overflow: 'hidden', background: '#0f172a' }}>
-      <iframe
-        key={stockId}
-        src={src}
-        style={{ width: '100%', height: 360, border: 'none', display: 'block' }}
-        allowTransparency="true"
-        frameBorder="0"
-        scrolling="no"
-        allowFullScreen
-        title={`TradingView ${stockId}`}
-      />
-      <div style={{ fontSize: 10, color: '#334155', padding: '2px 6px', textAlign: 'right' }}>
-        TradingView · 可切換時間框架
+    <div>
+      <div ref={containerRef} style={{ width: '100%', minHeight: 360, background: '#0f172a', borderRadius: 8, overflow: 'hidden' }} />
+      <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+        <a href={tvSearchUrl} target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
+          TradingView 完整圖表 ↗
+        </a>
+        <a href={yahooUrl} target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: 11, color: '#94a3b8', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
+          Yahoo Finance ↗
+        </a>
+        <span style={{ fontSize: 10, color: '#475569', alignSelf: 'center' }}>若顯示「不存在」請點上方連結或手動搜尋 {sym}</span>
       </div>
     </div>
   )
@@ -60,7 +106,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
   if (!stock) return null
   const s = stock
   const n = notionInfo || null
-  const scoreColor = s.entry_score >= 1800 ? '#facc15' : s.entry_score >= 1500 ? '#fb923c' : '#e2e8f0'
+  const scoreColor = s.entry_score >= 1000 ? '#facc15' : s.entry_score >= 700 ? '#fb923c' : '#e2e8f0'
 
   return (
     <div
