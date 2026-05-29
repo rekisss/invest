@@ -209,6 +209,9 @@ export default function Dashboard({ data, error }) {
   const persistent = scan.persistent || []
   const limitDownAlerts = scan.limit_down_alerts || []
   const entryStocks = stocks.filter(s => s.entry_signal)
+  const pred = data.prediction || null
+  const aiText = scan.ai_picks_text || ''
+  const marginStats = scan.margin_stats || {}
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -257,9 +260,61 @@ export default function Dashboard({ data, error }) {
 
       {/* Table area */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 24px 0' }}>
+
+        {/* Market summary (from prediction + aggregate) */}
+        {pred && (
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(30,41,59,0.6)' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: pred.scenario ? 8 : 0 }}>
+              <span style={{ fontSize: 12, color: pred.xgb_label === '偏多' ? 'var(--red)' : pred.xgb_label === '偏空' ? 'var(--green)' : 'var(--muted)', fontWeight: 700 }}>
+                {pred.xgb_label === '偏多' ? '📈' : pred.xgb_label === '偏空' ? '📉' : '➡'} 大盤預測 {Math.round((pred.xgb_prob_up || 0) * 100)}% 上漲
+              </span>
+              {pred.market_data?.vix != null && <span style={{ fontSize: 11, color: 'var(--muted)' }}>VIX {pred.market_data.vix}</span>}
+              {pred.market_data?.futures_net != null && <span style={{ fontSize: 11, color: pred.market_data.futures_net < 0 ? 'var(--green)' : 'var(--red)' }}>外資期貨 {pred.market_data.futures_net?.toLocaleString()}口</span>}
+              {pred.market_data?.night_change != null && <span style={{ fontSize: 11, color: pred.market_data.night_change > 0 ? 'var(--red)' : 'var(--green)' }}>夜盤 {pred.market_data.night_change > 0 ? '+' : ''}{pred.market_data.night_change}點</span>}
+              {pred.regime?.label_zh && <span style={{ fontSize: 11, color: 'var(--accent)', background: 'rgba(96,165,250,0.1)', borderRadius: 4, padding: '1px 6px' }}>{pred.regime.label_zh}</span>}
+            </div>
+            {pred.scenario?.main_scenario && (
+              <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>
+                <b style={{ color: '#e2e8f0' }}>主力劇本：</b>{pred.scenario.main_scenario}
+              </div>
+            )}
+            {pred.scenario?.best_strategy && (
+              <div style={{ fontSize: 11, color: '#86efac', marginTop: 3 }}>
+                <b>最佳策略：</b>{pred.scenario.best_strategy}
+              </div>
+            )}
+            {pred.scenario?.forbidden_actions?.length > 0 && (
+              <div style={{ fontSize: 11, color: '#fca5a5', marginTop: 2 }}>
+                <b>🚫 禁止：</b>{pred.scenario.forbidden_actions.join(' · ')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* AI picks */}
+        {aiText && (
+          <div style={{ padding: '10px 16px', background: 'rgba(15,23,42,0.8)', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa', marginBottom: 6 }}>🤖 AI 精選推薦</div>
+            <pre style={{ fontSize: 11, color: '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, fontFamily: 'inherit', lineHeight: 1.6 }}>{aiText}</pre>
+          </div>
+        )}
+
+        {/* Margin chip stats */}
+        {(marginStats.clean_count > 0 || marginStats.surge_count > 0) && (
+          <div style={{ padding: '6px 16px', fontSize: 11, color: 'var(--muted)', background: 'rgba(30,41,59,0.4)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16 }}>
+            {marginStats.clean_count > 0 && <span>📉 融資籌碼乾淨（5日縮&gt;3%）：<b style={{ color: '#4ade80' }}>{marginStats.clean_count}</b> 支</span>}
+            {marginStats.surge_count > 0 && <span>⚠️ 融資暴增警告：<b style={{ color: '#fca5a5' }}>{marginStats.surge_count}</b> 支</span>}
+          </div>
+        )}
+
         {entryStocks.length > 0 && (
-          <div style={{ padding: '12px 16px 4px', fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>
+          <div style={{ padding: '10px 16px 4px', fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>
             ✓ 進場訊號（{entryStocks.length} 支）
+          </div>
+        )}
+        {scan.from_aggregate_json && (
+          <div style={{ padding: '4px 16px', fontSize: 11, color: 'var(--accent)', opacity: 0.7 }}>
+            ℹ 資料來源：彙整結果（全掃描已合併）
           </div>
         )}
         <div style={{ padding: '0 8px' }}>

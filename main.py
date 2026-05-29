@@ -3412,6 +3412,47 @@ def run_aggregate(args: argparse.Namespace) -> None:
                     f"請確認：1) Notion database 已連結 Integration  2) NOTION_DATABASE_ID 正確"
                 ])
 
+    # ── 存 aggregate_latest.json（網頁讀取用，在刪 CSV 前）──────────────────────
+    try:
+        import json as _agg_json_lib
+
+        def _to_py(v):
+            if isinstance(v, (np.integer,)): return int(v)
+            if isinstance(v, (np.floating,)): return None if (np.isnan(v) or np.isinf(v)) else float(v)
+            if isinstance(v, float) and (v != v or v == float('inf') or v == float('-inf')): return None
+            return v
+
+        def _row_to_dict(row):
+            return {k: _to_py(v) for k, v in row.items()}
+
+        _ld_col = "limit_down_streak"
+        _ld_alerts = []
+        if _ld_col in all_candidates.columns:
+            _ld_df = all_candidates[all_candidates[_ld_col].apply(lambda x: _float_or(x)) >= 3]
+            _ld_alerts = [_row_to_dict(r) for _, r in _ld_df.sort_values(_ld_col, ascending=False).head(20).iterrows()]
+
+        _entry_cnt = int((all_candidates["entry_signal"] == True).sum()) if "entry_signal" in all_candidates.columns else 0
+
+        _agg_payload = {
+            "date": args.end,
+            "generated_at": _cst_now(),
+            "total_scanned": total_stocks,
+            "entry_count": _entry_cnt,
+            "top_stocks": [_row_to_dict(r) for _, r in top.iterrows()],
+            "limit_down_alerts": _ld_alerts,
+            "persistent_strong": _persistence_rows[:20] if "_persistence_rows" in dir() else [],
+            "margin_stats": {
+                "clean_count": _clean_cnt if "_clean_cnt" in dir() else 0,
+                "surge_count": _surge_cnt if "_surge_cnt" in dir() else 0,
+            },
+            "ai_picks_text": _ai_text if "_ai_text" in dir() else "",
+        }
+        _agg_out = Path(args.output) / "aggregate_latest.json"
+        _agg_out.write_text(_agg_json_lib.dumps(_agg_payload, ensure_ascii=False, default=str), encoding="utf-8")
+        _safe_print(f"[aggregate] 已存 aggregate_latest.json（{total_stocks} 支股票）")
+    except Exception as _aj_exc:
+        _safe_print(f"[aggregate] aggregate_latest.json 寫入失敗（無妨）: {_aj_exc}")
+
     # Clean up batch files after successful aggregation
     for p in csvs:
         try:
