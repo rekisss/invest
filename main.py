@@ -2956,6 +2956,18 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
             }
         _pred_out.write_text(_json.dumps(_pred_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         _safe_print(f"[predict] 預測 JSON 已存至 {_pred_out}")
+        # Append to prediction_history.json (keep last 90 days)
+        _hist_out = _pred_out.parent / "prediction_history.json"
+        try:
+            _hist: list = _json.loads(_hist_out.read_text(encoding="utf-8")) if _hist_out.exists() else []
+        except Exception:
+            _hist = []
+        _hist = [h for h in _hist if h.get("date", "") != today]  # remove same-day entry
+        _hist.append(_pred_payload)
+        _hist.sort(key=lambda h: h.get("date", ""), reverse=True)
+        _hist = _hist[:90]
+        _hist_out.write_text(_json.dumps(_hist, ensure_ascii=False, indent=2), encoding="utf-8")
+        _safe_print(f"[predict] 歷史記錄已更新（{len(_hist)} 筆）→ {_hist_out}")
     except Exception as _pj_exc:
         _safe_print(f"[predict] 儲存預測 JSON 失敗（skip）: {_pj_exc}")
 

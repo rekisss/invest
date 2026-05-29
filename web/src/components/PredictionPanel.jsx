@@ -63,7 +63,54 @@ function MarketDataGrid({ data }) {
   )
 }
 
-export default function PredictionPanel({ prediction }) {
+function HistoryRow({ entry }) {
+  const [open, setOpen] = useState(false)
+  const pct = Math.round((entry.xgb_prob_up ?? 0.5) * 100)
+  const color = pct >= 60 ? 'var(--green)' : pct <= 40 ? 'var(--red)' : 'var(--yellow)'
+  const riskLevel = entry.risk?.level?.replace('RiskLevel.', '') || 'MEDIUM'
+  return (
+    <div style={{ borderBottom: '1px solid var(--border)' }}>
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', cursor: 'pointer' }}>
+        <div style={{ minWidth: 72, fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>{entry.date}</div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color, fontSize: 16, minWidth: 44 }}>{pct}%</div>
+        <div style={{ flex: 1, fontSize: 12, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {entry.xgb_label || (pct >= 55 ? '偏多' : pct <= 45 ? '偏空' : '中性')}
+          {entry.regime?.label_zh ? ` · ${entry.regime.label_zh.slice(0, 20)}` : ''}
+        </div>
+        <div style={{ fontSize: 11, color: RISK_COLOR[riskLevel] || 'var(--muted)', flexShrink: 0 }}>
+          {RISK_LABEL[riskLevel] || riskLevel}
+        </div>
+        <span style={{ color: 'var(--muted)', fontSize: 11 }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ padding: '0 16px 12px', fontSize: 12 }}>
+          {entry.scenario?.main_scenario && (
+            <div style={{ color: 'var(--muted)', lineHeight: 1.6, marginBottom: 6 }}>{entry.scenario.main_scenario}</div>
+          )}
+          {entry.scenario?.best_strategy && (
+            <div style={{ color: 'var(--accent)', marginBottom: 6 }}>策略：{entry.scenario.best_strategy}</div>
+          )}
+          {entry.market_data && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+              {[
+                ['VIX', entry.market_data.vix?.toFixed(1)],
+                ['那斯達克', entry.market_data.nasdaq_ret != null ? `${(entry.market_data.nasdaq_ret * 100).toFixed(2)}%` : null],
+                ['外資期貨', entry.market_data.futures_net != null ? `${Math.round(entry.market_data.futures_net).toLocaleString()}口` : null],
+                ['夜盤', entry.market_data.night_change != null ? `${entry.market_data.night_change > 0 ? '+' : ''}${Math.round(entry.market_data.night_change)}` : null],
+              ].filter(([, v]) => v).map(([label, val]) => (
+                <span key={label} style={{ fontSize: 11, background: 'var(--surface2)', borderRadius: 4, padding: '2px 7px', color: 'var(--text)' }}>
+                  {label} {val}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function PredictionPanel({ prediction, history = [] }) {
   if (!prediction) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--muted)', gap: 12, padding: 24, textAlign: 'center' }}>
@@ -188,6 +235,15 @@ export default function PredictionPanel({ prediction }) {
                 ))}
               </div>
             )}
+          </Card>
+        )}
+
+        {/* Prediction history */}
+        {history.length > 0 && (
+          <Card title={`歷史預測記錄（${history.length} 筆）`}>
+            <div style={{ margin: '0 -16px' }}>
+              {history.map((entry, i) => <HistoryRow key={entry.date || i} entry={entry} />)}
+            </div>
           </Card>
         )}
       </div>

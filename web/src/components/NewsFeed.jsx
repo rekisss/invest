@@ -20,15 +20,51 @@ const KEYWORD_RULES = [
 const STOCK_CODE_RE = /\b([2-9]\d{3})\b/g
 
 const QUERIES = [
-  { q: '台灣股市 大盤 指數' },
-  { q: '台積電 2330 半導體' },
-  { q: '外資 法人 台指期貨' },
-  { q: '美股 那斯達克 費半' },
-  { q: 'AI 人工智慧 科技股 GPU' },
-  { q: '生技 新藥 醫療 FDA' },
-  { q: '匯率 新台幣 美元 聯準會' },
+  { q: '台灣股市 大盤 指數 when:3d' },
+  { q: '台積電 2330 半導體 when:3d' },
+  { q: '外資 法人 台指期貨 when:3d' },
+  { q: '美股 那斯達克 費半 when:3d' },
+  { q: 'AI 人工智慧 科技股 GPU when:3d' },
+  { q: '生技 新藥 醫療 FDA when:3d' },
+  { q: '匯率 新台幣 美元 聯準會 when:3d' },
 ]
 
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
+
+async function fetchRSS(rssUrl) {
+  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=8`
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 7000)
+  try {
+    const r = await fetch(apiUrl, { signal: ctrl.signal })
+    if (r.ok) {
+      const j = await r.json()
+      if (j.status === 'ok' && j.items?.length) {
+        return j.items.map(item => ({
+          title: item.title || '',
+          url: item.link || '',
+          source: j.feed?.title || '',
+          published: item.pubDate || '',
+          summary: (item.description || '').replace(/<[^>]+>/g, '').slice(0, 300),
+        }))
+      }
+    }
+  } catch (_) { /* fall through to proxy */ } finally {
+    clearTimeout(timer)
+  }
+  const ctrl2 = new AbortController()
+  const timer2 = setTimeout(() => ctrl2.abort(), 6000)
+  try {
+    const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent(rssUrl)}`, { signal: ctrl2.signal })
+    if (r2.ok) {
+      const xml = await r2.text()
+      if (xml.includes('<item>')) return parseRSS(xml)
+    }
+  } catch (_) { /* give up */ } finally {
+    clearTimeout(timer2)
+  }
+  return []
+}
 function detectTags(title, summary = '') {
   const text = title + ' ' + summary
   const matched = []
@@ -98,12 +134,18 @@ async function loadLiveNews() {
   for (const r of results) {
     if (r.status === 'fulfilled') allNews.push(...r.value)
   }
+  const cutoff = Date.now() - THREE_DAYS_MS
   const seen = new Set()
   return allNews
     .filter(item => {
       const key = item.title.slice(0, 30)
       if (seen.has(key)) return false
       seen.add(key)
+      // filter out articles older than 3 days
+      if (item.published) {
+        const age = Date.now() - new Date(item.published).getTime()
+        if (age > THREE_DAYS_MS) return false
+      }
       return true
     })
     .map(item => {
