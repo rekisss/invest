@@ -25,12 +25,18 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import logging
+
 import pandas as pd
 import requests
 import yfinance as yf
 from loguru import logger
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
+
+# Silence yfinance's own noisy warnings ("possibly delisted; no timezone found")
+logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+logging.getLogger("peewee").setLevel(logging.CRITICAL)
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 ROOT       = Path(__file__).parent
@@ -40,7 +46,7 @@ EXCEL_FILE = ROOT / "output" / "kline_export.xlsx"
 
 LOOKBACK_DAYS = 90   # calendar days of OHLCV to fetch on first run
 WINDOW_DAYS   = 30   # collect stocks scanned within this many days
-BATCH_SIZE    = 100  # stocks per yfinance download call
+BATCH_SIZE    = 200  # stocks per yfinance download call (Yahoo handles large batches well)
 
 NOTION_API = "https://api.notion.com/v1"
 NOTION_VER = "2022-06-28"
@@ -214,8 +220,6 @@ def fetch_all_klines_yfinance(
             f"  .TW batch {bi}/{len(batches)}: {len(found)}/{len(chunk)} found "
             f"({len(miss)} misses)"
         )
-        if bi < len(batches):
-            time.sleep(1)   # brief pause between batches to avoid rate-limiting
 
     # ── Phase 2: .TWO (TPEX OTC) for misses ──────────────────────────────────
     if tw_misses:
@@ -231,8 +235,6 @@ def fetch_all_klines_yfinance(
                 f"  .TWO batch {bi}/{len(two_batches)}: {len(found)}/{len(chunk)} found "
                 f"({still_miss} not found anywhere)"
             )
-            if bi < len(two_batches):
-                time.sleep(1)
 
     logger.info(
         f"yfinance fetch complete: {len(result)}/{len(stock_ids)} stocks returned data"
