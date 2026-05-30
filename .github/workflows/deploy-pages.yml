@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
   workflow_run:
     workflows:
+      - K線資料更新
       - 全市場掃描
       - 全市場彙整 TOP 20 (20:00 CST 週二~週六)
       - 盤前預測 (08:00 CST)
