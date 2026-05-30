@@ -521,7 +521,7 @@ async function fetchFinMindQuota() {
 async function fetchKLineData(stockIds, token) {
   if (!token || stockIds.length === 0) return {}
   const endDate = new Date().toISOString().slice(0, 10)
-  const startDate = new Date(Date.now() - 35 * 86400000).toISOString().slice(0, 10)
+  const startDate = new Date(Date.now() - 65 * 86400000).toISOString().slice(0, 10)
   const klineMap = {}
   console.log(`  K-line: fetching ${stockIds.length} stocks (${startDate} ~ ${endDate})`)
   for (const sid of stockIds) {
@@ -613,19 +613,31 @@ if (aggregateLatest) {
   }
 }
 
-// Fetch K-line data for top 50 stocks using dedicated account 10
+// Fetch K-line data — cover top stocks across the most recent 3 scan dates
+// Use FINMIND_TOKEN_10 (dedicated K-line account); fall back to FINMIND_TOKEN if unset
 console.log('Fetching K-line data...')
-const klineToken = (process.env.FINMIND_TOKEN_10 || '').trim()
+const klineToken = (process.env.FINMIND_TOKEN_10 || process.env.FINMIND_TOKEN || '').trim()
 if (klineToken && dates.length > 0) {
-  const latestTop = scans[dates[0]]?.top_stocks || []
-  const top50ids = latestTop.slice(0, 50).map(s => s.stock_id)
-  const klineMap = await fetchKLineData(top50ids, klineToken)
-  for (const stock of latestTop) {
-    if (klineMap[stock.stock_id]) stock.price_history = klineMap[stock.stock_id]
+  // Collect unique stock_ids from the latest 3 dates (deduped)
+  const recentDates = dates.slice(0, 3)
+  const idSet = new Set()
+  for (const d of recentDates) {
+    for (const s of (scans[d]?.top_stocks || [])) idSet.add(s.stock_id)
   }
-  console.log(`K-line: injected into ${Object.keys(klineMap).length} stocks`)
+  const allIds = [...idSet].slice(0, 100)
+  const klineMap = await fetchKLineData(allIds, klineToken)
+  // Inject price_history into all recent dates' stocks
+  for (const d of recentDates) {
+    for (const stock of (scans[d]?.top_stocks || [])) {
+      if (klineMap[stock.stock_id]) stock.price_history = klineMap[stock.stock_id]
+    }
+  }
+  // Log days returned for first stock to help diagnose plan limitations
+  const firstKey = Object.keys(klineMap)[0]
+  const sampleDays = firstKey ? klineMap[firstKey].length : 0
+  console.log(`K-line: injected into ${Object.keys(klineMap).length}/${allIds.length} stocks (~${sampleDays} days each)`)
 } else {
-  console.log(`K-line: ${klineToken ? 'no dates' : 'FINMIND_TOKEN_10 not set'}, skipping`)
+  console.log('K-line: no token set, skipping')
 }
 
 const prediction = readPrediction()
