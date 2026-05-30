@@ -1,19 +1,17 @@
 """
 K-line incremental fetch + Notion sync + Excel export.
 
-Data sources: TWSE (listed) and TPEX (OTC) official public APIs — no API key needed.
+Data source: yfinance (Yahoo Finance) — works from any IP including GitHub Actions.
+Taiwan stocks: {SID}.TW for TWSE-listed, {SID}.TWO for TPEX OTC.
 
 Logic:
   1. Read batch_seq*.csv from last 30 days → all scanned stock IDs
-  2. Diff against kline_cache.json → only fetch dates newer than latest cached bar
-  3. Fetch ALL stocks per trading day (batch approach):
-       TWSE: MI_INDEX endpoint (main board, all stocks, one day per call)
-       TPEX: otc_quotes endpoint (OTC board, all stocks, one day per call)
-  4. Filter to scanned stocks, accumulate OHLCV bars
-  5. Preserve bars older than the fetch window (never deleted)
-  6. Save updated output/kline_cache.json
-  7. Sync 30-day/90-day stats to Notion (PATCH schema first, then update pages)
-  8. Export output/kline_export.xlsx (K線匯總 + OHLCV近30日)
+  2. Load kline_cache.json → find global latest cached date (incremental)
+  3. Batch-download via yfinance (.TW first, .TWO for misses)
+  4. Merge new bars into cache (append, dedup by date, sort)
+  5. Save updated output/kline_cache.json
+  6. Sync 30-day/90-day stats to Notion (PATCH schema first, then update pages)
+  7. Export output/kline_export.xlsx (K線匯總 + OHLCV近30日)
 """
 
 from __future__ import annotations
@@ -29,6 +27,7 @@ from typing import Any
 
 import pandas as pd
 import requests
+import yfinance as yf
 from loguru import logger
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -39,11 +38,9 @@ SCAN_DIR   = ROOT / "output" / "full_scan"
 CACHE_FILE = ROOT / "output" / "kline_cache.json"
 EXCEL_FILE = ROOT / "output" / "kline_export.xlsx"
 
-LOOKBACK_DAYS = 90   # calendar days of OHLCV to fetch
+LOOKBACK_DAYS = 90   # calendar days of OHLCV to fetch on first run
 WINDOW_DAYS   = 30   # collect stocks scanned within this many days
-
-TWSE_MI_URL  = "https://www.twse.com.tw/exchangeReport/MI_INDEX"
-TPEX_OTC_URL = "https://www.tpex.org.tw/web/stock/aftertrading/otc_quotes/stk_wn1_result.php"
+BATCH_SIZE    = 100  # stocks per yfinance download call
 
 NOTION_API = "https://api.notion.com/v1"
 NOTION_VER = "2022-06-28"
@@ -67,16 +64,9 @@ def days_ago_iso(n: int) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=n)).strftime("%Y-%m-%d")
 
 
-def weekdays_between(start: str, end: str) -> list[str]:
-    """Return list of Mon-Fri date strings in [start, end]."""
-    result: list[str] = []
-    d = date.fromisoformat(start)
-    stop = date.fromisoformat(end)
-    while d <= stop:
-        if d.weekday() < 5:   # 0=Mon … 4=Fri
-            result.append(d.isoformat())
-        d += timedelta(days=1)
-    return result
+def tomorrow_iso() -> str:
+    """yfinance end date is exclusive — pass tomorrow to include today."""
+    return (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
 
 
 # ── Step 1: Collect stock IDs from last 30 days of scan CSVs ──────────────────
@@ -120,114 +110,133 @@ def get_stock_ids_last_30_days() -> list[str]:
     return sorted(ids)
 
 
-# ── Step 2: Determine which dates need fetching ───────────────────────────────
-def get_dates_to_fetch(existing_cache: dict[str, list], lookback_days: int) -> list[str]:
-    """Return weekday dates that are newer than the latest bar already cached."""
-    start = days_ago_iso(lookback_days)
-    end   = today_iso()
-    all_days = weekdays_between(start, end)
+# ── Step 3: yfinance batch download ───────────────────────────────────────────
+def _download_batch(
+    stock_ids: list[str],
+    suffix: str,
+    start: str,
+    end: str,
+) -> dict[str, list[dict]]:
+    """Download one batch of stocks with a given suffix (.TW or .TWO)."""
+    if not stock_ids:
+        return {}
 
-    # Find latest date already in cache across all stocks
-    latest_cached = "1900-01-01"
-    for bars in existing_cache.values():
-        if bars and bars[-1].get("time", "") > latest_cached:
-            latest_cached = bars[-1]["time"]
+    yf_tickers = [f"{sid}{suffix}" for sid in stock_ids]
 
-    if latest_cached > "1900-01-01":
-        new_days = [d for d in all_days if d > latest_cached]
-        skipped = len(all_days) - len(new_days)
-        if skipped:
-            logger.info(f"Cache already has data up to {latest_cached} — skipping {skipped} days")
-        return new_days
-
-    return all_days   # no cache yet, fetch everything
-
-
-# ── Step 3: Fetch one trading day from TWSE (listed stocks) ───────────────────
-def _parse_price(s: str) -> float | None:
-    s = str(s).strip().replace(",", "")
-    if s in ("--", "", "X"):
-        return None
     try:
-        return float(s)
-    except ValueError:
-        return None
-
-
-def fetch_twse_day(date_str: str, session: requests.Session) -> dict[str, dict]:
-    """Return {stock_id: bar_dict} for all TWSE main-board stocks on date_str."""
-    yyyymmdd = date_str.replace("-", "")
-    try:
-        resp = session.get(
-            TWSE_MI_URL,
-            params={"response": "json", "date": yyyymmdd, "type": "ALLBUT0999"},
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        body = resp.json()
+        if len(yf_tickers) == 1:
+            raw = yf.download(
+                yf_tickers[0],
+                start=start,
+                end=end,
+                auto_adjust=True,
+                progress=False,
+            )
+            if raw.empty:
+                return {}
+            # Wrap single-ticker result into the same shape as multi-ticker
+            ticker_dfs: dict[str, pd.DataFrame] = {yf_tickers[0]: raw}
+        else:
+            raw = yf.download(
+                yf_tickers,
+                start=start,
+                end=end,
+                auto_adjust=True,
+                group_by="ticker",
+                progress=False,
+                threads=True,
+            )
+            if raw.empty:
+                return {}
+            ticker_dfs = {}
+            # raw.columns is a MultiIndex (ticker, field)
+            top_level = raw.columns.get_level_values(0).unique().tolist()
+            for t in top_level:
+                ticker_dfs[t] = raw[t]
     except Exception as exc:
-        logger.debug(f"TWSE {date_str}: {exc}")
+        logger.warning(f"yfinance batch error ({suffix}): {exc}")
         return {}
 
-    if body.get("stat") != "OK":
-        return {}
-
-    result: dict[str, dict] = {}
-    for row in body.get("data9", []):
-        if len(row) < 9:
+    result: dict[str, list[dict]] = {}
+    for yf_ticker, df in ticker_dfs.items():
+        sid = yf_ticker[: -len(suffix)]   # strip suffix to get clean stock_id
+        if df is None or df.empty:
             continue
-        sid = str(row[0]).strip()
-        o = _parse_price(row[5])
-        h = _parse_price(row[6])
-        lv = _parse_price(row[7])
-        c = _parse_price(row[8])
-        if None in (o, h, lv, c):
+        df = df.dropna(subset=["Close"])
+        if df.empty:
             continue
-        try:
-            vol = int(str(row[2]).replace(",", ""))
-        except ValueError:
-            vol = 0
-        result[sid] = {"time": date_str, "open": o, "high": h, "low": lv, "close": c, "volume": vol}
+        bars: list[dict] = []
+        for dt_idx, row in df.iterrows():
+            dt_str = dt_idx.strftime("%Y-%m-%d") if hasattr(dt_idx, "strftime") else str(dt_idx)[:10]
+            try:
+                bars.append({
+                    "time":   dt_str,
+                    "open":   round(float(row["Open"]),  2),
+                    "high":   round(float(row["High"]),  2),
+                    "low":    round(float(row["Low"]),   2),
+                    "close":  round(float(row["Close"]), 2),
+                    "volume": int(row["Volume"]) if not pd.isna(row["Volume"]) else 0,
+                })
+            except Exception:
+                continue
+        if bars:
+            result[sid] = bars
 
     return result
 
 
-# ── Step 4: Fetch one trading day from TPEX (OTC stocks) ─────────────────────
-def fetch_tpex_day(date_str: str, session: requests.Session) -> dict[str, dict]:
-    """Return {stock_id: bar_dict} for all TPEX OTC stocks on date_str."""
-    y, m, d = date_str.split("-")
-    roc_date = f"{int(y) - 1911}/{m}/{d}"
-    try:
-        resp = session.get(
-            TPEX_OTC_URL,
-            params={"l": "zh-tw", "d": roc_date, "se": "EW", "o": "json"},
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=30,
+def fetch_all_klines_yfinance(
+    stock_ids: list[str],
+    start: str,
+    end: str,
+) -> dict[str, list[dict]]:
+    """
+    Download K-line data for Taiwan stocks via yfinance.
+    Phase 1: try {sid}.TW  (TWSE-listed stocks)
+    Phase 2: try {sid}.TWO (TPEX OTC) for any stocks not found in phase 1
+    Returns {stock_id: [bar_dict, ...]}
+    """
+    result: dict[str, list[dict]] = {}
+
+    # ── Phase 1: .TW (TWSE main board) ───────────────────────────────────────
+    tw_misses: list[str] = []
+    batches = [stock_ids[i:i + BATCH_SIZE] for i in range(0, len(stock_ids), BATCH_SIZE)]
+    logger.info(
+        f"Phase 1 (.TW): {len(stock_ids)} stocks in {len(batches)} batches "
+        f"[{start} → {end}]"
+    )
+    for bi, chunk in enumerate(batches, 1):
+        found = _download_batch(chunk, ".TW", start, end)
+        result.update(found)
+        miss = [sid for sid in chunk if sid not in found]
+        tw_misses.extend(miss)
+        logger.info(
+            f"  .TW batch {bi}/{len(batches)}: {len(found)}/{len(chunk)} found "
+            f"({len(miss)} misses)"
         )
-        resp.raise_for_status()
-        body = resp.json()
-    except Exception as exc:
-        logger.debug(f"TPEX {date_str}: {exc}")
-        return {}
+        if bi < len(batches):
+            time.sleep(1)   # brief pause between batches to avoid rate-limiting
 
-    result: dict[str, dict] = {}
-    for row in body.get("aaData", []):
-        if len(row) < 8:
-            continue
-        sid = str(row[0]).strip()
-        o = _parse_price(row[4])
-        h = _parse_price(row[5])
-        lv = _parse_price(row[6])
-        c = _parse_price(row[7])
-        if None in (o, h, lv, c):
-            continue
-        try:
-            vol = int(str(row[2]).replace(",", ""))
-        except ValueError:
-            vol = 0
-        result[sid] = {"time": date_str, "open": o, "high": h, "low": lv, "close": c, "volume": vol}
+    # ── Phase 2: .TWO (TPEX OTC) for misses ──────────────────────────────────
+    if tw_misses:
+        two_batches = [tw_misses[i:i + BATCH_SIZE] for i in range(0, len(tw_misses), BATCH_SIZE)]
+        logger.info(
+            f"Phase 2 (.TWO): {len(tw_misses)} missed stocks in {len(two_batches)} batches"
+        )
+        for bi, chunk in enumerate(two_batches, 1):
+            found = _download_batch(chunk, ".TWO", start, end)
+            result.update(found)
+            still_miss = len(chunk) - len(found)
+            logger.info(
+                f"  .TWO batch {bi}/{len(two_batches)}: {len(found)}/{len(chunk)} found "
+                f"({still_miss} not found anywhere)"
+            )
+            if bi < len(two_batches):
+                time.sleep(1)
 
+    logger.info(
+        f"yfinance fetch complete: {len(result)}/{len(stock_ids)} stocks returned data"
+    )
     return result
 
 
@@ -433,10 +442,10 @@ def sync_to_notion(kline_map: dict[str, list], token: str, db_id: str) -> None:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main() -> None:
-    logger.info("=== K-line incremental fetch (TWSE + TPEX) ===")
+    logger.info("=== K-line incremental fetch (yfinance) ===")
 
     # ── 1. Collect stock IDs from last 30 days of scan CSVs ──────────────────
-    stock_ids = set(get_stock_ids_last_30_days())
+    stock_ids = get_stock_ids_last_30_days()
     if not stock_ids:
         logger.warning("No stocks found in last 30 days of scans — exiting")
         sys.exit(0)
@@ -451,71 +460,67 @@ def main() -> None:
         except Exception as exc:
             logger.warning(f"Failed to load cache ({exc}) — starting fresh")
 
-    # ── 3. Determine which dates to fetch ────────────────────────────────────
-    dates_to_fetch = get_dates_to_fetch(existing_cache, LOOKBACK_DAYS)
-    if not dates_to_fetch:
-        logger.info("Cache is already up-to-date — skipping API calls")
+    # ── 3. Determine incremental fetch window ─────────────────────────────────
+    # Find the latest bar date across all cached stocks
+    latest_cached = max(
+        (bars[-1]["time"] for bars in existing_cache.values() if bars),
+        default="",
+    )
+    if latest_cached:
+        # Fetch from the day after the latest cached bar
+        start_date = (
+            date.fromisoformat(latest_cached) + timedelta(days=1)
+        ).isoformat()
+        logger.info(f"Incremental mode: cache up to {latest_cached}, fetching from {start_date}")
     else:
-        logger.info(f"Fetching {len(dates_to_fetch)} trading days "
-                    f"({dates_to_fetch[0]} ~ {dates_to_fetch[-1]})")
+        start_date = days_ago_iso(LOOKBACK_DAYS)
+        logger.info(f"Full fetch mode: no prior cache, fetching {LOOKBACK_DAYS} days from {start_date}")
 
-    # ── 4. Batch-by-day fetch from TWSE + TPEX ───────────────────────────────
+    end_date = tomorrow_iso()   # exclusive — includes today's data
+
+    if start_date >= end_date:
+        logger.info("Cache is already up-to-date — skipping API calls")
+        new_data: dict[str, list[dict]] = {}
+    else:
+        # ── 4. Fetch via yfinance ─────────────────────────────────────────────
+        new_data = fetch_all_klines_yfinance(stock_ids, start_date, end_date)
+
+    # ── 5. Merge new bars into kline_map ──────────────────────────────────────
+    # Start from the full existing cache (preserves all older bars)
     kline_map: dict[str, list] = {sid: list(bars) for sid, bars in existing_cache.items()}
-    twse_hits = tpex_hits = empty_days = 0
 
-    with requests.Session() as session:
-        for i, date_str in enumerate(dates_to_fetch):
-            twse = fetch_twse_day(date_str, session)
-            time.sleep(0.4)
-            tpex = fetch_tpex_day(date_str, session)
-            time.sleep(0.4)
+    newly_added = 0
+    for sid, new_bars in new_data.items():
+        existing_times = {b["time"] for b in kline_map.get(sid, [])}
+        to_add = [b for b in new_bars if b["time"] not in existing_times]
+        if to_add:
+            kline_map.setdefault(sid, []).extend(to_add)
+            newly_added += len(to_add)
 
-            day_data = {**twse, **tpex}
-
-            if not day_data:
-                empty_days += 1
-                continue   # holiday or weekend — no market data
-
-            for sid in stock_ids:
-                if sid in day_data:
-                    kline_map.setdefault(sid, []).append(day_data[sid])
-
-            day_twse = sum(1 for s in stock_ids if s in twse)
-            day_tpex = sum(1 for s in stock_ids if s in tpex)
-            twse_hits += day_twse
-            tpex_hits += day_tpex
-
-            if (i + 1) % 10 == 0 or (i + 1) == len(dates_to_fetch):
-                logger.info(
-                    f"  [{i+1}/{len(dates_to_fetch)}] {date_str}  "
-                    f"TWSE:{len(twse)} OTC:{len(tpex)}  "
-                    f"scanned hits: {day_twse}T+{day_tpex}O"
-                )
-
-    if dates_to_fetch:
-        covered = sum(1 for bars in kline_map.values() if bars)
-        logger.info(
-            f"Fetch complete: {covered}/{len(stock_ids)} scanned stocks have K-line data  "
-            f"(TWSE bars: {twse_hits}, OTC bars: {tpex_hits}, "
-            f"empty days skipped: {empty_days})"
-        )
-
-    # Sort bars by date within each stock (ensure chronological order)
+    # Sort bars chronologically within each stock
     for sid in kline_map:
         kline_map[sid].sort(key=lambda b: b.get("time", ""))
 
-    # ── 5. Save updated cache ─────────────────────────────────────────────────
+    if new_data:
+        covered = sum(1 for sid in stock_ids if sid in kline_map and kline_map[sid])
+        logger.info(
+            f"Merge complete: {len(new_data)} stocks returned new data, "
+            f"+{newly_added} bars added, "
+            f"{covered}/{len(stock_ids)} scanned stocks covered in cache"
+        )
+
+    # ── 6. Save updated cache ─────────────────────────────────────────────────
     CACHE_FILE.write_text(json.dumps(kline_map, ensure_ascii=False), "utf-8")
     logger.info(f"Cache saved: {CACHE_FILE.name} ({len(kline_map)} stocks)")
 
-    # ── 6. Excel export ───────────────────────────────────────────────────────
+    # ── 7. Excel export ───────────────────────────────────────────────────────
     logger.info("=== Excel export ===")
     try:
         export_excel(kline_map, EXCEL_FILE)
     except Exception as exc:
         logger.error(f"Excel export failed: {exc}")
 
-    # ── 7. Notion sync ────────────────────────────────────────────────────────
+    # ── 8. Notion sync ────────────────────────────────────────────────────────
     logger.info("=== Notion sync ===")
     notion_token = os.environ.get("NOTION_TOKEN",       "").strip()
     notion_db_id = os.environ.get("NOTION_DATABASE_ID", "").strip()
