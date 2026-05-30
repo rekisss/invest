@@ -1,5 +1,3 @@
-import { useState, useEffect } from 'react'
-
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
 const pct = (v) => (v == null || isNaN(v) ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
 const colorNum = (v, pos = '#ef4444', neg = '#4ade80') => {
@@ -15,23 +13,6 @@ function isOTC(stockId) {
   const n = parseInt(String(stockId), 10)
   return (n >= 4200 && n <= 4999) || (n >= 5000 && n <= 5999) ||
          (n >= 6000 && n <= 6999) || (n >= 8000 && n <= 8999) || (n >= 9200 && n <= 9999)
-}
-
-async function fetchYahooHistory(stockId) {
-  const suffix = isOTC(stockId) ? '.TWO' : '.TW'
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${stockId}${suffix}?interval=1d&range=3mo`
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const json = await res.json()
-  const result = json?.chart?.result?.[0]
-  if (!result) throw new Error('no result')
-  const ts = result.timestamp || []
-  const q = result.indicators?.quote?.[0] || {}
-  return ts.map((t, i) => ({
-    time: new Date(t * 1000).toISOString().slice(0, 10),
-    open: q.open?.[i], high: q.high?.[i], low: q.low?.[i],
-    close: q.close?.[i], volume: q.volume?.[i] || 0,
-  })).filter(d => d.open != null && d.close != null && d.high != null && d.low != null)
 }
 
 function CandleSVG({ data }) {
@@ -93,43 +74,16 @@ function CandleSVG({ data }) {
 }
 
 function KLineChart({ stockId, priceHistory }) {
-  const [data, setData] = useState(null)   // null=loading
-  const [source, setSource] = useState('')
-
-  useEffect(() => {
-    let alive = true
-    setData(null)
-    setSource('')
-    fetchYahooHistory(stockId)
-      .then(rows => {
-        if (!alive) return
-        setData(rows)
-        setSource(`Yahoo Finance · ${rows.length} 天`)
-      })
-      .catch(() => {
-        if (!alive) return
-        const fallback = Array.isArray(priceHistory) ? priceHistory : []
-        setData(fallback)
-        setSource(fallback.length >= 2 ? `掃描資料 · ${fallback.length} 天` : '')
-      })
-    return () => { alive = false }
-  }, [stockId])
-
-  const tvSym = `${isOTC(stockId) ? 'TPEX' : 'TWSE'}:${stockId}`
-  const tvUrl = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSym)}`
-  const yahooUrl = `https://finance.yahoo.com/quote/${stockId}${isOTC(stockId) ? '.TWO' : '.TW'}/chart/`
+  const isOtc = isOTC(stockId)
+  const tvUrl = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(`${isOtc ? 'TPEX' : 'TWSE'}:${stockId}`)}`
+  const yahooUrl = `https://finance.yahoo.com/quote/${stockId}${isOtc ? '.TWO' : '.TW'}/chart/`
+  const data = Array.isArray(priceHistory) ? priceHistory : []
 
   return (
     <div>
-      {data === null ? (
-        <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 12, background: '#0f172a', borderRadius: 8 }}>
-          載入中…
-        </div>
-      ) : (
-        <CandleSVG data={data} />
-      )}
+      <CandleSVG data={data} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 6 }}>
-        {source && <span style={{ fontSize: 10, color: '#475569' }}>{source}</span>}
+        {data.length >= 2 && <span style={{ fontSize: 10, color: '#475569' }}>近 {data.length} 個交易日</span>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <a href={tvUrl} target="_blank" rel="noopener noreferrer"
             style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
