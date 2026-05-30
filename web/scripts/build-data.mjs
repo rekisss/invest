@@ -494,7 +494,8 @@ async function fetchFinMindQuota() {
     { key: process.env.FINMIND_TOKEN_6, label: '帳號6（300）' },
     { key: process.env.FINMIND_TOKEN_7, label: '帳號7（300）' },
     { key: process.env.FINMIND_TOKEN_8, label: '帳號8（300）' },
-    { key: process.env.FINMIND_TOKEN_9, label: '帳號9（300）' },
+    { key: process.env.FINMIND_TOKEN_9,  label: '帳號9（300）' },
+    { key: process.env.FINMIND_TOKEN_10, label: '帳號10（K線）' },
   ].filter(t => t.key?.trim())
 
   console.log(`  FinMind quota: checking ${tokens.length} token(s)`)
