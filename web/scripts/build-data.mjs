@@ -444,8 +444,9 @@ async function fetchNotionStocks() {
 
 // ── FinMind quota ────────────────────────────────────────────────────────────
 async function fetchOneQuota(token, label) {
-  // GET with query param — matches FinMind Python SDK DataLoader.get_user_info()
-  const url = `https://api.finmindtrade.com/api/v4/user_info?token=${encodeURIComponent(token)}`
+  // FinMind docs: https://finmind.github.io/api_usage_count/
+  // Endpoint: GET /api/v4/api_usage_count?token=...
+  const url = `https://api.finmindtrade.com/api/v4/api_usage_count?token=${encodeURIComponent(token)}`
   let rawBody = ''
   try {
     rawBody = await fetchUrl(url, 10000)
@@ -453,8 +454,7 @@ async function fetchOneQuota(token, label) {
     throw new Error(`network error: ${e.message}`)
   }
 
-  // Log raw body to help diagnose field-name / structure issues
-  console.log(`  FinMind [${label}] raw (300): ${rawBody.slice(0, 300)}`)
+  console.log(`  FinMind [${label}] raw: ${rawBody.slice(0, 300)}`)
 
   let json
   try {
@@ -466,7 +466,6 @@ async function fetchOneQuota(token, label) {
   if (json.status === 200 && json.data) {
     const d = json.data
     console.log(`  FinMind [${label}] data keys: ${JSON.stringify(Object.keys(d))}`)
-    // Support various field naming conventions
     const used  = d.api_request_count ?? d.request_count ?? d.user_count ?? d.count ?? 0
     const limit = d.api_request_limit ?? d.request_limit ?? d.user_count_limit ?? d.limit ?? 0
     return { label, limit: Number(limit), used: Number(used) }
