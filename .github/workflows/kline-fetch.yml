@@ -43,7 +43,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          cp output/kline_cache.json /tmp/kline_cache.json
+          cp output/kline_export.xlsx /tmp/kline_export.xlsx
           git pull --rebase origin main
+          cp /tmp/kline_cache.json output/kline_cache.json
+          cp /tmp/kline_export.xlsx output/kline_export.xlsx
           git add output/kline_cache.json output/kline_export.xlsx
           git diff --staged --quiet && echo "No changes to commit" || \
             git commit -m "chore: update kline_cache + kline_export.xlsx [skip ci]"
