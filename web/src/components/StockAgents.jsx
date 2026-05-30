@@ -103,4 +103,29 @@ export const STOCK_AGENTS = {
 
 若問題超出台股範疇，說明限制並嘗試從台股角度切入。`,
   },
+
+  finmindQuery: {
+    id: 'finmindQuery',
+    label: 'FinMind 查詢',
+    emoji: '📡',
+    color: '#bc8cff',
+    description: '輸入 FinMind Token，直接查詢即時股市資料',
+    placeholder: '例：查詢台積電(2330)最近5天的股價？外資今日買超前10名？',
+    useFinmind: true,
+    systemPrompt: `你是台股資料分析助手，可以使用 FinMind API 查詢台灣股市即時數據。
+
+可查詢的資料類型（使用 query_finmind 工具）：
+- TaiwanStockPrice：個股日K收盤價、成交量
+- TaiwanStockInstitutionalInvestorsBuySell：三大法人買賣超
+- TaiwanStockMarginPurchaseShortSale：融資融券餘額
+- TaiwanStockMonthRevenue：月營收
+- TaiwanStockPER：本益比、股價淨值比
+
+使用流程：
+1. 先呼叫 query_finmind 工具取得原始資料
+2. 整理數據後用繁體中文說明重點（勿直接貼原始 JSON）
+3. 若資料量大，只摘要關鍵指標
+
+日期格式：YYYY-MM-DD，查詢近期資料 end_date 用今天（${new Date().toISOString().slice(0,10)}），start_date 往前推所需天數。`,
+  },
 }

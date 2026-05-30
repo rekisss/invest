@@ -1,4 +1,15 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+
+const CUSTOM_RULES_KEY = 'news_custom_rules'
+const CUSTOM_COLORS = ['#58a6ff', '#3fb950', '#ffa657', '#f85149', '#bc8cff', '#f9c74f', '#79c0ff', '#56d364']
+const CUSTOM_ICONS = ['📌', '⭐', '🏭', '💡', '🔥', '🏗️', '💰', '🎯', '🔋', '🚀', '🌐', '🏆']
+
+function loadCustomRules() {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_RULES_KEY) || '[]') } catch { return [] }
+}
+function saveCustomRules(rules) {
+  localStorage.setItem(CUSTOM_RULES_KEY, JSON.stringify(rules))
+}
 
 const KEYWORD_RULES = [
   { patterns: ['台積電', 'TSMC', '2330'], tag: '台積電', color: 'var(--accent)', icon: '🏭' },
@@ -69,10 +80,10 @@ async function fetchRSS(rssUrl) {
   return []
 }
 
-function detectTags(title, summary = '') {
+function detectTags(title, summary = '', customRules = []) {
   const text = title + ' ' + summary
   const matched = []
-  for (const rule of KEYWORD_RULES) {
+  for (const rule of [...KEYWORD_RULES, ...customRules]) {
     if (rule.patterns.some(p => text.includes(p))) {
       matched.push(rule.tag)
     }
@@ -197,7 +208,8 @@ function TrendingBar({ news, onFilter }) {
   )
 }
 
-function buildDynamicTabs(news) {
+function buildDynamicTabs(news, customRules = []) {
+  const allRules = [...KEYWORD_RULES, ...customRules]
   const freq = {}
   for (const item of news) {
     for (const tag of (item.tags || [])) {
@@ -209,7 +221,7 @@ function buildDynamicTabs(news) {
     .slice(0, 7)
     .map(([tag]) => tag)
   return [{ key: 'all', label: '全部', icon: '📋' }, ...topTags.map(tag => {
-    const rule = KEYWORD_RULES.find(r => r.tag === tag)
+    const rule = allRules.find(r => r.tag === tag)
     return { key: tag, label: tag, icon: rule?.icon || '📌', color: rule?.color }
   })]
 }
@@ -226,8 +238,9 @@ function timeAgo(dateStr) {
   } catch { return '' }
 }
 
-function TagChip({ tag }) {
-  const rule = KEYWORD_RULES.find(r => r.tag === tag)
+function TagChip({ tag, customRules = [] }) {
+  const allRules = [...KEYWORD_RULES, ...customRules]
+  const rule = allRules.find(r => r.tag === tag)
   const color = rule?.color || 'var(--muted)'
   return (
     <span style={{
@@ -250,9 +263,125 @@ function StockChip({ code }) {
   )
 }
 
-function NewsItem({ item, isOpen, onToggle }) {
+function CustomRulePanel({ customRules, onRulesChange, onClose }) {
+  const [keyword, setKeyword] = useState('')
+  const [tagName, setTagName] = useState('')
+  const [icon, setIcon] = useState('📌')
+  const [color, setColor] = useState('#58a6ff')
+
+  function addRule() {
+    const kw = keyword.trim()
+    if (!kw) return
+    const tag = tagName.trim() || kw
+    const patterns = kw.split(/[,，\s]+/).filter(Boolean)
+    const newRule = { patterns, tag, color, icon, custom: true }
+    const updated = [...customRules, newRule]
+    saveCustomRules(updated)
+    onRulesChange(updated)
+    setKeyword('')
+    setTagName('')
+  }
+
+  function deleteRule(idx) {
+    const updated = customRules.filter((_, i) => i !== idx)
+    saveCustomRules(updated)
+    onRulesChange(updated)
+  }
+
+  return (
+    <div style={{
+      background: 'var(--surface)', borderBottom: '1px solid var(--border)',
+      padding: '12px 14px',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>⚙️ 自訂分類關鍵字</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 14 }}>✕</button>
+      </div>
+
+      {customRules.length > 0 && (
+        <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {customRules.map((rule, idx) => (
+            <div key={idx} style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px',
+              background: 'var(--bg)', borderRadius: 5, border: '1px solid var(--border)',
+            }}>
+              <span style={{ color: rule.color, fontSize: 12 }}>{rule.icon}</span>
+              <span style={{ flex: 1, fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>{rule.tag}</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'monospace' }}>
+                {rule.patterns.join('、')}
+              </span>
+              <button onClick={() => deleteRule(idx)} style={{
+                background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: 12, padding: '0 2px',
+              }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ fontSize: 11, color: 'var(--muted)' }}>新增分類（多個關鍵字用逗號分隔）</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <input
+            value={keyword}
+            onChange={e => setKeyword(e.target.value)}
+            placeholder="關鍵字，如：鴻海,2317,FOXCONN"
+            onKeyDown={e => e.key === 'Enter' && addRule()}
+            style={{
+              flex: '2 1 140px', padding: '5px 9px', fontSize: 12, borderRadius: 5,
+              background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none',
+            }}
+          />
+          <input
+            value={tagName}
+            onChange={e => setTagName(e.target.value)}
+            placeholder="標籤名（可選）"
+            onKeyDown={e => e.key === 'Enter' && addRule()}
+            style={{
+              flex: '1 1 80px', padding: '5px 9px', fontSize: 12, borderRadius: 5,
+              background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>圖示：</span>
+          {CUSTOM_ICONS.map(ic => (
+            <button key={ic} onClick={() => setIcon(ic)} style={{
+              background: icon === ic ? 'var(--accent)33' : 'none',
+              border: icon === ic ? '1px solid var(--accent)' : '1px solid transparent',
+              borderRadius: 4, cursor: 'pointer', fontSize: 14, padding: '1px 3px',
+            }}>{ic}</button>
+          ))}
+          <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>顏色：</span>
+          {CUSTOM_COLORS.map(c => (
+            <button key={c} onClick={() => setColor(c)} style={{
+              width: 18, height: 18, borderRadius: '50%', background: c,
+              border: color === c ? '2px solid var(--text)' : '2px solid transparent',
+              cursor: 'pointer', padding: 0,
+            }} />
+          ))}
+          <button
+            onClick={addRule}
+            disabled={!keyword.trim()}
+            style={{
+              marginLeft: 'auto', padding: '5px 14px', fontSize: 12, fontWeight: 700,
+              background: keyword.trim() ? 'var(--accent)' : 'var(--surface2)',
+              color: keyword.trim() ? '#fff' : 'var(--muted)',
+              border: 'none', borderRadius: 5, cursor: keyword.trim() ? 'pointer' : 'default',
+            }}
+          >+ 新增</button>
+        </div>
+      </div>
+      <div style={{ marginTop: 8, fontSize: 10, color: 'var(--muted)', lineHeight: 1.6 }}>
+        新分類會自動出現在 Tab 和熱門趨勢中（若有相符新聞）。儲存於本機，重整後保留。
+      </div>
+    </div>
+  )
+}
+
+function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
+  const allRules = [...KEYWORD_RULES, ...customRules]
   const mainTag = item.tags?.[0]
-  const rule = mainTag ? KEYWORD_RULES.find(r => r.tag === mainTag) : null
+  const rule = mainTag ? allRules.find(r => r.tag === mainTag) : null
   const hint = isOpen ? generateHint(item.title, item.tags || []) : null
   const stockCodes = isOpen ? [...new Set([...item.title.matchAll(STOCK_CODE_RE)].map(m => m[1]))] : []
 
@@ -270,7 +399,7 @@ function NewsItem({ item, isOpen, onToggle }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.5, color: 'var(--text)' }}>{item.title}</div>
           <div style={{ display: 'flex', gap: 6, marginTop: 5, alignItems: 'center', flexWrap: 'wrap' }}>
-            {(item.tags || []).slice(0, 3).map(tag => <TagChip key={tag} tag={tag} />)}
+            {(item.tags || []).slice(0, 3).map(tag => <TagChip key={tag} tag={tag} customRules={customRules} />)}
             {item.source && <span style={{ fontSize: 10, color: 'var(--muted)' }}>{item.source}</span>}
             <span style={{ fontSize: 10, color: 'var(--muted)' }}>{timeAgo(item.published)}</span>
           </div>
@@ -287,7 +416,7 @@ function NewsItem({ item, isOpen, onToggle }) {
           )}
           {(item.tags?.length > 0 || stockCodes.length > 0) && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: hint ? 8 : 0 }}>
-              {item.tags.map(tag => <TagChip key={tag} tag={tag} />)}
+              {item.tags.map(tag => <TagChip key={tag} tag={tag} customRules={customRules} />)}
               {stockCodes.map(c => <StockChip key={c} code={c} />)}
             </div>
           )}
@@ -308,12 +437,14 @@ function NewsItem({ item, isOpen, onToggle }) {
 }
 
 export default function NewsFeed({ staticNews }) {
-  const [news, setNews] = useState(staticNews || [])
+  const [rawNews, setRawNews] = useState(staticNews || [])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [openIdx, setOpenIdx] = useState(null)
   const [filter, setFilter] = useState('all')
+  const [customRules, setCustomRules] = useState(loadCustomRules)
+  const [showCustomPanel, setShowCustomPanel] = useState(false)
 
   const doFetch = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -321,7 +452,7 @@ export default function NewsFeed({ staticNews }) {
     try {
       const items = await loadLiveNews()
       if (items.length > 0) {
-        setNews(items)
+        setRawNews(items)
         setLastUpdated(new Date())
       }
     } catch (e) {
@@ -338,7 +469,13 @@ export default function NewsFeed({ staticNews }) {
     return () => clearInterval(timer)
   }, [doFetch])
 
-  const tabs = buildDynamicTabs(news)
+  // Re-tag news whenever customRules changes
+  const news = useMemo(() =>
+    rawNews.map(item => ({ ...item, tags: detectTags(item.title, item.summary, customRules) })),
+    [rawNews, customRules]
+  )
+
+  const tabs = buildDynamicTabs(news, customRules)
   const filtered = filter === 'all' ? news : news.filter(n => (n.tags || []).includes(filter))
 
   if (loading && news.length === 0) {
@@ -388,20 +525,41 @@ export default function NewsFeed({ staticNews }) {
               : '即時新聞'}
             {refreshing && <span style={{ marginLeft: 6 }}>· 更新中…</span>}
           </div>
-          <button
-            onClick={() => doFetch(true)}
-            disabled={refreshing}
-            style={{
-              fontSize: 11, padding: '3px 10px', background: 'var(--surface2)',
-              border: '1px solid var(--border)', borderRadius: 4,
-              color: refreshing ? 'var(--muted)' : 'var(--text)',
-              cursor: refreshing ? 'default' : 'pointer',
-            }}
-          >
-            {refreshing ? '更新中…' : '↻ 重新整理'}
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => setShowCustomPanel(p => !p)}
+              style={{
+                fontSize: 11, padding: '3px 10px', background: showCustomPanel ? 'var(--accent)22' : 'var(--surface2)',
+                border: `1px solid ${showCustomPanel ? 'var(--accent)' : 'var(--border)'}`,
+                borderRadius: 4, color: showCustomPanel ? 'var(--accent)' : 'var(--muted)', cursor: 'pointer',
+              }}
+            >
+              ⚙️ 自訂分類{customRules.length > 0 ? ` (${customRules.length})` : ''}
+            </button>
+            <button
+              onClick={() => doFetch(true)}
+              disabled={refreshing}
+              style={{
+                fontSize: 11, padding: '3px 10px', background: 'var(--surface2)',
+                border: '1px solid var(--border)', borderRadius: 4,
+                color: refreshing ? 'var(--muted)' : 'var(--text)',
+                cursor: refreshing ? 'default' : 'pointer',
+              }}
+            >
+              {refreshing ? '更新中…' : '↻ 重新整理'}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Custom category panel */}
+      {showCustomPanel && (
+        <CustomRulePanel
+          customRules={customRules}
+          onRulesChange={rules => { setCustomRules(rules); setOpenIdx(null) }}
+          onClose={() => setShowCustomPanel(false)}
+        />
+      )}
 
       {/* News list */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -420,6 +578,7 @@ export default function NewsFeed({ staticNews }) {
             item={item}
             isOpen={openIdx === i}
             onToggle={() => setOpenIdx(openIdx === i ? null : i)}
+            customRules={customRules}
           />
         ))}
         <div style={{ height: 32 }} />

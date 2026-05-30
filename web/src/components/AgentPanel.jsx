@@ -289,12 +289,41 @@ function ThinkingIndicator({ color }) {
   )
 }
 
+const FINMIND_TOOLS = [{
+  name: 'query_finmind',
+  description: '查詢 FinMind 台灣股市數據庫。可查詢個股股價、三大法人買賣超、融資融券、月營收等資料。',
+  input_schema: {
+    type: 'object',
+    properties: {
+      dataset: { type: 'string', description: '資料集名稱，例如 TaiwanStockPrice, TaiwanStockInstitutionalInvestorsBuySell, TaiwanStockMarginPurchaseShortSale, TaiwanStockMonthRevenue' },
+      stock_id: { type: 'string', description: '股票代號，例如 2330。不填則查全市場（視資料集而定）' },
+      start_date: { type: 'string', description: '開始日期，格式 YYYY-MM-DD' },
+      end_date: { type: 'string', description: '結束日期，格式 YYYY-MM-DD' },
+    },
+    required: ['dataset'],
+  },
+}]
+
+async function callFinMindAPI(input, token) {
+  const params = new URLSearchParams({ dataset: input.dataset, token })
+  if (input.stock_id) params.append('stock_id', input.stock_id)
+  if (input.start_date) params.append('start_date', input.start_date)
+  if (input.end_date) params.append('end_date', input.end_date)
+  const r = await fetch(`https://api.finmindtrade.com/api/v4/data?${params}`)
+  const j = await r.json()
+  if (j.status !== 200) throw new Error(j.msg || 'FinMind 查詢失敗')
+  const data = j.data || []
+  return { total: data.length, data: data.slice(-30) }
+}
+
 export default function AgentPanel({ apiKey, onClearKey }) {
   const [agentId, setAgentId] = useState('premarket')
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [totalCost, setTotalCost] = useState(0)
+  const [finmindToken, setFinmindToken] = useState(() => sessionStorage.getItem('fm_agent_token') || '')
+  const [showFmInput, setShowFmInput] = useState(false)
   const messagesEndRef = useRef(null)
   const textareaRef = useRef(null)
 
@@ -310,11 +339,68 @@ export default function AgentPanel({ apiKey, onClearKey }) {
     setAgentId(id)
     setMessages([])
     setInput('')
+    setShowFmInput(STOCK_AGENTS[id]?.useFinmind && !sessionStorage.getItem('fm_agent_token'))
   }
 
   function autoResize(el) {
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 140) + 'px'
+  }
+
+  async function sendFinmindMessage(history) {
+    const token = finmindToken.trim()
+    if (!token) throw new Error('請先輸入 FinMind Token')
+
+    let currentHistory = [...history]
+    let finalText = ''
+    let totalInput = 0, totalOutput = 0
+
+    for (let round = 0; round < 5; round++) {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 800,
+          system: agent.systemPrompt,
+          messages: currentHistory,
+          tools: FINMIND_TOOLS,
+        }),
+      })
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}))
+        throw new Error(err?.error?.message || `HTTP ${resp.status}`)
+      }
+      const data = await resp.json()
+      totalInput += data.usage?.input_tokens || 0
+      totalOutput += data.usage?.output_tokens || 0
+
+      const textBlocks = (data.content || []).filter(c => c.type === 'text')
+      const toolUseBlocks = (data.content || []).filter(c => c.type === 'tool_use')
+      if (textBlocks.length) finalText += textBlocks.map(b => b.text).join('')
+
+      if (data.stop_reason === 'tool_use' && toolUseBlocks.length > 0) {
+        currentHistory.push({ role: 'assistant', content: data.content })
+        const toolResults = []
+        for (const tu of toolUseBlocks) {
+          try {
+            const result = await callFinMindAPI(tu.input, token)
+            toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(result).slice(0, 4000) })
+          } catch (e) {
+            toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: `查詢失敗：${e.message}`, is_error: true })
+          }
+        }
+        currentHistory.push({ role: 'user', content: toolResults })
+      } else {
+        break
+      }
+    }
+    return { text: finalText, inputTokens: totalInput, outputTokens: totalOutput }
   }
 
   const sendMessage = useCallback(async () => {
@@ -329,87 +415,77 @@ export default function AgentPanel({ apiKey, onClearKey }) {
     setLoading(true)
 
     const assistantMsgId = Date.now()
-    setMessages(prev => [...prev, {
-      role: 'assistant',
-      content: '',
-      id: assistantMsgId,
-      streaming: true,
-    }])
+    setMessages(prev => [...prev, { role: 'assistant', content: '', id: assistantMsgId, streaming: true }])
 
     try {
       const history = newMessages.map(m => ({ role: m.role, content: m.content }))
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          max_tokens: MAX_TOKENS,
-          system: agent.systemPrompt,
-          messages: history,
-          stream: true,
-        }),
-      })
 
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}))
-        throw new Error(err?.error?.message || `HTTP ${resp.status}`)
-      }
+      if (agent.useFinmind) {
+        // Non-streaming tool_use loop for FinMind
+        const { text: result, inputTokens, outputTokens } = await sendFinmindMessage(history)
+        const cost = calcCost(inputTokens, outputTokens)
+        setTotalCost(prev => prev + cost)
+        setMessages(prev => prev.map(m =>
+          m.id === assistantMsgId ? { ...m, streaming: false, content: result || '（無回應）', inputTokens, outputTokens, cost } : m
+        ))
+      } else {
+        // Streaming for regular agents
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: JSON.stringify({ model: MODEL, max_tokens: MAX_TOKENS, system: agent.systemPrompt, messages: history, stream: true }),
+        })
 
-      const reader = resp.body.getReader()
-      const decoder = new TextDecoder()
-      let accumulated = ''
-      let inputTokens = 0
-      let outputTokens = 0
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const data = line.slice(6).trim()
-          if (data === '[DONE]') continue
-          try {
-            const ev = JSON.parse(data)
-            if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
-              accumulated += ev.delta.text
-              setMessages(prev => prev.map(m =>
-                m.id === assistantMsgId ? { ...m, content: accumulated } : m
-              ))
-            }
-            if (ev.type === 'message_delta' && ev.usage) {
-              outputTokens = ev.usage.output_tokens || 0
-            }
-            if (ev.type === 'message_start' && ev.message?.usage) {
-              inputTokens = ev.message.usage.input_tokens || 0
-            }
-          } catch {}
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}))
+          throw new Error(err?.error?.message || `HTTP ${resp.status}`)
         }
-      }
 
-      const cost = calcCost(inputTokens, outputTokens)
-      setTotalCost(prev => prev + cost)
-      setMessages(prev => prev.map(m =>
-        m.id === assistantMsgId
-          ? { ...m, streaming: false, inputTokens, outputTokens, cost }
-          : m
-      ))
+        const reader = resp.body.getReader()
+        const decoder = new TextDecoder()
+        let accumulated = ''
+        let inputTokens = 0
+        let outputTokens = 0
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const chunk = decoder.decode(value, { stream: true })
+          for (const line of chunk.split('\n')) {
+            if (!line.startsWith('data: ')) continue
+            const data = line.slice(6).trim()
+            if (data === '[DONE]') continue
+            try {
+              const ev = JSON.parse(data)
+              if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+                accumulated += ev.delta.text
+                setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: accumulated } : m))
+              }
+              if (ev.type === 'message_delta' && ev.usage) outputTokens = ev.usage.output_tokens || 0
+              if (ev.type === 'message_start' && ev.message?.usage) inputTokens = ev.message.usage.input_tokens || 0
+            } catch {}
+          }
+        }
+
+        const cost = calcCost(inputTokens, outputTokens)
+        setTotalCost(prev => prev + cost)
+        setMessages(prev => prev.map(m =>
+          m.id === assistantMsgId ? { ...m, streaming: false, inputTokens, outputTokens, cost } : m
+        ))
+      }
     } catch (err) {
       setMessages(prev => prev.map(m =>
-        m.id === assistantMsgId
-          ? { ...m, streaming: false, error: err.message }
-          : m
+        m.id === assistantMsgId ? { ...m, streaming: false, error: err.message } : m
       ))
     } finally {
       setLoading(false)
     }
-  }, [input, loading, budgetOver, messages, apiKey, agent])
+  }, [input, loading, budgetOver, messages, apiKey, agent, finmindToken])
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -435,6 +511,15 @@ export default function AgentPanel({ apiKey, onClearKey }) {
           </span>
         </div>
         <div style={s.budgetBar}>
+          {agent.useFinmind && (
+            <button
+              style={{ ...s.keyBtn, color: finmindToken ? 'var(--green)' : 'var(--yellow)', borderColor: finmindToken ? 'var(--green)33' : 'var(--yellow)33' }}
+              onClick={() => setShowFmInput(p => !p)}
+              title="設定 FinMind Token"
+            >
+              📡 {finmindToken ? 'Token ✓' : '設定 Token'}
+            </button>
+          )}
           <div style={s.budgetFill(budgetPct, budgetOver)}>
             <div style={s.budgetFillInner(budgetPct, budgetOver)} />
           </div>
@@ -446,6 +531,34 @@ export default function AgentPanel({ apiKey, onClearKey }) {
           </button>
         </div>
       </div>
+
+      {/* FinMind Token Input */}
+      {agent.useFinmind && showFmInput && (
+        <div style={{ padding: '10px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>📡 FinMind Token：</span>
+          <input
+            type="password"
+            value={finmindToken}
+            onChange={e => setFinmindToken(e.target.value)}
+            placeholder="貼上你的 FinMind API Token"
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                sessionStorage.setItem('fm_agent_token', finmindToken)
+                setShowFmInput(false)
+              }
+            }}
+            style={{
+              flex: 1, padding: '6px 10px', fontSize: 12, borderRadius: 5,
+              background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none',
+            }}
+          />
+          <button
+            onClick={() => { sessionStorage.setItem('fm_agent_token', finmindToken); setShowFmInput(false) }}
+            style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >儲存</button>
+          <button onClick={() => setShowFmInput(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 14 }}>✕</button>
+        </div>
+      )}
 
       {/* Body */}
       <div style={s.body}>
