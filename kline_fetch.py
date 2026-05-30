@@ -349,12 +349,16 @@ def _notion_headers(token: str) -> dict[str, str]:
     }
 
 
+NOTION_SYNC_TIMEOUT = 480   # seconds (8 minutes)
+
+
 def sync_to_notion(kline_map: dict[str, list], token: str, db_id: str) -> None:
     if not token or not db_id:
         logger.info("Notion: skipped (NOTION_TOKEN or NOTION_DATABASE_ID not set)")
         return
 
     cutoff_30d = days_ago_iso(30)
+    deadline = time.time() + NOTION_SYNC_TIMEOUT
 
     # Ensure K-line properties exist in the database schema
     try:
@@ -381,6 +385,12 @@ def sync_to_notion(kline_map: dict[str, list], token: str, db_id: str) -> None:
     MAX_PAGES = 300   # safety cap: stop after scanning 30,000 Notion pages
 
     while remaining:
+        if time.time() >= deadline:
+            logger.warning(
+                f"Notion: {NOTION_SYNC_TIMEOUT}s timeout reached — "
+                f"{updated} updated, {len(remaining)} skipped (will catch up next run)"
+            )
+            break
         if total // 100 >= MAX_PAGES:
             logger.warning(f"Notion: reached {MAX_PAGES}-page cap, stopping early")
             break
