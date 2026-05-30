@@ -445,14 +445,15 @@ async function fetchNotionStocks() {
 // ── FinMind quota ────────────────────────────────────────────────────────────
 async function fetchOneQuota(token, label) {
   // FinMind v2 API: GET https://api.web.finmindtrade.com/v2/user_info
-  // Authorization: Bearer <token>  (not query param)
+  // Response is flat (no nested `data`): { status, msg, user_count, api_request_limit, ... }
+  const cleanToken = token.trim()  // guard against leading/trailing whitespace in secrets
   const rawBody = await new Promise((resolve, reject) => {
     const opts = {
       hostname: 'api.web.finmindtrade.com',
       path: '/v2/user_info',
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${cleanToken}`,
         'User-Agent': 'Mozilla/5.0',
       },
     }
@@ -467,8 +468,6 @@ async function fetchOneQuota(token, label) {
     req.end()
   })
 
-  console.log(`  FinMind [${label}] raw: ${rawBody.slice(0, 300)}`)
-
   let json
   try {
     json = JSON.parse(rawBody)
@@ -476,11 +475,10 @@ async function fetchOneQuota(token, label) {
     throw new Error(`JSON parse failed: ${rawBody.slice(0, 200)}`)
   }
 
-  if (json.status === 200 && json.data) {
-    const d = json.data
-    console.log(`  FinMind [${label}] data keys: ${JSON.stringify(Object.keys(d))}`)
-    const used  = d.api_request_count ?? d.user_count ?? d.request_count ?? d.count ?? 0
-    const limit = d.api_request_limit ?? d.api_request_limit ?? d.user_count_limit ?? d.limit ?? 0
+  // v2 response is flat: { status: 200, msg: "success", user_count: N, api_request_limit: M, ... }
+  if (json.status === 200) {
+    const used  = json.user_count ?? 0
+    const limit = json.api_request_limit ?? 0
     return { label, limit: Number(limit), used: Number(used) }
   }
   throw new Error(`status=${json.status} msg="${json.msg || json.message || 'unknown'}"`)
@@ -497,7 +495,7 @@ async function fetchFinMindQuota() {
     { key: process.env.FINMIND_TOKEN_7, label: '帳號7（300）' },
     { key: process.env.FINMIND_TOKEN_8, label: '帳號8（300）' },
     { key: process.env.FINMIND_TOKEN_9, label: '帳號9（300）' },
-  ].filter(t => t.key)
+  ].filter(t => t.key?.trim())
 
   console.log(`  FinMind quota: checking ${tokens.length} token(s)`)
   if (tokens.length === 0) {
