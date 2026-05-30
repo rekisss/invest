@@ -444,42 +444,34 @@ async function fetchNotionStocks() {
 
 // ── FinMind quota ────────────────────────────────────────────────────────────
 async function fetchOneQuota(token, label) {
-  // Try POST with form-data (matches FinMind Python SDK behavior)
-  const payload = `token=${encodeURIComponent(token)}`
-  const postResult = await new Promise((resolve, reject) => {
-    const parsed = new URL('https://api.finmindtrade.com/api/v4/user_info')
-    const opts = {
-      hostname: parsed.hostname,
-      path: parsed.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Content-Length': Buffer.byteLength(payload),
-        'User-Agent': 'Mozilla/5.0',
-      },
-    }
-    const req = https.request(opts, res => {
-      const chunks = []
-      res.on('data', c => chunks.push(c))
-      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
-      res.on('error', reject)
-    })
-    req.setTimeout(8000, () => { req.destroy(); reject(new Error('timeout')) })
-    req.on('error', reject)
-    req.write(payload)
-    req.end()
-  })
+  // GET with query param — matches FinMind Python SDK DataLoader.get_user_info()
+  const url = `https://api.finmindtrade.com/api/v4/user_info?token=${encodeURIComponent(token)}`
+  let rawBody = ''
+  try {
+    rawBody = await fetchUrl(url, 10000)
+  } catch (e) {
+    throw new Error(`network error: ${e.message}`)
+  }
 
-  const json = JSON.parse(postResult)
-  console.log(`  FinMind [${label}] POST response: status=${json.status} keys=${JSON.stringify(Object.keys(json.data || {}))}`)
+  // Log raw body to help diagnose field-name / structure issues
+  console.log(`  FinMind [${label}] raw (300): ${rawBody.slice(0, 300)}`)
+
+  let json
+  try {
+    json = JSON.parse(rawBody)
+  } catch (e) {
+    throw new Error(`JSON parse failed: ${rawBody.slice(0, 200)}`)
+  }
+
   if (json.status === 200 && json.data) {
     const d = json.data
-    // Support both old and new field names
-    const used  = d.api_request_count  ?? d.user_count         ?? d.request_count  ?? 0
-    const limit = d.api_request_limit  ?? d.user_count_limit   ?? d.request_limit  ?? 0
+    console.log(`  FinMind [${label}] data keys: ${JSON.stringify(Object.keys(d))}`)
+    // Support various field naming conventions
+    const used  = d.api_request_count ?? d.request_count ?? d.user_count ?? d.count ?? 0
+    const limit = d.api_request_limit ?? d.request_limit ?? d.user_count_limit ?? d.limit ?? 0
     return { label, limit: Number(limit), used: Number(used) }
   }
-  throw new Error(`status ${json.status}: ${json.msg || 'unknown'}`)
+  throw new Error(`status=${json.status} msg="${json.msg || json.message || 'unknown'}"`)
 }
 
 async function fetchFinMindQuota() {
