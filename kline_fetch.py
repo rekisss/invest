@@ -27,7 +27,6 @@ import requests
 from loguru import logger
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 ROOT       = Path(__file__).parent
@@ -127,26 +126,45 @@ def get_stocks_needing_update(cache: dict[str, list], stock_ids: list[str]) -> l
 
 
 # ── Step 3: Fetch K-line data per stock ──────────────────────────────────────
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
-def _fetch_one_raw(sid: str, token: str, start: str, end: str) -> dict:
-    resp = requests.get(
-        FINMIND_API,
-        params=dict(token=token, dataset="TaiwanStockPrice", stock_id=sid, start_date=start, end_date=end),
-        timeout=20,
-    )
-    resp.raise_for_status()
-    return resp.json()
+PROBE_STOCK = "2330"  # 台積電 — always active; used to validate token before chunk
 
 
 def fetch_one(sid: str, token: str, start: str, end: str) -> list[dict] | None:
+    """Fetch OHLCV bars for one stock. Returns None on any failure (no retry)."""
     try:
-        data = _fetch_one_raw(sid, token, start, end)
+        resp = requests.get(
+            FINMIND_API,
+            params=dict(token=token, dataset="TaiwanStockPrice",
+                        stock_id=sid, start_date=start, end_date=end),
+            timeout=20,
+        )
+        if resp.status_code == 400:
+            # 400 is a permanent error (bad stock ID, invalid token, quota exceeded, etc.)
+            # Never retry — log the FinMind message if available
+            try:
+                body = resp.json()
+                logger.debug(
+                    f"  fetch_one({sid}): HTTP 400 "
+                    f"status={body.get('status')} msg={body.get('msg', '')}"
+                )
+            except Exception:
+                logger.debug(f"  fetch_one({sid}): HTTP 400")
+            return None
+        resp.raise_for_status()  # raise for 5xx
+        data = resp.json()
         if data.get("status") == 200 and isinstance(data.get("data"), list) and data["data"]:
             return [
                 dict(time=d["date"], open=d["open"], high=d["max"],
                      low=d["min"], close=d["close"], volume=d.get("Trading_Volume", 0))
                 for d in data["data"]
             ]
+        if data.get("status") != 200:
+            logger.debug(
+                f"  fetch_one({sid}): API status={data.get('status')} msg={data.get('msg', '')}"
+            )
+        return None
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+        logger.debug(f"  fetch_one({sid}): transient error: {exc}")
         return None
     except Exception as exc:
         logger.debug(f"  fetch_one({sid}): {exc}")
@@ -157,14 +175,20 @@ def fetch_chunk(stock_ids: list[str], token: str, label: str, start: str, end: s
     if not token or not stock_ids:
         return {}
 
-    # Probe the first stock to validate the token / plan
-    probe = fetch_one(stock_ids[0], token, start, end)
-    if probe is None:
-        logger.warning(f"[{label}] probe failed — skipping this token")
+    # Probe with 台積電 (2330) — a reliably active stock — to validate the token.
+    # Using the chunk's first stock risks probing a delisted/invalid ticker.
+    probe_bars = fetch_one(PROBE_STOCK, token, start, end)
+    if probe_bars is None:
+        logger.warning(f"[{label}] probe (2330) failed — token invalid or quota exceeded")
         return {}
 
-    result: dict[str, list] = {stock_ids[0]: probe}
-    for sid in stock_ids[1:]:
+    result: dict[str, list] = {}
+    if PROBE_STOCK in stock_ids:
+        result[PROBE_STOCK] = probe_bars   # reuse probe result if 2330 is in this chunk
+
+    for sid in stock_ids:
+        if sid == PROBE_STOCK:
+            continue   # already fetched by probe
         bars = fetch_one(sid, token, start, end)
         if bars is not None:
             result[sid] = bars
@@ -446,9 +470,9 @@ def main() -> None:
                 except Exception as exc:
                     logger.error(f"Chunk failed: {exc}")
 
-        total_fetched = sum(1 for sid in to_fetch if sid in kline_map and
-                            sid not in existing_cache or kline_map[sid] != existing_cache.get(sid))
-        logger.info(f"Fetch complete: {len(kline_map)} stocks in cache total")
+        newly_fetched = sum(1 for sid in to_fetch if sid in kline_map)
+        logger.info(f"Fetch complete: {newly_fetched}/{len(to_fetch)} stocks fetched, "
+                    f"{len(kline_map)} total in cache")
     else:
         logger.info("All stocks already up-to-date — skipping API calls")
 
