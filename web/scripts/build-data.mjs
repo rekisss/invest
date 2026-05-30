@@ -6,9 +6,10 @@ import http from 'http'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SCAN_DIR = resolve(__dirname, '../../output/full_scan')
-const PRED_FILE = resolve(__dirname, '../../output/prediction_latest.json')
-const AGG_FILE  = resolve(__dirname, '../../output/aggregate_latest.json')
-const PUBLIC_DIR = resolve(__dirname, '../public')
+const PRED_FILE   = resolve(__dirname, '../../output/prediction_latest.json')
+const AGG_FILE    = resolve(__dirname, '../../output/aggregate_latest.json')
+const KLINE_FILE  = resolve(__dirname, '../../output/kline_cache.json')
+const PUBLIC_DIR  = resolve(__dirname, '../public')
 const OUTPUT_FILE = join(PUBLIC_DIR, 'data.json')
 const TOP_N = 50
 const MAX_DATES = 30
@@ -641,34 +642,35 @@ if (aggregateLatest) {
   }
 }
 
-// Fetch K-line data — cover top stocks across the most recent 3 scan dates
-// Use FINMIND_TOKEN_10 (dedicated K-line account); fall back to FINMIND_TOKEN if unset
-console.log('Fetching K-line data...')
-const klineToken10 = (process.env.FINMIND_TOKEN_10 || '').trim()
-const klineToken1  = (process.env.FINMIND_TOKEN   || '').trim()
-const klineToken   = klineToken10 || klineToken1
-if (klineToken && dates.length > 0) {
-  // Collect unique stock_ids from the latest 3 dates (deduped)
-  const recentDates = dates.slice(0, 3)
-  const idSet = new Set()
-  for (const d of recentDates) {
-    for (const s of (scans[d]?.top_stocks || [])) idSet.add(s.stock_id)
-  }
-  const allIds = [...idSet].slice(0, 100)
-  // Pass TOKEN_10 as primary, TOKEN_1 as fallback
-  const klineMap = await fetchKLineData(allIds, klineToken10 || klineToken1, klineToken10 ? klineToken1 : null)
-  // Inject price_history into all recent dates' stocks
-  for (const d of recentDates) {
-    for (const stock of (scans[d]?.top_stocks || [])) {
-      if (klineMap[stock.stock_id]) stock.price_history = klineMap[stock.stock_id]
-    }
-  }
+// Inject K-line data — read from kline_cache.json (populated by kline-fetch.yml workflow)
+// Falls back to live fetch (with TOKEN_10 → TOKEN_1) if cache is missing
+console.log('Loading K-line data...')
+const recentDates = dates.slice(0, 3)
+let klineMap = {}
+if (existsSync(KLINE_FILE)) {
+  klineMap = JSON.parse(readFileSync(KLINE_FILE, 'utf-8'))
   const firstKey = Object.keys(klineMap)[0]
-  const sampleDays = firstKey ? klineMap[firstKey].length : 0
-  console.log(`K-line: injected into ${Object.keys(klineMap).length}/${allIds.length} stocks (~${sampleDays} days each)`)
+  const sampleDays = firstKey ? (klineMap[firstKey].length ?? 0) : 0
+  console.log(`K-line: loaded cache (${Object.keys(klineMap).length} stocks, ~${sampleDays} days each)`)
 } else {
-  console.log('K-line: no token set, skipping')
+  console.log('K-line: no cache found — falling back to live fetch')
+  const klineToken10 = (process.env.FINMIND_TOKEN_10 || '').trim()
+  const klineToken1  = (process.env.FINMIND_TOKEN   || '').trim()
+  if (klineToken10 || klineToken1) {
+    const idSet = new Set()
+    for (const d of recentDates) {
+      for (const s of (scans[d]?.top_stocks || [])) idSet.add(s.stock_id)
+    }
+    klineMap = await fetchKLineData([...idSet].slice(0, 100), klineToken10 || klineToken1, klineToken10 ? klineToken1 : null)
+  }
 }
+// Inject price_history into recent dates' stocks
+for (const d of recentDates) {
+  for (const stock of (scans[d]?.top_stocks || [])) {
+    if (klineMap[stock.stock_id]) stock.price_history = klineMap[stock.stock_id]
+  }
+}
+console.log(`K-line: injected into stocks across ${recentDates.length} dates`)
 
 const prediction = readPrediction()
 const predictionHistory = readPredictionHistory()
