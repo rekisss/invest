@@ -57,6 +57,7 @@ jobs:
           FINMIND_TOKEN_7:      ${{ secrets.FINMIND_TOKEN_7 }}
           FINMIND_TOKEN_8:      ${{ secrets.FINMIND_TOKEN_8 }}
           FINMIND_TOKEN_9:      ${{ secrets.FINMIND_TOKEN_9 }}
+          FINMIND_TOKEN_10:     ${{ secrets.FINMIND_TOKEN_10 }}
           NOTION_TOKEN:         ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID:   ${{ secrets.NOTION_DATABASE_ID }}
         run: node scripts/build-data.mjs

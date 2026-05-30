@@ -516,6 +516,33 @@ async function fetchFinMindQuota() {
   return results
 }
 
+// ── FinMind K-line pre-fetch (FINMIND_TOKEN_10) ──────────────────────────────
+async function fetchKLineData(stockIds, token) {
+  if (!token || stockIds.length === 0) return {}
+  const endDate = new Date().toISOString().slice(0, 10)
+  const startDate = new Date(Date.now() - 35 * 86400000).toISOString().slice(0, 10)
+  const klineMap = {}
+  console.log(`  K-line: fetching ${stockIds.length} stocks (${startDate} ~ ${endDate})`)
+  for (const sid of stockIds) {
+    try {
+      const url = `https://api.finmindtrade.com/api/v4/data?token=${encodeURIComponent(token)}&dataset=TaiwanStockPrice&stock_id=${sid}&start_date=${startDate}&end_date=${endDate}`
+      const body = await fetchUrl(url, 12000)
+      const json = JSON.parse(body)
+      if (json.status === 200 && Array.isArray(json.data) && json.data.length > 0) {
+        klineMap[sid] = json.data.map(d => ({
+          time: d.date, open: d.open, high: d.max, low: d.min,
+          close: d.close, volume: d.Trading_Volume || 0,
+        }))
+      }
+      await new Promise(r => setTimeout(r, 80))
+    } catch (e) {
+      console.warn(`  K-line [${sid}] failed: ${e.message}`)
+    }
+  }
+  console.log(`  K-line: ${Object.keys(klineMap).length}/${stockIds.length} fetched`)
+  return klineMap
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 const { dates, scans } = processScanData()
 console.log(`Scan data: ${dates.length} dates, latest=${dates[0]}, stocks=${scans[dates[0]]?.total_scanned ?? 0}`)
@@ -583,6 +610,21 @@ if (aggregateLatest) {
     if (!dates.includes(aggDate)) dates.unshift(aggDate)
     console.log(`  Injected aggregate date ${aggDate}: ${aggregateLatest.total_scanned} stocks, ai=${!!aggregateLatest.ai_picks_text}`)
   }
+}
+
+// Fetch K-line data for top 50 stocks using dedicated account 10
+console.log('Fetching K-line data...')
+const klineToken = (process.env.FINMIND_TOKEN_10 || '').trim()
+if (klineToken && dates.length > 0) {
+  const latestTop = scans[dates[0]]?.top_stocks || []
+  const top50ids = latestTop.slice(0, 50).map(s => s.stock_id)
+  const klineMap = await fetchKLineData(top50ids, klineToken)
+  for (const stock of latestTop) {
+    if (klineMap[stock.stock_id]) stock.price_history = klineMap[stock.stock_id]
+  }
+  console.log(`K-line: injected into ${Object.keys(klineMap).length} stocks`)
+} else {
+  console.log(`K-line: ${klineToken ? 'no dates' : 'FINMIND_TOKEN_10 not set'}, skipping`)
 }
 
 const prediction = readPrediction()
