@@ -443,6 +443,45 @@ async function fetchNotionStocks() {
 }
 
 // ── FinMind quota ────────────────────────────────────────────────────────────
+async function fetchOneQuota(token, label) {
+  // Try POST with form-data (matches FinMind Python SDK behavior)
+  const payload = `token=${encodeURIComponent(token)}`
+  const postResult = await new Promise((resolve, reject) => {
+    const parsed = new URL('https://api.finmindtrade.com/api/v4/user_info')
+    const opts = {
+      hostname: parsed.hostname,
+      path: parsed.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(payload),
+        'User-Agent': 'Mozilla/5.0',
+      },
+    }
+    const req = https.request(opts, res => {
+      const chunks = []
+      res.on('data', c => chunks.push(c))
+      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
+      res.on('error', reject)
+    })
+    req.setTimeout(8000, () => { req.destroy(); reject(new Error('timeout')) })
+    req.on('error', reject)
+    req.write(payload)
+    req.end()
+  })
+
+  const json = JSON.parse(postResult)
+  console.log(`  FinMind [${label}] POST response: status=${json.status} keys=${JSON.stringify(Object.keys(json.data || {}))}`)
+  if (json.status === 200 && json.data) {
+    const d = json.data
+    // Support both old and new field names
+    const used  = d.api_request_count  ?? d.user_count         ?? d.request_count  ?? 0
+    const limit = d.api_request_limit  ?? d.user_count_limit   ?? d.request_limit  ?? 0
+    return { label, limit: Number(limit), used: Number(used) }
+  }
+  throw new Error(`status ${json.status}: ${json.msg || 'unknown'}`)
+}
+
 async function fetchFinMindQuota() {
   const tokens = [
     { key: process.env.FINMIND_TOKEN,   label: '帳號1（600）' },
@@ -455,16 +494,22 @@ async function fetchFinMindQuota() {
     { key: process.env.FINMIND_TOKEN_8, label: '帳號8（300）' },
     { key: process.env.FINMIND_TOKEN_9, label: '帳號9（300）' },
   ].filter(t => t.key)
+
+  console.log(`  FinMind quota: checking ${tokens.length} token(s)`)
+  if (tokens.length === 0) {
+    console.warn('  ⚠️  No FINMIND_TOKEN env vars found — quota will be empty')
+    return []
+  }
+
   const results = []
   for (const { key, label } of tokens) {
     try {
-      const body = await fetchUrl(`https://api.finmindtrade.com/api/v4/user_info?token=${encodeURIComponent(key)}`, 6000)
-      const json = JSON.parse(body)
-      if (json.status === 200 && json.data) {
-        results.push({ label, limit: json.data.api_request_limit, used: json.data.api_request_count })
-        console.log(`  FinMind [${label}]: ${json.data.api_request_count}/${json.data.api_request_limit}`)
-      }
-    } catch (e) { console.warn(`  FinMind [${label}] quota failed: ${e.message}`) }
+      const r = await fetchOneQuota(key, label)
+      results.push(r)
+      console.log(`  ✓ [${label}]: ${r.used}/${r.limit}`)
+    } catch (e) {
+      console.warn(`  ✗ [${label}] failed: ${e.message}`)
+    }
   }
   return results
 }
