@@ -45,6 +45,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           cp output/kline_cache.json /tmp/kline_cache.json
           cp output/kline_export.xlsx /tmp/kline_export.xlsx
+          git checkout -- output/kline_cache.json output/kline_export.xlsx
           git pull --rebase origin main
           cp /tmp/kline_cache.json output/kline_cache.json
           cp /tmp/kline_export.xlsx output/kline_export.xlsx
