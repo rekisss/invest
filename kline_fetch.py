@@ -486,30 +486,43 @@ def main() -> None:
         except Exception as exc:
             logger.warning(f"Failed to load cache ({exc}) — starting fresh")
 
-    # ── 3. Determine incremental fetch window ─────────────────────────────────
-    # Find the latest bar date across all cached stocks
+    # ── 3 & 4. Determine fetch windows and download ───────────────────────────
+    # Split: stocks not yet in cache need full backfill;
+    # stocks already cached only need incremental update from latest+1.
+    missing_ids = [sid for sid in stock_ids if sid not in existing_cache or not existing_cache[sid]]
+    present_ids = [sid for sid in stock_ids if sid in existing_cache and existing_cache[sid]]
+
+    # Incremental window: day after the latest bar among already-cached stocks
     latest_cached = max(
-        (bars[-1]["time"] for bars in existing_cache.values() if bars),
+        (existing_cache[sid][-1]["time"] for sid in present_ids),
         default="",
     )
     if latest_cached:
-        # Fetch from the day after the latest cached bar
-        start_date = (
-            date.fromisoformat(latest_cached) + timedelta(days=1)
-        ).isoformat()
-        logger.info(f"Incremental mode: cache up to {latest_cached}, fetching from {start_date}")
+        inc_start = (date.fromisoformat(latest_cached) + timedelta(days=1)).isoformat()
+        logger.info(f"Incremental mode: cache up to {latest_cached}, fetching from {inc_start}")
     else:
-        start_date = days_ago_iso(LOOKBACK_DAYS)
-        logger.info(f"Full fetch mode: no prior cache, fetching {LOOKBACK_DAYS} days from {start_date}")
+        inc_start = days_ago_iso(LOOKBACK_DAYS)
+        logger.info(f"No prior cache — full fetch from {inc_start}")
 
     end_date = tomorrow_iso()   # exclusive — includes today's data
+    new_data: dict[str, list[dict]] = {}
 
-    if start_date >= end_date:
-        logger.info("Cache is already up-to-date — skipping API calls")
-        new_data: dict[str, list[dict]] = {}
-    else:
-        # ── 4. Fetch via yfinance ─────────────────────────────────────────────
-        new_data = fetch_all_klines_yfinance(stock_ids, start_date, end_date)
+    # Full LOOKBACK_DAYS backfill for stocks not yet in cache
+    if missing_ids:
+        full_start = days_ago_iso(LOOKBACK_DAYS)
+        logger.info(f"Full backfill for {len(missing_ids)} uncached stocks from {full_start}")
+        full_data = fetch_all_klines_yfinance(missing_ids, full_start, end_date)
+        new_data.update(full_data)
+        logger.info(f"  Backfill result: {len(full_data)}/{len(missing_ids)} stocks returned data")
+
+    # Incremental fetch for already-cached stocks (skip if already current)
+    if present_ids and inc_start < end_date:
+        logger.info(f"Incremental fetch for {len(present_ids)} cached stocks from {inc_start}")
+        inc_data = fetch_all_klines_yfinance(present_ids, inc_start, end_date)
+        new_data.update(inc_data)
+        logger.info(f"  Incremental result: {len(inc_data)}/{len(present_ids)} stocks returned data")
+    elif present_ids:
+        logger.info(f"Cached stocks up-to-date through {latest_cached} — skipping incremental")
 
     # ── 5. Merge new bars into kline_map ──────────────────────────────────────
     # Start from the full existing cache (preserves all older bars)
