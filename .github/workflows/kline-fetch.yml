@@ -26,11 +26,19 @@ jobs:
         working-directory: web
         run: npm ci
 
-      - name: Fetch K-line data
+      - name: Fetch K-line data (10 accounts parallel)
         working-directory: web
         env:
-          FINMIND_TOKEN_10: ${{ secrets.FINMIND_TOKEN_10 }}
           FINMIND_TOKEN:    ${{ secrets.FINMIND_TOKEN }}
+          FINMIND_TOKEN_2:  ${{ secrets.FINMIND_TOKEN_2 }}
+          FINMIND_TOKEN_3:  ${{ secrets.FINMIND_TOKEN_3 }}
+          FINMIND_TOKEN_4:  ${{ secrets.FINMIND_TOKEN_4 }}
+          FINMIND_TOKEN_5:  ${{ secrets.FINMIND_TOKEN_5 }}
+          FINMIND_TOKEN_6:  ${{ secrets.FINMIND_TOKEN_6 }}
+          FINMIND_TOKEN_7:  ${{ secrets.FINMIND_TOKEN_7 }}
+          FINMIND_TOKEN_8:  ${{ secrets.FINMIND_TOKEN_8 }}
+          FINMIND_TOKEN_9:  ${{ secrets.FINMIND_TOKEN_9 }}
+          FINMIND_TOKEN_10: ${{ secrets.FINMIND_TOKEN_10 }}
         run: node scripts/fetch-kline.mjs
 
       - name: Commit kline cache
