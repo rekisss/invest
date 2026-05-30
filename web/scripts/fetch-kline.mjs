@@ -99,32 +99,29 @@ async function fetchChunk(stockIds, token, label, startDate, endDate) {
   }
 }
 
-// ── Read all stock IDs from the latest scan_*_all.csv ────────────────────────
+// ── Read all stock IDs from batch_seq*_YYYY-MM-DD.csv files ──────────────────
 function getAllStockIds() {
   if (!existsSync(SCAN_DIR)) { console.warn('SCAN_DIR not found:', SCAN_DIR); return [] }
-  const allFiles = readdirSync(SCAN_DIR)
-    .filter(f => f.startsWith('scan_') && f.endsWith('_all.csv'))
-    .sort().reverse()
-  const top50Files = readdirSync(SCAN_DIR)
-    .filter(f => f.startsWith('scan_') && f.endsWith('_top50.csv'))
+
+  // Find all batch_seq files, group by date, take the latest date's files
+  const files = readdirSync(SCAN_DIR)
+    .filter(f => /^batch_seq\d+_\d{4}-\d{2}-\d{2}\.csv$/.test(f))
     .sort().reverse()
 
+  if (files.length === 0) { console.warn('No batch_seq CSV files found in', SCAN_DIR); return [] }
+
+  // Extract the latest date
+  const latestDate = files[0].match(/(\d{4}-\d{2}-\d{2})/)[1]
+  const latestFiles = files.filter(f => f.includes(latestDate))
+
   const idSet = new Set()
-  // Latest all.csv (main source)
-  if (allFiles[0]) {
-    try {
-      const rows = parseCSV(readFileSync(`${SCAN_DIR}/${allFiles[0]}`, 'utf-8'))
-      rows.forEach(r => r.stock_id && idSet.add(r.stock_id))
-      console.log(`  Loaded ${idSet.size} stocks from ${allFiles[0]}`)
-    } catch (e) { console.warn(`  skip ${allFiles[0]}: ${e.message}`) }
-  }
-  // Add top50 from recent dates to fill any gaps
-  for (const f of top50Files.slice(0, 3)) {
+  for (const f of latestFiles) {
     try {
       const rows = parseCSV(readFileSync(`${SCAN_DIR}/${f}`, 'utf-8'))
       rows.forEach(r => r.stock_id && idSet.add(r.stock_id))
-    } catch (e) { /* ignore */ }
+    } catch (e) { console.warn(`  skip ${f}: ${e.message}`) }
   }
+  console.log(`  Loaded ${idSet.size} stocks from ${latestFiles.length} batch_seq files (${latestDate})`)
   return [...idSet]
 }
 
