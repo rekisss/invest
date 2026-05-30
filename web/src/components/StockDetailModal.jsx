@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react'
+
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
 const pct = (v) => (v == null || isNaN(v) ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
 const colorNum = (v, pos = '#ef4444', neg = '#4ade80') => {
@@ -9,119 +11,140 @@ const colorNum = (v, pos = '#ef4444', neg = '#4ade80') => {
 // Taiwan convention: red = up, green = down
 function candleColor(open, close) { return close >= open ? '#ef4444' : '#22c55e' }
 
+function isOTC(stockId) {
+  const n = parseInt(String(stockId), 10)
+  return (n >= 4200 && n <= 4999) || (n >= 5000 && n <= 5999) ||
+         (n >= 6000 && n <= 6999) || (n >= 8000 && n <= 8999) || (n >= 9200 && n <= 9999)
+}
+
+async function fetchYahooHistory(stockId) {
+  const suffix = isOTC(stockId) ? '.TWO' : '.TW'
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${stockId}${suffix}?interval=1d&range=3mo`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const json = await res.json()
+  const result = json?.chart?.result?.[0]
+  if (!result) throw new Error('no result')
+  const ts = result.timestamp || []
+  const q = result.indicators?.quote?.[0] || {}
+  return ts.map((t, i) => ({
+    time: new Date(t * 1000).toISOString().slice(0, 10),
+    open: q.open?.[i], high: q.high?.[i], low: q.low?.[i],
+    close: q.close?.[i], volume: q.volume?.[i] || 0,
+  })).filter(d => d.open != null && d.close != null && d.high != null && d.low != null)
+}
+
+function CandleSVG({ data }) {
+  if (!data || data.length < 2) return (
+    <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 12, background: '#0f172a', borderRadius: 8 }}>
+      暫無歷史 K 線資料
+    </div>
+  )
+
+  const bars = data.slice(-60)
+  const W = 460, CH = 200, VH = 45, GAP = 6, H = CH + GAP + VH
+  const PL = 42, PR = 6, PT = 8
+
+  const maxP = Math.max(...bars.map(d => d.high))
+  const minP = Math.min(...bars.map(d => d.low))
+  const pRange = maxP - minP || 1
+  const maxVol = Math.max(...bars.map(d => d.volume), 1)
+  const n = bars.length
+  const slotW = (W - PL - PR) / n
+  const bW = Math.max(slotW * 0.65, 1.5)
+  const toY = p => PT + (1 - (p - minP) / pRange) * CH
+  const toX = i => PL + (i + 0.5) * slotW
+
+  const gridLevels = [0, 1/3, 2/3, 1].map(t => ({
+    price: minP + t * pRange, y: PT + (1 - t) * CH,
+  }))
+  const xStep = Math.max(1, Math.floor(n / 5))
+  const xLabels = bars.map((d, i) => ({ i, label: d.time.slice(5) })).filter((_, i) => i % xStep === 0 || i === n - 1)
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H + PT + 18}`} style={{ width: '100%', display: 'block', background: '#0f172a', borderRadius: 8 }}>
+      {gridLevels.map(({ y, price }, j) => (
+        <g key={j}>
+          <line x1={PL} y1={y} x2={W - 6} y2={y} stroke="#1e293b" strokeWidth={0.5} />
+          <text x={PL - 3} y={y + 3.5} fontSize={8.5} fill="#475569" textAnchor="end">
+            {price >= 100 ? price.toFixed(0) : price.toFixed(1)}
+          </text>
+        </g>
+      ))}
+      {bars.map((d, i) => {
+        const x = toX(i), color = candleColor(d.open, d.close)
+        const bodyTop = toY(Math.max(d.open, d.close))
+        const bodyBot = toY(Math.min(d.open, d.close))
+        const bodyH = Math.max(bodyBot - bodyTop, 1)
+        const volH = (d.volume / maxVol) * VH
+        return (
+          <g key={i}>
+            <line x1={x} y1={toY(d.high)} x2={x} y2={toY(d.low)} stroke={color} strokeWidth={0.8} />
+            <rect x={x - bW / 2} y={bodyTop} width={bW} height={bodyH} fill={color} />
+            <rect x={x - bW / 2} y={CH + GAP + PT + VH - volH} width={bW} height={volH} fill={color} opacity={0.45} />
+          </g>
+        )
+      })}
+      {xLabels.map(({ i, label }) => (
+        <text key={i} x={toX(i)} y={H + PT + 12} fontSize={8.5} fill="#475569" textAnchor="middle">{label}</text>
+      ))}
+    </svg>
+  )
+}
+
 function KLineChart({ stockId, priceHistory }) {
-  const sym = (() => {
-    const id = String(stockId), n = parseInt(id, 10)
-    const isOTC = (n >= 4200 && n <= 4999) || (n >= 5000 && n <= 5999) ||
-                  (n >= 6000 && n <= 6999) || (n >= 8000 && n <= 8999) || (n >= 9200 && n <= 9999)
-    return `${isOTC ? 'TPEX' : 'TWSE'}:${id}`
-  })()
-  const tvUrl = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(sym)}`
-  const yahooUrl = `https://finance.yahoo.com/quote/${stockId}.TW/chart/`
+  const [data, setData] = useState(null)   // null=loading
+  const [source, setSource] = useState('')
 
-  const data = Array.isArray(priceHistory) ? priceHistory.slice(-30) : []
+  useEffect(() => {
+    let alive = true
+    setData(null)
+    setSource('')
+    fetchYahooHistory(stockId)
+      .then(rows => {
+        if (!alive) return
+        setData(rows)
+        setSource(`Yahoo Finance · ${rows.length} 天`)
+      })
+      .catch(() => {
+        if (!alive) return
+        const fallback = Array.isArray(priceHistory) ? priceHistory : []
+        setData(fallback)
+        setSource(fallback.length >= 2 ? `掃描資料 · ${fallback.length} 天` : '')
+      })
+    return () => { alive = false }
+  }, [stockId])
 
-  const chart = (() => {
-    if (data.length < 2) return null
-    const W = 460, CH = 200, VH = 45, GAP = 6
-    const H = CH + GAP + VH
-    const PL = 42, PR = 6, PT = 8
-
-    const maxP = Math.max(...data.map(d => d.high))
-    const minP = Math.min(...data.map(d => d.low))
-    const pRange = maxP - minP || 1
-    const maxVol = Math.max(...data.map(d => d.volume), 1)
-
-    const n = data.length
-    const slotW = (W - PL - PR) / n
-    const bW = Math.max(slotW * 0.65, 1.5)
-
-    const toY = p => PT + (1 - (p - minP) / pRange) * CH
-    const toX = i => PL + (i + 0.5) * slotW
-
-    // 4 price grid lines
-    const gridLevels = [0, 1/3, 2/3, 1].map(t => ({
-      price: minP + t * pRange,
-      y: PT + (1 - t) * CH,
-    }))
-
-    // x-axis: show up to 5 evenly spaced labels
-    const xStep = Math.max(1, Math.floor(n / 5))
-    const xLabels = data
-      .map((d, i) => ({ i, label: d.time.slice(5) }))
-      .filter((_, i) => i % xStep === 0 || i === n - 1)
-
-    return { W, H, PT, CH, GAP, VH, PL, bW, toY, toX, gridLevels, xLabels, data }
-  })()
+  const tvSym = `${isOTC(stockId) ? 'TPEX' : 'TWSE'}:${stockId}`
+  const tvUrl = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSym)}`
+  const yahooUrl = `https://finance.yahoo.com/quote/${stockId}${isOTC(stockId) ? '.TWO' : '.TW'}/chart/`
 
   return (
     <div>
-      {chart ? (
-        <svg
-          viewBox={`0 0 ${chart.W} ${chart.H + chart.PT + 18}`}
-          style={{ width: '100%', display: 'block', background: '#0f172a', borderRadius: 8 }}
-        >
-          {/* Price grid */}
-          {chart.gridLevels.map(({ y, price }, j) => (
-            <g key={j}>
-              <line x1={chart.PL} y1={y} x2={chart.W - 6} y2={y} stroke="#1e293b" strokeWidth={0.5} />
-              <text x={chart.PL - 3} y={y + 3.5} fontSize={8.5} fill="#475569" textAnchor="end">
-                {price >= 100 ? price.toFixed(0) : price.toFixed(1)}
-              </text>
-            </g>
-          ))}
-
-          {/* Candles + volume */}
-          {chart.data.map((d, i) => {
-            const x = chart.toX(i)
-            const color = candleColor(d.open, d.close)
-            const bodyTop = chart.toY(Math.max(d.open, d.close))
-            const bodyBot = chart.toY(Math.min(d.open, d.close))
-            const bodyH = Math.max(bodyBot - bodyTop, 1)
-            const volH = (d.volume / (Math.max(...chart.data.map(dd => dd.volume), 1))) * chart.VH
-            return (
-              <g key={i}>
-                <line x1={x} y1={chart.toY(d.high)} x2={x} y2={chart.toY(d.low)} stroke={color} strokeWidth={0.8} />
-                <rect x={x - chart.bW / 2} y={bodyTop} width={chart.bW} height={bodyH} fill={color} />
-                <rect
-                  x={x - chart.bW / 2}
-                  y={chart.CH + chart.GAP + chart.PT + chart.VH - volH}
-                  width={chart.bW}
-                  height={volH}
-                  fill={color}
-                  opacity={0.45}
-                />
-              </g>
-            )
-          })}
-
-          {/* X-axis labels */}
-          {chart.xLabels.map(({ i, label }) => (
-            <text key={i} x={chart.toX(i)} y={chart.H + chart.PT + 12} fontSize={8.5} fill="#475569" textAnchor="middle">
-              {label}
-            </text>
-          ))}
-        </svg>
-      ) : (
+      {data === null ? (
         <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 12, background: '#0f172a', borderRadius: 8 }}>
-          暫無歷史 K 線資料
+          載入中…
         </div>
+      ) : (
+        <CandleSVG data={data} />
       )}
-
-      {/* External links */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-        <a href={tvUrl} target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
-          TradingView 完整圖表 ↗
-        </a>
-        <a href={yahooUrl} target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: 11, color: '#94a3b8', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
-          Yahoo Finance ↗
-        </a>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 6 }}>
+        {source && <span style={{ fontSize: 10, color: '#475569' }}>{source}</span>}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <a href={tvUrl} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
+            TradingView ↗
+          </a>
+          <a href={yahooUrl} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: 11, color: '#94a3b8', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
+            Yahoo Finance ↗
+          </a>
+        </div>
       </div>
     </div>
   )
 }
+
 
 function Row({ label, value, valueStyle }) {
   return (
@@ -185,7 +208,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
         </div>
 
         {/* K 線圖 */}
-        <Section title="K 線圖（掃描日資料）">
+        <Section title="K 線圖">
           <KLineChart stockId={s.stock_id} priceHistory={s.price_history} />
         </Section>
 
