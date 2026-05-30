@@ -517,30 +517,58 @@ async function fetchFinMindQuota() {
   return results
 }
 
-// ── FinMind K-line pre-fetch (FINMIND_TOKEN_10) ──────────────────────────────
-async function fetchKLineData(stockIds, token) {
-  if (!token || stockIds.length === 0) return {}
+// ── FinMind K-line pre-fetch ──────────────────────────────────────────────────
+async function fetchOneKLine(sid, token, startDate, endDate) {
+  const url = `https://api.finmindtrade.com/api/v4/data?token=${encodeURIComponent(token)}&dataset=TaiwanStockPrice&stock_id=${sid}&start_date=${startDate}&end_date=${endDate}`
+  const body = await fetchUrl(url, 12000)
+  const json = JSON.parse(body)
+  if (json.status === 200 && Array.isArray(json.data) && json.data.length > 0) {
+    return json.data.map(d => ({
+      time: d.date, open: d.open, high: d.max, low: d.min,
+      close: d.close, volume: d.Trading_Volume || 0,
+    }))
+  }
+  // Return the status/msg so callers can diagnose plan limitations
+  return { _err: true, status: json.status, msg: json.msg || '' }
+}
+
+async function fetchKLineData(stockIds, primaryToken, fallbackToken) {
+  if (!primaryToken || stockIds.length === 0) return {}
   const endDate = new Date().toISOString().slice(0, 10)
   const startDate = new Date(Date.now() - 65 * 86400000).toISOString().slice(0, 10)
   const klineMap = {}
   console.log(`  K-line: fetching ${stockIds.length} stocks (${startDate} ~ ${endDate})`)
-  for (const sid of stockIds) {
-    try {
-      const url = `https://api.finmindtrade.com/api/v4/data?token=${encodeURIComponent(token)}&dataset=TaiwanStockPrice&stock_id=${sid}&start_date=${startDate}&end_date=${endDate}`
-      const body = await fetchUrl(url, 12000)
-      const json = JSON.parse(body)
-      if (json.status === 200 && Array.isArray(json.data) && json.data.length > 0) {
-        klineMap[sid] = json.data.map(d => ({
-          time: d.date, open: d.open, high: d.max, low: d.min,
-          close: d.close, volume: d.Trading_Volume || 0,
-        }))
+
+  // Probe with the first stock to detect plan limitations early
+  let activeToken = primaryToken
+  try {
+    const probe = await fetchOneKLine(stockIds[0], primaryToken, startDate, endDate)
+    if (probe?._err) {
+      console.warn(`  K-line TOKEN_10 probe failed (status=${probe.status} msg="${probe.msg}") — switching to fallback token`)
+      if (fallbackToken) {
+        activeToken = fallbackToken
+        // Re-probe with fallback
+        const probe2 = await fetchOneKLine(stockIds[0], fallbackToken, startDate, endDate)
+        if (!probe2?._err) klineMap[stockIds[0]] = probe2
+        else console.warn(`  K-line fallback also failed (status=${probe2.status})`)
       }
+    } else {
+      klineMap[stockIds[0]] = probe
+    }
+  } catch (e) {
+    console.warn(`  K-line probe error: ${e.message}`)
+  }
+
+  for (const sid of stockIds.slice(1)) {
+    try {
+      const rows = await fetchOneKLine(sid, activeToken, startDate, endDate)
+      if (!rows?._err) klineMap[sid] = rows
       await new Promise(r => setTimeout(r, 80))
     } catch (e) {
       console.warn(`  K-line [${sid}] failed: ${e.message}`)
     }
   }
-  console.log(`  K-line: ${Object.keys(klineMap).length}/${stockIds.length} fetched`)
+  console.log(`  K-line: ${Object.keys(klineMap).length}/${stockIds.length} fetched (token=${activeToken === primaryToken ? 'TOKEN_10' : 'TOKEN_1 fallback'})`)
   return klineMap
 }
 
@@ -616,7 +644,9 @@ if (aggregateLatest) {
 // Fetch K-line data — cover top stocks across the most recent 3 scan dates
 // Use FINMIND_TOKEN_10 (dedicated K-line account); fall back to FINMIND_TOKEN if unset
 console.log('Fetching K-line data...')
-const klineToken = (process.env.FINMIND_TOKEN_10 || process.env.FINMIND_TOKEN || '').trim()
+const klineToken10 = (process.env.FINMIND_TOKEN_10 || '').trim()
+const klineToken1  = (process.env.FINMIND_TOKEN   || '').trim()
+const klineToken   = klineToken10 || klineToken1
 if (klineToken && dates.length > 0) {
   // Collect unique stock_ids from the latest 3 dates (deduped)
   const recentDates = dates.slice(0, 3)
@@ -625,14 +655,14 @@ if (klineToken && dates.length > 0) {
     for (const s of (scans[d]?.top_stocks || [])) idSet.add(s.stock_id)
   }
   const allIds = [...idSet].slice(0, 100)
-  const klineMap = await fetchKLineData(allIds, klineToken)
+  // Pass TOKEN_10 as primary, TOKEN_1 as fallback
+  const klineMap = await fetchKLineData(allIds, klineToken10 || klineToken1, klineToken10 ? klineToken1 : null)
   // Inject price_history into all recent dates' stocks
   for (const d of recentDates) {
     for (const stock of (scans[d]?.top_stocks || [])) {
       if (klineMap[stock.stock_id]) stock.price_history = klineMap[stock.stock_id]
     }
   }
-  // Log days returned for first stock to help diagnose plan limitations
   const firstKey = Object.keys(klineMap)[0]
   const sampleDays = firstKey ? klineMap[firstKey].length : 0
   console.log(`K-line: injected into ${Object.keys(klineMap).length}/${allIds.length} stocks (~${sampleDays} days each)`)
