@@ -374,11 +374,17 @@ def sync_to_notion(kline_map: dict[str, list], token: str, db_id: str) -> None:
     except Exception as exc:
         logger.warning(f"Notion schema patch warning: {exc}")
 
-    # Paginate through all pages and update matching entries
+    # Build a set of stock_ids we still need to update (stop early once all done)
+    remaining = set(kline_map.keys())
     cursor: str | None = None
     updated = failed = total = 0
+    MAX_PAGES = 300   # safety cap: stop after scanning 30,000 Notion pages
 
-    while True:
+    while remaining:
+        if total // 100 >= MAX_PAGES:
+            logger.warning(f"Notion: reached {MAX_PAGES}-page cap, stopping early")
+            break
+
         body: dict = {"page_size": 100}
         if cursor:
             body["start_cursor"] = cursor
@@ -401,11 +407,12 @@ def sync_to_notion(kline_map: dict[str, list], token: str, db_id: str) -> None:
         for page in pages:
             rt = page.get("properties", {}).get("股票代號", {}).get("rich_text", [])
             sid = rt[0]["text"]["content"].strip() if rt else ""
-            if not sid or sid not in kline_map:
+            if not sid or sid not in remaining:
                 continue
 
             stats = compute_stats(kline_map[sid], cutoff_30d)
             if not stats:
+                remaining.discard(sid)
                 continue
 
             props: dict = {
@@ -426,10 +433,17 @@ def sync_to_notion(kline_map: dict[str, list], token: str, db_id: str) -> None:
                     timeout=25,
                 ).raise_for_status()
                 updated += 1
-                time.sleep(0.05)
+                remaining.discard(sid)
             except Exception as exc:
                 logger.debug(f"  Notion update {sid} failed: {exc}")
                 failed += 1
+
+        if not data.get("has_more"):
+            break
+        cursor = data["next_cursor"]
+
+        if updated % 100 == 0 and updated > 0:
+            logger.info(f"  Notion progress: {updated} updated, {len(remaining)} remaining")
 
         if data.get("has_more"):
             cursor = data["next_cursor"]
