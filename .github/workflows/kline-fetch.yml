@@ -6,45 +6,44 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # 需要 commit kline_cache.json 回 repo
+  contents: write
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
+          python-version: '3.11'
 
       - name: Install dependencies
-        working-directory: web
-        run: npm ci
+        run: pip install -r requirements.txt
 
-      - name: Fetch K-line data (10 accounts parallel)
-        working-directory: web
+      - name: K線增量抓取 + Notion 同步 + Excel 匯出
         env:
-          FINMIND_TOKEN:    ${{ secrets.FINMIND_TOKEN }}
-          FINMIND_TOKEN_2:  ${{ secrets.FINMIND_TOKEN_2 }}
-          FINMIND_TOKEN_3:  ${{ secrets.FINMIND_TOKEN_3 }}
-          FINMIND_TOKEN_4:  ${{ secrets.FINMIND_TOKEN_4 }}
-          FINMIND_TOKEN_5:  ${{ secrets.FINMIND_TOKEN_5 }}
-          FINMIND_TOKEN_6:  ${{ secrets.FINMIND_TOKEN_6 }}
-          FINMIND_TOKEN_7:  ${{ secrets.FINMIND_TOKEN_7 }}
-          FINMIND_TOKEN_8:  ${{ secrets.FINMIND_TOKEN_8 }}
-          FINMIND_TOKEN_9:  ${{ secrets.FINMIND_TOKEN_9 }}
-          FINMIND_TOKEN_10: ${{ secrets.FINMIND_TOKEN_10 }}
-        run: node scripts/fetch-kline.mjs
+          FINMIND_TOKEN:        ${{ secrets.FINMIND_TOKEN }}
+          FINMIND_TOKEN_2:      ${{ secrets.FINMIND_TOKEN_2 }}
+          FINMIND_TOKEN_3:      ${{ secrets.FINMIND_TOKEN_3 }}
+          FINMIND_TOKEN_4:      ${{ secrets.FINMIND_TOKEN_4 }}
+          FINMIND_TOKEN_5:      ${{ secrets.FINMIND_TOKEN_5 }}
+          FINMIND_TOKEN_6:      ${{ secrets.FINMIND_TOKEN_6 }}
+          FINMIND_TOKEN_7:      ${{ secrets.FINMIND_TOKEN_7 }}
+          FINMIND_TOKEN_8:      ${{ secrets.FINMIND_TOKEN_8 }}
+          FINMIND_TOKEN_9:      ${{ secrets.FINMIND_TOKEN_9 }}
+          FINMIND_TOKEN_10:     ${{ secrets.FINMIND_TOKEN_10 }}
+          NOTION_TOKEN:         ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID:   ${{ secrets.NOTION_DATABASE_ID }}
+        run: python kline_fetch.py
 
-      - name: Commit kline cache
+      - name: Commit kline cache + Excel
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add output/kline_cache.json
-          git diff --staged --quiet && echo "No changes to commit" || git commit -m "chore: update kline_cache.json [skip ci]"
+          git add output/kline_cache.json output/kline_export.xlsx
+          git diff --staged --quiet && echo "No changes to commit" || \
+            git commit -m "chore: update kline_cache + kline_export.xlsx [skip ci]"
           git push
