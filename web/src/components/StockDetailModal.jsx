@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
 const pct = (v) => (v == null || isNaN(v) ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
 const colorNum = (v, pos = '#ef4444', neg = '#4ade80') => {
@@ -16,6 +18,8 @@ function isOTC(stockId) {
 }
 
 function CandleSVG({ data }) {
+  const [hovered, setHovered] = useState(null)
+
   if (!data || data.length < 2) return (
     <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 12, background: '#0f172a', borderRadius: 8 }}>
       暫無歷史 K 線資料
@@ -42,8 +46,30 @@ function CandleSVG({ data }) {
   const xStep = Math.max(1, Math.floor(n / 5))
   const xLabels = bars.map((d, i) => ({ i, label: d.time.slice(5) })).filter((_, i) => i % xStep === 0 || i === n - 1)
 
+  const handleMouseMove = (e) => {
+    const svg = e.currentTarget
+    const rect = svg.getBoundingClientRect()
+    const svgX = (e.clientX - rect.left) / rect.width * W
+    const idx = Math.floor((svgX - PL) / slotW)
+    if (idx >= 0 && idx < bars.length) {
+      setHovered({ idx, bar: bars[idx], x: toX(idx) })
+    } else {
+      setHovered(null)
+    }
+  }
+
+  // Tooltip position: flip to left side if in right half of chart
+  const tipW = 118, tipH = 94
+  const tipX = hovered ? (hovered.x > W / 2 ? hovered.x - tipW - 6 : hovered.x + 8) : 0
+  const tipY = PT + 4
+
   return (
-    <svg viewBox={`0 0 ${W} ${H + PT + 18}`} style={{ width: '100%', display: 'block', background: '#0f172a', borderRadius: 8 }}>
+    <svg
+      viewBox={`0 0 ${W} ${H + PT + 18}`}
+      style={{ width: '100%', display: 'block', background: '#0f172a', borderRadius: 8, cursor: 'crosshair' }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setHovered(null)}
+    >
       {gridLevels.map(({ y, price }, j) => (
         <g key={j}>
           <line x1={PL} y1={y} x2={W - 6} y2={y} stroke="#1e293b" strokeWidth={0.5} />
@@ -58,17 +84,47 @@ function CandleSVG({ data }) {
         const bodyBot = toY(Math.min(d.open, d.close))
         const bodyH = Math.max(bodyBot - bodyTop, 1)
         const volH = (d.volume / maxVol) * VH
+        const isHovered = hovered?.idx === i
         return (
-          <g key={i}>
-            <line x1={x} y1={toY(d.high)} x2={x} y2={toY(d.low)} stroke={color} strokeWidth={0.8} />
-            <rect x={x - bW / 2} y={bodyTop} width={bW} height={bodyH} fill={color} />
-            <rect x={x - bW / 2} y={CH + GAP + PT + VH - volH} width={bW} height={volH} fill={color} opacity={0.45} />
+          <g key={i} opacity={hovered && !isHovered ? 0.45 : 1}>
+            <line x1={x} y1={toY(d.high)} x2={x} y2={toY(d.low)} stroke={color} strokeWidth={isHovered ? 1.4 : 0.8} />
+            <rect x={x - bW / 2} y={bodyTop} width={bW} height={bodyH} fill={color} stroke={isHovered ? '#fff' : 'none'} strokeWidth={0.5} />
+            <rect x={x - bW / 2} y={CH + GAP + PT + VH - volH} width={bW} height={volH} fill={color} opacity={isHovered ? 0.75 : 0.45} />
           </g>
         )
       })}
       {xLabels.map(({ i, label }) => (
         <text key={i} x={toX(i)} y={H + PT + 12} fontSize={8.5} fill="#475569" textAnchor="middle">{label}</text>
       ))}
+
+      {/* Crosshair + Tooltip */}
+      {hovered && (() => {
+        const b = hovered.bar
+        const closeColor = candleColor(b.open, b.close)
+        const vol = b.volume >= 1000000 ? `${(b.volume / 1000000).toFixed(1)}M` : `${(b.volume / 1000).toFixed(0)}K`
+        return (
+          <g>
+            {/* Vertical crosshair */}
+            <line x1={hovered.x} y1={PT} x2={hovered.x} y2={H + PT} stroke="#60a5fa" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.7} />
+            {/* Horizontal crosshair at close price */}
+            <line x1={PL} y1={toY(b.close)} x2={W - PR} y2={toY(b.close)} stroke="#60a5fa" strokeWidth={0.4} strokeDasharray="2,3" opacity={0.5} />
+            {/* Close price label on Y axis */}
+            <rect x={0} y={toY(b.close) - 7} width={PL - 2} height={13} fill="#1e293b" rx={2} />
+            <text x={PL - 5} y={toY(b.close) + 4} fontSize={8} fill={closeColor} textAnchor="end" fontWeight="bold">
+              {b.close >= 100 ? b.close.toFixed(1) : b.close.toFixed(2)}
+            </text>
+            {/* Tooltip box */}
+            <rect x={tipX} y={tipY} width={tipW} height={tipH} fill="#0d1829" rx={4} stroke="#334155" strokeWidth={0.8} />
+            <text x={tipX + 7} y={tipY + 13} fontSize={9} fill="#94a3b8" fontWeight="bold">{b.time}</text>
+            <line x1={tipX + 4} y1={tipY + 17} x2={tipX + tipW - 4} y2={tipY + 17} stroke="#1e293b" strokeWidth={0.5} />
+            <text x={tipX + 7} y={tipY + 30} fontSize={8.5} fill="#64748b">開 <tspan fill="#e2e8f0">{b.open.toFixed(b.open >= 100 ? 1 : 2)}</tspan></text>
+            <text x={tipX + 7} y={tipY + 43} fontSize={8.5} fill="#64748b">高 <tspan fill="#ef4444">{b.high.toFixed(b.high >= 100 ? 1 : 2)}</tspan></text>
+            <text x={tipX + 7} y={tipY + 56} fontSize={8.5} fill="#64748b">低 <tspan fill="#4ade80">{b.low.toFixed(b.low >= 100 ? 1 : 2)}</tspan></text>
+            <text x={tipX + 7} y={tipY + 69} fontSize={8.5} fill="#64748b">收 <tspan fill={closeColor} fontWeight="bold">{b.close.toFixed(b.close >= 100 ? 1 : 2)}</tspan></text>
+            <text x={tipX + 7} y={tipY + 82} fontSize={8.5} fill="#64748b">量 <tspan fill="#94a3b8">{vol}</tspan></text>
+          </g>
+        )
+      })()}
     </svg>
   )
 }
