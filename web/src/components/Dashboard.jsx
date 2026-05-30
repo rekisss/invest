@@ -109,6 +109,81 @@ function StockTable({ stocks, onSelect, notionMap = {} }) {
   )
 }
 
+function calcDropStreak(priceHistory) {
+  if (!priceHistory || priceHistory.length < 2) return 0
+  let streak = 0
+  for (let i = priceHistory.length - 1; i > 0; i--) {
+    if (priceHistory[i].close < priceHistory[i - 1].close) streak++
+    else break
+  }
+  return streak
+}
+
+function ConsecutiveDropSection({ stocks, onSelect }) {
+  const droppers = (stocks || [])
+    .map(s => ({ ...s, _drop: calcDropStreak(s.price_history) }))
+    .filter(s => s._drop >= 2)
+    .sort((a, b) => b._drop - a._drop)
+
+  if (droppers.length === 0) return null
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <h3 style={{ fontSize: 14, fontWeight: 700, color: '#fb923c', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+        📉 連跌警示（K線連續收低）
+        <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--muted)', marginLeft: 4 }}>共 {droppers.length} 支</span>
+      </h3>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 480 }}>
+          <thead>
+            <tr style={{ background: 'rgba(251,146,60,0.08)' }}>
+              {['股號', '名稱', '收盤', '連跌天數', '最新漲跌%', '入場分數', '產業'].map(h => (
+                <th key={h} style={{ padding: '7px 8px', textAlign: 'center', color: 'var(--muted)', fontSize: 11, borderBottom: '1px solid var(--border)' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {droppers.map((s, i) => {
+              const ph = s.price_history || []
+              const last = ph[ph.length - 1]
+              const prev = ph[ph.length - 2]
+              const dayPct = last && prev && prev.close ? ((last.close - prev.close) / prev.close * 100).toFixed(2) : null
+              const bgColor = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)'
+              return (
+                <tr
+                  key={s.stock_id}
+                  onClick={() => onSelect && onSelect(s)}
+                  style={{ borderBottom: '1px solid var(--border)', background: bgColor, cursor: 'pointer' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(251,146,60,0.1)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = bgColor }}
+                >
+                  <td style={{ padding: '7px 8px', textAlign: 'center', fontFamily: 'var(--font-mono)', color: '#fb923c', fontWeight: 600 }}>{s.stock_id}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{s.close?.toFixed(2)}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center' }}>
+                    <span style={{
+                      color: '#fff',
+                      background: s._drop >= 6 ? '#431407' : s._drop >= 4 ? '#9a3412' : '#c2410c',
+                      borderRadius: 4, padding: '2px 8px', fontWeight: 700, fontSize: 12, fontFamily: 'var(--font-mono)',
+                    }}>↓{s._drop}天</span>
+                  </td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center', fontFamily: 'var(--font-mono)', color: '#fb923c' }}>
+                    {dayPct != null ? `${dayPct}%` : '—'}
+                  </td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center', fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>
+                    {s.entry_score?.toLocaleString() ?? '—'}
+                  </td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center', color: 'var(--muted)', fontSize: 11 }}>{s.industry_category || '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function LimitDownSection({ items, onSelect }) {
   if (!items || items.length === 0) return null
   return (
@@ -350,6 +425,10 @@ export default function Dashboard({ data, error }) {
             <LimitDownSection items={limitDownAlerts} onSelect={setSelectedStock} />
           </div>
         )}
+
+        <div style={{ padding: '0 16px' }}>
+          <ConsecutiveDropSection stocks={stocks} onSelect={setSelectedStock} />
+        </div>
 
         <div style={{ padding: '16px', color: 'var(--muted)', fontSize: 11 }}>
           點擊任一列查看詳細資料與K線圖 · 分數 ✓ 綠色 = 進場訊號 · 外資/投信欄為連買天數
