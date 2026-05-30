@@ -11,13 +11,18 @@ function statusLabel(pct) {
 }
 
 export default function QuotaPanel({ quota }) {
-  const allAccounts = Array.from({ length: 9 }, (_, i) => {
-    const label = `帳號${i + 1}`
-    const labelFull = i < 5 ? `${label}（600/hr）` : `${label}（300/hr）`
-    const hrLimit = i < 5 ? 600 : 300
+  const accountDefs = [
+    ...Array.from({ length: 5 }, (_, i) => ({ label: `帳號${i + 1}`, hrLimit: 600, tag: '掃描' })),
+    ...Array.from({ length: 4 }, (_, i) => ({ label: `帳號${i + 6}`, hrLimit: 300, tag: '掃描' })),
+    { label: '帳號10', hrLimit: null, tag: 'K線' },
+  ]
+
+  const allAccounts = accountDefs.map(({ label, hrLimit, tag }) => {
     const found = (quota || []).find(q => q.label.includes(label))
+    const resolvedLimit = found?.limit ?? hrLimit
     return {
-      label, labelFull, hrLimit,
+      label, tag,
+      hrLimit: resolvedLimit,
       used: found?.used ?? null,
       limit: found?.limit ?? null,
     }
@@ -34,7 +39,7 @@ export default function QuotaPanel({ quota }) {
         {/* Summary cards */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
           {[
-            { label: '回應帳號', value: `${responding} / 9 個` },
+            { label: '回應帳號', value: `${responding} / 10 個` },
             { label: '今日已用（各帳號合計）', value: totalLimit > 0 ? `${totalUsed.toLocaleString()} 次` : '—' },
             { label: '剩餘可用', value: totalLimit > 0 ? `${(totalLimit - totalUsed).toLocaleString()} 次` : '—' },
           ].map(c => (
@@ -65,8 +70,13 @@ export default function QuotaPanel({ quota }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{acc.label}</span>
-                    <span style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--surface2)', borderRadius: 4, padding: '1px 6px' }}>
-                      {acc.hrLimit}/hr
+                    {acc.hrLimit != null && (
+                      <span style={{ fontSize: 11, color: 'var(--muted)', background: 'var(--surface2)', borderRadius: 4, padding: '1px 6px' }}>
+                        {acc.hrLimit}/hr
+                      </span>
+                    )}
+                    <span style={{ fontSize: 10, color: acc.tag === 'K線' ? '#60a5fa' : '#94a3b8', background: 'var(--surface2)', borderRadius: 4, padding: '1px 6px' }}>
+                      {acc.tag}
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -114,6 +124,7 @@ export default function QuotaPanel({ quota }) {
 
         <div style={{ marginTop: 20, fontSize: 11, color: 'var(--muted)', lineHeight: 1.7 }}>
           • 每小時上限：帳號1~5 各 600 次，帳號6~9 各 300 次<br />
+          • 帳號10 專用於 K 線資料預取，不參與股票掃描<br />
           • 每支股票掃描需 2 次 API 呼叫<br />
           • 「未回應」表示該帳號金鑰未設定或 FinMind API 暫時無法連線<br />
           • 資料每次部署自動更新
