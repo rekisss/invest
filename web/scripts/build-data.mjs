@@ -536,7 +536,7 @@ async function fetchOneKLine(sid, token, startDate, endDate) {
 async function fetchKLineData(stockIds, primaryToken, fallbackToken) {
   if (!primaryToken || stockIds.length === 0) return {}
   const endDate = new Date().toISOString().slice(0, 10)
-  const startDate = new Date(Date.now() - 65 * 86400000).toISOString().slice(0, 10)
+  const startDate = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)
   const klineMap = {}
   console.log(`  K-line: fetching ${stockIds.length} stocks (${startDate} ~ ${endDate})`)
 

@@ -13,7 +13,7 @@ import https from 'https'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SCAN_DIR   = resolve(__dirname, '../../output/full_scan')
 const CACHE_FILE = resolve(__dirname, '../../output/kline_cache.json')
-const LOOKBACK_DAYS = 65
+const LOOKBACK_DAYS = 90
 
 // ── CSV parser ────────────────────────────────────────────────────────────────
 function parseCSVLine(line) {
