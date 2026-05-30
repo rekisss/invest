@@ -6,71 +6,111 @@ const colorNum = (v, pos = '#ef4444', neg = '#4ade80') => {
   return n > 0 ? pos : neg
 }
 
-import { useEffect, useRef } from 'react'
+// Taiwan convention: red = up, green = down
+function candleColor(open, close) { return close >= open ? '#ef4444' : '#22c55e' }
 
-// Taiwan stock exchange classification
-// TWSE (上市): most 1000-3999, some 4xxx, some larger caps
-// TPEX (上櫃): 4500+, most 5xxx-9xxx small/mid caps
-function tvSymbol(stockId) {
-  const id = String(stockId)
-  const n = parseInt(id, 10)
-  // Conservative: only mark as TPEX if clearly OTC range
-  // Large-cap 4xxx (4904 遠傳, 4938 和碩) are TWSE; small 4xxx and 5xxx+ are TPEX
-  const isOTC = (n >= 4200 && n <= 4999) || (n >= 5000 && n <= 5999) ||
-                (n >= 6000 && n <= 6999) || (n >= 8000 && n <= 8999) ||
-                (n >= 9200 && n <= 9999)
-  return `${isOTC ? 'TPEX' : 'TWSE'}:${id}`
-}
-
-function TradingViewChart({ stockId }) {
-  const sym = tvSymbol(stockId)
-  const containerRef = useRef(null)
-  const containerId = `tv_${stockId}_${Date.now()}`
-
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    el.innerHTML = ''
-
-    const wrapper = document.createElement('div')
-    wrapper.id = containerId
-    el.appendChild(wrapper)
-
-    const script = document.createElement('script')
-    script.src = 'https://s3.tradingview.com/tv.js'
-    script.async = true
-    script.onload = () => {
-      if (window.TradingView) {
-        new window.TradingView.widget({
-          container_id: containerId,
-          autosize: true,
-          height: 360,
-          symbol: sym,
-          interval: 'D',
-          timezone: 'Asia/Taipei',
-          theme: 'dark',
-          style: '1',
-          locale: 'zh_TW',
-          hide_top_toolbar: false,
-          allow_symbol_change: true,
-          save_image: false,
-          hide_legend: false,
-          studies: [],
-        })
-      }
-    }
-    el.appendChild(script)
-    return () => { if (el) el.innerHTML = '' }
-  }, [sym])
-
+function KLineChart({ stockId, priceHistory }) {
+  const sym = (() => {
+    const id = String(stockId), n = parseInt(id, 10)
+    const isOTC = (n >= 4200 && n <= 4999) || (n >= 5000 && n <= 5999) ||
+                  (n >= 6000 && n <= 6999) || (n >= 8000 && n <= 8999) || (n >= 9200 && n <= 9999)
+    return `${isOTC ? 'TPEX' : 'TWSE'}:${id}`
+  })()
+  const tvUrl = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(sym)}`
   const yahooUrl = `https://finance.yahoo.com/quote/${stockId}.TW/chart/`
-  const tvSearchUrl = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(sym)}`
+
+  const data = Array.isArray(priceHistory) ? priceHistory.slice(-30) : []
+
+  const chart = (() => {
+    if (data.length < 2) return null
+    const W = 460, CH = 200, VH = 45, GAP = 6
+    const H = CH + GAP + VH
+    const PL = 42, PR = 6, PT = 8
+
+    const maxP = Math.max(...data.map(d => d.high))
+    const minP = Math.min(...data.map(d => d.low))
+    const pRange = maxP - minP || 1
+    const maxVol = Math.max(...data.map(d => d.volume), 1)
+
+    const n = data.length
+    const slotW = (W - PL - PR) / n
+    const bW = Math.max(slotW * 0.65, 1.5)
+
+    const toY = p => PT + (1 - (p - minP) / pRange) * CH
+    const toX = i => PL + (i + 0.5) * slotW
+
+    // 4 price grid lines
+    const gridLevels = [0, 1/3, 2/3, 1].map(t => ({
+      price: minP + t * pRange,
+      y: PT + (1 - t) * CH,
+    }))
+
+    // x-axis: show up to 5 evenly spaced labels
+    const xStep = Math.max(1, Math.floor(n / 5))
+    const xLabels = data
+      .map((d, i) => ({ i, label: d.time.slice(5) }))
+      .filter((_, i) => i % xStep === 0 || i === n - 1)
+
+    return { W, H, PT, CH, GAP, VH, PL, bW, toY, toX, gridLevels, xLabels, data }
+  })()
 
   return (
     <div>
-      <div ref={containerRef} style={{ width: '100%', minHeight: 360, background: '#0f172a', borderRadius: 8, overflow: 'hidden' }} />
+      {chart ? (
+        <svg
+          viewBox={`0 0 ${chart.W} ${chart.H + chart.PT + 18}`}
+          style={{ width: '100%', display: 'block', background: '#0f172a', borderRadius: 8 }}
+        >
+          {/* Price grid */}
+          {chart.gridLevels.map(({ y, price }, j) => (
+            <g key={j}>
+              <line x1={chart.PL} y1={y} x2={chart.W - 6} y2={y} stroke="#1e293b" strokeWidth={0.5} />
+              <text x={chart.PL - 3} y={y + 3.5} fontSize={8.5} fill="#475569" textAnchor="end">
+                {price >= 100 ? price.toFixed(0) : price.toFixed(1)}
+              </text>
+            </g>
+          ))}
+
+          {/* Candles + volume */}
+          {chart.data.map((d, i) => {
+            const x = chart.toX(i)
+            const color = candleColor(d.open, d.close)
+            const bodyTop = chart.toY(Math.max(d.open, d.close))
+            const bodyBot = chart.toY(Math.min(d.open, d.close))
+            const bodyH = Math.max(bodyBot - bodyTop, 1)
+            const volH = (d.volume / (Math.max(...chart.data.map(dd => dd.volume), 1))) * chart.VH
+            return (
+              <g key={i}>
+                <line x1={x} y1={chart.toY(d.high)} x2={x} y2={chart.toY(d.low)} stroke={color} strokeWidth={0.8} />
+                <rect x={x - chart.bW / 2} y={bodyTop} width={chart.bW} height={bodyH} fill={color} />
+                <rect
+                  x={x - chart.bW / 2}
+                  y={chart.CH + chart.GAP + chart.PT + chart.VH - volH}
+                  width={chart.bW}
+                  height={volH}
+                  fill={color}
+                  opacity={0.45}
+                />
+              </g>
+            )
+          })}
+
+          {/* X-axis labels */}
+          {chart.xLabels.map(({ i, label }) => (
+            <text key={i} x={chart.toX(i)} y={chart.H + chart.PT + 12} fontSize={8.5} fill="#475569" textAnchor="middle">
+              {label}
+            </text>
+          ))}
+        </svg>
+      ) : (
+        <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 12, background: '#0f172a', borderRadius: 8 }}>
+          暫無歷史 K 線資料
+        </div>
+      )}
+
+      {/* External links */}
       <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-        <a href={tvSearchUrl} target="_blank" rel="noopener noreferrer"
+        <a href={tvUrl} target="_blank" rel="noopener noreferrer"
           style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
           TradingView 完整圖表 ↗
         </a>
@@ -78,7 +118,6 @@ function TradingViewChart({ stockId }) {
           style={{ fontSize: 11, color: '#94a3b8', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
           Yahoo Finance ↗
         </a>
-        <span style={{ fontSize: 10, color: '#475569', alignSelf: 'center' }}>若顯示「不存在」請點上方連結或手動搜尋 {sym}</span>
       </div>
     </div>
   )
@@ -145,9 +184,9 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           >✕</button>
         </div>
 
-        {/* TradingView chart */}
-        <Section title={`K 線圖 · ${tvSymbol(s.stock_id)}`}>
-          <TradingViewChart stockId={s.stock_id} />
+        {/* K 線圖 */}
+        <Section title="K 線圖（掃描日資料）">
+          <KLineChart stockId={s.stock_id} priceHistory={s.price_history} />
         </Section>
 
         {/* Notion 連結 */}
