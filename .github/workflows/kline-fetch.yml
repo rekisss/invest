@@ -1,0 +1,50 @@
+name: K線資料更新
+
+on:
+  schedule:
+    - cron: '30 12 * * 2-6'   # 20:30 CST 週二~週六（收盤後）
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 需要 commit kline_cache.json 回 repo
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Fetch K-line data (10 accounts parallel)
+        working-directory: web
+        env:
+          FINMIND_TOKEN:    ${{ secrets.FINMIND_TOKEN }}
+          FINMIND_TOKEN_2:  ${{ secrets.FINMIND_TOKEN_2 }}
+          FINMIND_TOKEN_3:  ${{ secrets.FINMIND_TOKEN_3 }}
+          FINMIND_TOKEN_4:  ${{ secrets.FINMIND_TOKEN_4 }}
+          FINMIND_TOKEN_5:  ${{ secrets.FINMIND_TOKEN_5 }}
+          FINMIND_TOKEN_6:  ${{ secrets.FINMIND_TOKEN_6 }}
+          FINMIND_TOKEN_7:  ${{ secrets.FINMIND_TOKEN_7 }}
+          FINMIND_TOKEN_8:  ${{ secrets.FINMIND_TOKEN_8 }}
+          FINMIND_TOKEN_9:  ${{ secrets.FINMIND_TOKEN_9 }}
+          FINMIND_TOKEN_10: ${{ secrets.FINMIND_TOKEN_10 }}
+        run: node scripts/fetch-kline.mjs
+
+      - name: Commit kline cache
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/kline_cache.json
+          git diff --staged --quiet && echo "No changes to commit" || git commit -m "chore: update kline_cache.json [skip ci]"
+          git push
