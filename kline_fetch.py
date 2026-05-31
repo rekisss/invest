@@ -44,9 +44,15 @@ SCAN_DIR   = ROOT / "output" / "full_scan"
 CACHE_FILE = ROOT / "output" / "kline_cache.json"
 EXCEL_FILE = ROOT / "output" / "kline_export.xlsx"
 
-LOOKBACK_DAYS = 90   # calendar days of OHLCV to fetch on first run
-WINDOW_DAYS   = 30   # collect stocks scanned within this many days
-BATCH_SIZE    = 200  # stocks per yfinance download call (Yahoo handles large batches well)
+WINDOW_DAYS = 30   # collect stocks scanned within this many days
+BATCH_SIZE  = 200  # stocks per yfinance download call
+
+# Lookback calendar days per interval (for first-time / missing stocks)
+INTERVAL_LOOKBACK: dict[str, int] = {
+    "1d":  90,    # ~60 trading bars
+    "1wk": 730,   # ~2 years / ~104 bars
+    "1mo": 1825,  # ~5 years / ~60 bars
+}
 
 NOTION_API = "https://api.notion.com/v1"
 NOTION_VER = "2022-06-28"
@@ -122,6 +128,7 @@ def _download_batch(
     suffix: str,
     start: str,
     end: str,
+    interval: str = "1d",
 ) -> dict[str, list[dict]]:
     """Download one batch of stocks with a given suffix (.TW or .TWO)."""
     if not stock_ids:
@@ -135,6 +142,7 @@ def _download_batch(
                 yf_tickers[0],
                 start=start,
                 end=end,
+                interval=interval,
                 auto_adjust=True,
                 progress=False,
             )
@@ -147,6 +155,7 @@ def _download_batch(
                 yf_tickers,
                 start=start,
                 end=end,
+                interval=interval,
                 auto_adjust=True,
                 group_by="ticker",
                 progress=False,
@@ -195,6 +204,7 @@ def fetch_all_klines_yfinance(
     stock_ids: list[str],
     start: str,
     end: str,
+    interval: str = "1d",
 ) -> dict[str, list[dict]]:
     """
     Download K-line data for Taiwan stocks via yfinance.
@@ -208,11 +218,11 @@ def fetch_all_klines_yfinance(
     tw_misses: list[str] = []
     batches = [stock_ids[i:i + BATCH_SIZE] for i in range(0, len(stock_ids), BATCH_SIZE)]
     logger.info(
-        f"Phase 1 (.TW): {len(stock_ids)} stocks in {len(batches)} batches "
+        f"Phase 1 (.TW) [{interval}]: {len(stock_ids)} stocks in {len(batches)} batches "
         f"[{start} → {end}]"
     )
     for bi, chunk in enumerate(batches, 1):
-        found = _download_batch(chunk, ".TW", start, end)
+        found = _download_batch(chunk, ".TW", start, end, interval=interval)
         result.update(found)
         miss = [sid for sid in chunk if sid not in found]
         tw_misses.extend(miss)
@@ -225,10 +235,10 @@ def fetch_all_klines_yfinance(
     if tw_misses:
         two_batches = [tw_misses[i:i + BATCH_SIZE] for i in range(0, len(tw_misses), BATCH_SIZE)]
         logger.info(
-            f"Phase 2 (.TWO): {len(tw_misses)} missed stocks in {len(two_batches)} batches"
+            f"Phase 2 (.TWO) [{interval}]: {len(tw_misses)} missed stocks in {len(two_batches)} batches"
         )
         for bi, chunk in enumerate(two_batches, 1):
-            found = _download_batch(chunk, ".TWO", start, end)
+            found = _download_batch(chunk, ".TWO", start, end, interval=interval)
             result.update(found)
             still_miss = len(chunk) - len(found)
             logger.info(
@@ -237,7 +247,7 @@ def fetch_all_klines_yfinance(
             )
 
     logger.info(
-        f"yfinance fetch complete: {len(result)}/{len(stock_ids)} stocks returned data"
+        f"yfinance [{interval}] complete: {len(result)}/{len(stock_ids)} stocks returned data"
     )
     return result
 
@@ -476,86 +486,101 @@ def main() -> None:
         logger.warning("No stocks found in last 30 days of scans — exiting")
         sys.exit(0)
 
-    # ── 2. Load existing cache ────────────────────────────────────────────────
+    # ── 2. Load existing cache (support both old list format and new dict format) ─
     CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    existing_cache: dict[str, list] = {}
+    # New format: {stock_id: {"1d": [...], "1wk": [...], "1mo": [...]}}
+    # Old format: {stock_id: [...]}  ← auto-migrated on load
+    existing_cache: dict[str, dict[str, list]] = {}
     if CACHE_FILE.exists():
         try:
-            existing_cache = json.loads(CACHE_FILE.read_text("utf-8"))
-            logger.info(f"Cache loaded: {len(existing_cache)} stocks")
+            raw = json.loads(CACHE_FILE.read_text("utf-8"))
+            migrated = 0
+            for sid, val in raw.items():
+                if isinstance(val, list):
+                    existing_cache[sid] = {"1d": val, "1wk": [], "1mo": []}
+                    migrated += 1
+                else:
+                    existing_cache[sid] = val
+            logger.info(
+                f"Cache loaded: {len(existing_cache)} stocks"
+                + (f" ({migrated} migrated from old format)" if migrated else "")
+            )
         except Exception as exc:
             logger.warning(f"Failed to load cache ({exc}) — starting fresh")
 
-    # ── 3 & 4. Determine fetch windows and download ───────────────────────────
-    # Split: stocks not yet in cache need full backfill;
-    # stocks already cached only need incremental update from latest+1.
-    missing_ids = [sid for sid in stock_ids if sid not in existing_cache or not existing_cache[sid]]
-    present_ids = [sid for sid in stock_ids if sid in existing_cache and existing_cache[sid]]
+    # ── 3 & 4. Fetch each interval with per-interval incremental logic ────────
+    end_date = tomorrow_iso()
+    # Accumulate all fetched bars: {stock_id: {interval: [bars]}}
+    all_fetched: dict[str, dict[str, list]] = {}
 
-    # Incremental window: day after the latest bar among already-cached stocks
-    latest_cached = max(
-        (existing_cache[sid][-1]["time"] for sid in present_ids),
-        default="",
+    for ivl, lookback in INTERVAL_LOOKBACK.items():
+        logger.info(f"=== Fetching {ivl} bars ===")
+
+        # Get per-stock cached bars for this interval
+        cached_ivl = {
+            sid: existing_cache.get(sid, {}).get(ivl, [])
+            for sid in stock_ids
+        }
+        missing_ids = [sid for sid in stock_ids if not cached_ivl[sid]]
+        present_ids = [sid for sid in stock_ids if cached_ivl[sid]]
+
+        new_ivl: dict[str, list] = {}
+
+        if missing_ids:
+            full_start = days_ago_iso(lookback)
+            logger.info(f"  Full backfill ({ivl}): {len(missing_ids)} stocks from {full_start}")
+            new_ivl.update(fetch_all_klines_yfinance(missing_ids, full_start, end_date, interval=ivl))
+
+        if present_ids:
+            latest = max(
+                (cached_ivl[sid][-1]["time"] for sid in present_ids if cached_ivl[sid]),
+                default="",
+            )
+            if latest:
+                inc_start = (date.fromisoformat(latest) + timedelta(days=1)).isoformat()
+                if inc_start < end_date:
+                    logger.info(f"  Incremental ({ivl}): {len(present_ids)} stocks from {inc_start}")
+                    new_ivl.update(fetch_all_klines_yfinance(present_ids, inc_start, end_date, interval=ivl))
+                else:
+                    logger.info(f"  {ivl} already up-to-date (cached through {latest})")
+
+        for sid, bars in new_ivl.items():
+            all_fetched.setdefault(sid, {})[ivl] = bars
+
+    # ── 5. Merge fetched bars into kline_map ──────────────────────────────────
+    kline_map: dict[str, dict[str, list]] = {}
+    all_sids = set(list(existing_cache.keys()) + stock_ids)
+    total_new_bars = 0
+
+    for sid in all_sids:
+        kline_map[sid] = {}
+        for ivl in INTERVAL_LOOKBACK:
+            old_bars = existing_cache.get(sid, {}).get(ivl, [])
+            new_bars = all_fetched.get(sid, {}).get(ivl, [])
+            existing_times = {b["time"] for b in old_bars}
+            to_add = [b for b in new_bars if b["time"] not in existing_times]
+            merged = old_bars + to_add
+            merged.sort(key=lambda b: b.get("time", ""))
+            kline_map[sid][ivl] = merged
+            total_new_bars += len(to_add)
+
+    covered = sum(1 for sid in stock_ids if kline_map.get(sid, {}).get("1d"))
+    logger.info(
+        f"Merge complete: +{total_new_bars} new bars, "
+        f"{covered}/{len(stock_ids)} scanned stocks have daily data"
     )
-    if latest_cached:
-        inc_start = (date.fromisoformat(latest_cached) + timedelta(days=1)).isoformat()
-        logger.info(f"Incremental mode: cache up to {latest_cached}, fetching from {inc_start}")
-    else:
-        inc_start = days_ago_iso(LOOKBACK_DAYS)
-        logger.info(f"No prior cache — full fetch from {inc_start}")
-
-    end_date = tomorrow_iso()   # exclusive — includes today's data
-    new_data: dict[str, list[dict]] = {}
-
-    # Full LOOKBACK_DAYS backfill for stocks not yet in cache
-    if missing_ids:
-        full_start = days_ago_iso(LOOKBACK_DAYS)
-        logger.info(f"Full backfill for {len(missing_ids)} uncached stocks from {full_start}")
-        full_data = fetch_all_klines_yfinance(missing_ids, full_start, end_date)
-        new_data.update(full_data)
-        logger.info(f"  Backfill result: {len(full_data)}/{len(missing_ids)} stocks returned data")
-
-    # Incremental fetch for already-cached stocks (skip if already current)
-    if present_ids and inc_start < end_date:
-        logger.info(f"Incremental fetch for {len(present_ids)} cached stocks from {inc_start}")
-        inc_data = fetch_all_klines_yfinance(present_ids, inc_start, end_date)
-        new_data.update(inc_data)
-        logger.info(f"  Incremental result: {len(inc_data)}/{len(present_ids)} stocks returned data")
-    elif present_ids:
-        logger.info(f"Cached stocks up-to-date through {latest_cached} — skipping incremental")
-
-    # ── 5. Merge new bars into kline_map ──────────────────────────────────────
-    # Start from the full existing cache (preserves all older bars)
-    kline_map: dict[str, list] = {sid: list(bars) for sid, bars in existing_cache.items()}
-
-    newly_added = 0
-    for sid, new_bars in new_data.items():
-        existing_times = {b["time"] for b in kline_map.get(sid, [])}
-        to_add = [b for b in new_bars if b["time"] not in existing_times]
-        if to_add:
-            kline_map.setdefault(sid, []).extend(to_add)
-            newly_added += len(to_add)
-
-    # Sort bars chronologically within each stock
-    for sid in kline_map:
-        kline_map[sid].sort(key=lambda b: b.get("time", ""))
-
-    if new_data:
-        covered = sum(1 for sid in stock_ids if sid in kline_map and kline_map[sid])
-        logger.info(
-            f"Merge complete: {len(new_data)} stocks returned new data, "
-            f"+{newly_added} bars added, "
-            f"{covered}/{len(stock_ids)} scanned stocks covered in cache"
-        )
 
     # ── 6. Save updated cache ─────────────────────────────────────────────────
     CACHE_FILE.write_text(json.dumps(kline_map, ensure_ascii=False), "utf-8")
-    logger.info(f"Cache saved: {CACHE_FILE.name} ({len(kline_map)} stocks)")
+    logger.info(f"Cache saved: {CACHE_FILE.name} ({len(kline_map)} stocks, 3 intervals)")
+
+    # Flatten to daily bars for Excel + Notion (they don't need weekly/monthly)
+    kline_map_1d = {sid: data.get("1d", []) for sid, data in kline_map.items()}
 
     # ── 7. Excel export ───────────────────────────────────────────────────────
     logger.info("=== Excel export ===")
     try:
-        export_excel(kline_map, EXCEL_FILE)
+        export_excel(kline_map_1d, EXCEL_FILE)
     except Exception as exc:
         logger.error(f"Excel export failed: {exc}")
 
@@ -564,7 +589,7 @@ def main() -> None:
     notion_token = os.environ.get("NOTION_TOKEN",       "").strip()
     notion_db_id = os.environ.get("NOTION_DATABASE_ID", "").strip()
     try:
-        sync_to_notion(kline_map, notion_token, notion_db_id)
+        sync_to_notion(kline_map_1d, notion_token, notion_db_id)
     except Exception as exc:
         logger.error(f"Notion sync failed: {exc}")
 
