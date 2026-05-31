@@ -669,6 +669,10 @@ for (const d of recentDates) {
   for (const stock of (scans[d]?.top_stocks || [])) {
     if (klineMap[stock.stock_id]) stock.price_history = klineMap[stock.stock_id]
   }
+  // Also inject into persistent items so the K-line modal works for them too
+  for (const item of (scans[d]?.persistent || [])) {
+    if (klineMap[item.stock_id]) item.price_history = klineMap[item.stock_id]
+  }
 }
 console.log(`K-line: injected into stocks across ${recentDates.length} dates`)
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
 const pct = (v) => (v == null || isNaN(v) ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
@@ -19,6 +19,7 @@ function isOTC(stockId) {
 
 function CandleSVG({ data }) {
   const [hovered, setHovered] = useState(null)
+  const touchRef = useRef(null)
 
   if (!data || data.length < 2) return (
     <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 12, background: '#0f172a', borderRadius: 8 }}>
@@ -46,16 +47,53 @@ function CandleSVG({ data }) {
   const xStep = Math.max(1, Math.floor(n / 5))
   const xLabels = bars.map((d, i) => ({ i, label: d.time.slice(5) })).filter((_, i) => i % xStep === 0 || i === n - 1)
 
+  const getIdxFromClientX = (clientX, svgEl) => {
+    const rect = svgEl.getBoundingClientRect()
+    const svgX = (clientX - rect.left) / rect.width * W
+    return Math.floor((svgX - PL) / slotW)
+  }
+
+  const setBar = (idx) => {
+    if (idx >= 0 && idx < bars.length) setHovered({ idx, bar: bars[idx], x: toX(idx) })
+    else setHovered(null)
+  }
+
   const handleMouseMove = (e) => {
+    setBar(getIdxFromClientX(e.clientX, e.currentTarget))
+  }
+
+  // Touch: long-press (300ms) activates scrub mode; drag to scrub through bars
+  const handleTouchStart = (e) => {
+    const touch = e.touches[0]
     const svg = e.currentTarget
-    const rect = svg.getBoundingClientRect()
-    const svgX = (e.clientX - rect.left) / rect.width * W
-    const idx = Math.floor((svgX - PL) / slotW)
-    if (idx >= 0 && idx < bars.length) {
-      setHovered({ idx, bar: bars[idx], x: toX(idx) })
-    } else {
-      setHovered(null)
+    touchRef.current = {
+      active: false,
+      startX: touch.clientX,
+      timer: setTimeout(() => {
+        if (touchRef.current) {
+          touchRef.current.active = true
+          setBar(getIdxFromClientX(touchRef.current.lastX ?? touchRef.current.startX, svg))
+        }
+      }, 300),
+      lastX: touch.clientX,
+      svgEl: svg,
     }
+  }
+
+  const handleTouchMove = (e) => {
+    const touch = e.touches[0]
+    if (!touchRef.current) return
+    touchRef.current.lastX = touch.clientX
+    if (touchRef.current.active) {
+      e.preventDefault()
+      setBar(getIdxFromClientX(touch.clientX, touchRef.current.svgEl))
+    }
+  }
+
+  const handleTouchEnd = () => {
+    if (touchRef.current?.timer) clearTimeout(touchRef.current.timer)
+    touchRef.current = null
+    setHovered(null)
   }
 
   // Tooltip position: flip to left side if in right half of chart
@@ -66,9 +104,12 @@ function CandleSVG({ data }) {
   return (
     <svg
       viewBox={`0 0 ${W} ${H + PT + 18}`}
-      style={{ width: '100%', display: 'block', background: '#0f172a', borderRadius: 8, cursor: 'crosshair' }}
+      style={{ width: '100%', display: 'block', background: '#0f172a', borderRadius: 8, cursor: 'crosshair', touchAction: 'none' }}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setHovered(null)}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       {gridLevels.map(({ y, price }, j) => (
         <g key={j}>
