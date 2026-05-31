@@ -230,12 +230,13 @@ function LimitDownSection({ items, onSelect }) {
   )
 }
 
-function PersistentSection({ items }) {
+function PersistentSection({ items, onSelect }) {
   if (!items || items.length === 0) return null
   return (
     <div style={{ marginTop: 24 }}>
       <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
         📅 跨日持續強勢（近14天 TOP 50）
+        {onSelect && <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--muted)' }}>點擊查看K線</span>}
       </h3>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 400 }}>
@@ -247,17 +248,26 @@ function PersistentSection({ items }) {
             </tr>
           </thead>
           <tbody>
-            {items.map((s, i) => (
-              <tr key={s.stock_id} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
-                <td style={{ padding: '7px 8px', textAlign: 'center', fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 600 }}>{s.stock_id}</td>
-                <td style={{ padding: '7px 8px', textAlign: 'center' }}>{s.name}</td>
-                <td style={{ padding: '7px 8px', textAlign: 'center', color: s.days_in_top >= 5 ? 'var(--green)' : s.days_in_top >= 3 ? 'var(--yellow)' : 'var(--text)', fontWeight: 700 }}>{s.days_in_top}天</td>
-                <td style={{ padding: '7px 8px', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{s.latest_score.toLocaleString()}</td>
-                <td style={{ padding: '7px 8px', textAlign: 'center', color: s.score_trend > 0 ? 'var(--green)' : s.score_trend < 0 ? 'var(--red)' : 'var(--muted)', fontFamily: 'var(--font-mono)' }}>
-                  {s.score_trend > 0 ? '+' : ''}{s.score_trend}
-                </td>
-              </tr>
-            ))}
+            {items.map((s, i) => {
+              const bg = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)'
+              return (
+                <tr
+                  key={s.stock_id}
+                  onClick={() => onSelect && onSelect(s)}
+                  style={{ borderBottom: '1px solid var(--border)', background: bg, cursor: onSelect ? 'pointer' : 'default' }}
+                  onMouseEnter={e => { if (onSelect) e.currentTarget.style.background = 'rgba(96,165,250,0.07)' }}
+                  onMouseLeave={e => { if (onSelect) e.currentTarget.style.background = bg }}
+                >
+                  <td style={{ padding: '7px 8px', textAlign: 'center', fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 600 }}>{s.stock_id}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center' }}>{s.name}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center', color: s.days_in_top >= 5 ? 'var(--green)' : s.days_in_top >= 3 ? 'var(--yellow)' : 'var(--text)', fontWeight: 700 }}>{s.days_in_top}天</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>{s.latest_score.toLocaleString()}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center', color: s.score_trend > 0 ? 'var(--green)' : s.score_trend < 0 ? 'var(--red)' : 'var(--muted)', fontFamily: 'var(--font-mono)' }}>
+                    {s.score_trend > 0 ? '+' : ''}{s.score_trend}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -268,6 +278,7 @@ function PersistentSection({ items }) {
 export default function Dashboard({ data, error }) {
   const [selectedDate, setSelectedDate] = useState(() => data?.dates?.[0] || null)
   const [selectedStock, setSelectedStock] = useState(null)
+  const [viewTab, setViewTab] = useState('all')
   const notionMap = data?.notionMap || {}
 
   if (error || !data || !data.dates || data.dates.length === 0) {
@@ -338,6 +349,28 @@ export default function Dashboard({ data, error }) {
           <StatCard label="掃描總數" value={scan.total_scanned?.toLocaleString() || '—'} />
           <StatCard label="進場訊號" value={scan.entry_count ?? '—'} color={scan.entry_count > 0 ? 'var(--green)' : 'var(--muted)'} />
           <StatCard label="TOP 50 顯示" value={stocks.length} />
+        </div>
+        {/* View tabs */}
+        <div style={{ display: 'flex', gap: 4, marginTop: 10, flexWrap: 'wrap' }}>
+          {[
+            { id: 'all',       label: '全部',      count: stocks.length,         color: null },
+            { id: 'entry',     label: '✓ 進場訊號', count: entryStocks.length,    color: 'var(--green)' },
+            { id: 'limitdown', label: '🔴 連跌停',  count: limitDownAlerts.length, color: '#ef4444' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setViewTab(tab.id)}
+              style={{
+                background: viewTab === tab.id ? 'rgba(96,165,250,0.15)' : 'var(--surface2)',
+                border: `1px solid ${viewTab === tab.id ? 'var(--accent)' : 'var(--border)'}`,
+                color: viewTab === tab.id ? 'var(--accent)' : tab.color || 'var(--muted)',
+                borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
+                fontWeight: viewTab === tab.id ? 700 : 400, whiteSpace: 'nowrap',
+              }}
+            >
+              {tab.label} <span style={{ fontSize: 11, opacity: 0.8 }}>({tab.count})</span>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -411,12 +444,22 @@ export default function Dashboard({ data, error }) {
           </div>
         )}
         <div style={{ padding: '0 8px' }}>
-          <StockTable stocks={stocks} onSelect={setSelectedStock} notionMap={notionMap} />
+          <StockTable
+            stocks={viewTab === 'entry' ? entryStocks : viewTab === 'limitdown' ? limitDownAlerts : stocks}
+            onSelect={setSelectedStock}
+            notionMap={notionMap}
+          />
         </div>
 
         {persistent.length > 0 && (
           <div style={{ padding: '0 16px' }}>
-            <PersistentSection items={persistent} />
+            <PersistentSection
+              items={persistent}
+              onSelect={item => {
+                const full = stocks.find(s => s.stock_id === item.stock_id)
+                setSelectedStock(full || { stock_id: item.stock_id, name: item.name, industry_category: item.industry_category || '', entry_score: item.latest_score || 0, price_history: item.price_history || [], condition_count: 0, entry_signal: false })
+              }}
+            />
           </div>
         )}
 
