@@ -664,14 +664,31 @@ if (existsSync(KLINE_FILE)) {
     klineMap = await fetchKLineData([...idSet].slice(0, 100), klineToken10 || klineToken1, klineToken10 ? klineToken1 : null)
   }
 }
-// Inject price_history into recent dates' stocks
+// Support both cache formats:
+// Old: {stock_id: [bars]}
+// New: {stock_id: {"1d": [bars], "1wk": [bars], "1mo": [bars]}}
+function getKlineBars(entry, interval) {
+  if (!entry) return undefined
+  if (Array.isArray(entry)) return interval === '1d' ? entry : undefined
+  const bars = entry[interval]
+  return Array.isArray(bars) && bars.length >= 2 ? bars : undefined
+}
+
+// Inject price_history (all 3 intervals) into recent dates' stocks and persistent items
 for (const d of recentDates) {
   for (const stock of (scans[d]?.top_stocks || [])) {
-    if (klineMap[stock.stock_id]) stock.price_history = klineMap[stock.stock_id]
+    const entry = klineMap[stock.stock_id]
+    if (!entry) continue
+    stock.price_history    = getKlineBars(entry, '1d')
+    stock.price_history_wk = getKlineBars(entry, '1wk')
+    stock.price_history_mo = getKlineBars(entry, '1mo')
   }
-  // Also inject into persistent items so the K-line modal works for them too
   for (const item of (scans[d]?.persistent || [])) {
-    if (klineMap[item.stock_id]) item.price_history = klineMap[item.stock_id]
+    const entry = klineMap[item.stock_id]
+    if (!entry) continue
+    item.price_history    = getKlineBars(entry, '1d')
+    item.price_history_wk = getKlineBars(entry, '1wk')
+    item.price_history_mo = getKlineBars(entry, '1mo')
   }
 }
 console.log(`K-line: injected into stocks across ${recentDates.length} dates`)

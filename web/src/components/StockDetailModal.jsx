@@ -170,17 +170,52 @@ function CandleSVG({ data }) {
   )
 }
 
-function KLineChart({ stockId, priceHistory }) {
+const INTERVAL_LABELS = [
+  { id: '1d',  label: '日' },
+  { id: '1wk', label: '週' },
+  { id: '1mo', label: '月' },
+]
+
+function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
+  const [interval, setInterval] = useState('1d')
   const isOtc = isOTC(stockId)
   const tvUrl = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(`${isOtc ? 'TPEX' : 'TWSE'}:${stockId}`)}`
   const yahooUrl = `https://finance.yahoo.com/quote/${stockId}${isOtc ? '.TWO' : '.TW'}/chart/`
-  const data = Array.isArray(priceHistory) ? priceHistory : []
+
+  const dataMap = {
+    '1d':  Array.isArray(priceHistory)    ? priceHistory    : [],
+    '1wk': Array.isArray(priceHistoryWk)  ? priceHistoryWk  : [],
+    '1mo': Array.isArray(priceHistoryMo)  ? priceHistoryMo  : [],
+  }
+  const data = dataMap[interval]
+
+  const unitLabel = { '1d': '個交易日', '1wk': '週', '1mo': '個月' }
 
   return (
     <div>
+      {/* Interval tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+        {INTERVAL_LABELS.map(t => {
+          const available = dataMap[t.id].length >= 2
+          const active = interval === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => available && setInterval(t.id)}
+              style={{
+                background: active ? '#1e3a5f' : '#1e293b',
+                border: `1px solid ${active ? '#3b82f6' : '#334155'}`,
+                color: !available ? '#334155' : active ? '#93c5fd' : '#64748b',
+                borderRadius: 4, padding: '3px 12px', fontSize: 12,
+                cursor: available ? 'pointer' : 'not-allowed', fontWeight: active ? 700 : 400,
+              }}
+            >{t.label}</button>
+          )
+        })}
+      </div>
       <CandleSVG data={data} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 6 }}>
-        {data.length >= 2 && <span style={{ fontSize: 10, color: '#475569' }}>近 {data.length} 個交易日</span>}
+        {data.length >= 2 && <span style={{ fontSize: 10, color: '#475569' }}>近 {data.length} {unitLabel[interval]}</span>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <a href={tvUrl} target="_blank" rel="noopener noreferrer"
             style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
@@ -260,7 +295,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
 
         {/* K 線圖 */}
         <Section title="K 線圖">
-          <KLineChart stockId={s.stock_id} priceHistory={s.price_history} />
+          <KLineChart stockId={s.stock_id} priceHistory={s.price_history} priceHistoryWk={s.price_history_wk} priceHistoryMo={s.price_history_mo} />
         </Section>
 
         {/* Notion 連結 */}
