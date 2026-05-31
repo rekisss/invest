@@ -210,20 +210,30 @@ function TrendingBar({ news, onFilter }) {
 
 function buildDynamicTabs(news, customRules = []) {
   const allRules = [...KEYWORD_RULES, ...customRules]
+  const customTagSet = new Set(customRules.map(r => r.tag))
   const freq = {}
   for (const item of news) {
     for (const tag of (item.tags || [])) {
       if (tag !== '其他') freq[tag] = (freq[tag] || 0) + 1
     }
   }
+  // Top 7 built-in tags by frequency (exclude custom tags to avoid duplicates)
   const topTags = Object.entries(freq)
+    .filter(([tag]) => !customTagSet.has(tag))
     .sort((a, b) => b[1] - a[1])
     .slice(0, 7)
     .map(([tag]) => tag)
-  return [{ key: 'all', label: '全部', icon: '📋' }, ...topTags.map(tag => {
+
+  const tabs = [{ key: 'all', label: '全部', icon: '📋' }]
+  for (const tag of topTags) {
     const rule = allRules.find(r => r.tag === tag)
-    return { key: tag, label: tag, icon: rule?.icon || '📌', color: rule?.color }
-  })]
+    tabs.push({ key: tag, label: tag, icon: rule?.icon || '📌', color: rule?.color })
+  }
+  // Always show custom rule tabs (even if 0 matches, so user knows they were added)
+  for (const rule of customRules) {
+    tabs.push({ key: rule.tag, label: rule.tag, icon: rule.icon || '📌', color: rule.color })
+  }
+  return tabs
 }
 
 function timeAgo(dateStr) {
