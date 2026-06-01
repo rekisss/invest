@@ -2999,15 +2999,22 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
             "generated_at": _cst_now(),
             "xgb_prob_up": round(pred["prob_up"], 3),
             "xgb_label": pred.get("label", ""),
-            "market_data": {k: (float(v) if isinstance(v, (int, float)) else str(v))
-                            for k, v in market_data_json.items()
-                            if not isinstance(v, (list, dict))},
+            "market_data": {
+                "vix":         _safe_float(_us_row.get("vix")),
+                "nasdaq_ret":  _safe_float(_us_row.get("nasdaq_ret1")),
+                "sox_ret":     _safe_float(_us_row.get("sox_ret1")),
+                "tsm_adr_ret": _safe_float(_us_row.get("tsm_adr_ret1")),
+                "futures_net": _safe_float(_ft_row.get("foreign_futures_net")),
+                "night_change": (night_data.get("price_change") if isinstance(night_data, dict) else None),
+                "pcr":         (round(_pcr_val, 3) if _pcr_val is not None else None),
+                "taiex_rsi":   _taiex_tech.get("rsi14"),
+            },
         }
         if "_regime" in dir():
             _pred_payload["regime"] = {
                 "label": getattr(_regime, "label", ""),
                 "label_zh": getattr(_regime, "label_zh", ""),
-                "win_rate": getattr(_regime, "win_rate_estimate", 0),
+                "win_rate": round(getattr(_regime, "win_rate_estimate", 0) * 100, 1),
             }
         if "_scenario" in dir():
             _pred_payload["scenario"] = {
@@ -3017,10 +3024,14 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
                 "forbidden_actions": list(getattr(_scenario, "forbidden_actions", [])),
             }
         if "_risk" in dir():
+            _rl = getattr(_risk, "overall_level", None)
             _pred_payload["risk"] = {
-                "level": str(getattr(_risk, "level", "")),
-                "score": float(getattr(_risk, "score", 0)),
-                "factors": list(getattr(_risk, "factors", [])),
+                "level": (_rl.value if hasattr(_rl, "value") else str(_rl)) if _rl is not None else "MEDIUM",
+                "score": float(getattr(_risk, "composite_score", 0)),
+                "factors": [
+                    {"name": f.name, "description": f.description, "action": f.action}
+                    for f in getattr(_risk, "risk_factors", [])
+                ],
             }
         if "_news_result" in dir():
             _pred_payload["news_sentiment"] = {
