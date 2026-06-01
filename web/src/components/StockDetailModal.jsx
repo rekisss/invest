@@ -176,21 +176,53 @@ const INTERVAL_LABELS = [
   { id: '1mo', label: '月' },
 ]
 
+// Compute weekly/monthly bars from daily bars (used when server-side data is unavailable)
+function resampleBars(dailyBars, unit) {
+  if (!dailyBars || dailyBars.length < 2) return []
+  const buckets = {}
+  for (const bar of dailyBars) {
+    let key
+    if (unit === 'week') {
+      // ISO week: find the Monday of this bar's week
+      const d = new Date(bar.time)
+      const dow = d.getUTCDay() // 0=Sun
+      const daysBack = dow === 0 ? 6 : dow - 1
+      const mon = new Date(d)
+      mon.setUTCDate(d.getUTCDate() - daysBack)
+      key = mon.toISOString().slice(0, 10)
+    } else {
+      key = bar.time.slice(0, 7) + '-01'
+    }
+    if (!buckets[key]) {
+      buckets[key] = { time: key, open: bar.open, high: bar.high, low: bar.low, close: bar.close, volume: bar.volume }
+    } else {
+      buckets[key].high = Math.max(buckets[key].high, bar.high)
+      buckets[key].low  = Math.min(buckets[key].low,  bar.low)
+      buckets[key].close = bar.close
+      buckets[key].volume += bar.volume
+    }
+  }
+  return Object.values(buckets).sort((a, b) => a.time.localeCompare(b.time))
+}
+
 function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [chartInterval, setChartInterval] = useState('1d')
   const isOtc = isOTC(stockId)
   const tvUrl = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(`${isOtc ? 'TPEX' : 'TWSE'}:${stockId}`)}`
   const yahooUrl = `https://finance.yahoo.com/quote/${stockId}${isOtc ? '.TWO' : '.TW'}/chart/`
 
-  const dataMap = {
-    '1d':  Array.isArray(priceHistory)    ? priceHistory    : [],
-    '1wk': Array.isArray(priceHistoryWk)  ? priceHistoryWk  : [],
-    '1mo': Array.isArray(priceHistoryMo)  ? priceHistoryMo  : [],
-  }
+  const daily = Array.isArray(priceHistory) ? priceHistory : []
+  // Use server-side data if available (longer history), else compute from daily bars
+  const weekly = (Array.isArray(priceHistoryWk) && priceHistoryWk.length >= 2)
+    ? priceHistoryWk : resampleBars(daily, 'week')
+  const monthly = (Array.isArray(priceHistoryMo) && priceHistoryMo.length >= 2)
+    ? priceHistoryMo : resampleBars(daily, 'month')
+
+  const dataMap = { '1d': daily, '1wk': weekly, '1mo': monthly }
   const data = dataMap[chartInterval]
 
   const unitLabel = { '1d': '個交易日', '1wk': '週', '1mo': '個月' }
-  const anyMultiInterval = dataMap['1wk'].length >= 2 || dataMap['1mo'].length >= 2
+  const anyMultiInterval = true  // always available now (computed from daily)
 
   return (
     <div>
@@ -202,21 +234,17 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
           return (
             <button
               key={t.id}
-              title={!available ? '請先執行「K線資料更新」工作流以取得此時間週期資料' : ''}
               onClick={() => available && setChartInterval(t.id)}
               style={{
                 background: active ? '#1e3a5f' : '#1e293b',
                 border: `1px solid ${active ? '#3b82f6' : '#334155'}`,
-                color: !available ? '#334155' : active ? '#93c5fd' : '#64748b',
+                color: active ? '#93c5fd' : '#64748b',
                 borderRadius: 4, padding: '3px 12px', fontSize: 12,
-                cursor: available ? 'pointer' : 'not-allowed', fontWeight: active ? 700 : 400,
+                cursor: 'pointer', fontWeight: active ? 700 : 400,
               }}
             >{t.label}</button>
           )
         })}
-        {!anyMultiInterval && (
-          <span style={{ fontSize: 10, color: '#334155', marginLeft: 4 }}>週/月線需執行 K線更新後可用</span>
-        )}
       </div>
       <CandleSVG data={data} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 6 }}>
