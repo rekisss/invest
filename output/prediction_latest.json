@@ -1,53 +1,37 @@
 {
-  "date": "2026-05-28",
-  "generated_at": "07:58 CST",
-  "xgb_prob_up": 0.623,
-  "xgb_label": "偏多",
+  "date": "2026-06-01",
+  "generated_at": "12:56",
+  "xgb_prob_up": 0.454,
+  "xgb_label": "偏空",
   "market_data": {
-    "vix": 17.8,
-    "nasdaq_ret": 0.0124,
-    "sox_ret": 0.0231,
-    "tsm_adr_ret": 0.0089,
-    "futures_net": -18432,
-    "night_change": 87,
-    "pcr": 0.82,
-    "taiex_rsi": 58.3
+    "night_session": "None",
+    "xgb_prob_up": 0.454,
+    "xgb_label": "偏空"
   },
   "regime": {
-    "label": "BULL_TREND",
-    "label_zh": "強勢多頭趨勢日，動能延續可能性高",
-    "win_rate": 62
+    "label": "double_whipsaw",
+    "label_zh": "🔄 多空雙巴日",
+    "win_rate": 0.45
   },
   "scenario": {
-    "main_scenario": "外資期貨空單 18,432 口，但美股夜盤上漲 87 點、台積電 ADR 收漲 0.89%。多空訊號分歧，早盤宜觀察開盤 15 分鐘方向再進場，避免追缺口。",
-    "best_strategy": "確認開盤方向後，多方訊號布局 0050 或強勢半導體股；空方訊號等 VWAP 反彈後做空",
+    "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+    "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
     "danger_signals": [
-      "外資期貨空單偏重 -18,432 口，需觀察是否收斂",
-      "VIX 17.8 偏低，小心假突破回殺"
+      "外資空單極重（-60,650口），軋空風險高"
     ],
     "forbidden_actions": [
-      "禁止追缺口超過 150 點",
-      "禁止在外資空單未收斂前反彈高點追多"
+      "禁止反彈高點追多（軋空陷阱）"
     ]
   },
   "risk": {
-    "level": "RiskLevel.MEDIUM",
-    "score": 0.42,
-    "factors": [
-      "外資期貨淨空單 -18,432 口，有下行壓力",
-      "市場廣度 58%，中性偏多",
-      "VIX 17.8 屬低波動環境"
-    ]
+    "level": "",
+    "score": 0.0,
+    "factors": []
   },
   "news_sentiment": {
-    "market_impact": 0.31,
-    "bullish_count": 7,
-    "bearish_count": 3,
-    "key_events": [
-      "台積電 ADR 收漲 0.89%，半導體族群受惠",
-      "Fed 官員發言偏鴿，市場降息預期升溫",
-      "外資連續 3 日布局台積電現貨",
-      "費城半導體指數單日漲 2.31%"
-    ]
+    "market_impact": 0.0,
+    "key_events": [],
+    "bullish_count": 0,
+    "bearish_count": 0
   }
 }

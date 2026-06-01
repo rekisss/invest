@@ -1,0 +1,39 @@
+[
+  {
+    "date": "2026-06-01",
+    "generated_at": "12:56",
+    "xgb_prob_up": 0.454,
+    "xgb_label": "偏空",
+    "market_data": {
+      "night_session": "None",
+      "xgb_prob_up": 0.454,
+      "xgb_label": "偏空"
+    },
+    "regime": {
+      "label": "double_whipsaw",
+      "label_zh": "🔄 多空雙巴日",
+      "win_rate": 0.45
+    },
+    "scenario": {
+      "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+      "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
+      "danger_signals": [
+        "外資空單極重（-60,650口），軋空風險高"
+      ],
+      "forbidden_actions": [
+        "禁止反彈高點追多（軋空陷阱）"
+      ]
+    },
+    "risk": {
+      "level": "",
+      "score": 0.0,
+      "factors": []
+    },
+    "news_sentiment": {
+      "market_impact": 0.0,
+      "key_events": [],
+      "bullish_count": 0,
+      "bearish_count": 0
+    }
+  }
+]
