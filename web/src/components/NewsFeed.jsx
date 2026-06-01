@@ -462,7 +462,7 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
   )
 }
 
-export default function NewsFeed({ staticNews }) {
+export default function NewsFeed({ staticNews, refreshSignal }) {
   const [rawNews, setRawNews] = useState(staticNews || [])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -478,7 +478,12 @@ export default function NewsFeed({ staticNews }) {
     try {
       const items = await loadLiveNews()
       if (items.length > 0) {
-        setRawNews(items)
+        setRawNews(prev => {
+          // Merge: keep live items at top, append old items not in new set
+          const seen = new Set(items.map(i => i.title.slice(0, 30)))
+          const kept = prev.filter(i => !seen.has(i.title.slice(0, 30)))
+          return [...items, ...kept].slice(0, 80)
+        })
         setLastUpdated(new Date())
       }
     } catch (e) {
@@ -494,6 +499,21 @@ export default function NewsFeed({ staticNews }) {
     const timer = setInterval(() => doFetch(true), 10 * 60 * 1000)
     return () => clearInterval(timer)
   }, [doFetch])
+
+  // When App refresh button is clicked, re-fetch live news too
+  useEffect(() => {
+    if (refreshSignal > 0) doFetch(true)
+  }, [refreshSignal, doFetch])
+
+  // Merge updated staticNews (from App reload) into rawNews
+  useEffect(() => {
+    if (!staticNews?.length) return
+    setRawNews(prev => {
+      const seen = new Set(prev.map(i => i.title.slice(0, 30)))
+      const fresh = staticNews.filter(i => !seen.has(i.title.slice(0, 30)))
+      return fresh.length ? [...prev, ...fresh].slice(0, 80) : prev
+    })
+  }, [staticNews])
 
   // Re-tag news whenever customRules changes
   const news = useMemo(() =>

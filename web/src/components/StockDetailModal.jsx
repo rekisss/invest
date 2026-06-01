@@ -208,8 +208,8 @@ function resampleBars(dailyBars, unit) {
 function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [chartInterval, setChartInterval] = useState('1d')
   const isOtc = isOTC(stockId)
-  const tvUrl = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(`${isOtc ? 'TPEX' : 'TWSE'}:${stockId}`)}`
-  const yahooUrl = `https://finance.yahoo.com/quote/${stockId}${isOtc ? '.TWO' : '.TW'}/chart/`
+  const goodinfoUrl = `https://goodinfo.tw/tw/StockInfo.asp?STOCK_ID=${stockId}`
+  const yahooUrl = `https://tw.stock.yahoo.com/quote/${stockId}${isOtc ? '.TWO' : '.TW'}`
 
   const daily = Array.isArray(priceHistory) ? priceHistory : []
   // Use server-side data if available (longer history), else compute from daily bars
@@ -250,13 +250,13 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 6 }}>
         {data.length >= 2 && <span style={{ fontSize: 10, color: '#475569' }}>近 {data.length} {unitLabel[chartInterval]}</span>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <a href={tvUrl} target="_blank" rel="noopener noreferrer"
+          <a href={goodinfoUrl} target="_blank" rel="noopener noreferrer"
             style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
-            TradingView ↗
+            Goodinfo ↗
           </a>
           <a href={yahooUrl} target="_blank" rel="noopener noreferrer"
             style={{ fontSize: 11, color: '#94a3b8', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
-            Yahoo Finance ↗
+            Yahoo 台股 ↗
           </a>
         </div>
       </div>

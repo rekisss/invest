@@ -38,6 +38,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
+  const [refreshCount, setRefreshCount] = useState(0)
 
   const loadData = useCallback((isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -45,7 +46,12 @@ export default function App() {
     setError(null)
     fetch(`${BASE}data.json?t=${Date.now()}`)
       .then(r => { if (!r.ok) throw new Error(r.status); return r.json() })
-      .then(d => { setData(d); setLoading(false); setRefreshing(false) })
+      .then(d => {
+        setData(d)
+        setLoading(false)
+        setRefreshing(false)
+        if (isRefresh) setRefreshCount(c => c + 1)
+      })
       .catch(e => { setError(e.message); setLoading(false); setRefreshing(false) })
   }, [])
 
@@ -112,7 +118,7 @@ export default function App() {
           </div>
         )}
         {!loading && tab === 'dashboard' && <Dashboard data={data} error={error} />}
-        {!loading && tab === 'news' && <NewsFeed staticNews={data?.news} />}
+        {!loading && tab === 'news' && <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} />}
         {!loading && tab === 'predict' && <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />}
         {!loading && tab === 'quota' && <QuotaPanel quota={data?.quota} generatedAt={data?.generated_at} />}
         {!loading && tab === 'ai' && (
