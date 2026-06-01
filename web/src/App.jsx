@@ -114,7 +114,7 @@ export default function App() {
         {!loading && tab === 'dashboard' && <Dashboard data={data} error={error} />}
         {!loading && tab === 'news' && <NewsFeed staticNews={data?.news} />}
         {!loading && tab === 'predict' && <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />}
-        {!loading && tab === 'quota' && <QuotaPanel quota={data?.quota} />}
+        {!loading && tab === 'quota' && <QuotaPanel quota={data?.quota} generatedAt={data?.generated_at} />}
         {!loading && tab === 'ai' && (
           apiKey
             ? <AgentPanel apiKey={apiKey} onClearKey={() => { sessionStorage.removeItem('anthropic_key'); setApiKey('') }} />
