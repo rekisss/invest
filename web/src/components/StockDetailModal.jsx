@@ -208,7 +208,7 @@ function resampleBars(dailyBars, unit) {
 function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [chartInterval, setChartInterval] = useState('1d')
   const isOtc = isOTC(stockId)
-  const goodinfoUrl = `https://goodinfo.tw/tw/StockInfo.asp?STOCK_ID=${stockId}`
+  const fugleUrl = `https://stock.fugle.tw/quote/${stockId}`
   const yahooUrl = `https://tw.stock.yahoo.com/quote/${stockId}${isOtc ? '.TWO' : '.TW'}`
 
   const daily = Array.isArray(priceHistory) ? priceHistory : []
@@ -250,9 +250,9 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 6 }}>
         {data.length >= 2 && <span style={{ fontSize: 10, color: '#475569' }}>近 {data.length} {unitLabel[chartInterval]}</span>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <a href={goodinfoUrl} target="_blank" rel="noopener noreferrer"
+          <a href={fugleUrl} target="_blank" rel="noopener noreferrer"
             style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
-            Goodinfo ↗
+            富果 Fugle ↗
           </a>
           <a href={yahooUrl} target="_blank" rel="noopener noreferrer"
             style={{ fontSize: 11, color: '#94a3b8', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
