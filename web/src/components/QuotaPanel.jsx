@@ -10,7 +10,7 @@ function statusLabel(pct) {
   return '正常'
 }
 
-export default function QuotaPanel({ quota }) {
+export default function QuotaPanel({ quota, generatedAt }) {
   const accountDefs = [
     ...Array.from({ length: 5 }, (_, i) => ({ label: `帳號${i + 1}`, hrLimit: 600, tag: '掃描' })),
     ...Array.from({ length: 4 }, (_, i) => ({ label: `帳號${i + 6}`, hrLimit: 300, tag: '掃描' })),
@@ -122,12 +122,31 @@ export default function QuotaPanel({ quota }) {
           })}
         </div>
 
-        <div style={{ marginTop: 20, fontSize: 11, color: 'var(--muted)', lineHeight: 1.7 }}>
+        {/* Data freshness note */}
+        {generatedAt && (() => {
+          const tw = new Intl.DateTimeFormat('zh-TW', {
+            timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hour12: false,
+          }).format(new Date(generatedAt))
+          return (
+            <div style={{
+              marginTop: 16, padding: '10px 14px',
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 8, fontSize: 12, color: 'var(--muted)',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <span style={{ fontSize: 14 }}>🕐</span>
+              <span>配額快照時間：<b style={{ color: 'var(--text)' }}>{tw} 台灣時間</b>
+                　—　此數字為部署時抓取，非即時。按右上角「↻ 刷新」可取得最新部署資料；掃描/彙整工作流執行後數字才會更新。
+              </span>
+            </div>
+          )
+        })()}
+        <div style={{ marginTop: 12, fontSize: 11, color: 'var(--muted)', lineHeight: 1.7 }}>
           • 每小時上限：帳號1~5 各 600 次，帳號6~9 各 300 次<br />
           • 帳號10 專用於 K 線資料預取，不參與股票掃描<br />
           • 每支股票掃描需 2 次 API 呼叫<br />
-          • 「未回應」表示該帳號金鑰未設定或 FinMind API 暫時無法連線<br />
-          • 資料每次部署自動更新
+          • 「未回應」表示該帳號金鑰未設定或 FinMind API 暫時無法連線
         </div>
       </div>
     </div>
