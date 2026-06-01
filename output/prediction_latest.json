@@ -4,14 +4,19 @@
   "xgb_prob_up": 0.454,
   "xgb_label": "偏空",
   "market_data": {
-    "night_session": "None",
-    "xgb_prob_up": 0.454,
-    "xgb_label": "偏空"
+    "vix": 20.0,
+    "nasdaq_ret": null,
+    "sox_ret": null,
+    "tsm_adr_ret": null,
+    "futures_net": -60650.0,
+    "night_change": null,
+    "pcr": null,
+    "taiex_rsi": null
   },
   "regime": {
     "label": "double_whipsaw",
     "label_zh": "🔄 多空雙巴日",
-    "win_rate": 0.45
+    "win_rate": 45.0
   },
   "scenario": {
     "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",

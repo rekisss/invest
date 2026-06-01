@@ -47,12 +47,8 @@ EXCEL_FILE = ROOT / "output" / "kline_export.xlsx"
 WINDOW_DAYS = 30   # collect stocks scanned within this many days
 BATCH_SIZE  = 200  # stocks per yfinance download call
 
-# Lookback calendar days per interval (for first-time / missing stocks)
-INTERVAL_LOOKBACK: dict[str, int] = {
-    "1d":  90,    # ~60 trading bars
-    "1wk": 730,   # ~2 years / ~104 bars
-    "1mo": 1825,  # ~5 years / ~60 bars
-}
+# Lookback calendar days for daily bars (weekly/monthly are resampled from daily)
+DAILY_LOOKBACK = 730   # ~500 trading bars / ~2 years
 
 NOTION_API = "https://api.notion.com/v1"
 NOTION_VER = "2022-06-28"
@@ -511,65 +507,74 @@ def main() -> None:
     # ── 3 & 4. Fetch each interval with per-interval incremental logic ────────
     end_date = tomorrow_iso()
     # Accumulate all fetched bars: {stock_id: {interval: [bars]}}
-    all_fetched: dict[str, dict[str, list]] = {}
+    # ── 3b. Fetch daily bars only; derive weekly/monthly by resampling ──────────
+    logger.info("=== Fetching 1d bars (weekly/monthly will be resampled) ===")
+    cached_daily = {sid: existing_cache.get(sid, {}).get("1d", []) for sid in stock_ids}
 
-    for ivl, lookback in INTERVAL_LOOKBACK.items():
-        logger.info(f"=== Fetching {ivl} bars ===")
+    # Stocks with < 30 daily bars get a full backfill; others get incremental
+    missing_ids = [sid for sid in stock_ids if len(cached_daily[sid]) < 30]
+    present_ids = [sid for sid in stock_ids if len(cached_daily[sid]) >= 30]
 
-        # Get per-stock cached bars for this interval
-        cached_ivl = {
-            sid: existing_cache.get(sid, {}).get(ivl, [])
-            for sid in stock_ids
-        }
-        # Stocks with too few bars are treated as missing (force full backfill)
-        MIN_BARS = {"1d": 30, "1wk": 10, "1mo": 3}
-        threshold = MIN_BARS.get(ivl, 2)
-        missing_ids = [sid for sid in stock_ids if len(cached_ivl[sid]) < threshold]
-        present_ids = [sid for sid in stock_ids if len(cached_ivl[sid]) >= threshold]
+    new_daily: dict[str, list] = {}
+    if missing_ids:
+        full_start = days_ago_iso(DAILY_LOOKBACK)
+        logger.info(f"  Full backfill (1d): {len(missing_ids)} stocks from {full_start}")
+        new_daily.update(fetch_all_klines_yfinance(missing_ids, full_start, end_date, interval="1d"))
 
-        new_ivl: dict[str, list] = {}
+    if present_ids:
+        latest_cached = max(
+            (cached_daily[sid][-1]["time"] for sid in present_ids if cached_daily[sid]),
+            default="",
+        )
+        if latest_cached:
+            inc_start = (date.fromisoformat(latest_cached) + timedelta(days=1)).isoformat()
+            if inc_start < end_date:
+                logger.info(f"  Incremental (1d): {len(present_ids)} stocks from {inc_start}")
+                new_daily.update(fetch_all_klines_yfinance(present_ids, inc_start, end_date, interval="1d"))
+            else:
+                logger.info(f"  1d already up-to-date (cached through {latest_cached})")
 
-        if missing_ids:
-            full_start = days_ago_iso(lookback)
-            logger.info(f"  Full backfill ({ivl}): {len(missing_ids)} stocks from {full_start}")
-            new_ivl.update(fetch_all_klines_yfinance(missing_ids, full_start, end_date, interval=ivl))
+    # ── 5. Merge daily bars, then resample weekly/monthly ─────────────────────
+    def _resample(bars: list, freq: str) -> list:
+        """Aggregate daily bars into weekly (freq='W') or monthly (freq='M') OHLCV."""
+        buckets: dict[str, dict] = {}
+        for b in bars:
+            t = b["time"]
+            if freq == "W":
+                d_obj = date.fromisoformat(t)
+                key = (d_obj - timedelta(days=d_obj.weekday())).isoformat()
+            else:
+                key = t[:7] + "-01"
+            if key not in buckets:
+                buckets[key] = {"time": key, "open": b["open"], "high": b["high"],
+                                "low": b["low"], "close": b["close"], "volume": b["volume"]}
+            else:
+                buckets[key]["high"]    = max(buckets[key]["high"], b["high"])
+                buckets[key]["low"]     = min(buckets[key]["low"],  b["low"])
+                buckets[key]["close"]   = b["close"]
+                buckets[key]["volume"] += b["volume"]
+        return sorted(buckets.values(), key=lambda x: x["time"])
 
-        if present_ids:
-            latest = max(
-                (cached_ivl[sid][-1]["time"] for sid in present_ids if cached_ivl[sid]),
-                default="",
-            )
-            if latest:
-                inc_start = (date.fromisoformat(latest) + timedelta(days=1)).isoformat()
-                if inc_start < end_date:
-                    logger.info(f"  Incremental ({ivl}): {len(present_ids)} stocks from {inc_start}")
-                    new_ivl.update(fetch_all_klines_yfinance(present_ids, inc_start, end_date, interval=ivl))
-                else:
-                    logger.info(f"  {ivl} already up-to-date (cached through {latest})")
-
-        for sid, bars in new_ivl.items():
-            all_fetched.setdefault(sid, {})[ivl] = bars
-
-    # ── 5. Merge fetched bars into kline_map ──────────────────────────────────
     kline_map: dict[str, dict[str, list]] = {}
     all_sids = set(list(existing_cache.keys()) + stock_ids)
     total_new_bars = 0
 
     for sid in all_sids:
-        kline_map[sid] = {}
-        for ivl in INTERVAL_LOOKBACK:
-            old_bars = existing_cache.get(sid, {}).get(ivl, [])
-            new_bars = all_fetched.get(sid, {}).get(ivl, [])
-            existing_times = {b["time"] for b in old_bars}
-            to_add = [b for b in new_bars if b["time"] not in existing_times]
-            merged = old_bars + to_add
-            merged.sort(key=lambda b: b.get("time", ""))
-            kline_map[sid][ivl] = merged
-            total_new_bars += len(to_add)
+        old_daily = existing_cache.get(sid, {}).get("1d", [])
+        fetched   = new_daily.get(sid, [])
+        existing_times = {b["time"] for b in old_daily}
+        to_add = [b for b in fetched if b["time"] not in existing_times]
+        merged_daily = sorted(old_daily + to_add, key=lambda b: b.get("time", ""))
+        total_new_bars += len(to_add)
+        kline_map[sid] = {
+            "1d":  merged_daily,
+            "1wk": _resample(merged_daily, "W"),
+            "1mo": _resample(merged_daily, "M"),
+        }
 
     covered = sum(1 for sid in stock_ids if kline_map.get(sid, {}).get("1d"))
     logger.info(
-        f"Merge complete: +{total_new_bars} new bars, "
+        f"Merge complete: +{total_new_bars} new daily bars, "
         f"{covered}/{len(stock_ids)} scanned stocks have daily data"
     )
 

@@ -143,7 +143,7 @@ export default function PredictionPanel({ prediction, history = [] }) {
           <div style={{ textAlign: 'center', marginTop: 10 }}>
             <Tag text={xgb_label || (xgb_prob_up >= 0.55 ? '偏多' : xgb_prob_up <= 0.45 ? '偏空' : '中性')}
               color={xgb_prob_up >= 0.55 ? 'var(--green)' : xgb_prob_up <= 0.45 ? 'var(--red)' : 'var(--yellow)'} />
-            {regime && <Tag text={`勝率 ${regime.win_rate}%`} color="var(--accent)" />}
+            {regime && <Tag text={`勝率 ${regime.win_rate > 1 ? regime.win_rate : Math.round(regime.win_rate * 100)}%`} color="var(--accent)" />}
           </div>
           {regime?.label_zh && (
             <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--surface2)', borderRadius: 6, fontSize: 13, color: 'var(--text)' }}>
@@ -152,8 +152,8 @@ export default function PredictionPanel({ prediction, history = [] }) {
           )}
         </Card>
 
-        {/* Market data */}
-        {market_data && Object.keys(market_data).length > 0 && (
+        {/* Market data — only show if at least one real indicator exists */}
+        {market_data && (market_data.vix != null || market_data.nasdaq_ret != null || market_data.futures_net != null || market_data.night_change != null) && (
           <Card title="市場指標">
             <MarketDataGrid data={market_data} />
           </Card>
@@ -206,7 +206,10 @@ export default function PredictionPanel({ prediction, history = [] }) {
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--muted)' }}>{((risk.score || 0) * 100).toFixed(0)}%</div>
             </div>
             {risk.factors?.length > 0 && risk.factors.map((f, i) => (
-              <div key={i} style={{ fontSize: 12, color: 'var(--muted)', padding: '2px 0' }}>· {f}</div>
+              <div key={i} style={{ fontSize: 12, color: 'var(--muted)', padding: '2px 0' }}>
+                · {typeof f === 'string' ? f : (f.description || f.name || '')}
+                {typeof f !== 'string' && f.action && <span style={{ color: 'var(--accent)', marginLeft: 6 }}>→ {f.action}</span>}
+              </div>
             ))}
           </Card>
         )}
