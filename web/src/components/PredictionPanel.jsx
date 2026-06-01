@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 const RISK_COLOR = { LOW: 'var(--green)', MEDIUM: 'var(--yellow)', HIGH: 'var(--orange)', EXTREME: 'var(--red)' }
 const RISK_LABEL = { LOW: '低風險', MEDIUM: '中風險', HIGH: '高風險', EXTREME: '極高風險' }
 
