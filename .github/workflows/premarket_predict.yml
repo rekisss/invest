@@ -5,6 +5,9 @@ on:
     - cron: '0 0 * * 1-5'   # 08:00 CST 週一~週五（台股開盤前）
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
