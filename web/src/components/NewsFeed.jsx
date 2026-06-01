@@ -440,6 +440,22 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
               {hint}
             </div>
           )}
+          {item.url && (
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{
+                display: 'inline-block', marginTop: 10, fontSize: 11,
+                color: 'var(--accent)', textDecoration: 'none',
+                background: 'var(--accent)15', border: '1px solid var(--accent)40',
+                borderRadius: 4, padding: '3px 10px',
+              }}
+            >
+              閱讀原文 ↗
+            </a>
+          )}
         </div>
       )}
     </div>
