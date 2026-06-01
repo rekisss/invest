@@ -2057,6 +2057,28 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         if not raw_df.empty:
             raw_df.to_csv(token_csv, index=False, encoding="utf-8-sig")
             _write_summary_excel(raw_df, token_csv.with_suffix(".xlsx"))
+
+        # ── Notion 即時同步（掃描段落完成後立即上傳有訊號股票）────────────────────────
+        if notion_enabled() and not raw_df.empty and (
+            not candidates.empty or not watchlist.empty
+        ):
+            try:
+                _notion_date = str(raw_df["date"].max())[:10] if "date" in raw_df.columns else today
+                _regime_str = str(breadth.get("market_regime", "") if isinstance(breadth, dict) else "")
+                sync_scan_results(
+                    candidates if not candidates.empty else pd.DataFrame(),
+                    watchlist if not watchlist.empty else pd.DataFrame(),
+                    _notion_date,
+                    {},
+                    market_regime=_regime_str,
+                )
+                _safe_print(
+                    f"[sequential] ✅ Notion 即時同步完成"
+                    f"（帳號 {token_idx}，候選 {len(candidates)}，觀察 {len(watchlist)}）"
+                )
+            except Exception as _notion_exc:
+                _safe_print(f"[sequential] ⚠️ Notion 同步失敗（skip）：{_notion_exc}")
+
         _remaining_after = len(remaining_ids)
         _delta_done = _remaining_before - _remaining_after
 
@@ -3008,8 +3030,13 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
                 "night_change": (night_data.get("price_change") if isinstance(night_data, dict) else None),
                 "pcr":         (round(_pcr_val, 3) if _pcr_val is not None else None),
                 "taiex_rsi":   _taiex_tech.get("rsi14"),
+                "macd_hist":   _taiex_tech.get("macd_hist"),
+                "dist_ma60":   _taiex_tech.get("dist_ma60"),
+                "night_trend": (night_data.get("trend") if isinstance(night_data, dict) else None),
             },
         }
+        if ai_insight:
+            _pred_payload["ai_insight"] = ai_insight
         if "_regime" in dir():
             _pred_payload["regime"] = {
                 "label": getattr(_regime, "label", ""),

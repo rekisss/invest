@@ -52,6 +52,9 @@ function MarketDataGrid({ data }) {
     { label: '夜盤', value: data.night_change != null ? `${data.night_change > 0 ? '+' : ''}${Math.round(data.night_change)}` : '—', color: data.night_change > 0 ? 'var(--green)' : 'var(--red)' },
     { label: 'PCR', value: data.pcr?.toFixed(2), color: data.pcr > 1.2 ? 'var(--red)' : data.pcr < 0.8 ? 'var(--green)' : 'var(--text)' },
     { label: '加權 RSI', value: data.taiex_rsi?.toFixed(0) || data.rsi14?.toFixed(0), color: 'var(--text)' },
+    { label: 'MACD 直方', value: data.macd_hist != null ? `${data.macd_hist > 0 ? '+' : ''}${data.macd_hist.toFixed(1)}` : null, color: data.macd_hist > 0 ? 'var(--green)' : 'var(--red)' },
+    { label: '距 MA60', value: data.dist_ma60 != null ? `${data.dist_ma60 > 0 ? '+' : ''}${data.dist_ma60.toFixed(1)}%` : null, color: data.dist_ma60 > 0 ? 'var(--green)' : 'var(--red)' },
+    { label: '夜盤趨勢', value: data.night_trend || null, color: 'var(--text)' },
   ].filter(i => i.value && i.value !== 'undefined' && i.value !== 'NaN')
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 8 }}>
@@ -123,7 +126,7 @@ export default function PredictionPanel({ prediction, history = [] }) {
     )
   }
 
-  const { xgb_prob_up, xgb_label, date, generated_at, regime, scenario, risk, news_sentiment, market_data } = prediction
+  const { xgb_prob_up, xgb_label, date, generated_at, regime, scenario, risk, news_sentiment, market_data, ai_insight } = prediction
   const riskLevel = risk?.level?.replace('RiskLevel.', '') || 'MEDIUM'
 
   return (
@@ -151,6 +154,16 @@ export default function PredictionPanel({ prediction, history = [] }) {
             </div>
           )}
         </Card>
+
+        {/* AI Insight */}
+        {ai_insight && (
+          <Card title="🤖 AI 操盤要點" accent="var(--accent)">
+            <div style={{ fontSize: 13, lineHeight: 1.9, whiteSpace: 'pre-line', color: 'var(--text)' }}>
+              {ai_insight}
+            </div>
+          </Card>
+        )}
+
 
         {/* Market data — only show if at least one real indicator exists */}
         {market_data && (market_data.vix != null || market_data.nasdaq_ret != null || market_data.futures_net != null || market_data.night_change != null) && (
