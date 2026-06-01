@@ -206,7 +206,6 @@ function resampleBars(dailyBars, unit) {
 }
 
 function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
-  const [chartInterval, setChartInterval] = useState('1d')
   const isOtc = isOTC(stockId)
   const cnyesUrl = `https://www.cnyes.com/twstock/${stockId}`
   const wantgooUrl = `https://www.wantgoo.com/stock/${stockId}`
@@ -219,6 +218,11 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
     ? priceHistoryMo : resampleBars(daily, 'month')
 
   const dataMap = { '1d': daily, '1wk': weekly, '1mo': monthly }
+
+  // Auto-select first available interval (daily may be absent for some OTC stocks)
+  const [chartInterval, setChartInterval] = useState(
+    () => INTERVAL_LABELS.find(t => dataMap[t.id].length >= 2)?.id || '1d'
+  )
   const data = dataMap[chartInterval]
 
   const unitLabel = { '1d': '個交易日', '1wk': '週', '1mo': '個月' }
@@ -328,7 +332,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
 
         {/* K 線圖 */}
         <Section title="K 線圖">
-          <KLineChart stockId={s.stock_id} priceHistory={s.price_history} priceHistoryWk={s.price_history_wk} priceHistoryMo={s.price_history_mo} />
+          <KLineChart key={s.stock_id} stockId={s.stock_id} priceHistory={s.price_history} priceHistoryWk={s.price_history_wk} priceHistoryMo={s.price_history_mo} />
         </Section>
 
         {/* Notion 連結 */}
