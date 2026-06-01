@@ -521,8 +521,11 @@ def main() -> None:
             sid: existing_cache.get(sid, {}).get(ivl, [])
             for sid in stock_ids
         }
-        missing_ids = [sid for sid in stock_ids if not cached_ivl[sid]]
-        present_ids = [sid for sid in stock_ids if cached_ivl[sid]]
+        # Stocks with too few bars are treated as missing (force full backfill)
+        MIN_BARS = {"1d": 30, "1wk": 10, "1mo": 3}
+        threshold = MIN_BARS.get(ivl, 2)
+        missing_ids = [sid for sid in stock_ids if len(cached_ivl[sid]) < threshold]
+        present_ids = [sid for sid in stock_ids if len(cached_ivl[sid]) >= threshold]
 
         new_ivl: dict[str, list] = {}
 
