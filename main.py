@@ -2918,8 +2918,8 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         "xgb_prob_up":  pred["prob_up"],
         "futures_net":  _safe_float(_ft_row.get("foreign_futures_net")),
         "vix":          _safe_float(_us_row.get("vix")),
-        "night_change": night_data.get("price_change") if night_data else None,
-        "night_trend":  night_data.get("trend", "") if night_data else "",
+        "night_change": night_data.get("change") if night_data else None,
+        "night_trend":  night_data.get("last_hour_trend", "") if night_data else "",
         "cash_norm":    _safe_float(_mk_row.get("foreign_inst_norm")),
         "pcr":          _pcr_val,
         "nasdaq_ret":   _safe_float(_us_row.get("nasdaq_ret1")),
@@ -2951,7 +2951,7 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         from market_regime.scenario import generate_scenario
         _vix_val = float(_us_row.get("vix", 20) or 20)
         _fut_net = int(_safe_float(_ft_row.get("foreign_futures_net")) or 0)
-        _night_chg = float(night_data.get("price_change", 0) if night_data else 0)
+        _night_chg = float(night_data.get("change", 0) if night_data else 0)
         _adv_ratio = 0.5  # breadth not available in predict mode; use neutral
         _tech_str = float(_safe_float(_us_row.get("nasdaq_ret1")) or 0) * 30 + \
                     float(_safe_float(_us_row.get("sox_ret1")) or 0) * 20
@@ -3027,12 +3027,12 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
                 "sox_ret":     _safe_float(_us_row.get("sox_ret1")),
                 "tsm_adr_ret": _safe_float(_us_row.get("tsm_adr_ret1")),
                 "futures_net": _safe_float(_ft_row.get("foreign_futures_net")),
-                "night_change": (night_data.get("price_change") if isinstance(night_data, dict) else None),
+                "night_change": (night_data.get("change") if isinstance(night_data, dict) else None),
                 "pcr":         (round(_pcr_val, 3) if _pcr_val is not None else None),
                 "taiex_rsi":   _taiex_tech.get("rsi14"),
                 "macd_hist":   _taiex_tech.get("macd_hist"),
                 "dist_ma60":   _taiex_tech.get("dist_ma60"),
-                "night_trend": (night_data.get("trend") if isinstance(night_data, dict) else None),
+                "night_trend": (night_data.get("last_hour_trend") if isinstance(night_data, dict) else None),
             },
         }
         if ai_insight:
