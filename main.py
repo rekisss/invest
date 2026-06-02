@@ -2057,6 +2057,28 @@ def run_sequential_scan(args: argparse.Namespace, client: FinMindClient, config:
         if not raw_df.empty:
             raw_df.to_csv(token_csv, index=False, encoding="utf-8-sig")
             _write_summary_excel(raw_df, token_csv.with_suffix(".xlsx"))
+
+        # ── Notion 即時同步（掃描段落完成後立即上傳有訊號股票）────────────────────────
+        if notion_enabled() and not raw_df.empty and (
+            not candidates.empty or not watchlist.empty
+        ):
+            try:
+                _notion_date = str(raw_df["date"].max())[:10] if "date" in raw_df.columns else today
+                _regime_str = str(breadth.get("market_regime", "") if isinstance(breadth, dict) else "")
+                sync_scan_results(
+                    candidates if not candidates.empty else pd.DataFrame(),
+                    watchlist if not watchlist.empty else pd.DataFrame(),
+                    _notion_date,
+                    {},
+                    market_regime=_regime_str,
+                )
+                _safe_print(
+                    f"[sequential] ✅ Notion 即時同步完成"
+                    f"（帳號 {token_idx}，候選 {len(candidates)}，觀察 {len(watchlist)}）"
+                )
+            except Exception as _notion_exc:
+                _safe_print(f"[sequential] ⚠️ Notion 同步失敗（skip）：{_notion_exc}")
+
         _remaining_after = len(remaining_ids)
         _delta_done = _remaining_before - _remaining_after
 
@@ -2896,8 +2918,8 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         "xgb_prob_up":  pred["prob_up"],
         "futures_net":  _safe_float(_ft_row.get("foreign_futures_net")),
         "vix":          _safe_float(_us_row.get("vix")),
-        "night_change": night_data.get("price_change") if night_data else None,
-        "night_trend":  night_data.get("trend", "") if night_data else "",
+        "night_change": night_data.get("change") if night_data else None,
+        "night_trend":  night_data.get("last_hour_trend", "") if night_data else "",
         "cash_norm":    _safe_float(_mk_row.get("foreign_inst_norm")),
         "pcr":          _pcr_val,
         "nasdaq_ret":   _safe_float(_us_row.get("nasdaq_ret1")),
@@ -2929,7 +2951,7 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         from market_regime.scenario import generate_scenario
         _vix_val = float(_us_row.get("vix", 20) or 20)
         _fut_net = int(_safe_float(_ft_row.get("foreign_futures_net")) or 0)
-        _night_chg = float(night_data.get("price_change", 0) if night_data else 0)
+        _night_chg = float(night_data.get("change", 0) if night_data else 0)
         _adv_ratio = 0.5  # breadth not available in predict mode; use neutral
         _tech_str = float(_safe_float(_us_row.get("nasdaq_ret1")) or 0) * 30 + \
                     float(_safe_float(_us_row.get("sox_ret1")) or 0) * 20
@@ -3005,11 +3027,16 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
                 "sox_ret":     _safe_float(_us_row.get("sox_ret1")),
                 "tsm_adr_ret": _safe_float(_us_row.get("tsm_adr_ret1")),
                 "futures_net": _safe_float(_ft_row.get("foreign_futures_net")),
-                "night_change": (night_data.get("price_change") if isinstance(night_data, dict) else None),
+                "night_change": (night_data.get("change") if isinstance(night_data, dict) else None),
                 "pcr":         (round(_pcr_val, 3) if _pcr_val is not None else None),
                 "taiex_rsi":   _taiex_tech.get("rsi14"),
+                "macd_hist":   _taiex_tech.get("macd_hist"),
+                "dist_ma60":   _taiex_tech.get("dist_ma60"),
+                "night_trend": (night_data.get("last_hour_trend") if isinstance(night_data, dict) else None),
             },
         }
+        if ai_insight:
+            _pred_payload["ai_insight"] = ai_insight
         if "_regime" in dir():
             _pred_payload["regime"] = {
                 "label": getattr(_regime, "label", ""),
