@@ -201,16 +201,16 @@ function TrendingBar({ news, onFilter }) {
   const { topTags, topStocks } = buildTrending(news)
   if (topTags.length === 0 && topStocks.length === 0) return null
   return (
-    <div style={{ padding: '8px 14px 10px', background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
-      <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 600, marginBottom: 6, letterSpacing: 0.5 }}>🔥 熱門趨勢</div>
+    <div style={{ padding: '8px 14px 10px', background: 'var(--ios-bg)', borderBottom: '0.5px solid var(--ios-sep)' }}>
+      <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>🔥 熱門趨勢</div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {topTags.map(([tag, count]) => {
           const rule = KEYWORD_RULES.find(r => r.tag === tag)
-          const color = rule?.color || 'var(--muted)'
+          const color = rule?.color || 'var(--ios-label3)'
           return (
             <button key={tag} onClick={() => onFilter(tag)} style={{
               fontSize: 11, color, background: `${color}20`, border: `1px solid ${color}40`,
-              borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontWeight: 600,
+              borderRadius: 9999, padding: '3px 10px', cursor: 'pointer', fontWeight: 600,
             }}>
               {rule?.icon} {tag} <span style={{ opacity: 0.65 }}>·{count}</span>
             </button>
@@ -218,9 +218,9 @@ function TrendingBar({ news, onFilter }) {
         })}
         {topStocks.map(([code, count]) => (
           <span key={code} style={{
-            fontSize: 11, color: 'var(--accent)', background: 'var(--accent)18',
-            border: '1px solid var(--accent)40', borderRadius: 4,
-            padding: '2px 8px', fontWeight: 700,
+            fontSize: 11, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.12)',
+            border: '1px solid rgba(10,132,255,0.3)', borderRadius: 9999,
+            padding: '3px 10px', fontWeight: 700,
           }}>
             {code} <span style={{ opacity: 0.65 }}>·{count}</span>
           </span>
@@ -273,11 +273,11 @@ function timeAgo(dateStr) {
 function TagChip({ tag, customRules = [] }) {
   const allRules = [...KEYWORD_RULES, ...customRules]
   const rule = allRules.find(r => r.tag === tag)
-  const color = rule?.color || 'var(--muted)'
+  const color = rule?.color || 'var(--ios-label3)'
   return (
     <span style={{
       fontSize: 10, color, background: `${color}22`,
-      padding: '1px 6px', borderRadius: 3, fontWeight: 600, whiteSpace: 'nowrap',
+      padding: '2px 8px', borderRadius: 9999, fontWeight: 600, whiteSpace: 'nowrap',
     }}>
       {rule?.icon || '📌'} {tag}
     </span>
@@ -287,8 +287,9 @@ function TagChip({ tag, customRules = [] }) {
 function StockChip({ code }) {
   return (
     <span style={{
-      fontSize: 10, color: 'var(--accent)', background: 'var(--accent)11',
-      padding: '1px 6px', borderRadius: 3, fontWeight: 700, fontFamily: 'monospace',
+      fontSize: 10, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.12)',
+      padding: '2px 8px', borderRadius: 9999, fontWeight: 700, fontFamily: 'monospace',
+      border: '1px solid rgba(10,132,255,0.25)',
     }}>
       {code}
     </span>
@@ -322,28 +323,28 @@ function CustomRulePanel({ customRules, onRulesChange, onClose }) {
 
   return (
     <div style={{
-      background: 'var(--surface)', borderBottom: '1px solid var(--border)',
+      background: 'var(--ios-bg2)', borderBottom: '0.5px solid var(--ios-sep)',
       padding: '12px 14px',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>⚙️ 自訂分類關鍵字</span>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 14 }}>✕</button>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-label)' }}>⚙️ 自訂分類關鍵字</span>
+        <button onClick={onClose} style={{ background: 'var(--ios-fill3)', border: 'none', color: 'var(--ios-label2)', cursor: 'pointer', fontSize: 12, width: 24, height: 24, borderRadius: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
       </div>
 
       {customRules.length > 0 && (
         <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           {customRules.map((rule, idx) => (
             <div key={idx} style={{
-              display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px',
-              background: 'var(--bg)', borderRadius: 5, border: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+              background: 'var(--ios-bg3)', borderRadius: 10, border: '0.5px solid var(--ios-sep)',
             }}>
               <span style={{ color: rule.color, fontSize: 12 }}>{rule.icon}</span>
-              <span style={{ flex: 1, fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>{rule.tag}</span>
-              <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'monospace' }}>
+              <span style={{ flex: 1, fontSize: 12, color: 'var(--ios-label)', fontWeight: 600 }}>{rule.tag}</span>
+              <span style={{ fontSize: 11, color: 'var(--ios-label3)', fontFamily: 'monospace' }}>
                 {rule.patterns.join('、')}
               </span>
               <button onClick={() => deleteRule(idx)} style={{
-                background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: 12, padding: '0 2px',
+                background: 'none', border: 'none', color: 'var(--ios-red)', cursor: 'pointer', fontSize: 12, padding: '0 2px',
               }}>✕</button>
             </div>
           ))}
@@ -351,7 +352,7 @@ function CustomRulePanel({ customRules, onRulesChange, onClose }) {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ fontSize: 11, color: 'var(--muted)' }}>新增分類（多個關鍵字用逗號分隔）</div>
+        <div style={{ fontSize: 11, color: 'var(--ios-label3)' }}>新增分類（多個關鍵字用逗號分隔）</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <input
             value={keyword}
@@ -359,8 +360,8 @@ function CustomRulePanel({ customRules, onRulesChange, onClose }) {
             placeholder="關鍵字，如：鴻海,2317,FOXCONN"
             onKeyDown={e => e.key === 'Enter' && addRule()}
             style={{
-              flex: '2 1 140px', padding: '5px 9px', fontSize: 12, borderRadius: 5,
-              background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none',
+              flex: '2 1 140px', padding: '7px 10px', fontSize: 12, borderRadius: 9,
+              background: 'var(--ios-bg)', border: '0.5px solid var(--ios-sep)', color: 'var(--ios-label)', outline: 'none',
             }}
           />
           <input
@@ -369,25 +370,25 @@ function CustomRulePanel({ customRules, onRulesChange, onClose }) {
             placeholder="標籤名（可選）"
             onKeyDown={e => e.key === 'Enter' && addRule()}
             style={{
-              flex: '1 1 80px', padding: '5px 9px', fontSize: 12, borderRadius: 5,
-              background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none',
+              flex: '1 1 80px', padding: '7px 10px', fontSize: 12, borderRadius: 9,
+              background: 'var(--ios-bg)', border: '0.5px solid var(--ios-sep)', color: 'var(--ios-label)', outline: 'none',
             }}
           />
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: 'var(--muted)' }}>圖示：</span>
+          <span style={{ fontSize: 11, color: 'var(--ios-label3)' }}>圖示：</span>
           {CUSTOM_ICONS.map(ic => (
             <button key={ic} onClick={() => setIcon(ic)} style={{
-              background: icon === ic ? 'var(--accent)33' : 'none',
-              border: icon === ic ? '1px solid var(--accent)' : '1px solid transparent',
-              borderRadius: 4, cursor: 'pointer', fontSize: 14, padding: '1px 3px',
+              background: icon === ic ? 'rgba(10,132,255,0.2)' : 'none',
+              border: icon === ic ? '1px solid var(--ios-blue)' : '1px solid transparent',
+              borderRadius: 6, cursor: 'pointer', fontSize: 14, padding: '1px 3px',
             }}>{ic}</button>
           ))}
-          <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>顏色：</span>
+          <span style={{ fontSize: 11, color: 'var(--ios-label3)', marginLeft: 8 }}>顏色：</span>
           {CUSTOM_COLORS.map(c => (
             <button key={c} onClick={() => setColor(c)} style={{
               width: 18, height: 18, borderRadius: '50%', background: c,
-              border: color === c ? '2px solid var(--text)' : '2px solid transparent',
+              border: color === c ? '2px solid var(--ios-label)' : '2px solid transparent',
               cursor: 'pointer', padding: 0,
             }} />
           ))}
@@ -395,15 +396,15 @@ function CustomRulePanel({ customRules, onRulesChange, onClose }) {
             onClick={addRule}
             disabled={!keyword.trim()}
             style={{
-              marginLeft: 'auto', padding: '5px 14px', fontSize: 12, fontWeight: 700,
-              background: keyword.trim() ? 'var(--accent)' : 'var(--surface2)',
-              color: keyword.trim() ? '#fff' : 'var(--muted)',
-              border: 'none', borderRadius: 5, cursor: keyword.trim() ? 'pointer' : 'default',
+              marginLeft: 'auto', padding: '6px 14px', fontSize: 12, fontWeight: 700,
+              background: keyword.trim() ? 'var(--ios-blue)' : 'var(--ios-fill3)',
+              color: keyword.trim() ? '#fff' : 'var(--ios-label3)',
+              border: 'none', borderRadius: 9999, cursor: keyword.trim() ? 'pointer' : 'default',
             }}
           >+ 新增</button>
         </div>
       </div>
-      <div style={{ marginTop: 8, fontSize: 10, color: 'var(--muted)', lineHeight: 1.6 }}>
+      <div style={{ marginTop: 8, fontSize: 10, color: 'var(--ios-label3)', lineHeight: 1.6 }}>
         新分類會自動出現在 Tab 和熱門趨勢中（若有相符新聞）。儲存於本機，重整後保留。
       </div>
     </div>
@@ -419,31 +420,31 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
 
   return (
     <div style={{
-      borderBottom: '1px solid var(--border)',
-      background: isOpen ? 'var(--surface)' : 'transparent',
+      borderBottom: '0.5px solid var(--ios-sep)',
+      background: isOpen ? 'var(--ios-bg2)' : 'transparent',
       transition: 'background 0.15s',
     }}>
       <div
         onClick={onToggle}
-        style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start' }}
+        style={{ padding: '13px 16px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start' }}
       >
         <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{rule?.icon || '📰'}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.5, color: 'var(--text)' }}>{item.title}</div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.5, color: 'var(--ios-label)' }}>{item.title}</div>
+          <div style={{ display: 'flex', gap: 5, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             {(item.tags || []).slice(0, 3).map(tag => <TagChip key={tag} tag={tag} customRules={customRules} />)}
-            {item.source && <span style={{ fontSize: 10, color: 'var(--muted)' }}>{item.source}</span>}
-            <span style={{ fontSize: 10, color: 'var(--muted)' }}>{timeAgo(item.published)}</span>
+            {item.source && <span style={{ fontSize: 10, color: 'var(--ios-label3)' }}>{item.source}</span>}
+            <span style={{ fontSize: 10, color: 'var(--ios-label3)' }}>{timeAgo(item.published)}</span>
           </div>
         </div>
-        <span style={{ color: 'var(--muted)', fontSize: 12, flexShrink: 0 }}>{isOpen ? '▲' : '▼'}</span>
+        <span style={{ color: 'var(--ios-label3)', fontSize: 11, flexShrink: 0, marginTop: 3 }}>{isOpen ? '▲' : '▼'}</span>
       </div>
 
       {isOpen && (
         <div style={{ padding: '0 16px 14px 44px' }}>
           {/* Tags + stock chips */}
           {(item.tags?.length > 0 || stockCodes.length > 0) && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
               {item.tags.map(tag => <TagChip key={tag} tag={tag} customRules={customRules} />)}
               {stockCodes.map(c => <StockChip key={c} code={c} />)}
             </div>
@@ -453,20 +454,20 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
             const outline = generateOutline(item.title, item.summary)
             if (!outline) return null
             const typeIcon = { up: '📈', down: '📉', inst: '🏦', num: '💰', fwd: '🔭', info: '·' }
-            const typeColor = { up: 'var(--green)', down: 'var(--red)', inst: 'var(--yellow)', num: 'var(--accent)', fwd: 'var(--purple)', info: 'var(--text)' }
+            const typeColor = { up: 'var(--ios-green)', down: 'var(--ios-red)', inst: 'var(--ios-yellow)', num: 'var(--ios-blue)', fwd: 'var(--ios-purple)', info: 'var(--ios-label)' }
             return (
               <div style={{
                 marginBottom: 10,
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                padding: '8px 12px',
+                background: 'var(--ios-bg3)',
+                border: '0.5px solid var(--ios-sep)',
+                borderRadius: 10,
+                padding: '9px 12px',
               }}>
-                <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6, fontWeight: 600, letterSpacing: 0.5 }}>📋 大綱</div>
+                <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 6, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>📋 大綱</div>
                 {outline.map((item, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: i < outline.length - 1 ? 5 : 0, alignItems: 'flex-start' }}>
+                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: i < outline.length - 1 ? 6 : 0, alignItems: 'flex-start' }}>
                     <span style={{ fontSize: 12, flexShrink: 0, minWidth: 16, color: typeColor[item.type] }}>{typeIcon[item.type]}</span>
-                    <span style={{ fontSize: 12, color: typeColor[item.type] === 'var(--text)' ? 'var(--muted)' : 'var(--text)', lineHeight: 1.6 }}>{item.text}</span>
+                    <span style={{ fontSize: 12, color: item.type === 'info' ? 'var(--ios-label2)' : 'var(--ios-label)', lineHeight: 1.6 }}>{item.text}</span>
                   </div>
                 ))}
               </div>
@@ -475,9 +476,9 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
           {/* Investment hint */}
           {hint && (
             <div style={{
-              marginBottom: 10, fontSize: 12, color: 'var(--text)',
-              background: 'var(--surface2)', borderRadius: 6,
-              padding: '7px 10px', borderLeft: '3px solid var(--accent)',
+              marginBottom: 10, fontSize: 13, color: 'var(--ios-label)',
+              background: 'var(--ios-bg3)', borderRadius: 10,
+              padding: '9px 12px', borderLeft: '3px solid var(--ios-blue)',
               lineHeight: 1.6,
             }}>
               {hint}
@@ -553,9 +554,9 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
 
   if (loading && news.length === 0) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--muted)', gap: 10 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--ios-label2)', gap: 10 }}>
         <div style={{ fontSize: 28 }}>📡</div>
-        <div style={{ fontSize: 14 }}>載入即時新聞中…</div>
+        <div style={{ fontSize: 15 }}>載入即時新聞中…</div>
       </div>
     )
   }
@@ -568,7 +569,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
       )}
 
       {/* Dynamic tab bar */}
-      <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+      <div style={{ background: 'var(--ios-bg2)', borderBottom: '0.5px solid var(--ios-sep)', flexShrink: 0 }}>
         <div style={{ display: 'flex', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {tabs.map(cat => {
             const isActive = filter === cat.key
@@ -578,21 +579,21 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
                 key={cat.key}
                 onClick={() => { setFilter(cat.key); setOpenIdx(null) }}
                 style={{
-                  padding: '10px 12px', fontSize: 12, fontWeight: 600, border: 'none',
-                  borderBottom: `2px solid ${isActive ? (cat.color || 'var(--accent)') : 'transparent'}`,
+                  padding: '10px 12px', fontSize: 12, fontWeight: isActive ? 600 : 400, border: 'none',
+                  borderBottom: `2px solid ${isActive ? (cat.color || 'var(--ios-blue)') : 'transparent'}`,
                   background: 'transparent',
-                  color: isActive ? (cat.color || 'var(--accent)') : 'var(--muted)',
+                  color: isActive ? (cat.color || 'var(--ios-blue)') : 'var(--ios-label2)',
                   cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
               >
                 {cat.icon} {cat.label}
-                <span style={{ marginLeft: 3, fontSize: 10, opacity: 0.7 }}>({count})</span>
+                <span style={{ marginLeft: 3, fontSize: 10, opacity: 0.6 }}>({count})</span>
               </button>
             )
           })}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 12px 7px' }}>
-          <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+          <div style={{ fontSize: 10, color: 'var(--ios-label3)' }}>
             {lastUpdated
               ? `即時新聞 · 更新於 ${lastUpdated.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`
               : '即時新聞'}
@@ -602,9 +603,10 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
             <button
               onClick={() => setShowCustomPanel(p => !p)}
               style={{
-                fontSize: 11, padding: '3px 10px', background: showCustomPanel ? 'var(--accent)22' : 'var(--surface2)',
-                border: `1px solid ${showCustomPanel ? 'var(--accent)' : 'var(--border)'}`,
-                borderRadius: 4, color: showCustomPanel ? 'var(--accent)' : 'var(--muted)', cursor: 'pointer',
+                fontSize: 11, padding: '4px 11px',
+                background: showCustomPanel ? 'rgba(10,132,255,0.15)' : 'var(--ios-fill4)',
+                border: `0.5px solid ${showCustomPanel ? 'var(--ios-blue)' : 'var(--ios-sep)'}`,
+                borderRadius: 9999, color: showCustomPanel ? 'var(--ios-blue)' : 'var(--ios-label2)', cursor: 'pointer',
               }}
             >
               ⚙️ 自訂分類{customRules.length > 0 ? ` (${customRules.length})` : ''}
@@ -613,9 +615,9 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
               onClick={() => doFetch(true)}
               disabled={refreshing}
               style={{
-                fontSize: 11, padding: '3px 10px', background: 'var(--surface2)',
-                border: '1px solid var(--border)', borderRadius: 4,
-                color: refreshing ? 'var(--muted)' : 'var(--text)',
+                fontSize: 11, padding: '4px 11px', background: 'var(--ios-fill4)',
+                border: '0.5px solid var(--ios-sep)', borderRadius: 9999,
+                color: refreshing ? 'var(--ios-label3)' : 'var(--ios-label2)',
                 cursor: refreshing ? 'default' : 'pointer',
               }}
             >
@@ -635,12 +637,12 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
       )}
 
       {/* News list */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        <div style={{ padding: '8px 16px 4px', fontSize: 11, color: 'var(--muted)' }}>
+      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div style={{ padding: '8px 16px 4px', fontSize: 11, color: 'var(--ios-label3)' }}>
           {filtered.length} 則新聞
         </div>
         {filtered.length === 0 && !loading && (
-          <div style={{ textAlign: 'center', padding: '40px 24px', color: 'var(--muted)' }}>
+          <div style={{ textAlign: 'center', padding: '40px 24px', color: 'var(--ios-label2)' }}>
             <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
             <div>此分類暫無新聞</div>
           </div>
