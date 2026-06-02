@@ -1,9 +1,9 @@
-/* ── Liquid Glass Design System v2 ──────────────────────────────────── */
+/* ── Liquid Glass Design System v3 ──────────────────────────────────── */
 :root {
-  --bg:         rgba(6, 8, 18, 0.58);
-  --surface:    rgba(255, 255, 255, 0.038);
-  --surface2:   rgba(255, 255, 255, 0.075);
-  --border:     rgba(255, 255, 255, 0.11);
+  --bg:         rgba(6, 8, 18, 0.38);
+  --surface:    rgba(255, 255, 255, 0.022);
+  --surface2:   rgba(255, 255, 255, 0.048);
+  --border:     rgba(255, 255, 255, 0.08);
   --text:       rgba(255, 255, 255, 0.88);
   --muted:      rgba(255, 255, 255, 0.44);
   --accent:     #60a5fa;
@@ -90,8 +90,8 @@ body::after {
 /* ── Glass header bar ───────────────────────────────────────────────── */
 .app-header {
   position: relative;
-  backdrop-filter: blur(36px) saturate(1.9) brightness(1.08);
-  -webkit-backdrop-filter: blur(36px) saturate(1.9) brightness(1.08);
+  backdrop-filter: blur(48px) saturate(2.2) brightness(1.12);
+  -webkit-backdrop-filter: blur(48px) saturate(2.2) brightness(1.12);
 }
 
 .app-header::before {
@@ -136,8 +136,8 @@ body::after {
 .glass-card {
   position: relative;
   overflow: hidden;
-  backdrop-filter: blur(20px) saturate(1.6);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(28px) saturate(1.9);
+  -webkit-backdrop-filter: blur(28px) saturate(1.9);
   transition:
     transform    0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow   0.28s ease,
