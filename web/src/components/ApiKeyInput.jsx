@@ -1,78 +1,5 @@
 import { useState } from 'react'
 
-const styles = {
-  overlay: {
-    position: 'fixed', inset: 0,
-    background: 'var(--bg)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    padding: '20px',
-    zIndex: 100,
-  },
-  card: {
-    background: 'var(--surface)',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-lg)',
-    padding: '32px',
-    maxWidth: '420px',
-    width: '100%',
-  },
-  title: {
-    fontSize: '18px',
-    fontWeight: 600,
-    marginBottom: '8px',
-  },
-  subtitle: {
-    color: 'var(--muted)',
-    fontSize: '13px',
-    marginBottom: '24px',
-    lineHeight: 1.7,
-  },
-  label: {
-    display: 'block',
-    fontSize: '12px',
-    fontWeight: 500,
-    color: 'var(--muted)',
-    marginBottom: '8px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-  },
-  input: {
-    width: '100%',
-    background: 'var(--surface2)',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)',
-    padding: '10px 14px',
-    color: 'var(--text)',
-    fontSize: '13px',
-    fontFamily: 'var(--font-mono)',
-    outline: 'none',
-    transition: 'border-color 0.15s',
-  },
-  btn: {
-    marginTop: '16px',
-    width: '100%',
-    background: 'var(--accent)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 'var(--radius)',
-    padding: '11px',
-    fontSize: '14px',
-    fontWeight: 600,
-    transition: 'opacity 0.15s',
-  },
-  note: {
-    marginTop: '16px',
-    fontSize: '11px',
-    color: 'var(--muted)',
-    textAlign: 'center',
-  },
-  error: {
-    marginTop: '8px',
-    fontSize: '12px',
-    color: 'var(--red)',
-  },
-}
-
 export default function ApiKeyInput({ onSave }) {
   const [key, setKey] = useState('')
   const [error, setError] = useState('')
@@ -92,16 +19,53 @@ export default function ApiKeyInput({ onSave }) {
   }
 
   return (
-    <div style={styles.overlay}>
-      <div style={styles.card}>
-        <div style={styles.title}>台股 AI 助手</div>
-        <div style={styles.subtitle}>
+    <div style={{
+      position: 'fixed', inset: 0,
+      background: 'var(--ios-bg)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '20px',
+      zIndex: 100,
+    }}>
+      <div style={{
+        background: 'var(--ios-bg2)',
+        borderRadius: 20,
+        padding: '32px 24px',
+        maxWidth: '400px',
+        width: '100%',
+        boxShadow: 'var(--shadow-modal)',
+      }}>
+        <div style={{
+          fontSize: 22, fontWeight: 700, marginBottom: 8,
+          color: 'var(--ios-label)', letterSpacing: '-0.3px',
+        }}>
+          台股 AI 助手
+        </div>
+        <div style={{
+          color: 'var(--ios-label2)', fontSize: 14,
+          marginBottom: 28, lineHeight: 1.7,
+        }}>
           請輸入您的 Anthropic API Key。<br />
           金鑰僅存於本次分頁，關閉後自動清除，不會上傳至任何伺服器。
         </div>
-        <label style={styles.label}>Anthropic API Key</label>
+
+        <div style={{
+          fontSize: 12, fontWeight: 600, color: 'var(--ios-label3)',
+          marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.8,
+        }}>
+          Anthropic API Key
+        </div>
         <input
-          style={styles.input}
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            background: 'var(--ios-bg3)',
+            border: '0.5px solid var(--ios-sep)',
+            borderRadius: 12,
+            padding: '12px 14px',
+            color: 'var(--ios-label)',
+            fontSize: 13,
+            fontFamily: 'var(--font-mono)',
+            outline: 'none',
+          }}
           type="password"
           placeholder="sk-ant-api03-..."
           value={key}
@@ -109,15 +73,24 @@ export default function ApiKeyInput({ onSave }) {
           onKeyDown={handleKeyDown}
           autoFocus
         />
-        {error && <div style={styles.error}>{error}</div>}
+        {error && (
+          <div style={{ marginTop: 8, fontSize: 13, color: 'var(--ios-red)' }}>{error}</div>
+        )}
         <button
-          style={{ ...styles.btn, opacity: key.trim() ? 1 : 0.5 }}
+          className="ios-btn-primary"
+          style={{
+            marginTop: 20, width: '100%',
+            opacity: key.trim() ? 1 : 0.4,
+            cursor: key.trim() ? 'pointer' : 'default',
+          }}
           onClick={handleSave}
           disabled={!key.trim()}
         >
           開始使用
         </button>
-        <div style={styles.note}>
+        <div style={{
+          marginTop: 14, fontSize: 11, color: 'var(--ios-label3)', textAlign: 'center',
+        }}>
           金鑰存於 sessionStorage · 不持久化 · 不 commit
         </div>
       </div>

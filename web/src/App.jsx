@@ -9,27 +9,20 @@ import QuotaPanel from './components/QuotaPanel.jsx'
 const BASE = import.meta.env.BASE_URL || '/'
 
 const TABS = [
-  { key: 'dashboard', label: '📊 掃描結果' },
-  { key: 'news',      label: '📰 市場新聞' },
-  { key: 'predict',   label: '🔮 盤前預測' },
-  { key: 'quota',     label: '📡 配額狀態' },
-  { key: 'ai',        label: '🤖 AI 助手' },
+  { key: 'dashboard', label: '掃描', icon: '📊' },
+  { key: 'news',      label: '新聞', icon: '📰' },
+  { key: 'predict',   label: '預測', icon: '🔮' },
+  { key: 'quota',     label: '配額', icon: '📡' },
+  { key: 'ai',        label: 'AI',   icon: '🤖' },
 ]
 
-const TAB_BASE = {
-  padding: '10px 14px',
-  fontSize: 13,
-  fontWeight: 600,
-  border: 'none',
-  borderBottom: '2px solid transparent',
-  background: 'transparent',
-  color: 'var(--muted)',
-  cursor: 'pointer',
-  transition: 'color 0.15s',
-  whiteSpace: 'nowrap',
-  flexShrink: 0,
+const TAB_TITLES = {
+  dashboard: '掃描結果',
+  news:      '市場新聞',
+  predict:   '盤前預測',
+  quota:     '配額狀態',
+  ai:        'AI 助手',
 }
-const TAB_ACTIVE = { ...TAB_BASE, color: 'var(--accent)', borderBottom: '2px solid var(--accent)' }
 
 export default function App() {
   const [tab, setTab] = useState('dashboard')
@@ -57,64 +50,47 @@ export default function App() {
 
   useEffect(() => { loadData(false) }, [loadData])
 
+  const formattedTime = (() => {
+    if (!data?.generated_at) return null
+    const d = new Date(data.generated_at)
+    return new Intl.DateTimeFormat('zh-TW', {
+      timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(d)
+  })()
+
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Header */}
-      <div style={{
-        padding: '0 16px',
-        background: 'var(--bg)',
-        borderBottom: '1px solid var(--border)',
-        flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, paddingBottom: 2 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', letterSpacing: 0.5 }}>
-            台股 AI 助手
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {data?.generated_at && (() => {
-              const d = new Date(data.generated_at)
-              const tw = new Intl.DateTimeFormat('zh-TW', {
-                timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit',
-                hour: '2-digit', minute: '2-digit', hour12: false,
-              }).format(d).replace('/', '/').replace(' ', ' ')
-              return <div style={{ fontSize: 10, color: 'var(--muted)' }}>更新 {tw} 台灣時間</div>
-            })()}
-            <button
-              onClick={() => loadData(true)}
-              disabled={refreshing}
-              title="重新載入最新掃描資料"
-              style={{
-                background: 'var(--surface2)', border: '1px solid var(--border)',
-                color: refreshing ? 'var(--muted)' : 'var(--text)',
-                borderRadius: 6, padding: '3px 9px', fontSize: 13,
-                cursor: refreshing ? 'default' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: 4,
-                transition: 'opacity 0.2s',
-              }}
-            >
-              <span style={{
-                display: 'inline-block',
-                animation: refreshing ? 'spin 0.8s linear infinite' : 'none',
-              }}>↻</span>
-              {refreshing ? '更新中…' : '刷新'}
-            </button>
-          </div>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--ios-bg)' }}>
+
+      {/* ── iOS Navigation Bar ───────────────────────────────────── */}
+      <div className="ios-nav">
+        <div style={{ fontSize: 12, color: 'var(--ios-label2)', minWidth: 80 }}>
+          {formattedTime || ''}
         </div>
-        {/* Tab bar */}
-        <div style={{ display: 'flex', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          {TABS.map(t => (
-            <button key={t.key} style={tab === t.key ? TAB_ACTIVE : TAB_BASE} onClick={() => setTab(t.key)}>
-              {t.label}
-            </button>
-          ))}
+        <div className="ios-nav-title">台股 AI 助手</div>
+        <button
+          className="ios-refresh-btn"
+          onClick={() => loadData(true)}
+          disabled={refreshing}
+        >
+          <span style={{ display: 'inline-block', animation: refreshing ? 'spin 0.8s linear infinite' : 'none', fontSize: 14 }}>↻</span>
+          {refreshing ? '更新中' : '刷新'}
+        </button>
+      </div>
+
+      {/* ── Large Title ──────────────────────────────────────────── */}
+      <div style={{ padding: '8px 20px 4px', background: 'var(--ios-bg)', flexShrink: 0 }}>
+        <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-0.3px', color: 'var(--ios-label)', lineHeight: 1.2 }}>
+          {TAB_TITLES[tab]}
         </div>
       </div>
 
-      {/* Content */}
+      {/* ── Content ──────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {loading && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--muted)' }}>
-            載入中…
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 12 }}>
+            <div style={{ width: 32, height: 32, border: '3px solid var(--ios-fill3)', borderTop: '3px solid var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <div style={{ color: 'var(--ios-label2)', fontSize: 15 }}>載入中⋯</div>
           </div>
         )}
         {!loading && tab === 'dashboard' && <Dashboard data={data} error={error} />}
@@ -126,6 +102,24 @@ export default function App() {
             ? <AgentPanel apiKey={apiKey} onClearKey={() => { sessionStorage.removeItem('anthropic_key'); setApiKey('') }} />
             : <ApiKeyInput onSave={key => { sessionStorage.setItem('anthropic_key', key); setApiKey(key) }} />
         )}
+      </div>
+
+      {/* ── iOS Tab Bar ──────────────────────────────────────────── */}
+      <div className="ios-tabbar">
+        {TABS.map(t => (
+          <button
+            key={t.key}
+            className={`ios-tab-btn${tab === t.key ? ' active' : ''}`}
+            onClick={() => setTab(t.key)}
+          >
+            <span style={{ fontSize: 22, lineHeight: 1, opacity: tab === t.key ? 1 : 0.45 }}>
+              {t.icon}
+            </span>
+            <span style={{ fontSize: 10, fontWeight: 500, color: tab === t.key ? 'var(--ios-blue)' : 'var(--ios-label2)' }}>
+              {t.label}
+            </span>
+          </button>
+        ))}
       </div>
     </div>
   )
