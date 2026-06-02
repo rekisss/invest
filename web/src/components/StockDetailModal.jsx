@@ -2,14 +2,14 @@ import { useState, useRef } from 'react'
 
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
 const pct = (v) => (v == null || isNaN(v) ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
-const colorNum = (v, pos = '#ef4444', neg = '#4ade80') => {
+const colorNum = (v, pos = 'var(--ios-red)', neg = 'var(--ios-green)') => {
   const n = Number(v)
-  if (isNaN(n) || n === 0) return '#94a3b8'
+  if (isNaN(n) || n === 0) return 'var(--ios-label3)'
   return n > 0 ? pos : neg
 }
 
 // Taiwan convention: red = up, green = down
-function candleColor(open, close) { return close >= open ? '#ef4444' : '#22c55e' }
+function candleColor(open, close) { return close >= open ? '#FF453A' : '#30D158' }
 
 function isOTC(stockId) {
   const n = parseInt(String(stockId), 10)
@@ -22,7 +22,7 @@ function CandleSVG({ data }) {
   const touchRef = useRef(null)
 
   if (!data || data.length < 2) return (
-    <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 12, background: '#0f172a', borderRadius: 8 }}>
+    <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
       暫無歷史 K 線資料
     </div>
   )
@@ -62,7 +62,6 @@ function CandleSVG({ data }) {
     setBar(getIdxFromClientX(e.clientX, e.currentTarget))
   }
 
-  // Touch: long-press (300ms) activates scrub mode; drag to scrub through bars
   const handleTouchStart = (e) => {
     const touch = e.touches[0]
     const svg = e.currentTarget
@@ -96,7 +95,6 @@ function CandleSVG({ data }) {
     setHovered(null)
   }
 
-  // Tooltip position: flip to left side if in right half of chart
   const tipW = 118, tipH = 94
   const tipX = hovered ? (hovered.x > W / 2 ? hovered.x - tipW - 6 : hovered.x + 8) : 0
   const tipY = PT + 4
@@ -104,7 +102,7 @@ function CandleSVG({ data }) {
   return (
     <svg
       viewBox={`0 0 ${W} ${H + PT + 18}`}
-      style={{ width: '100%', display: 'block', background: '#0f172a', borderRadius: 8, cursor: 'crosshair', touchAction: 'none' }}
+      style={{ width: '100%', display: 'block', background: 'var(--ios-bg)', borderRadius: 10, cursor: 'crosshair', touchAction: 'none' }}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setHovered(null)}
       onTouchStart={handleTouchStart}
@@ -113,8 +111,8 @@ function CandleSVG({ data }) {
     >
       {gridLevels.map(({ y, price }, j) => (
         <g key={j}>
-          <line x1={PL} y1={y} x2={W - 6} y2={y} stroke="#1e293b" strokeWidth={0.5} />
-          <text x={PL - 3} y={y + 3.5} fontSize={8.5} fill="#475569" textAnchor="end">
+          <line x1={PL} y1={y} x2={W - 6} y2={y} stroke="#2C2C2E" strokeWidth={0.5} />
+          <text x={PL - 3} y={y + 3.5} fontSize={8.5} fill="#636366" textAnchor="end">
             {price >= 100 ? price.toFixed(0) : price.toFixed(1)}
           </text>
         </g>
@@ -135,34 +133,29 @@ function CandleSVG({ data }) {
         )
       })}
       {xLabels.map(({ i, label }) => (
-        <text key={i} x={toX(i)} y={H + PT + 12} fontSize={8.5} fill="#475569" textAnchor="middle">{label}</text>
+        <text key={i} x={toX(i)} y={H + PT + 12} fontSize={8.5} fill="#636366" textAnchor="middle">{label}</text>
       ))}
 
-      {/* Crosshair + Tooltip */}
       {hovered && (() => {
         const b = hovered.bar
         const closeColor = candleColor(b.open, b.close)
         const vol = b.volume >= 1000000 ? `${(b.volume / 1000000).toFixed(1)}M` : `${(b.volume / 1000).toFixed(0)}K`
         return (
           <g>
-            {/* Vertical crosshair */}
-            <line x1={hovered.x} y1={PT} x2={hovered.x} y2={H + PT} stroke="#60a5fa" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.7} />
-            {/* Horizontal crosshair at close price */}
-            <line x1={PL} y1={toY(b.close)} x2={W - PR} y2={toY(b.close)} stroke="#60a5fa" strokeWidth={0.4} strokeDasharray="2,3" opacity={0.5} />
-            {/* Close price label on Y axis */}
-            <rect x={0} y={toY(b.close) - 7} width={PL - 2} height={13} fill="#1e293b" rx={2} />
+            <line x1={hovered.x} y1={PT} x2={hovered.x} y2={H + PT} stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.7} />
+            <line x1={PL} y1={toY(b.close)} x2={W - PR} y2={toY(b.close)} stroke="#0A84FF" strokeWidth={0.4} strokeDasharray="2,3" opacity={0.5} />
+            <rect x={0} y={toY(b.close) - 7} width={PL - 2} height={13} fill="#1C1C1E" rx={2} />
             <text x={PL - 5} y={toY(b.close) + 4} fontSize={8} fill={closeColor} textAnchor="end" fontWeight="bold">
               {b.close >= 100 ? b.close.toFixed(1) : b.close.toFixed(2)}
             </text>
-            {/* Tooltip box */}
-            <rect x={tipX} y={tipY} width={tipW} height={tipH} fill="#0d1829" rx={4} stroke="#334155" strokeWidth={0.8} />
-            <text x={tipX + 7} y={tipY + 13} fontSize={9} fill="#94a3b8" fontWeight="bold">{b.time}</text>
-            <line x1={tipX + 4} y1={tipY + 17} x2={tipX + tipW - 4} y2={tipY + 17} stroke="#1e293b" strokeWidth={0.5} />
-            <text x={tipX + 7} y={tipY + 30} fontSize={8.5} fill="#64748b">開 <tspan fill="#e2e8f0">{b.open.toFixed(b.open >= 100 ? 1 : 2)}</tspan></text>
-            <text x={tipX + 7} y={tipY + 43} fontSize={8.5} fill="#64748b">高 <tspan fill="#ef4444">{b.high.toFixed(b.high >= 100 ? 1 : 2)}</tspan></text>
-            <text x={tipX + 7} y={tipY + 56} fontSize={8.5} fill="#64748b">低 <tspan fill="#4ade80">{b.low.toFixed(b.low >= 100 ? 1 : 2)}</tspan></text>
-            <text x={tipX + 7} y={tipY + 69} fontSize={8.5} fill="#64748b">收 <tspan fill={closeColor} fontWeight="bold">{b.close.toFixed(b.close >= 100 ? 1 : 2)}</tspan></text>
-            <text x={tipX + 7} y={tipY + 82} fontSize={8.5} fill="#64748b">量 <tspan fill="#94a3b8">{vol}</tspan></text>
+            <rect x={tipX} y={tipY} width={tipW} height={tipH} fill="#1C1C1E" rx={6} stroke="#3A3A3C" strokeWidth={0.8} />
+            <text x={tipX + 7} y={tipY + 13} fontSize={9} fill="#8E8E93" fontWeight="bold">{b.time}</text>
+            <line x1={tipX + 4} y1={tipY + 17} x2={tipX + tipW - 4} y2={tipY + 17} stroke="#2C2C2E" strokeWidth={0.5} />
+            <text x={tipX + 7} y={tipY + 30} fontSize={8.5} fill="#636366">開 <tspan fill="#EBEBF5">{b.open.toFixed(b.open >= 100 ? 1 : 2)}</tspan></text>
+            <text x={tipX + 7} y={tipY + 43} fontSize={8.5} fill="#636366">高 <tspan fill="#FF453A">{b.high.toFixed(b.high >= 100 ? 1 : 2)}</tspan></text>
+            <text x={tipX + 7} y={tipY + 56} fontSize={8.5} fill="#636366">低 <tspan fill="#30D158">{b.low.toFixed(b.low >= 100 ? 1 : 2)}</tspan></text>
+            <text x={tipX + 7} y={tipY + 69} fontSize={8.5} fill="#636366">收 <tspan fill={closeColor} fontWeight="bold">{b.close.toFixed(b.close >= 100 ? 1 : 2)}</tspan></text>
+            <text x={tipX + 7} y={tipY + 82} fontSize={8.5} fill="#636366">量 <tspan fill="#8E8E93">{vol}</tspan></text>
           </g>
         )
       })()}
@@ -176,16 +169,14 @@ const INTERVAL_LABELS = [
   { id: '1mo', label: '月' },
 ]
 
-// Compute weekly/monthly bars from daily bars (used when server-side data is unavailable)
 function resampleBars(dailyBars, unit) {
   if (!dailyBars || dailyBars.length < 2) return []
   const buckets = {}
   for (const bar of dailyBars) {
     let key
     if (unit === 'week') {
-      // ISO week: find the Monday of this bar's week
       const d = new Date(bar.time)
-      const dow = d.getUTCDay() // 0=Sun
+      const dow = d.getUTCDay()
       const daysBack = dow === 0 ? 6 : dow - 1
       const mon = new Date(d)
       mon.setUTCDate(d.getUTCDate() - daysBack)
@@ -206,12 +197,10 @@ function resampleBars(dailyBars, unit) {
 }
 
 function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
-  const isOtc = isOTC(stockId)
   const cnyesUrl = `https://www.cnyes.com/twstock/${stockId}`
   const wantgooUrl = `https://www.wantgoo.com/stock/${stockId}`
 
   const daily = Array.isArray(priceHistory) ? priceHistory : []
-  // Use server-side data if available (longer history), else compute from daily bars
   const weekly = (Array.isArray(priceHistoryWk) && priceHistoryWk.length >= 2)
     ? priceHistoryWk : resampleBars(daily, 'week')
   const monthly = (Array.isArray(priceHistoryMo) && priceHistoryMo.length >= 2)
@@ -219,47 +208,48 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
 
   const dataMap = { '1d': daily, '1wk': weekly, '1mo': monthly }
 
-  // Auto-select first available interval (daily may be absent for some OTC stocks)
   const [chartInterval, setChartInterval] = useState(
     () => INTERVAL_LABELS.find(t => dataMap[t.id].length >= 2)?.id || '1d'
   )
   const data = dataMap[chartInterval]
 
   const unitLabel = { '1d': '個交易日', '1wk': '週', '1mo': '個月' }
-  const anyMultiInterval = true  // always available now (computed from daily)
 
   return (
     <div>
-      {/* Interval tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 6, alignItems: 'center' }}>
-        {INTERVAL_LABELS.map(t => {
-          const available = dataMap[t.id].length >= 2
-          const active = chartInterval === t.id
-          return (
-            <button
-              key={t.id}
-              onClick={() => available && setChartInterval(t.id)}
-              style={{
-                background: active ? '#1e3a5f' : '#1e293b',
-                border: `1px solid ${active ? '#3b82f6' : '#334155'}`,
-                color: active ? '#93c5fd' : '#64748b',
-                borderRadius: 4, padding: '3px 12px', fontSize: 12,
-                cursor: 'pointer', fontWeight: active ? 700 : 400,
-              }}
-            >{t.label}</button>
-          )
-        })}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 8, alignItems: 'center' }}>
+        <div className="ios-segmented" style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--ios-fill4)', borderRadius: 8 }}>
+          {INTERVAL_LABELS.map(t => {
+            const available = dataMap[t.id].length >= 2
+            const active = chartInterval === t.id
+            return (
+              <button
+                key={t.id}
+                onClick={() => available && setChartInterval(t.id)}
+                style={{
+                  background: active ? 'var(--ios-bg3)' : 'transparent',
+                  border: 'none',
+                  color: active ? 'var(--ios-label)' : 'var(--ios-label3)',
+                  borderRadius: 6, padding: '4px 14px', fontSize: 12,
+                  cursor: available ? 'pointer' : 'default', fontWeight: active ? 600 : 400,
+                  boxShadow: active ? '0 1px 4px rgba(0,0,0,0.3)' : 'none',
+                  transition: 'all 0.15s',
+                }}
+              >{t.label}</button>
+            )
+          })}
+        </div>
       </div>
       <CandleSVG data={data} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, flexWrap: 'wrap', gap: 6 }}>
-        {data.length >= 2 && <span style={{ fontSize: 10, color: '#475569' }}>近 {data.length} {unitLabel[chartInterval]}</span>}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, flexWrap: 'wrap', gap: 6 }}>
+        {data.length >= 2 && <span style={{ fontSize: 10, color: 'var(--ios-label3)' }}>近 {data.length} {unitLabel[chartInterval]}</span>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <a href={cnyesUrl} target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: 11, color: '#60a5fa', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
+            style={{ fontSize: 11, color: 'var(--ios-blue)', textDecoration: 'none', padding: '4px 10px', background: 'var(--ios-fill4)', borderRadius: 8, border: '0.5px solid var(--ios-sep)' }}>
             鉅亨網 ↗
           </a>
           <a href={wantgooUrl} target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: 11, color: '#94a3b8', textDecoration: 'none', padding: '3px 8px', background: '#1e293b', borderRadius: 4, border: '1px solid #334155' }}>
+            style={{ fontSize: 11, color: 'var(--ios-label2)', textDecoration: 'none', padding: '4px 10px', background: 'var(--ios-fill4)', borderRadius: 8, border: '0.5px solid var(--ios-sep)' }}>
             玩股網 ↗
           </a>
         </div>
@@ -268,20 +258,19 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   )
 }
 
-
 function Row({ label, value, valueStyle }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
-      <span style={{ color: '#64748b', fontSize: 12 }}>{label}</span>
-      <span style={{ color: '#e2e8f0', fontSize: 13, fontWeight: 600, ...valueStyle }}>{value}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '0.5px solid var(--ios-sep)' }}>
+      <span style={{ color: 'var(--ios-label2)', fontSize: 13 }}>{label}</span>
+      <span style={{ color: 'var(--ios-label)', fontSize: 13, fontWeight: 600, ...valueStyle }}>{value}</span>
     </div>
   )
 }
 
 function Section({ title, children }) {
   return (
-    <div style={{ background: '#1e293b', borderRadius: 8, padding: '10px 14px', marginBottom: 10 }}>
-      <div style={{ color: '#60a5fa', fontSize: 11, fontWeight: 700, marginBottom: 6, letterSpacing: 1 }}>{title}</div>
+    <div style={{ background: 'var(--ios-bg2)', borderRadius: 12, padding: '10px 14px', marginBottom: 10, boxShadow: 'var(--shadow-card)' }}>
+      <div style={{ color: 'var(--ios-blue)', fontSize: 11, fontWeight: 700, marginBottom: 8, letterSpacing: 0.8, textTransform: 'uppercase' }}>{title}</div>
       {children}
     </div>
   )
@@ -291,42 +280,51 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
   if (!stock) return null
   const s = stock
   const n = notionInfo || null
-  const scoreColor = s.entry_score >= 1000 ? '#facc15' : s.entry_score >= 700 ? '#fb923c' : '#e2e8f0'
+  const scoreColor = s.entry_score >= 1000 ? 'var(--ios-yellow)' : s.entry_score >= 700 ? 'var(--ios-orange)' : 'var(--ios-label)'
 
   return (
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex' }}
       onClick={onClose}
     >
-      {/* backdrop */}
-      <div style={{ flex: 1, background: 'rgba(0,0,0,0.6)' }} />
+      {/* Backdrop */}
+      <div style={{ flex: 1, background: 'rgba(0,0,0,0.55)' }} />
 
-      {/* panel */}
+      {/* Panel */}
       <div
         onClick={e => e.stopPropagation()}
         style={{
           width: 'min(460px, 100vw)',
           height: '100vh',
-          background: '#0f172a',
+          background: 'var(--ios-bg)',
           overflowY: 'auto',
-          padding: '16px 14px 40px',
-          borderLeft: '1px solid #1e293b',
+          overflowX: 'hidden',
+          padding: '20px 14px 48px',
+          borderLeft: '0.5px solid var(--ios-sep)',
+          borderRadius: '16px 0 0 16px',
           display: 'flex',
           flexDirection: 'column',
           gap: 0,
+          boxShadow: '-8px 0 32px rgba(0,0,0,0.5)',
+          WebkitOverflowScrolling: 'touch',
         }}
       >
-        {/* header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9' }}>
-              {s.stock_id} <span style={{ fontSize: 16, color: '#94a3b8' }}>{s.name}</span>
+            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--ios-label)', letterSpacing: '-0.3px' }}>
+              {s.stock_id} <span style={{ fontSize: 16, color: 'var(--ios-label2)', fontWeight: 400 }}>{s.name}</span>
             </div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{s.industry_category}</div>
+            <div style={{ fontSize: 12, color: 'var(--ios-label3)', marginTop: 3 }}>{s.industry_category}</div>
           </div>
           <button
             onClick={onClose}
-            style={{ background: 'none', border: '1px solid #334155', color: '#94a3b8', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 14 }}
+            style={{
+              background: 'var(--ios-fill3)', border: 'none',
+              color: 'var(--ios-label2)', borderRadius: 9999, width: 28, height: 28,
+              cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}
           >✕</button>
         </div>
 
@@ -338,21 +336,21 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
         {/* Notion 連結 */}
         {n && (
           <Section title="Notion 同步">
-            {n.type && <Row label="類型" value={n.type} valueStyle={{ color: n.type === 'TOP 20' ? '#facc15' : n.type === '候選進場' ? '#4ade80' : '#94a3b8' }} />}
+            {n.type && <Row label="類型" value={n.type} valueStyle={{ color: n.type === 'TOP 20' ? 'var(--ios-yellow)' : n.type === '候選進場' ? 'var(--ios-green)' : 'var(--ios-label2)' }} />}
             {n.regime && <Row label="市場氛圍" value={n.regime} />}
             {n.confidence != null && <Row label="信心分數" value={`${n.confidence}%`} />}
-            {n.note && <Row label="觀察建議" value={n.note} valueStyle={{ color: '#93c5fd', fontSize: 11 }} />}
-            {n.date && <Row label="同步日期" value={n.date} valueStyle={{ color: '#64748b' }} />}
+            {n.note && <Row label="觀察建議" value={n.note} valueStyle={{ color: 'var(--ios-blue)', fontSize: 11 }} />}
+            {n.date && <Row label="同步日期" value={n.date} valueStyle={{ color: 'var(--ios-label3)' }} />}
             {n.notion_url && (
               <a
                 href={n.notion_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
-                  display: 'block', marginTop: 8, textAlign: 'center',
-                  background: '#1d2b3a', border: '1px solid #334155',
-                  borderRadius: 6, padding: '6px 12px',
-                  color: '#60a5fa', fontSize: 12, textDecoration: 'none',
+                  display: 'block', marginTop: 10, textAlign: 'center',
+                  background: 'var(--ios-fill4)', border: '0.5px solid var(--ios-sep)',
+                  borderRadius: 10, padding: '8px 12px',
+                  color: 'var(--ios-blue)', fontSize: 13, textDecoration: 'none', fontWeight: 500,
                 }}
               >
                 在 Notion 查看 ↗
@@ -366,8 +364,8 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           <Row label="入場分數" value={s.entry_score} valueStyle={{ color: scoreColor, fontSize: 16 }} />
           <Row label="條件達成數" value={`${s.condition_count} 個`} />
           <Row label="入場訊號" value={s.entry_signal ? '✅ 是' : '❌ 否'} />
-          {s.entry_reason && <Row label="入場理由" value={s.entry_reason} valueStyle={{ color: '#86efac', fontSize: 11 }} />}
-          {s.skip_reason && <Row label="跳過原因" value={s.skip_reason} valueStyle={{ color: '#fca5a5', fontSize: 11 }} />}
+          {s.entry_reason && <Row label="入場理由" value={s.entry_reason} valueStyle={{ color: 'var(--ios-green)', fontSize: 11 }} />}
+          {s.skip_reason && <Row label="跳過原因" value={s.skip_reason} valueStyle={{ color: 'var(--ios-red)', fontSize: 11 }} />}
         </Section>
 
         {/* 技術指標 */}
@@ -375,10 +373,10 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           <Row label="收盤價" value={`${fmt(s.close, 1)} 元`} />
           <Row label="日漲跌" value={pct(s.day_return != null ? s.day_return * 100 : null)} valueStyle={{ color: colorNum(s.day_return) }} />
           <Row label="5日報酬" value={pct(s.return_5d != null ? s.return_5d * 100 : null)} valueStyle={{ color: colorNum(s.return_5d) }} />
-          <Row label="RSI(14)" value={fmt(s.rsi14, 1)} valueStyle={{ color: s.rsi14 > 70 ? '#fca5a5' : s.rsi14 < 30 ? '#86efac' : '#e2e8f0' }} />
-          <Row label="ADX(14)" value={fmt(s.adx14, 1)} valueStyle={{ color: s.adx14 > 25 ? '#60a5fa' : '#e2e8f0' }} />
+          <Row label="RSI(14)" value={fmt(s.rsi14, 1)} valueStyle={{ color: s.rsi14 > 70 ? 'var(--ios-red)' : s.rsi14 < 30 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
+          <Row label="ADX(14)" value={fmt(s.adx14, 1)} valueStyle={{ color: s.adx14 > 25 ? 'var(--ios-blue)' : 'var(--ios-label)' }} />
           <Row label="ATR(14)" value={fmt(s.atr14, 2)} />
-          <Row label="量比" value={`${fmt(s.volume_ratio, 1)}x`} valueStyle={{ color: s.volume_ratio > 2 ? '#facc15' : '#e2e8f0' }} />
+          <Row label="量比" value={`${fmt(s.volume_ratio, 1)}x`} valueStyle={{ color: s.volume_ratio > 2 ? 'var(--ios-yellow)' : 'var(--ios-label)' }} />
           <Row label="EMA20" value={fmt(s.ema20, 1)} />
           <Row label="EMA60" value={fmt(s.ema60, 1)} />
           <Row label="布林帶位置" value={fmt(s.bb_pct_b, 2)} />
@@ -396,18 +394,18 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
             const noInst = !s.foreign_buy_streak && !s.invest_trust_streak && !s.dealer_buy_streak
               && !s.foreign_net && !s.invest_trust_net && !s.dealer_net
             if (noInst) return (
-              <div style={{ padding: '6px 0', fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>
+              <div style={{ padding: '6px 0', fontSize: 11, color: 'var(--ios-label3)', fontStyle: 'italic' }}>
                 本期無三大法人買賣超資料
               </div>
             )
             const fmtNet = (v) => v == null || v === 0 ? '—' : `${v > 0 ? '+' : ''}${fmt(v, 0)}`
             const fmtStreak = (v) => v > 0 ? `${v} 天` : '—'
             return (<>
-              <Row label="外資連買天數" value={fmtStreak(s.foreign_buy_streak)} valueStyle={{ color: s.foreign_buy_streak > 0 ? 'var(--red)' : 'var(--muted)' }} />
+              <Row label="外資連買天數" value={fmtStreak(s.foreign_buy_streak)} valueStyle={{ color: s.foreign_buy_streak > 0 ? 'var(--ios-red)' : 'var(--ios-label3)' }} />
               <Row label="外資買賣超" value={fmtNet(s.foreign_net)} valueStyle={{ color: colorNum(s.foreign_net) }} />
-              <Row label="投信連買天數" value={fmtStreak(s.invest_trust_streak)} valueStyle={{ color: s.invest_trust_streak > 0 ? 'var(--red)' : 'var(--muted)' }} />
+              <Row label="投信連買天數" value={fmtStreak(s.invest_trust_streak)} valueStyle={{ color: s.invest_trust_streak > 0 ? 'var(--ios-red)' : 'var(--ios-label3)' }} />
               <Row label="投信買賣超" value={fmtNet(s.invest_trust_net)} valueStyle={{ color: colorNum(s.invest_trust_net) }} />
-              <Row label="自營商連買天數" value={fmtStreak(s.dealer_buy_streak)} valueStyle={{ color: s.dealer_buy_streak > 0 ? 'var(--red)' : 'var(--muted)' }} />
+              <Row label="自營商連買天數" value={fmtStreak(s.dealer_buy_streak)} valueStyle={{ color: s.dealer_buy_streak > 0 ? 'var(--ios-red)' : 'var(--ios-label3)' }} />
               <Row label="自營商買賣超" value={fmtNet(s.dealer_net)} valueStyle={{ color: colorNum(s.dealer_net) }} />
             </>)
           })()}
@@ -415,16 +413,16 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
 
         {/* 融資融券 */}
         <Section title="融資融券">
-          <Row label="融資5日變化" value={pct(s.margin_change_5d)} valueStyle={{ color: s.margin_change_5d < -3 ? '#4ade80' : s.margin_change_5d > 5 ? '#fca5a5' : '#e2e8f0' }} />
+          <Row label="融資5日變化" value={pct(s.margin_change_5d)} valueStyle={{ color: s.margin_change_5d < -3 ? 'var(--ios-green)' : s.margin_change_5d > 5 ? 'var(--ios-red)' : 'var(--ios-label)' }} />
           <Row label="融券/融資比" value={`${fmt(s.short_ratio, 1)}%`} />
           {s.limit_down_streak >= 1 && (
-            <Row label="連續跌停" value={`${s.limit_down_streak} 天 ⚠️`} valueStyle={{ color: '#ef4444' }} />
+            <Row label="連續跌停" value={`${s.limit_down_streak} 天 ⚠️`} valueStyle={{ color: 'var(--ios-red)' }} />
           )}
         </Section>
 
         {/* 基本面 */}
         <Section title="基本面">
-          <Row label="F-Score" value={`${fmt(s.f_score, 0)} / 9`} valueStyle={{ color: s.f_score >= 7 ? '#4ade80' : s.f_score <= 3 ? '#fca5a5' : '#e2e8f0' }} />
+          <Row label="F-Score" value={`${fmt(s.f_score, 0)} / 9`} valueStyle={{ color: s.f_score >= 7 ? 'var(--ios-green)' : s.f_score <= 3 ? 'var(--ios-red)' : 'var(--ios-label)' }} />
         </Section>
       </div>
     </div>

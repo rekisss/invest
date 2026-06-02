@@ -16,15 +16,15 @@ const s = {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    background: 'var(--bg)',
+    background: 'var(--ios-bg)',
   },
   header: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '12px 16px',
-    borderBottom: '1px solid var(--border)',
-    background: 'var(--surface)',
+    borderBottom: '0.5px solid var(--ios-sep)',
+    background: 'var(--ios-bg2)',
     flexShrink: 0,
     gap: '12px',
     flexWrap: 'wrap',
@@ -38,6 +38,7 @@ const s = {
   headerTitle: {
     fontSize: '15px',
     fontWeight: 600,
+    color: 'var(--ios-label)',
     whiteSpace: 'nowrap',
   },
   agentBadge: (color) => ({
@@ -45,7 +46,7 @@ const s = {
     alignItems: 'center',
     gap: '5px',
     padding: '3px 10px',
-    borderRadius: '20px',
+    borderRadius: '9999px',
     fontSize: '12px',
     fontWeight: 600,
     background: color + '22',
@@ -58,13 +59,13 @@ const s = {
     alignItems: 'center',
     gap: '8px',
     fontSize: '12px',
-    color: 'var(--muted)',
+    color: 'var(--ios-label2)',
     flexShrink: 0,
   },
   budgetFill: (pct, over) => ({
     width: '60px',
     height: '4px',
-    background: 'var(--surface2)',
+    background: 'var(--ios-fill3)',
     borderRadius: '2px',
     overflow: 'hidden',
     position: 'relative',
@@ -73,16 +74,16 @@ const s = {
     position: 'absolute',
     left: 0, top: 0, bottom: 0,
     width: `${Math.min(pct, 100)}%`,
-    background: over ? 'var(--red)' : pct > 70 ? 'var(--yellow)' : 'var(--green)',
+    background: over ? 'var(--ios-red)' : pct > 70 ? 'var(--ios-yellow)' : 'var(--ios-green)',
     borderRadius: '2px',
     transition: 'width 0.3s',
   }),
   keyBtn: {
-    background: 'none',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)',
-    padding: '4px 10px',
-    color: 'var(--muted)',
+    background: 'var(--ios-fill4)',
+    border: '0.5px solid var(--ios-sep)',
+    borderRadius: '9999px',
+    padding: '4px 12px',
+    color: 'var(--ios-label2)',
     fontSize: '11px',
     cursor: 'pointer',
   },
@@ -93,8 +94,8 @@ const s = {
   },
   sidebar: {
     width: '200px',
-    borderRight: '1px solid var(--border)',
-    background: 'var(--surface)',
+    borderRight: '0.5px solid var(--ios-sep)',
+    background: 'var(--ios-bg2)',
     display: 'flex',
     flexDirection: 'column',
     padding: '8px',
@@ -107,7 +108,7 @@ const s = {
     alignItems: 'center',
     gap: '10px',
     padding: '10px 12px',
-    borderRadius: 'var(--radius)',
+    borderRadius: '12px',
     cursor: 'pointer',
     background: active ? color + '22' : 'transparent',
     border: `1px solid ${active ? color + '44' : 'transparent'}`,
@@ -124,7 +125,7 @@ const s = {
   },
   sidebarDesc: {
     fontSize: '11px',
-    color: 'var(--muted)',
+    color: 'var(--ios-label3)',
     marginTop: '2px',
     lineHeight: 1.4,
   },
@@ -140,7 +141,8 @@ const s = {
     padding: '16px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    gap: '14px',
+    WebkitOverflowScrolling: 'touch',
   },
   emptyState: {
     flex: 1,
@@ -148,7 +150,7 @@ const s = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    color: 'var(--muted)',
+    color: 'var(--ios-label2)',
     textAlign: 'center',
     padding: '32px',
   },
@@ -157,55 +159,55 @@ const s = {
     marginBottom: '12px',
   },
   emptyTitle: {
-    fontSize: '16px',
+    fontSize: '17px',
     fontWeight: 600,
-    color: 'var(--text)',
+    color: 'var(--ios-label)',
     marginBottom: '8px',
   },
   emptyHint: {
-    fontSize: '13px',
+    fontSize: '14px',
     lineHeight: 1.7,
     maxWidth: '320px',
   },
   msg: (role) => ({
     display: 'flex',
     flexDirection: role === 'user' ? 'row-reverse' : 'row',
-    gap: '10px',
-    alignItems: 'flex-start',
+    gap: '8px',
+    alignItems: 'flex-end',
   }),
   avatar: (role, color) => ({
-    width: '32px',
-    height: '32px',
+    width: '28px',
+    height: '28px',
     borderRadius: '50%',
-    background: role === 'user' ? 'var(--surface2)' : color + '33',
-    border: `1px solid ${role === 'user' ? 'var(--border)' : color + '66'}`,
+    background: role === 'user' ? 'var(--ios-fill3)' : color + '33',
+    border: `1px solid ${role === 'user' ? 'var(--ios-sep)' : color + '55'}`,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '14px',
+    fontSize: '12px',
     flexShrink: 0,
   }),
   bubble: (role) => ({
-    maxWidth: '80%',
+    maxWidth: '78%',
     padding: '10px 14px',
-    borderRadius: role === 'user' ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
-    background: role === 'user' ? 'var(--surface2)' : 'var(--surface)',
-    border: '1px solid var(--border)',
-    fontSize: '14px',
-    lineHeight: 1.7,
+    borderRadius: role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+    background: role === 'user' ? 'var(--ios-blue)' : 'var(--ios-bg3)',
+    color: role === 'user' ? '#FFFFFF' : 'var(--ios-label)',
+    fontSize: '15px',
+    lineHeight: 1.55,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
   }),
   tokenInfo: {
     fontSize: '11px',
-    color: 'var(--muted)',
-    marginTop: '6px',
+    color: 'var(--ios-label3)',
+    marginTop: '5px',
     fontFamily: 'var(--font-mono)',
   },
   inputArea: {
-    borderTop: '1px solid var(--border)',
-    padding: '12px 16px',
-    background: 'var(--surface)',
+    borderTop: '0.5px solid var(--ios-sep)',
+    padding: '10px 16px 14px',
+    background: 'var(--ios-bg2)',
     flexShrink: 0,
   },
   inputRow: {
@@ -215,53 +217,55 @@ const s = {
   },
   textarea: {
     flex: 1,
-    background: 'var(--surface2)',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius)',
-    padding: '10px 14px',
-    color: 'var(--text)',
-    fontSize: '14px',
+    background: 'var(--ios-bg3)',
+    border: '0.5px solid var(--ios-sep)',
+    borderRadius: '22px',
+    padding: '10px 16px',
+    color: 'var(--ios-label)',
+    fontSize: '15px',
     resize: 'none',
     outline: 'none',
-    lineHeight: 1.6,
-    minHeight: '44px',
+    lineHeight: 1.5,
+    minHeight: '42px',
     maxHeight: '140px',
     transition: 'border-color 0.15s',
     fontFamily: 'var(--font-sans)',
   },
   sendBtn: (active, color) => ({
-    background: active ? color : 'var(--surface2)',
-    border: `1px solid ${active ? color : 'var(--border)'}`,
-    borderRadius: 'var(--radius)',
-    padding: '10px 18px',
-    color: active ? '#fff' : 'var(--muted)',
-    fontSize: '14px',
+    background: active ? color : 'var(--ios-fill3)',
+    border: 'none',
+    borderRadius: '9999px',
+    padding: '0 18px',
+    color: active ? '#fff' : 'var(--ios-label3)',
+    fontSize: '15px',
     fontWeight: 600,
     transition: 'all 0.15s',
     flexShrink: 0,
-    height: '44px',
+    height: '42px',
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
+    cursor: active ? 'pointer' : 'default',
   }),
   placeholderHint: {
     fontSize: '11px',
-    color: 'var(--muted)',
+    color: 'var(--ios-label3)',
     marginTop: '6px',
+    paddingLeft: 4,
   },
   errorMsg: {
     padding: '10px 14px',
-    background: '#f851491a',
-    border: '1px solid #f8514933',
-    borderRadius: 'var(--radius)',
-    color: 'var(--red)',
+    background: 'rgba(255,69,58,0.12)',
+    border: '0.5px solid rgba(255,69,58,0.3)',
+    borderRadius: '12px',
+    color: 'var(--ios-red)',
     fontSize: '13px',
   },
   streamCursor: {
     display: 'inline-block',
     width: '2px',
     height: '1em',
-    background: 'var(--accent)',
+    background: 'var(--ios-blue)',
     marginLeft: '2px',
     animation: 'blink 1s infinite',
     verticalAlign: 'text-bottom',
@@ -270,7 +274,7 @@ const s = {
     display: 'inline-flex',
     gap: '4px',
     alignItems: 'center',
-    color: 'var(--muted)',
+    color: 'var(--ios-label3)',
     fontSize: '13px',
   },
 }
@@ -534,8 +538,8 @@ export default function AgentPanel({ apiKey, onClearKey }) {
 
       {/* FinMind Token Input */}
       {agent.useFinmind && showFmInput && (
-        <div style={{ padding: '10px 16px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-          <span style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>📡 FinMind Token：</span>
+        <div style={{ padding: '10px 16px', background: 'var(--ios-bg3)', borderBottom: '0.5px solid var(--ios-sep)', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: 'var(--ios-label2)', whiteSpace: 'nowrap' }}>📡 FinMind Token：</span>
           <input
             type="password"
             value={finmindToken}
@@ -548,15 +552,15 @@ export default function AgentPanel({ apiKey, onClearKey }) {
               }
             }}
             style={{
-              flex: 1, padding: '6px 10px', fontSize: 12, borderRadius: 5,
-              background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none',
+              flex: 1, padding: '7px 12px', fontSize: 12, borderRadius: 10,
+              background: 'var(--ios-bg)', border: '0.5px solid var(--ios-sep)', color: 'var(--ios-label)', outline: 'none',
             }}
           />
           <button
             onClick={() => { sessionStorage.setItem('fm_agent_token', finmindToken); setShowFmInput(false) }}
-            style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            style={{ padding: '7px 14px', fontSize: 12, fontWeight: 700, background: 'var(--ios-blue)', color: '#fff', border: 'none', borderRadius: 9999, cursor: 'pointer', whiteSpace: 'nowrap' }}
           >儲存</button>
-          <button onClick={() => setShowFmInput(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 14 }}>✕</button>
+          <button onClick={() => setShowFmInput(false)} style={{ background: 'none', border: 'none', color: 'var(--ios-label3)', cursor: 'pointer', fontSize: 14 }}>✕</button>
         </div>
       )}
 
@@ -627,17 +631,17 @@ export default function AgentPanel({ apiKey, onClearKey }) {
           <div style={s.inputArea}>
             {/* Mobile agent tabs */}
             {window.innerWidth < 640 && (
-              <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', overflowX: 'auto', paddingBottom: '2px' }}>
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', overflowX: 'auto', paddingBottom: '2px', WebkitOverflowScrolling: 'touch' }}>
                 {Object.values(STOCK_AGENTS).map(ag => (
                   <button
                     key={ag.id}
                     style={{
                       flexShrink: 0,
-                      padding: '5px 12px',
-                      borderRadius: '20px',
-                      border: `1px solid ${ag.id === agentId ? ag.color : 'var(--border)'}`,
-                      background: ag.id === agentId ? ag.color + '22' : 'transparent',
-                      color: ag.id === agentId ? ag.color : 'var(--muted)',
+                      padding: '5px 14px',
+                      borderRadius: '9999px',
+                      border: `1px solid ${ag.id === agentId ? ag.color : 'var(--ios-sep)'}`,
+                      background: ag.id === agentId ? ag.color + '22' : 'var(--ios-fill4)',
+                      color: ag.id === agentId ? ag.color : 'var(--ios-label2)',
                       fontSize: '12px',
                       fontWeight: ag.id === agentId ? 600 : 400,
                       cursor: 'pointer',
