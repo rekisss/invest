@@ -1,11 +1,11 @@
-/* ── Liquid Glass Design System ─────────────────────────────────────── */
+/* ── Liquid Glass Design System v2 ──────────────────────────────────── */
 :root {
-  --bg:         rgba(8, 10, 20, 0.70);
-  --surface:    rgba(255, 255, 255, 0.055);
-  --surface2:   rgba(255, 255, 255, 0.10);
-  --border:     rgba(255, 255, 255, 0.13);
-  --text:       rgba(255, 255, 255, 0.90);
-  --muted:      rgba(255, 255, 255, 0.46);
+  --bg:         rgba(6, 8, 18, 0.58);
+  --surface:    rgba(255, 255, 255, 0.038);
+  --surface2:   rgba(255, 255, 255, 0.075);
+  --border:     rgba(255, 255, 255, 0.11);
+  --text:       rgba(255, 255, 255, 0.88);
+  --muted:      rgba(255, 255, 255, 0.44);
   --accent:     #60a5fa;
   --accent-dim: rgba(96, 165, 250, 0.18);
   --green:  #34d399;
@@ -20,12 +20,11 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
 html, body, #root { height: 100%; width: 100%; }
 html, body { overflow: hidden; }
 
 body {
-  background: #06080f;
+  background: #05070d;
   color: var(--text);
   font-family: var(--font-sans);
   font-size: 14px;
@@ -41,10 +40,10 @@ body::before {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 70% 55% at 12% 18%, rgba(96, 165, 250, 0.30) 0%, transparent 55%),
-    radial-gradient(ellipse 55% 50% at 85% 82%, rgba(139, 92, 246, 0.24) 0%, transparent 55%),
-    radial-gradient(ellipse 48% 38% at 72% 10%, rgba(236, 72, 153, 0.14) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 65% at 28% 88%, rgba(16, 185, 129, 0.12) 0%, transparent 55%);
+    radial-gradient(ellipse 75% 60% at 10% 15%, rgba(96, 165, 250, 0.35) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 55% at 88% 85%, rgba(139, 92, 246, 0.28) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 75% 8%,  rgba(236, 72, 153, 0.16) 0%, transparent 55%),
+    radial-gradient(ellipse 65% 70% at 25% 90%, rgba(16, 185, 129, 0.14) 0%, transparent 55%);
   animation: aurora-drift 22s ease-in-out infinite alternate;
 }
 
@@ -55,8 +54,8 @@ body::after {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 45% 40% at 55% 42%, rgba(251, 191, 36, 0.07) 0%, transparent 50%),
-    radial-gradient(ellipse 38% 48% at 18% 65%, rgba(52, 211, 153, 0.09) 0%, transparent 50%);
+    radial-gradient(ellipse 48% 42% at 58% 45%, rgba(251, 191, 36, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 50% at 15% 62%, rgba(52, 211, 153, 0.10) 0%, transparent 50%);
   animation: aurora-drift 30s ease-in-out infinite alternate-reverse;
 }
 
@@ -69,14 +68,32 @@ body::after {
 
 #root { position: relative; z-index: 1; }
 
+/* ── Cursor spotlight glow ──────────────────────────────────────────── */
+.cursor-glow {
+  position: fixed;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(96, 165, 250, 0.11) 0%,
+    rgba(139, 92, 246, 0.07) 35%,
+    transparent 68%
+  );
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  mix-blend-mode: screen;
+  will-change: left, top;
+  transition: left 0.07s linear, top 0.07s linear;
+}
+
 /* ── Glass header bar ───────────────────────────────────────────────── */
 .app-header {
   position: relative;
-  backdrop-filter: blur(32px) saturate(1.8) brightness(1.08);
-  -webkit-backdrop-filter: blur(32px) saturate(1.8) brightness(1.08);
+  backdrop-filter: blur(36px) saturate(1.9) brightness(1.08);
+  -webkit-backdrop-filter: blur(36px) saturate(1.9) brightness(1.08);
 }
 
-/* Chromatic dispersion — top edge */
 .app-header::before {
   content: '';
   position: absolute;
@@ -84,16 +101,15 @@ body::after {
   height: 1px;
   background: linear-gradient(90deg,
     transparent            0%,
-    rgba(96, 165, 250, .7) 15%,
-    rgba(192, 132, 252, .7) 40%,
-    rgba(244, 114, 182, .6) 65%,
-    rgba(52, 211, 153, .5)  85%,
+    rgba(96, 165, 250, .8) 15%,
+    rgba(192, 132, 252, .8) 40%,
+    rgba(244, 114, 182, .7) 65%,
+    rgba(52, 211, 153, .6)  85%,
     transparent            100%
   );
   pointer-events: none;
 }
 
-/* Chromatic dispersion — bottom edge (overlays the inline border) */
 .app-header::after {
   content: '';
   position: absolute;
@@ -101,22 +117,92 @@ body::after {
   height: 1px;
   background: linear-gradient(90deg,
     transparent            0%,
-    rgba(96, 165, 250, .4) 20%,
-    rgba(192, 132, 252, .4) 50%,
-    rgba(52, 211, 153, .35) 80%,
+    rgba(96, 165, 250, .45) 20%,
+    rgba(192, 132, 252, .45) 50%,
+    rgba(52, 211, 153, .40) 80%,
     transparent            100%
   );
   pointer-events: none;
 }
 
+/* Tab buttons: glass pill on hover */
+.app-header button:hover {
+  background: rgba(255,255,255,0.08) !important;
+  border-radius: 8px;
+  color: var(--text) !important;
+}
+
+/* ── Glass cards ─────────────────────────────────────────────────────── */
+.glass-card {
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  transition:
+    transform    0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow   0.28s ease,
+    border-color 0.28s ease;
+  will-change: transform;
+}
+
+/* Inset highlight — top-left light source */
+.glass-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.09) 0%,
+    transparent 45%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Light sweep on hover */
+.glass-card::after {
+  content: '';
+  position: absolute;
+  top: -60%;
+  left: -80%;
+  width: 55%;
+  height: 220%;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    transparent 100%
+  );
+  transform: skewX(-18deg);
+  transition: left 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.glass-card:hover::after {
+  left: 130%;
+}
+
+.glass-card:hover {
+  transform: translateY(-3px) scale(1.005);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(96, 165, 250, 0.28),
+    0 0 24px rgba(96, 165, 250, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.glass-card > * { position: relative; z-index: 2; }
+
 /* ── Scrollbars ─────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.16);
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 3px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.30); }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
 
 /* ── Base resets ────────────────────────────────────────────────────── */
 button       { cursor: pointer; font-family: var(--font-sans); }

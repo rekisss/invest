@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Dashboard from './components/Dashboard.jsx'
 import NewsFeed from './components/NewsFeed.jsx'
 import PredictionPanel from './components/PredictionPanel.jsx'
@@ -39,6 +39,18 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
   const [refreshCount, setRefreshCount] = useState(0)
+  const glowRef = useRef(null)
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (glowRef.current) {
+        glowRef.current.style.left = e.clientX + 'px'
+        glowRef.current.style.top  = e.clientY + 'px'
+      }
+    }
+    window.addEventListener('mousemove', onMove, { passive: true })
+    return () => window.removeEventListener('mousemove', onMove)
+  }, [])
 
   const loadData = useCallback((isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -59,6 +71,7 @@ export default function App() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div ref={glowRef} className="cursor-glow" style={{ left: '-999px', top: '-999px' }} />
       {/* Header */}
       <div className="app-header" style={{
         padding: '0 16px',

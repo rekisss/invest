@@ -22,7 +22,7 @@ function ProbBar({ prob }) {
 
 function Card({ title, children, accent }) {
   return (
-    <div style={{
+    <div className="glass-card" style={{
       background: 'var(--surface)', border: `1px solid ${accent || 'var(--border)'}`,
       borderRadius: 'var(--radius-lg)', padding: 16, marginBottom: 12,
     }}>

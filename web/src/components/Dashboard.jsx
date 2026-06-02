@@ -5,7 +5,7 @@ const BASE = import.meta.env.BASE_URL  // '/invest/' on GitHub Pages, '/' in dev
 
 function StatCard({ label, value, sub, color }) {
   return (
-    <div style={{
+    <div className="glass-card" style={{
       background: 'var(--surface)',
       border: '1px solid var(--border)',
       borderRadius: 'var(--radius)',
