@@ -392,12 +392,25 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
 
         {/* 法人籌碼 */}
         <Section title="三大法人籌碼">
-          <Row label="外資連買天數" value={`${s.foreign_buy_streak || 0} 天`} valueStyle={{ color: s.foreign_buy_streak > 0 ? '#ef4444' : s.foreign_buy_streak < 0 ? '#22c55e' : '#e2e8f0' }} />
-          <Row label="外資當日買賣超" value={`${s.foreign_net > 0 ? '+' : ''}${fmt(s.foreign_net, 0)}`} valueStyle={{ color: colorNum(s.foreign_net) }} />
-          <Row label="投信連買天數" value={`${s.invest_trust_streak || 0} 天`} valueStyle={{ color: s.invest_trust_streak > 0 ? '#ef4444' : '#e2e8f0' }} />
-          <Row label="投信當日買賣超" value={`${s.invest_trust_net > 0 ? '+' : ''}${fmt(s.invest_trust_net, 0)}`} valueStyle={{ color: colorNum(s.invest_trust_net) }} />
-          <Row label="自營商連買天數" value={`${s.dealer_buy_streak || 0} 天`} valueStyle={{ color: s.dealer_buy_streak > 0 ? '#ef4444' : '#e2e8f0' }} />
-          <Row label="自營商當日買賣超" value={`${s.dealer_net > 0 ? '+' : ''}${fmt(s.dealer_net, 0)}`} valueStyle={{ color: colorNum(s.dealer_net) }} />
+          {(() => {
+            const noInst = !s.foreign_buy_streak && !s.invest_trust_streak && !s.dealer_buy_streak
+              && !s.foreign_net && !s.invest_trust_net && !s.dealer_net
+            if (noInst) return (
+              <div style={{ padding: '6px 0', fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>
+                本期無三大法人買賣超資料
+              </div>
+            )
+            const fmtNet = (v) => v == null || v === 0 ? '—' : `${v > 0 ? '+' : ''}${fmt(v, 0)}`
+            const fmtStreak = (v) => v > 0 ? `${v} 天` : '—'
+            return (<>
+              <Row label="外資連買天數" value={fmtStreak(s.foreign_buy_streak)} valueStyle={{ color: s.foreign_buy_streak > 0 ? 'var(--red)' : 'var(--muted)' }} />
+              <Row label="外資買賣超" value={fmtNet(s.foreign_net)} valueStyle={{ color: colorNum(s.foreign_net) }} />
+              <Row label="投信連買天數" value={fmtStreak(s.invest_trust_streak)} valueStyle={{ color: s.invest_trust_streak > 0 ? 'var(--red)' : 'var(--muted)' }} />
+              <Row label="投信買賣超" value={fmtNet(s.invest_trust_net)} valueStyle={{ color: colorNum(s.invest_trust_net) }} />
+              <Row label="自營商連買天數" value={fmtStreak(s.dealer_buy_streak)} valueStyle={{ color: s.dealer_buy_streak > 0 ? 'var(--red)' : 'var(--muted)' }} />
+              <Row label="自營商買賣超" value={fmtNet(s.dealer_net)} valueStyle={{ color: colorNum(s.dealer_net) }} />
+            </>)
+          })()}
         </Section>
 
         {/* 融資融券 */}

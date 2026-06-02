@@ -91,6 +91,28 @@ function detectTags(title, summary = '', customRules = []) {
   return matched.length ? matched : ['其他']
 }
 
+function generateOutline(title, summary) {
+  if (!summary || summary.length < 30) return null
+  // Split into sentences by Chinese/English punctuation
+  const sentences = summary
+    .split(/[。！？；…\n]+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 8)
+  if (sentences.length === 0) return null
+
+  // Tag key sentences with type indicators
+  const tagged = sentences.map(s => {
+    if (/漲[停幅]|上漲|大漲|創高|突破|走強|攀升/.test(s)) return { type: 'up', text: s }
+    if (/跌[停幅]|下跌|大跌|重挫|走弱|承壓|下修/.test(s)) return { type: 'down', text: s }
+    if (/外資|投信|自營|法人|機構/.test(s)) return { type: 'inst', text: s }
+    if (/\d+[\.,]?\d*\s*億|兆|億元|萬張/.test(s)) return { type: 'num', text: s }
+    if (/預估|預期|目標|看好|展望|樂觀|保守/.test(s)) return { type: 'fwd', text: s }
+    return { type: 'info', text: s }
+  })
+
+  return tagged.slice(0, 5)
+}
+
 function generateHint(title, tags) {
   if (/外資.*空單|外資.*放空|空單擴大/.test(title)) return '⚠️ 外資空頭部位增加，指數短線承壓'
   if (/外資.*買超|外資連買|外資買/.test(title)) return '💰 外資買盤進駐，籌碼面轉強'
@@ -419,42 +441,47 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
 
       {isOpen && (
         <div style={{ padding: '0 16px 14px 44px' }}>
-          {item.summary && (
-            <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.7, marginBottom: 10 }}>
-              {item.summary}
-            </div>
-          )}
+          {/* Tags + stock chips */}
           {(item.tags?.length > 0 || stockCodes.length > 0) && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: hint ? 8 : 0 }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
               {item.tags.map(tag => <TagChip key={tag} tag={tag} customRules={customRules} />)}
               {stockCodes.map(c => <StockChip key={c} code={c} />)}
             </div>
           )}
+          {/* 大綱 outline */}
+          {(() => {
+            const outline = generateOutline(item.title, item.summary)
+            if (!outline) return null
+            const typeIcon = { up: '📈', down: '📉', inst: '🏦', num: '💰', fwd: '🔭', info: '·' }
+            const typeColor = { up: 'var(--green)', down: 'var(--red)', inst: 'var(--yellow)', num: 'var(--accent)', fwd: 'var(--purple)', info: 'var(--text)' }
+            return (
+              <div style={{
+                marginBottom: 10,
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: '8px 12px',
+              }}>
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6, fontWeight: 600, letterSpacing: 0.5 }}>📋 大綱</div>
+                {outline.map((item, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: i < outline.length - 1 ? 5 : 0, alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: 12, flexShrink: 0, minWidth: 16, color: typeColor[item.type] }}>{typeIcon[item.type]}</span>
+                    <span style={{ fontSize: 12, color: typeColor[item.type] === 'var(--text)' ? 'var(--muted)' : 'var(--text)', lineHeight: 1.6 }}>{item.text}</span>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
+          {/* Investment hint */}
           {hint && (
             <div style={{
-              marginTop: 8, fontSize: 12, color: 'var(--text)',
+              marginBottom: 10, fontSize: 12, color: 'var(--text)',
               background: 'var(--surface2)', borderRadius: 6,
               padding: '7px 10px', borderLeft: '3px solid var(--accent)',
               lineHeight: 1.6,
             }}>
               {hint}
             </div>
-          )}
-          {item.url && (
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              style={{
-                display: 'inline-block', marginTop: 10, fontSize: 11,
-                color: 'var(--accent)', textDecoration: 'none',
-                background: 'var(--accent)15', border: '1px solid var(--accent)40',
-                borderRadius: 4, padding: '3px 10px',
-              }}
-            >
-              閱讀原文 ↗
-            </a>
           )}
         </div>
       )}
