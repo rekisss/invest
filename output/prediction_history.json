@@ -1,7 +1,7 @@
 [
   {
     "date": "2026-06-02",
-    "generated_at": "08:01",
+    "generated_at": "08:16",
     "xgb_prob_up": 0.594,
     "xgb_label": "偏多",
     "market_data": {
@@ -12,8 +12,12 @@
       "futures_net": -64673.0,
       "night_change": null,
       "pcr": null,
-      "taiex_rsi": 74.79084355028057
+      "taiex_rsi": 74.79084355028057,
+      "macd_hist": 390.86764053553134,
+      "dist_ma60": 21.033304608474367,
+      "night_trend": null
     },
+    "ai_insight": "今日操盤要點\n\n・加權RSI高達75進入超買區，需留意獲利了結賣壓，短線可能面臨技術性回檔風險。\n\n・外資期貨淨空單逾六萬口與現貨買超形成背離，反映籌碼分歧，宜觀察外資動向確認後市方向。\n\n・股價距MA60乖離逾兩成且MACD正動能強勁，AI題材支撐上漲機率，但應設定停利點控管風險。",
     "regime": {
       "label": "double_whipsaw",
       "label_zh": "🔄 多空雙巴日",
