@@ -1,37 +1,31 @@
+/* ── Liquid Glass Design System ─────────────────────────────────────── */
 :root {
-  --bg: #0d1117;
-  --surface: #161b22;
-  --surface2: #21262d;
-  --border: #30363d;
-  --text: #e6edf3;
-  --muted: #8b949e;
-  --accent: #58a6ff;
-  --accent-dim: #1f6feb33;
-  --green: #3fb950;
-  --red: #f85149;
-  --yellow: #d29922;
-  --purple: #bc8cff;
-  --orange: #ffa657;
+  --bg:         rgba(8, 10, 20, 0.70);
+  --surface:    rgba(255, 255, 255, 0.055);
+  --surface2:   rgba(255, 255, 255, 0.10);
+  --border:     rgba(255, 255, 255, 0.13);
+  --text:       rgba(255, 255, 255, 0.90);
+  --muted:      rgba(255, 255, 255, 0.46);
+  --accent:     #60a5fa;
+  --accent-dim: rgba(96, 165, 250, 0.18);
+  --green:  #34d399;
+  --red:    #f87171;
+  --yellow: #fbbf24;
+  --purple: #c084fc;
+  --orange: #fb923c;
   --font-sans: 'Noto Sans TC', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-  --radius: 8px;
-  --radius-lg: 12px;
+  --radius:    10px;
+  --radius-lg: 16px;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body, #root {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
-}
+html, body, #root { height: 100%; width: 100%; }
+html, body { overflow: hidden; }
 
 body {
-  background: var(--bg);
+  background: #06080f;
   color: var(--text);
   font-family: var(--font-sans);
   font-size: 14px;
@@ -39,26 +33,96 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-button {
-  cursor: pointer;
-  font-family: var(--font-sans);
+/* ── Aurora animated background ────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 55% at 12% 18%, rgba(96, 165, 250, 0.30) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 50% at 85% 82%, rgba(139, 92, 246, 0.24) 0%, transparent 55%),
+    radial-gradient(ellipse 48% 38% at 72% 10%, rgba(236, 72, 153, 0.14) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 65% at 28% 88%, rgba(16, 185, 129, 0.12) 0%, transparent 55%);
+  animation: aurora-drift 22s ease-in-out infinite alternate;
 }
 
-input, textarea {
-  font-family: var(--font-sans);
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 45% 40% at 55% 42%, rgba(251, 191, 36, 0.07) 0%, transparent 50%),
+    radial-gradient(ellipse 38% 48% at 18% 65%, rgba(52, 211, 153, 0.09) 0%, transparent 50%);
+  animation: aurora-drift 30s ease-in-out infinite alternate-reverse;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+@keyframes aurora-drift {
+  0%   { transform: translate(0%,    0%)   scale(1);    }
+  30%  { transform: translate(2.5%, -2%)   scale(1.04); }
+  65%  { transform: translate(-1.5%, 2.5%) scale(0.97); }
+  100% { transform: translate(1.5%,  1%)   scale(1.03); }
 }
+
+#root { position: relative; z-index: 1; }
+
+/* ── Glass header bar ───────────────────────────────────────────────── */
+.app-header {
+  position: relative;
+  backdrop-filter: blur(32px) saturate(1.8) brightness(1.08);
+  -webkit-backdrop-filter: blur(32px) saturate(1.8) brightness(1.08);
+}
+
+/* Chromatic dispersion — top edge */
+.app-header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent            0%,
+    rgba(96, 165, 250, .7) 15%,
+    rgba(192, 132, 252, .7) 40%,
+    rgba(244, 114, 182, .6) 65%,
+    rgba(52, 211, 153, .5)  85%,
+    transparent            100%
+  );
+  pointer-events: none;
+}
+
+/* Chromatic dispersion — bottom edge (overlays the inline border) */
+.app-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent            0%,
+    rgba(96, 165, 250, .4) 20%,
+    rgba(192, 132, 252, .4) 50%,
+    rgba(52, 211, 153, .35) 80%,
+    transparent            100%
+  );
+  pointer-events: none;
+}
+
+/* ── Scrollbars ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: rgba(255,255,255,0.16);
   border-radius: 3px;
 }
-::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.30); }
 
+/* ── Base resets ────────────────────────────────────────────────────── */
+button       { cursor: pointer; font-family: var(--font-sans); }
+input, textarea { font-family: var(--font-sans); }
+
+/* ── Animations ─────────────────────────────────────────────────────── */
 @keyframes spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }

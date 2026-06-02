@@ -60,7 +60,7 @@ export default function App() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{
+      <div className="app-header" style={{
         padding: '0 16px',
         background: 'var(--bg)',
         borderBottom: '1px solid var(--border)',
