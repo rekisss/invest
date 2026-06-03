@@ -181,16 +181,7 @@ export default function App() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--ios-bg)' }}>
-      {/* Hidden SVG filter — liquid distortion for specular highlights (nikdelvin technique) */}
-      <svg style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }} aria-hidden="true">
-        <defs>
-          <filter id="lg-distort">
-            <feTurbulence type="fractalNoise" baseFrequency="0.022 0.016" numOctaves="3" seed="7" result="noise"/>
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="20" xChannelSelector="R" yChannelSelector="G"/>
-          </filter>
-        </defs>
-      </svg>
-      <style>{`
+<style>{`
         @keyframes slideInFromRight {
           from { transform: translateX(60px); opacity: 0; }
           to   { transform: translateX(0);    opacity: 1; }

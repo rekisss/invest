@@ -262,7 +262,11 @@ function PersistentSection({ items, onSelect }) {
 
 /* ── Main Component ──────────────────────────────────────────────── */
 export default function Dashboard({ data, error }) {
-  const [selectedDate, setSelectedDate] = useState(() => data?.dates?.[0] || null)
+  const [selectedDate, setSelectedDate] = useState(() => {
+    if (!data?.dates?.length) return null
+    const todayTW = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
+    return data.dates.includes(todayTW) ? todayTW : (data.dates[0] || null)
+  })
   const [selectedStock, setSelectedStock] = useState(null)
   const [viewTab, setViewTab] = useState('all')
   const notionMap = data?.notionMap || {}
