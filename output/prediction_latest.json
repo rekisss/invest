@@ -1,22 +1,22 @@
 {
-  "date": "2026-06-02",
-  "generated_at": "11:30",
-  "xgb_prob_up": 0.594,
-  "xgb_label": "偏多",
+  "date": "2026-06-03",
+  "generated_at": "08:01",
+  "xgb_prob_up": 0.389,
+  "xgb_label": "偏空",
   "market_data": {
     "vix": null,
     "nasdaq_ret": null,
     "sox_ret": null,
     "tsm_adr_ret": null,
-    "futures_net": -64673.0,
+    "futures_net": -67018.0,
     "night_change": null,
     "pcr": null,
-    "taiex_rsi": 74.79084355028057,
-    "macd_hist": 390.86764053553134,
-    "dist_ma60": 21.033304608474367,
+    "taiex_rsi": 75.46012682543724,
+    "macd_hist": 440.28146533565496,
+    "dist_ma60": 20.98048972403315,
     "night_trend": null
   },
-  "ai_insight": "# 今日操盤要點\n\n・加權RSI達75進入超買區域，短線獲利回吐風險高，建議逢高減碼或設定停利點。\n\n・外資期貨淨空頭64,673口，與現貨買盤46%形成背離，留意機構調倉可能帶來的震盪。\n\n・距MA60漲幅達21%，股價已遠離長期均線，盤中若破關鍵支撐應立即止損，優先防守風險。",
+  "ai_insight": "# 今日操盤要點\n\n・加權RSI已達75進入超買區域，警惕獲利回吐壓力，短線應設置停利點位以鎖定漲幅。\n\n・外資期貨大幅淨空單逾六萬口，與現貨買超形成背離，需留意是否為避險操作或轉向訊號。\n\n・股價距MA60乖離超過兩成創新高，搭配MACD正柱放大，確認上升趨勢但應控制風險部位，逢高減碼。",
   "regime": {
     "label": "double_whipsaw",
     "label_zh": "🔄 多空雙巴日",
@@ -26,7 +26,7 @@
     "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
     "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
     "danger_signals": [
-      "外資空單極重（-64,673口），軋空風險高"
+      "外資空單極重（-67,018口），軋空風險高"
     ],
     "forbidden_actions": [
       "禁止反彈高點追多（軋空陷阱）"
@@ -38,7 +38,7 @@
     "factors": [
       {
         "name": "外資空單極重",
-        "description": "-64,673口，軋空/崩潰雙向風險",
+        "description": "-67,018口，軋空/崩潰雙向風險",
         "action": "避免重押方向"
       }
     ]
