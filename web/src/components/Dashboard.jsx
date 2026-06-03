@@ -6,11 +6,25 @@ const BASE = import.meta.env.BASE_URL
 /* ── Utility micro-components ────────────────────────────────────── */
 
 function StatCard({ label, value, sub, color }) {
+  const accents = {
+    'var(--ios-green)':  { from: 'rgba(48,209,88,0.16)',  border: 'rgba(48,209,88,0.55)' },
+    'var(--ios-red)':    { from: 'rgba(255,69,58,0.14)',  border: 'rgba(255,69,58,0.55)' },
+    'var(--ios-blue)':   { from: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.50)' },
+    'var(--ios-yellow)': { from: 'rgba(255,214,10,0.13)', border: 'rgba(255,214,10,0.50)' },
+  }
+  const a = accents[color] || { from: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.09)' }
   return (
-    <div className="ios-stat" style={{ flex: 1, minWidth: 0 }}>
-      <div className="ios-stat-label">{label}</div>
-      <div className="ios-stat-value" style={{ fontSize: 22, color: color || 'var(--ios-label)' }}>{value}</div>
-      {sub && <div className="ios-stat-sub">{sub}</div>}
+    <div style={{
+      flex: 1, minWidth: 0,
+      background: `linear-gradient(155deg, ${a.from} 0%, var(--ios-bg2) 62%)`,
+      borderRadius: 16, padding: '14px 16px 12px',
+      boxShadow: 'var(--shadow-card)',
+      borderTop: `1.5px solid ${a.border}`,
+      position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.8px', color: color || 'var(--ios-label)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginTop: 3 }}>{sub}</div>}
     </div>
   )
 }
@@ -79,6 +93,7 @@ function StockTable({ stocks, onSelect, notionMap = {} }) {
       borderRadius: 16,
       overflow: 'hidden',
       boxShadow: 'var(--shadow-card)',
+      border: '0.5px solid rgba(255,255,255,0.07)',
     }}>
       <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <table className="ios-table" style={{ minWidth: 560 }}>
@@ -154,6 +169,7 @@ function AlertTable({ title, accentColor, stocks, columns, onSelect }) {
       <div style={{
         background: 'var(--ios-bg2)', borderRadius: 16,
         overflow: 'hidden', boxShadow: 'var(--shadow-card)',
+        border: '0.5px solid rgba(255,255,255,0.07)',
       }}>
         <div style={{ overflowX: 'auto' }}>
           <table className="ios-table" style={{ minWidth: 400 }}>
@@ -283,9 +299,11 @@ export default function Dashboard({ data, error }) {
       {/* ── Controls Header ──────────────────────────────────────── */}
       <div style={{
         padding: '8px 16px 12px',
-        background: 'var(--ios-bg)',
+        background: 'linear-gradient(180deg, rgba(28,28,30,0.90) 0%, var(--ios-bg) 100%)',
         borderBottom: '0.5px solid var(--ios-sep)',
         flexShrink: 0,
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
       }}>
         {/* Date selector + download row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -324,7 +342,7 @@ export default function Dashboard({ data, error }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <StatCard label="掃描總數" value={scan.total_scanned?.toLocaleString() || '—'} />
           <StatCard label="進場訊號" value={scan.entry_count ?? '—'} color={scan.entry_count > 0 ? 'var(--ios-green)' : undefined} />
-          <StatCard label="TOP 50" value={stocks.length} />
+          <StatCard label="TOP 50" value={stocks.length} color="var(--ios-blue)" />
         </div>
 
         {/* Segmented view selector */}
@@ -348,13 +366,18 @@ export default function Dashboard({ data, error }) {
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
 
         {/* Market summary banner */}
-        {pred && (
+        {pred && (() => {
+          const isBull = pred.xgb_label === '偏多', isBear = pred.xgb_label === '偏空'
+          const pColor = isBull ? '#30D158' : isBear ? '#FF453A' : '#0A84FF'
+          return (
           <div style={{
             margin: '12px 16px 0',
-            background: 'var(--ios-bg2)',
+            background: `linear-gradient(135deg, ${pColor}13 0%, var(--ios-bg2) 55%)`,
             borderRadius: 16,
             padding: '14px 16px',
-            boxShadow: 'var(--shadow-card)',
+            boxShadow: `var(--shadow-card), inset 0 0 0 0.5px ${pColor}28`,
+            borderLeft: `3px solid ${pColor}`,
+            position: 'relative', overflow: 'hidden',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
               <span style={{
@@ -391,16 +414,19 @@ export default function Dashboard({ data, error }) {
               </div>
             )}
           </div>
-        )}
+          )
+        })()}
 
         {/* AI picks */}
         {aiText && (
           <div style={{
             margin: '10px 16px 0',
-            background: 'var(--ios-bg2)',
+            background: 'linear-gradient(135deg, rgba(191,90,242,0.10) 0%, var(--ios-bg2) 55%)',
             borderRadius: 16,
             padding: '14px 16px',
             boxShadow: 'var(--shadow-card)',
+            border: '0.5px solid rgba(191,90,242,0.22)',
+            borderLeft: '3px solid var(--ios-purple)',
           }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-purple)', marginBottom: 8, letterSpacing: 0.3, textTransform: 'uppercase' }}>🤖 AI 精選推薦</div>
             <pre style={{ fontSize: 13, color: 'var(--ios-label)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, fontFamily: 'inherit', lineHeight: 1.65 }}>{aiText}</pre>

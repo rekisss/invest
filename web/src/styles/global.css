@@ -658,27 +658,29 @@ input, textarea { font-family: var(--font-sans); }
   font-size: 14px;
 }
 .ios-table th {
-  padding: 8px 10px;
+  padding: 9px 10px;
   text-align: center;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  color: var(--ios-label2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  color: var(--ios-label3);
   text-transform: uppercase;
-  background: var(--ios-bg3);
+  background: linear-gradient(180deg, var(--ios-bg4) 0%, var(--ios-bg3) 100%);
   position: sticky;
   top: 0;
   z-index: 1;
   border-bottom: 0.5px solid var(--ios-sep);
 }
 .ios-table td {
-  padding: 10px 10px;
+  padding: 11px 10px;
   text-align: center;
-  border-bottom: 0.5px solid var(--ios-sep);
+  border-bottom: 0.5px solid rgba(84,84,88,0.30);
   vertical-align: middle;
 }
 .ios-table tr:last-child td { border-bottom: none; }
-.ios-table tbody tr { transition: background 0.1s; }
+.ios-table tbody tr { transition: background 0.15s; }
+.ios-table tbody tr:nth-child(even) { background: rgba(255,255,255,0.018); }
+.ios-table tbody tr:hover { background: rgba(10,132,255,0.06); }
 .ios-table tbody tr:active { background: var(--ios-fill4); }
 
 /* ── iOS Prediction Probability Bar ────────────────────────────────── */

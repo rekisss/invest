@@ -201,28 +201,34 @@ function TrendingBar({ news, onFilter }) {
   const { topTags, topStocks } = buildTrending(news)
   if (topTags.length === 0 && topStocks.length === 0) return null
   return (
-    <div className="ios-category-bar" style={{ padding: '8px 14px 10px' }}>
-      <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>🔥 熱門趨勢</div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+    <div className="ios-category-bar" style={{ padding: '10px 14px 12px' }}>
+      <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, marginBottom: 8, letterSpacing: 0.7, textTransform: 'uppercase' }}>🔥 熱門趨勢</div>
+      <div style={{ display: 'flex', gap: 7, overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 2 }}>
         {topTags.map(([tag, count]) => {
           const rule = KEYWORD_RULES.find(r => r.tag === tag)
           const color = rule?.color || 'var(--ios-label3)'
           return (
             <button key={tag} onClick={() => onFilter(tag)} style={{
-              fontSize: 11, color, background: `${color}20`, border: `1px solid ${color}40`,
-              borderRadius: 9999, padding: '3px 10px', cursor: 'pointer', fontWeight: 600,
+              fontSize: 11, color, background: `${color}1e`,
+              border: `1px solid ${color}45`,
+              borderRadius: 9999, padding: '5px 13px', cursor: 'pointer',
+              fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0, letterSpacing: 0.2,
             }}>
-              {rule?.icon} {tag} <span style={{ opacity: 0.65 }}>·{count}</span>
+              {rule?.icon} {tag}<span style={{ opacity: 0.55, fontWeight: 400, marginLeft: 4 }}>{count}</span>
             </button>
           )
         })}
+        {topStocks.length > 0 && (
+          <div style={{ width: 1, background: 'var(--ios-sep)', flexShrink: 0, margin: '3px 2px' }} />
+        )}
         {topStocks.map(([code, count]) => (
           <span key={code} style={{
-            fontSize: 11, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.12)',
-            border: '1px solid rgba(10,132,255,0.3)', borderRadius: 9999,
-            padding: '3px 10px', fontWeight: 700,
+            fontSize: 11, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.14)',
+            border: '1px solid rgba(10,132,255,0.32)', borderRadius: 9999,
+            padding: '5px 13px', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
+            fontFamily: 'monospace',
           }}>
-            {code} <span style={{ opacity: 0.65 }}>·{count}</span>
+            {code}<span style={{ opacity: 0.55, fontWeight: 400, marginLeft: 4 }}>{count}</span>
           </span>
         ))}
       </div>
@@ -418,26 +424,34 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
   const hint = isOpen ? generateHint(item.title, item.tags || []) : null
   const stockCodes = isOpen ? [...new Set([...item.title.matchAll(STOCK_CODE_RE)].map(m => m[1]))] : []
 
+  const borderColor = rule?.color || 'transparent'
   return (
     <div style={{
       borderBottom: '0.5px solid var(--ios-sep)',
-      background: isOpen ? 'var(--ios-bg2)' : 'transparent',
-      transition: 'background 0.15s',
+      background: isOpen ? `linear-gradient(90deg, ${borderColor}08 0%, var(--ios-bg2) 40%)` : 'transparent',
+      transition: 'background 0.18s',
+      borderLeft: `2.5px solid ${isOpen ? borderColor : 'transparent'}`,
     }}>
       <div
         onClick={onToggle}
-        style={{ padding: '13px 16px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start' }}
+        style={{ padding: '13px 14px 13px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start' }}
       >
-        <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{rule?.icon || '📰'}</span>
+        <div style={{
+          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+          background: `${borderColor}18`, border: `1px solid ${borderColor}30`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 16,
+        }}>{rule?.icon || '📰'}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.5, color: 'var(--ios-label)' }}>{item.title}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.5, color: 'var(--ios-label)', letterSpacing: '-0.1px' }}>{item.title}</div>
           <div style={{ display: 'flex', gap: 5, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             {(item.tags || []).slice(0, 3).map(tag => <TagChip key={tag} tag={tag} customRules={customRules} />)}
-            {item.source && <span style={{ fontSize: 10, color: 'var(--ios-label3)' }}>{item.source}</span>}
-            <span style={{ fontSize: 10, color: 'var(--ios-label3)' }}>{timeAgo(item.published)}</span>
+            <span style={{ fontSize: 10, color: 'var(--ios-label4)', marginLeft: 1 }}>
+              {item.source && `${item.source} · `}{timeAgo(item.published)}
+            </span>
           </div>
         </div>
-        <span style={{ color: 'var(--ios-label3)', fontSize: 11, flexShrink: 0, marginTop: 3 }}>{isOpen ? '▲' : '▼'}</span>
+        <span style={{ color: 'var(--ios-label4)', fontSize: 11, flexShrink: 0, marginTop: 2 }}>{isOpen ? '▲' : '▼'}</span>
       </div>
 
       {isOpen && (
