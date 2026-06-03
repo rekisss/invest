@@ -142,6 +142,7 @@ input, textarea { font-family: var(--font-sans); }
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-bottom: 0.5px solid var(--ios-sep);
+  box-shadow: inset 0 -0.5px 0 rgba(255,255,255,0.06), 0 1px 12px rgba(0,0,0,0.20);
   z-index: 100;
   flex-shrink: 0;
 }
@@ -180,6 +181,7 @@ input, textarea { font-family: var(--font-sans); }
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-top: 0.5px solid var(--ios-sep);
+  box-shadow: inset 0 0.5px 0 rgba(255,255,255,0.10), 0 -1px 12px rgba(0,0,0,0.20);
   flex-shrink: 0;
   z-index: 100;
 }
@@ -217,13 +219,113 @@ input, textarea { font-family: var(--font-sans); }
 .ios-tab-btn.active .ios-tab-icon { filter: saturate(100%); }
 .ios-tab-btn:not(.active) .ios-tab-icon { opacity: 0.5; }
 
+/* ── Liquid Glass Effect ─────────────────────────────────────────────
+   Inspired by Apple iOS 26 Liquid Glass.
+   Techniques from:
+     github.com/kevinbism/liquid-glass-effect (★51) — highlights + inset glow
+     github.com/nikdelvin/liquid-glass (★43)        — SVG displacement distortion
+                                                                       */
+
+/* Reusable class for floating / overlay elements */
+.liquid-glass {
+  position: relative;
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 0.5px solid rgba(255,255,255,0.18);
+  border-radius: var(--radius-lg);
+  /* Outer depth + top-edge glow + bottom-edge shadow (kevinbism technique) */
+  box-shadow:
+    0 8px 32px rgba(0,0,0,0.32),
+    inset 0 0.5px 0 rgba(255,255,255,0.22),
+    inset 0 -0.5px 0 rgba(0,0,0,0.18);
+  overflow: hidden;
+}
+.liquid-glass > * { position: relative; z-index: 1; }
+
+/* ── Specular highlight (all glass surfaces) ─────────────────────────
+   Diagonal light streak from top-left corner — the main "liquid" cue.
+   SVG displacement filter (nikdelvin technique) gives it a wavy,
+   organic edge instead of a flat linear gradient.                     */
+.liquid-glass::before,
+.ios-nav::before,
+.ios-tabbar::before,
+.ios-category-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(255,255,255,0.15) 0%,
+    rgba(255,255,255,0.05) 35%,
+    transparent 65%
+  );
+  /* SVG feTurbulence + feDisplacementMap makes the highlight edge "liquid" */
+  filter: url(#lg-distort);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Bottom caustic streak — light bending through glass lower edge */
+.liquid-glass::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 8%; right: 8%;
+  height: 1px;
+  background: linear-gradient(
+    90deg, transparent, rgba(255,255,255,0.28) 50%, transparent
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Light-mode variants */
+@media (prefers-color-scheme: light) {
+  .liquid-glass {
+    background: rgba(255,255,255,0.52);
+    border-color: rgba(255,255,255,0.80);
+    box-shadow:
+      0 4px 24px rgba(0,0,0,0.08),
+      inset 0 0.5px 0 rgba(255,255,255,0.92),
+      inset 0 -0.5px 0 rgba(0,0,0,0.04);
+  }
+  .liquid-glass::before,
+  .ios-nav::before,
+  .ios-tabbar::before,
+  .ios-category-bar::before {
+    background: linear-gradient(
+      135deg,
+      rgba(255,255,255,0.55) 0%,
+      rgba(255,255,255,0.14) 35%,
+      transparent 65%
+    );
+  }
+}
+
 /* ── iOS Category Bar (liquid glass) ───────────────────────────────── */
 .ios-category-bar {
+  position: relative; /* required for ::before / ::after */
   background: rgba(28,28,30,0.80);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border-bottom: 0.5px solid var(--ios-sep);
   flex-shrink: 0;
+}
+/* Top-edge rim highlight on category bar */
+.ios-category-bar::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 0.5px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255,255,255,0.20) 25%,
+    rgba(255,255,255,0.20) 75%,
+    transparent 100%
+  );
+  pointer-events: none;
 }
 @media (prefers-color-scheme: light) {
   .ios-category-bar { background: rgba(242,242,247,0.82); }
