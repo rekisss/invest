@@ -8,6 +8,18 @@ import QuotaPanel from './components/QuotaPanel.jsx'
 
 const BASE = import.meta.env.BASE_URL || '/'
 
+// Returns true if the touch target is inside a horizontally scrollable element
+// that actually has overflowing content — skip page-swipe in that case
+function startsOnHScrollable(target, root) {
+  let el = target
+  while (el && el !== root) {
+    const { overflowX } = window.getComputedStyle(el)
+    if ((overflowX === 'auto' || overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 4) return true
+    el = el.parentElement
+  }
+  return false
+}
+
 const TABS = [
   { key: 'dashboard', label: '掃描', icon: '📊' },
   { key: 'news',      label: '新聞', icon: '📰' },
@@ -66,6 +78,11 @@ export default function App() {
   }
 
   function onTouchStart(e) {
+    // Don't intercept touches that begin on a horizontally scrollable element
+    if (startsOnHScrollable(e.target, contentRef.current)) {
+      touchRef.current = null
+      return
+    }
     touchRef.current = {
       x0: e.touches[0].clientX,
       y0: e.touches[0].clientY,
@@ -155,22 +172,22 @@ export default function App() {
     }
   })()
 
-  // Slide-in animation style for the entering panel
+  // Slide-in animation — iOS spring easing, 0.28s
   const panelAnim = slideDir === 'right'
-    ? 'slideInFromRight 0.3s cubic-bezier(0.25,0.46,0.45,0.94) both'
+    ? 'slideInFromRight 0.28s cubic-bezier(0.22,1,0.36,1) both'
     : slideDir === 'left'
-    ? 'slideInFromLeft 0.3s cubic-bezier(0.25,0.46,0.45,0.94) both'
+    ? 'slideInFromLeft 0.28s cubic-bezier(0.22,1,0.36,1) both'
     : 'none'
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--ios-bg)' }}>
       <style>{`
         @keyframes slideInFromRight {
-          from { transform: translateX(40px); opacity: 0; }
+          from { transform: translateX(60px); opacity: 0; }
           to   { transform: translateX(0);    opacity: 1; }
         }
         @keyframes slideInFromLeft {
-          from { transform: translateX(-40px); opacity: 0; }
+          from { transform: translateX(-60px); opacity: 0; }
           to   { transform: translateX(0);     opacity: 1; }
         }
       `}</style>
@@ -208,7 +225,7 @@ export default function App() {
         style={{
           flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column',
           transform: `translateX(${swipeOffset}px)`,
-          transition: snapBack ? 'transform 0.35s cubic-bezier(0.25,0.46,0.45,0.94)' : 'none',
+          transition: snapBack ? 'transform 0.32s cubic-bezier(0.22,1,0.36,1)' : 'none',
           willChange: 'transform',
         }}
       >

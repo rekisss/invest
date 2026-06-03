@@ -201,7 +201,7 @@ function TrendingBar({ news, onFilter }) {
   const { topTags, topStocks } = buildTrending(news)
   if (topTags.length === 0 && topStocks.length === 0) return null
   return (
-    <div style={{ padding: '8px 14px 10px', background: 'var(--ios-bg)', borderBottom: '0.5px solid var(--ios-sep)' }}>
+    <div className="ios-category-bar" style={{ padding: '8px 14px 10px' }}>
       <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>🔥 熱門趨勢</div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {topTags.map(([tag, count]) => {
@@ -569,7 +569,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
       )}
 
       {/* Dynamic tab bar */}
-      <div style={{ background: 'var(--ios-bg2)', borderBottom: '0.5px solid var(--ios-sep)', flexShrink: 0 }}>
+      <div className="ios-category-bar">
         <div style={{ display: 'flex', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {tabs.map(cat => {
             const isActive = filter === cat.key
