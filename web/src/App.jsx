@@ -164,7 +164,7 @@ export default function App() {
   const tabContent = (() => {
     if (loading) return null
     switch (tab) {
-      case 'overview':  return <Overview data={data} />
+      case 'overview':  return <Overview data={data} error={error} />
       case 'dashboard': return <Dashboard data={data} error={error} />
       case 'news':      return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} />
       case 'predict':   return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />

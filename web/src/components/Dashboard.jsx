@@ -61,7 +61,7 @@ function ScoreCell({ score, entry_signal }) {
   )
 }
 
-function WatchlistView({ stocks, onSelect, notionMap = {} }) {
+function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
   if (!stocks || stocks.length === 0) {
     return (
       <div style={{ padding: '40px 20px', textAlign: 'center' }}>
@@ -71,7 +71,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {} }) {
     )
   }
 
-  const maxScore = Math.max(...stocks.map(s => s.entry_score || 0), 1)
+  const maxScore = globalMaxScore || Math.max(...stocks.map(s => s.entry_score || 0), 1)
 
   return (
     <div style={{ margin: '0 12px 16px' }}>
@@ -318,6 +318,7 @@ export default function Dashboard({ data, error }) {
   const persistent = scan.persistent || []
   const limitDownAlerts = scan.limit_down_alerts || []
   const entryStocks = stocks.filter(s => s.entry_signal)
+  const globalMaxScore = Math.max(...stocks.map(s => s.entry_score || 0), 1)
   const pred = data.prediction || null
   const aiText = scan.ai_picks_text || ''
   const marginStats = scan.margin_stats || {}
@@ -490,6 +491,7 @@ export default function Dashboard({ data, error }) {
           )}
           <WatchlistView
             stocks={viewTab === 'entry' ? entryStocks : viewTab === 'limitdown' ? limitDownAlerts : stocks}
+            globalMaxScore={globalMaxScore}
             onSelect={setSelectedStock}
             notionMap={notionMap}
           />
