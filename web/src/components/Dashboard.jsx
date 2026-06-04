@@ -84,10 +84,10 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
           const vol = s.volume_ratio || 0
           const foreignStreak = s.foreign_buy_streak || 0
           const investStreak = s.invest_trust_streak || 0
-          const scoreColor = isEntry ? '#22C55E' : normScore >= 70 ? '#3B82F6' : '#94A3B8'
-          const rsiColor = rsi > 65 ? '#22C55E' : rsi < 40 ? '#EF4444' : '#94A3B8'
-          const adxColor = adx > 25 ? '#60A5FA' : '#94A3B8'
-          const volColor = vol > 1.8 ? '#F59E0B' : vol > 1.3 ? '#94A3B8' : '#475569'
+          const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
+          const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
+          const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
+          const volColor = vol > 1.8 ? '#FF9F0A' : vol > 1.3 ? '#94A3B8' : '#475569'
 
           return (
             <div
@@ -114,8 +114,8 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
                   {notionMap[s.stock_id] && <span style={{ fontSize: 9, color: 'var(--ios-blue)', fontWeight: 700, marginLeft: 4 }}>N</span>}
                 </span>
                 {isEntry
-                  ? <span style={{ fontSize: 10, fontWeight: 700, color: '#22C55E', background: 'rgba(34,197,94,0.13)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>進場</span>
-                  : <span style={{ fontSize: 10, fontWeight: 600, color: '#3B82F6', background: 'rgba(59,130,246,0.10)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>觀察</span>
+                  ? <span style={{ fontSize: 10, fontWeight: 700, color: '#30D158', background: 'rgba(48,209,88,0.14)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>進場</span>
+                  : <span style={{ fontSize: 10, fontWeight: 600, color: '#0A84FF', background: 'rgba(10,132,255,0.12)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>觀察</span>
                 }
               </div>
 
@@ -151,12 +151,12 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
                   </span>
                 )}
                 {foreignStreak > 0 && (
-                  <span style={{ fontSize: 11, color: '#22C55E', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 11, color: '#30D158', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     外+<strong>{foreignStreak}</strong>天
                   </span>
                 )}
                 {investStreak > 0 && (
-                  <span style={{ fontSize: 11, color: '#A855F7', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 11, color: '#BF5AF2', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     投+<strong>{investStreak}</strong>天
                   </span>
                 )}
