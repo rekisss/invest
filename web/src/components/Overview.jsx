@@ -15,7 +15,7 @@ function DirectionGauge({ prob = 0.5, winRate }) {
   const ny2 = (cy + (r - 16) * Math.sin(ang)).toFixed(2)
 
   return (
-    <div style={{ flex: 1, background: '#0F172A', borderRadius: 16, padding: '12px 12px 10px', border: '1px solid #1E293B', display: 'flex', flexDirection: 'column' }}>
+    <div className="glass-panel" style={{ flex: 1, padding: '12px 12px 10px', display: 'flex', flexDirection: 'column' }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>大盤方向</div>
       <svg viewBox="0 0 160 96" style={{ width: '100%', display: 'block' }}>
         {/* glow */}
@@ -67,7 +67,7 @@ function RiskCard({ risk, marketData }) {
   ].filter(Boolean)
 
   return (
-    <div style={{ flex: 1, background: '#0F172A', borderRadius: 16, padding: '12px 12px', border: '1px solid #1E293B', display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div className="glass-panel" style={{ flex: 1, padding: '12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.8 }}>今日風險</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ padding: '4px 10px', borderRadius: 8, background: cfg.bg, fontSize: 13, fontWeight: 800, color: cfg.color, whiteSpace: 'nowrap' }}>{cfg.label}</div>
@@ -96,7 +96,7 @@ function ScenarioBlock({ scenario, prob }) {
   if (!scenario?.main_scenario && !scenario?.best_strategy) return null
 
   return (
-    <div style={{ background: '#0F172A', borderRadius: 16, padding: '14px 16px', border: '1px solid #1E293B', borderLeft: `3px solid ${accentColor}` }}>
+    <div className="glass-panel" style={{ padding: '14px 16px', borderLeft: `3px solid ${accentColor}` }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>今日劇本</div>
       {scenario.market_type && (
         <div style={{ fontSize: 12, color: '#94A3B8', marginBottom: 8 }}>
@@ -201,7 +201,7 @@ function AIAdviceBlock({ aiInsight, dangerSignals, forbiddenActions }) {
   const colors = { info: '#94A3B8', ban: '#EF4444', warn: '#F59E0B' }
 
   return (
-    <div style={{ background: '#0F172A', borderRadius: 16, padding: '14px 16px', border: '1px solid #1E293B' }}>
+    <div className="glass-panel" style={{ padding: '14px 16px' }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>🤖 AI 操作建議</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {bullets.map((b, i) => (
@@ -221,7 +221,7 @@ function RiskFactors({ factors }) {
   const items = factors.slice(0, 4).map(f => typeof f === 'string' ? f : (f.description || '')).filter(Boolean)
   if (!items.length) return null
   return (
-    <div style={{ background: '#0F172A', borderRadius: 16, padding: '14px 16px', border: '1px solid #1E293B' }}>
+    <div className="glass-panel" style={{ padding: '14px 16px' }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>風險因子</div>
       {items.map((text, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: i < items.length - 1 ? 7 : 0 }}>
@@ -278,7 +278,7 @@ export default function Overview({ data, error }) {
           <DirectionGauge prob={prob} winRate={winRate} />
           {(risk || marketData)
             ? <RiskCard risk={risk} marketData={marketData} />
-            : <div style={{ flex: 1, background: '#0F172A', borderRadius: 16, border: '1px solid #1E293B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            : <div className="glass-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: 12, color: '#475569' }}>暫無風險資料</span>
               </div>
           }
@@ -291,7 +291,7 @@ export default function Overview({ data, error }) {
 
         {/* Row 3: TOP 5 */}
         {top5.length > 0 && (
-          <div style={{ background: '#0F172A', borderRadius: 16, overflow: 'hidden', border: '1px solid #1E293B' }}>
+          <div className="glass-panel" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '12px 14px 10px', borderBottom: '1px solid #1E293B', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#F8FAFC' }}>⚡ 今日最強</span>
               <span style={{ fontSize: 11, color: '#475569' }}>{latestDate}</span>

@@ -75,7 +75,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
 
   return (
     <div style={{ margin: '0 12px 16px' }}>
-      <div style={{ background: 'var(--ios-bg2)', borderRadius: 16, overflow: 'hidden', border: '0.5px solid var(--ios-sep)', boxShadow: 'var(--shadow-card)' }}>
+      <div className="glass-panel" style={{ overflow: 'hidden' }}>
         {stocks.map((s, idx) => {
           const normScore = Math.min(Math.round((s.entry_score || 0) / maxScore * 100), 99)
           const isEntry = s.entry_signal
@@ -92,7 +92,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
           return (
             <div
               key={s.stock_id}
-              className={`stock-row${isEntry ? ' stock-row--entry' : ''}`}
+              className={`glass-row${isEntry ? ' glass-row--entry' : ''}`}
               onClick={() => onSelect && onSelect(s)}
               style={{
                 padding: '10px 14px',
@@ -192,11 +192,7 @@ function AlertTable({ title, accentColor, stocks, columns, onSelect }) {
           {stocks.length}
         </span>
       </div>
-      <div style={{
-        background: 'var(--ios-bg2)', borderRadius: 16,
-        overflow: 'hidden', boxShadow: 'var(--shadow-card)',
-        border: '0.5px solid rgba(255,255,255,0.07)',
-      }}>
+      <div className="glass-panel" style={{ overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table className="ios-table" style={{ minWidth: 400 }}>
             <thead>
