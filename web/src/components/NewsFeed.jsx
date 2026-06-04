@@ -498,6 +498,25 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
               {hint}
             </div>
           )}
+          {/* Link to full article */}
+          {item.url && (
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: 12, color: 'var(--ios-blue)', fontWeight: 500,
+                textDecoration: 'none',
+                padding: '5px 12px',
+                background: 'rgba(10,132,255,0.10)',
+                border: '0.5px solid rgba(10,132,255,0.28)',
+                borderRadius: 9999,
+              }}
+            >
+              閱讀全文 ↗
+            </a>
+          )}
         </div>
       )}
     </div>
