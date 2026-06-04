@@ -79,69 +79,88 @@ function WatchlistView({ stocks, onSelect, notionMap = {} }) {
         {stocks.map((s, idx) => {
           const normScore = Math.min(Math.round((s.entry_score || 0) / maxScore * 100), 99)
           const isEntry = s.entry_signal
-          const scoreColor = isEntry ? 'var(--ios-green)' : normScore >= 70 ? 'var(--ios-blue)' : 'var(--ios-label2)'
-          const techDots = [
-            (s.rsi14 || 0) > 50 && (s.rsi14 || 0) < 75,
-            (s.adx14 || 0) > 20,
-            (s.volume_ratio || 0) > 1.3,
-            (s.adx14 || 0) > 27,
-            (s.rsi14 || 0) > 60,
-          ].filter(Boolean).length
-          const chipDots = [
-            (s.foreign_buy_streak || 0) >= 1,
-            (s.foreign_buy_streak || 0) >= 2,
-            (s.foreign_buy_streak || 0) >= 3,
-            (s.invest_trust_streak || 0) >= 1,
-            (s.invest_trust_streak || 0) >= 2,
-          ].filter(Boolean).length
+          const rsi = s.rsi14 || 0
+          const adx = s.adx14 || 0
+          const vol = s.volume_ratio || 0
+          const foreignStreak = s.foreign_buy_streak || 0
+          const investStreak = s.invest_trust_streak || 0
+          const scoreColor = isEntry ? '#22C55E' : normScore >= 70 ? '#3B82F6' : '#94A3B8'
+          const rsiColor = rsi > 65 ? '#22C55E' : rsi < 40 ? '#EF4444' : '#94A3B8'
+          const adxColor = adx > 25 ? '#60A5FA' : '#94A3B8'
+          const volColor = vol > 1.8 ? '#F59E0B' : vol > 1.3 ? '#94A3B8' : '#475569'
 
           return (
             <div
               key={s.stock_id}
+              className={`stock-row${isEntry ? ' stock-row--entry' : ''}`}
               onClick={() => onSelect && onSelect(s)}
               style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px',
+                padding: '10px 14px',
                 borderBottom: idx < stocks.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
-                background: isEntry ? 'rgba(34,197,94,0.04)' : 'transparent',
-                cursor: 'pointer', transition: 'background 0.1s',
+                cursor: 'pointer',
+                animation: `rowIn 0.35s ${Math.min(idx * 30, 300)}ms cubic-bezier(0.22,1,0.36,1) both`,
               }}
             >
-              {/* Rank */}
-              <div style={{ fontSize: 12, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)', minWidth: 20, textAlign: 'right' }}>{s.rank || idx + 1}</div>
-
-              {/* Info */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 5 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>{s.stock_id}</span>
-                  <span style={{ fontSize: 13, color: 'var(--ios-label)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-                  {notionMap[s.stock_id] && <span style={{ fontSize: 9, color: 'var(--ios-blue)', fontWeight: 700, flexShrink: 0 }}>N</span>}
-                </div>
-                {/* Score bar */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-                  <div style={{ flex: 1, height: 3, background: 'var(--ios-fill2)', borderRadius: 9999 }}>
-                    <div style={{ height: '100%', width: `${normScore}%`, background: `linear-gradient(90deg,${scoreColor === 'var(--ios-green)' ? '#22C55E' : scoreColor === 'var(--ios-blue)' ? '#3B82F6' : '#94A3B8'}70,${scoreColor === 'var(--ios-green)' ? '#22C55E' : scoreColor === 'var(--ios-blue)' ? '#3B82F6' : '#94A3B8'})`, borderRadius: 9999 }} />
-                  </div>
-                  <span style={{ fontSize: 11, color: scoreColor, fontWeight: 700, minWidth: 22, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{normScore}</span>
-                </div>
-                {/* Dots + close */}
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                    <span style={{ fontSize: 9, color: 'var(--ios-label3)', marginRight: 2 }}>技</span>
-                    {[0,1,2,3,4].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i < techDots ? '#3B82F6' : 'var(--ios-bg4)' }} />)}
-                  </div>
-                  <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                    <span style={{ fontSize: 9, color: 'var(--ios-label3)', marginRight: 2 }}>籌</span>
-                    {[0,1,2,3,4].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i < chipDots ? '#22C55E' : 'var(--ios-bg4)' }} />)}
-                  </div>
-                  {s.close != null && <span style={{ fontSize: 11, color: 'var(--ios-label3)', marginLeft: 'auto', fontFamily: 'var(--font-mono)' }}>{s.close.toFixed(1)}</span>}
-                </div>
+              {/* Row 1: ID + Name + Signal tag */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+                <span style={{ fontSize: 10, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)', minWidth: 18 }}>
+                  {String(idx + 1).padStart(2, '0')}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                  {s.stock_id}
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--ios-label)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {s.name}
+                  {notionMap[s.stock_id] && <span style={{ fontSize: 9, color: 'var(--ios-blue)', fontWeight: 700, marginLeft: 4 }}>N</span>}
+                </span>
+                {isEntry
+                  ? <span style={{ fontSize: 10, fontWeight: 700, color: '#22C55E', background: 'rgba(34,197,94,0.13)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>進場</span>
+                  : <span style={{ fontSize: 10, fontWeight: 600, color: '#3B82F6', background: 'rgba(59,130,246,0.10)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>觀察</span>
+                }
               </div>
 
-              {/* Signal */}
-              {isEntry
-                ? <span style={{ fontSize: 11, color: '#22C55E', fontWeight: 700, background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '4px 10px', whiteSpace: 'nowrap', flexShrink: 0 }}>進場</span>
-                : <span style={{ fontSize: 11, color: '#3B82F6', fontWeight: 600, background: 'rgba(59,130,246,0.10)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '4px 10px', whiteSpace: 'nowrap', flexShrink: 0 }}>觀察</span>
-              }
+              {/* Row 2: Score bar + score + price */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <div style={{ flex: 1, height: 4, background: 'var(--ios-fill2)', borderRadius: 9999, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', width: `${normScore}%`,
+                    background: `linear-gradient(90deg,${scoreColor}60,${scoreColor})`,
+                    borderRadius: 9999,
+                    transition: 'width 0.7s cubic-bezier(0.34,1.56,0.64,1)',
+                  }} />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: scoreColor, fontFamily: 'var(--font-mono)', minWidth: 24, textAlign: 'right' }}>{normScore}</span>
+                {s.close != null && (
+                  <span style={{ fontSize: 12, color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)' }}>
+                    {s.close.toFixed(1)}
+                  </span>
+                )}
+              </div>
+
+              {/* Row 3: Real indicator numbers */}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'nowrap', overflow: 'hidden' }}>
+                <span style={{ fontSize: 11, color: rsiColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  RSI <strong>{rsi.toFixed(0)}</strong>
+                </span>
+                <span style={{ fontSize: 11, color: adxColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  ADX <strong>{adx.toFixed(0)}</strong>
+                </span>
+                {vol > 0 && (
+                  <span style={{ fontSize: 11, color: volColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                    量 <strong>{vol.toFixed(1)}x</strong>
+                  </span>
+                )}
+                {foreignStreak > 0 && (
+                  <span style={{ fontSize: 11, color: '#22C55E', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                    外+<strong>{foreignStreak}</strong>天
+                  </span>
+                )}
+                {investStreak > 0 && (
+                  <span style={{ fontSize: 11, color: '#A855F7', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                    投+<strong>{investStreak}</strong>天
+                  </span>
+                )}
+              </div>
             </div>
           )
         })}
