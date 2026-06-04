@@ -1,5 +1,109 @@
 [
   {
+    "date": "2026-06-04",
+    "generated_at": "08:01",
+    "xgb_prob_up": 0.395,
+    "xgb_label": "偏空",
+    "market_data": {
+      "vix": null,
+      "nasdaq_ret": null,
+      "sox_ret": null,
+      "tsm_adr_ret": null,
+      "futures_net": -66772.0,
+      "night_change": null,
+      "pcr": null,
+      "taiex_rsi": 78.02095869001664,
+      "macd_hist": 546.8911334577683,
+      "dist_ma60": 22.673317772392053,
+      "night_trend": null
+    },
+    "ai_insight": "# 今日操盤要點\n\n・加權RSI達78進入超買區域，搭配MACD正向直方擴張，短線漲幅過急應留意獲利了結壓力，守住MA60支撐為操作重點。\n\n・外資期貨淨空單超過6萬口與現貨淨買超相反，反映多空分歧加劇，宜觀察期貨盤開盤後的方向確認再決定進場時機。\n\n・AI類股上漲機率僅40%不足一半，若今日走勢反轉應優先檢視科技權值股表現，可考慮在高檔分批減碼或轉向防守型標",
+    "regime": {
+      "label": "double_whipsaw",
+      "label_zh": "🔄 多空雙巴日",
+      "win_rate": 45.0
+    },
+    "scenario": {
+      "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+      "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
+      "danger_signals": [
+        "外資空單極重（-66,772口），軋空風險高"
+      ],
+      "forbidden_actions": [
+        "禁止反彈高點追多（軋空陷阱）"
+      ]
+    },
+    "risk": {
+      "level": "medium",
+      "score": 0.25,
+      "factors": [
+        {
+          "name": "外資空單極重",
+          "description": "-66,772口，軋空/崩潰雙向風險",
+          "action": "避免重押方向"
+        }
+      ]
+    },
+    "news_sentiment": {
+      "market_impact": 0.0,
+      "key_events": [],
+      "bullish_count": 0,
+      "bearish_count": 0
+    }
+  },
+  {
+    "date": "2026-06-03",
+    "generated_at": "11:38",
+    "xgb_prob_up": 0.389,
+    "xgb_label": "偏空",
+    "market_data": {
+      "vix": null,
+      "nasdaq_ret": null,
+      "sox_ret": null,
+      "tsm_adr_ret": null,
+      "futures_net": -67018.0,
+      "night_change": null,
+      "pcr": null,
+      "taiex_rsi": 75.46012682543724,
+      "macd_hist": 440.28146533565496,
+      "dist_ma60": 20.98048972403315,
+      "night_trend": null
+    },
+    "ai_insight": "# 今日操盤要點\n\n・加權指數RSI達75已進入超買區域，需警惕高檔回檔風險，建議獲利部位適度減碼。\n\n・外資現貨淨買超惟期貨淨賣壓67,018口，短期多空力量分歧，宜觀察外資動向以確認後續方向。\n\n・AI族群上漲機率低於四成且三大科技指數表現不明，建議規避高估值個股，優先關注基本面支撐的標的。",
+    "regime": {
+      "label": "double_whipsaw",
+      "label_zh": "🔄 多空雙巴日",
+      "win_rate": 45.0
+    },
+    "scenario": {
+      "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+      "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
+      "danger_signals": [
+        "外資空單極重（-67,018口），軋空風險高"
+      ],
+      "forbidden_actions": [
+        "禁止反彈高點追多（軋空陷阱）"
+      ]
+    },
+    "risk": {
+      "level": "medium",
+      "score": 0.25,
+      "factors": [
+        {
+          "name": "外資空單極重",
+          "description": "-67,018口，軋空/崩潰雙向風險",
+          "action": "避免重押方向"
+        }
+      ]
+    },
+    "news_sentiment": {
+      "market_impact": 0.0,
+      "key_events": [],
+      "bullish_count": 0,
+      "bearish_count": 0
+    }
+  },
+  {
     "date": "2026-06-02",
     "generated_at": "11:30",
     "xgb_prob_up": 0.594,
