@@ -201,28 +201,34 @@ function TrendingBar({ news, onFilter }) {
   const { topTags, topStocks } = buildTrending(news)
   if (topTags.length === 0 && topStocks.length === 0) return null
   return (
-    <div style={{ padding: '8px 14px 10px', background: 'var(--ios-bg)', borderBottom: '0.5px solid var(--ios-sep)' }}>
-      <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 600, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' }}>🔥 熱門趨勢</div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+    <div className="ios-category-bar" style={{ padding: '10px 14px 12px' }}>
+      <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, marginBottom: 8, letterSpacing: 0.7, textTransform: 'uppercase' }}>🔥 熱門趨勢</div>
+      <div style={{ display: 'flex', gap: 7, overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 2 }}>
         {topTags.map(([tag, count]) => {
           const rule = KEYWORD_RULES.find(r => r.tag === tag)
           const color = rule?.color || 'var(--ios-label3)'
           return (
             <button key={tag} onClick={() => onFilter(tag)} style={{
-              fontSize: 11, color, background: `${color}20`, border: `1px solid ${color}40`,
-              borderRadius: 9999, padding: '3px 10px', cursor: 'pointer', fontWeight: 600,
+              fontSize: 11, color, background: `${color}1e`,
+              border: `1px solid ${color}45`,
+              borderRadius: 9999, padding: '5px 13px', cursor: 'pointer',
+              fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0, letterSpacing: 0.2,
             }}>
-              {rule?.icon} {tag} <span style={{ opacity: 0.65 }}>·{count}</span>
+              {rule?.icon} {tag}<span style={{ opacity: 0.55, fontWeight: 400, marginLeft: 4 }}>{count}</span>
             </button>
           )
         })}
+        {topStocks.length > 0 && (
+          <div style={{ width: 1, background: 'var(--ios-sep)', flexShrink: 0, margin: '3px 2px' }} />
+        )}
         {topStocks.map(([code, count]) => (
           <span key={code} style={{
-            fontSize: 11, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.12)',
-            border: '1px solid rgba(10,132,255,0.3)', borderRadius: 9999,
-            padding: '3px 10px', fontWeight: 700,
+            fontSize: 11, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.14)',
+            border: '1px solid rgba(10,132,255,0.32)', borderRadius: 9999,
+            padding: '5px 13px', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
+            fontFamily: 'monospace',
           }}>
-            {code} <span style={{ opacity: 0.65 }}>·{count}</span>
+            {code}<span style={{ opacity: 0.55, fontWeight: 400, marginLeft: 4 }}>{count}</span>
           </span>
         ))}
       </div>
@@ -256,6 +262,46 @@ function buildDynamicTabs(news, customRules = []) {
     tabs.push({ key: rule.tag, label: rule.tag, icon: rule.icon || '📌', color: rule.color })
   }
   return tabs
+}
+
+function getSentiment(title, hint) {
+  const t = (title || '') + ' ' + (hint || '')
+  if (/買超|利多|看好|創高|突破|拿下|接單|升值|降息|解盲.*過關|FDA.*核准/.test(t) && !/賣超|利空|看壞|跌停|重挫|暴跌/.test(t)) return 'bull'
+  if (/賣超|利空|看壞|跌停|重挫|暴跌|空單增|賣壓|放空/.test(t)) return 'bear'
+  if (hint?.match(/^(📈|✅|💰|💊|📦|🌊.*走強)/)) return 'bull'
+  if (hint?.match(/^(📉|⚠️|💸)/)) return 'bear'
+  return 'neutral'
+}
+
+function getImportance(title, summary, tags) {
+  let s = 1
+  if (/台積電|TSMC|Fed|聯準會|FOMC/.test(title)) s += 2
+  if (/外資|三大法人|升息|降息/.test(title)) s += 1
+  if (/法說會|財報|EPS|超預期/.test(title)) s += 1
+  if (/跌停|漲停|暴跌|暴漲|崩跌/.test(title)) s += 2
+  if ((tags || []).includes('台積電') || (tags || []).includes('貨幣政策')) s += 1
+  if ((summary?.length || 0) > 120) s += 1
+  return Math.min(s, 5)
+}
+
+function Stars({ n }) {
+  return (
+    <span style={{ fontSize: 10, letterSpacing: 0.5, lineHeight: 1 }}>
+      <span style={{ color: '#F59E0B' }}>{'★'.repeat(n)}</span>
+      <span style={{ color: '#334155' }}>{'★'.repeat(5 - n)}</span>
+    </span>
+  )
+}
+
+function SentimentBadge({ sentiment }) {
+  const cfg = {
+    bull:    { label: '利多', color: '#22C55E', bg: 'rgba(34,197,94,0.12)' },
+    bear:    { label: '利空', color: '#EF4444', bg: 'rgba(239,68,68,0.12)' },
+    neutral: { label: '中性', color: '#94A3B8', bg: 'transparent' },
+  }[sentiment] || { label: '中性', color: '#94A3B8', bg: 'transparent' }
+  return (
+    <span style={{ fontSize: 10, color: cfg.color, background: cfg.bg, borderRadius: 4, padding: '1px 6px', fontWeight: 700 }}>{cfg.label}</span>
+  )
 }
 
 function timeAgo(dateStr) {
@@ -415,29 +461,41 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
   const allRules = [...KEYWORD_RULES, ...customRules]
   const mainTag = item.tags?.[0]
   const rule = mainTag ? allRules.find(r => r.tag === mainTag) : null
-  const hint = isOpen ? generateHint(item.title, item.tags || []) : null
+  const hint = generateHint(item.title, item.tags || [])
+  const sentiment = getSentiment(item.title, hint)
+  const importance = getImportance(item.title, item.summary, item.tags)
   const stockCodes = isOpen ? [...new Set([...item.title.matchAll(STOCK_CODE_RE)].map(m => m[1]))] : []
 
+  const borderColor = rule?.color || 'transparent'
   return (
     <div style={{
       borderBottom: '0.5px solid var(--ios-sep)',
-      background: isOpen ? 'var(--ios-bg2)' : 'transparent',
-      transition: 'background 0.15s',
+      background: isOpen ? `linear-gradient(90deg, ${borderColor}08 0%, var(--ios-bg2) 40%)` : 'transparent',
+      transition: 'background 0.18s',
+      borderLeft: `2.5px solid ${isOpen ? borderColor : sentiment === 'bull' ? 'rgba(34,197,94,0.4)' : sentiment === 'bear' ? 'rgba(239,68,68,0.4)' : 'transparent'}`,
     }}>
       <div
         onClick={onToggle}
-        style={{ padding: '13px 16px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start' }}
+        style={{ padding: '12px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start' }}
       >
-        <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{rule?.icon || '📰'}</span>
+        <div style={{
+          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+          background: `${borderColor}18`, border: `1px solid ${borderColor}30`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 16,
+        }}>{rule?.icon || '📰'}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.5, color: 'var(--ios-label)' }}>{item.title}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.5, color: 'var(--ios-label)', letterSpacing: '-0.1px' }}>{item.title}</div>
           <div style={{ display: 'flex', gap: 5, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            {(item.tags || []).slice(0, 3).map(tag => <TagChip key={tag} tag={tag} customRules={customRules} />)}
-            {item.source && <span style={{ fontSize: 10, color: 'var(--ios-label3)' }}>{item.source}</span>}
-            <span style={{ fontSize: 10, color: 'var(--ios-label3)' }}>{timeAgo(item.published)}</span>
+            <SentimentBadge sentiment={sentiment} />
+            <Stars n={importance} />
+            {(item.tags || []).slice(0, 2).map(tag => <TagChip key={tag} tag={tag} customRules={customRules} />)}
+            <span style={{ fontSize: 10, color: 'var(--ios-label4)', marginLeft: 1 }}>
+              {item.source && `${item.source} · `}{timeAgo(item.published)}
+            </span>
           </div>
         </div>
-        <span style={{ color: 'var(--ios-label3)', fontSize: 11, flexShrink: 0, marginTop: 3 }}>{isOpen ? '▲' : '▼'}</span>
+        <span style={{ color: 'var(--ios-label4)', fontSize: 11, flexShrink: 0, marginTop: 2 }}>{isOpen ? '▲' : '▼'}</span>
       </div>
 
       {isOpen && (
@@ -483,6 +541,25 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
             }}>
               {hint}
             </div>
+          )}
+          {/* Link to full article */}
+          {item.url && (
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: 12, color: 'var(--ios-blue)', fontWeight: 500,
+                textDecoration: 'none',
+                padding: '5px 12px',
+                background: 'rgba(10,132,255,0.10)',
+                border: '0.5px solid rgba(10,132,255,0.28)',
+                borderRadius: 9999,
+              }}
+            >
+              閱讀全文 ↗
+            </a>
           )}
         </div>
       )}
@@ -569,7 +646,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
       )}
 
       {/* Dynamic tab bar */}
-      <div style={{ background: 'var(--ios-bg2)', borderBottom: '0.5px solid var(--ios-sep)', flexShrink: 0 }}>
+      <div className="ios-category-bar">
         <div style={{ display: 'flex', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {tabs.map(cat => {
             const isActive = filter === cat.key

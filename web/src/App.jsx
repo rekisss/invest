@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import Overview from './components/Overview.jsx'
 import Dashboard from './components/Dashboard.jsx'
 import NewsFeed from './components/NewsFeed.jsx'
 import PredictionPanel from './components/PredictionPanel.jsx'
@@ -9,6 +10,7 @@ import QuotaPanel from './components/QuotaPanel.jsx'
 const BASE = import.meta.env.BASE_URL || '/'
 
 const TABS = [
+  { key: 'overview',  label: '總覽', icon: '⚡' },
   { key: 'dashboard', label: '掃描', icon: '📊' },
   { key: 'news',      label: '新聞', icon: '📰' },
   { key: 'predict',   label: '預測', icon: '🔮' },
@@ -17,6 +19,7 @@ const TABS = [
 ]
 
 const TAB_TITLES = {
+  overview:  '今日總覽',
   dashboard: '掃描結果',
   news:      '市場新聞',
   predict:   '盤前預測',
@@ -93,6 +96,7 @@ export default function App() {
             <div style={{ color: 'var(--ios-label2)', fontSize: 15 }}>載入中⋯</div>
           </div>
         )}
+        {!loading && tab === 'overview'  && <Overview data={data} />}
         {!loading && tab === 'dashboard' && <Dashboard data={data} error={error} />}
         {!loading && tab === 'news' && <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} />}
         {!loading && tab === 'predict' && <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />}
