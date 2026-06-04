@@ -751,6 +751,166 @@ def fetch_all_monthly_revenue(
     return result
 
 
+def fetch_all_shareholding(
+    client: "FinMindClient",
+    end_date: str,
+    lookback: int = 10,
+) -> pd.DataFrame:
+    """Batch fetch foreign shareholding ratio for ALL stocks (one API call).
+
+    Returns DataFrame with columns: stock_id, date, ForeignInvestmentSharesRatio.
+    """
+    start = (pd.Timestamp(end_date) - pd.Timedelta(days=lookback)).strftime("%Y-%m-%d")
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockShareholding",
+            use_cache=True,
+            start_date=start,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 外資持股比例資料取得失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+    if frame.empty:
+        return pd.DataFrame()
+
+    frame = frame.copy()
+    frame.columns = [c.strip() for c in frame.columns]
+
+    if "stock_id" not in frame.columns:
+        return pd.DataFrame()
+
+    ratio_col = next(
+        (c for c in frame.columns if "ForeignInvestmentSharesRatio" in c or "foreigninvestmentsharesratio" in c.lower()),
+        next((c for c in frame.columns if "ratio" in c.lower() and "foreign" in c.lower()), None),
+    )
+    if ratio_col is None:
+        return pd.DataFrame()
+
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+    frame[ratio_col] = pd.to_numeric(frame[ratio_col], errors="coerce").fillna(0)
+
+    result = frame[["stock_id", "date", ratio_col]].rename(columns={ratio_col: "ForeignInvestmentSharesRatio"})
+    result = result.dropna(subset=["date"]).sort_values(["stock_id", "date"]).reset_index(drop=True)
+    print(f"[data_loader] 外資持股比例：{len(result)} 筆（{result['stock_id'].nunique()} 支股票）", file=sys.stderr)
+    return result
+
+
+def fetch_all_insider_trading(
+    client: "FinMindClient",
+    end_date: str,
+    lookback: int = 30,
+) -> pd.DataFrame:
+    """Batch fetch director/supervisor insider purchase/sell for ALL stocks (one API call).
+
+    Returns DataFrame with columns: stock_id, date, buy_amount, sell_amount, net_buy_amount.
+    net_buy_amount = buy_amount - sell_amount (shares).
+    """
+    start = (pd.Timestamp(end_date) - pd.Timedelta(days=lookback)).strftime("%Y-%m-%d")
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockInsiderPurchaseSell",
+            use_cache=True,
+            start_date=start,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 董監持股異動資料取得失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+    if frame.empty:
+        return pd.DataFrame()
+
+    frame = frame.copy()
+    frame.columns = [c.strip() for c in frame.columns]
+
+    if "stock_id" not in frame.columns:
+        return pd.DataFrame()
+
+    buy_col = next(
+        (c for c in frame.columns if "buy" in c.lower() and "amount" in c.lower()),
+        next((c for c in frame.columns if "buy" in c.lower()), None),
+    )
+    sell_col = next(
+        (c for c in frame.columns if "sell" in c.lower() and "amount" in c.lower()),
+        next((c for c in frame.columns if "sell" in c.lower()), None),
+    )
+
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+    frame = frame.dropna(subset=["date"])
+
+    if buy_col:
+        frame[buy_col] = pd.to_numeric(frame[buy_col], errors="coerce").fillna(0)
+    if sell_col:
+        frame[sell_col] = pd.to_numeric(frame[sell_col], errors="coerce").fillna(0)
+
+    # Aggregate per stock_id + date (may have multiple rows per day for different insider types)
+    agg_dict: dict[str, object] = {}
+    if buy_col:
+        agg_dict["buy_amount"] = (buy_col, "sum")
+    if sell_col:
+        agg_dict["sell_amount"] = (sell_col, "sum")
+
+    if not agg_dict:
+        return pd.DataFrame()
+
+    grp_cols = [buy_col] if buy_col else []
+    if sell_col:
+        grp_cols.append(sell_col)
+
+    result = frame.groupby(["stock_id", "date"])[grp_cols].sum().reset_index()
+    rename_map: dict[str, str] = {}
+    if buy_col:
+        rename_map[buy_col] = "buy_amount"
+    if sell_col:
+        rename_map[sell_col] = "sell_amount"
+    result = result.rename(columns=rename_map)
+
+    if "buy_amount" not in result.columns:
+        result["buy_amount"] = 0.0
+    if "sell_amount" not in result.columns:
+        result["sell_amount"] = 0.0
+
+    result["net_buy_amount"] = result["buy_amount"] - result["sell_amount"]
+    result = result.sort_values(["stock_id", "date"]).reset_index(drop=True)
+    print(f"[data_loader] 董監持股異動：{len(result)} 筆（{result['stock_id'].nunique()} 支股票）", file=sys.stderr)
+    return result
+
+
+def fetch_buyback_stocks(
+    client: "FinMindClient",
+    end_date: str,
+    lookback: int = 30,
+) -> set:
+    """Return set of stock_ids with active buyback (庫藏股買回) in the past lookback days.
+
+    Tries TaiwanStockBuyBack first, falls back to TaiwanStockRepurchase.
+    Returns empty set on failure.
+    """
+    start = (pd.Timestamp(end_date) - pd.Timedelta(days=lookback)).strftime("%Y-%m-%d")
+    frame = pd.DataFrame()
+    for dataset in ("TaiwanStockBuyBack", "TaiwanStockRepurchase"):
+        try:
+            frame = client.fetch_dataset(
+                dataset,
+                use_cache=True,
+                start_date=start,
+                end_date=end_date,
+            )
+            if not frame.empty:
+                break
+        except Exception as exc:
+            print(f"[data_loader] 庫藏股資料({dataset})取得失敗（graceful skip）: {exc}", file=sys.stderr)
+
+    if frame.empty or "stock_id" not in frame.columns:
+        return set()
+
+    result = set(frame["stock_id"].astype(str).unique())
+    print(f"[data_loader] 庫藏股買回：{len(result)} 支", file=sys.stderr)
+    return result
+
+
 def clean_cache(cache_dir: Path | str, max_age_days: int = 30) -> int:
     """Delete CSV cache files older than max_age_days. Returns count of deleted files."""
     cache_path = Path(cache_dir)
