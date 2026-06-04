@@ -30,8 +30,11 @@ from backtest import run_backtest
 from data_loader import (
     FinMindClient,
     clean_cache,
+    fetch_all_insider_trading,
     fetch_all_margin_data,
     fetch_all_monthly_revenue,
+    fetch_all_shareholding,
+    fetch_buyback_stocks,
     fetch_disposition_stocks,
     fetch_financial_statement_dates,
     fetch_fundamentals,
@@ -594,6 +597,9 @@ def collect_signals(
     checkpoint_path: "str | None" = None,
     margin_df: "pd.DataFrame | None" = None,
     revenue_df: "pd.DataFrame | None" = None,
+    shareholding_df: "pd.DataFrame | None" = None,
+    insider_df: "pd.DataFrame | None" = None,
+    buyback_ids: "set | None" = None,
 ) -> tuple[dict[str, pd.DataFrame], list[pd.DataFrame], list[str], bool]:
     """Returns (signals_by_stock, signal_frames, load_errors, quota_exhausted).
 
@@ -643,6 +649,9 @@ def collect_signals(
                 earnings_dates=earnings, f_score=stock_f_score,
                 margin_df=margin_df,
                 revenue_df=revenue_df,
+                shareholding_df=shareholding_df,
+                insider_df=insider_df,
+                buyback_ids=buyback_ids,
             )
             return sid, frame
         except Exception as error:
@@ -668,6 +677,8 @@ def collect_signals(
         "f_score", "limit_down_streak",
         "margin_change_5d", "short_ratio",
         "revenue_yoy", "revenue_mom", "revenue_3m_yoy",
+        "foreign_holding_pct", "foreign_holding_chg5d",
+        "insider_net_30d", "has_buyback",
     ]
     _signal_cols_present: list[str] = []  # resolved on first result
     _checkpoint_written = False           # tracks whether checkpoint header was written
@@ -737,12 +748,39 @@ def build_daily_snapshot(
     except Exception as _re:
         print(f"[build_daily_snapshot] ⚠️ 月營收資料抓取失敗（降級）：{_re}", file=sys.stderr)
 
+    _all_shareholding_df = pd.DataFrame()
+    try:
+        _all_shareholding_df = fetch_all_shareholding(client, end_date_text, lookback=10)
+        if not _all_shareholding_df.empty:
+            print(f"[build_daily_snapshot] 外資持股比例：{len(_all_shareholding_df)} 筆")
+    except Exception as _sh_e:
+        print(f"[build_daily_snapshot] ⚠️ 外資持股比例資料抓取失敗（降級）：{_sh_e}", file=sys.stderr)
+
+    _all_insider_df = pd.DataFrame()
+    try:
+        _all_insider_df = fetch_all_insider_trading(client, end_date_text, lookback=30)
+        if not _all_insider_df.empty:
+            print(f"[build_daily_snapshot] 董監持股異動：{len(_all_insider_df)} 筆")
+    except Exception as _ins_e:
+        print(f"[build_daily_snapshot] ⚠️ 董監持股異動資料抓取失敗（降級）：{_ins_e}", file=sys.stderr)
+
+    _buyback_ids: set = set()
+    try:
+        _buyback_ids = fetch_buyback_stocks(client, end_date_text, lookback=30)
+        if _buyback_ids:
+            print(f"[build_daily_snapshot] 庫藏股買回：{len(_buyback_ids)} 支")
+    except Exception as _bb_e:
+        print(f"[build_daily_snapshot] ⚠️ 庫藏股買回資料抓取失敗（降級）：{_bb_e}", file=sys.stderr)
+
     universe = load_universe(args, client)
     signals_by_stock, _, load_errors, quota_exhausted = collect_signals(
         universe, client, market, config, start_date, end_date_text, args.workers,
         checkpoint_path=getattr(args, "checkpoint_csv", None),
         margin_df=_all_margin_df if not _all_margin_df.empty else None,
         revenue_df=_all_revenue_df if not _all_revenue_df.empty else None,
+        shareholding_df=_all_shareholding_df if not _all_shareholding_df.empty else None,
+        insider_df=_all_insider_df if not _all_insider_df.empty else None,
+        buyback_ids=_buyback_ids if _buyback_ids else None,
     )
     snapshot = latest_signal_snapshot(signals_by_stock)
     breadth = compute_market_breadth(snapshot)

@@ -179,6 +179,9 @@ def prepare_stock_signals(
     f_score: int = -1,
     margin_df: pd.DataFrame | None = None,
     revenue_df: pd.DataFrame | None = None,
+    shareholding_df: pd.DataFrame | None = None,
+    insider_df: pd.DataFrame | None = None,
+    buyback_ids: set | None = None,
 ) -> pd.DataFrame:
     frame = stock_df.sort_values("date").reset_index(drop=True)
     frame["stock_id"] = stock_info["stock_id"]
@@ -313,6 +316,34 @@ def prepare_stock_signals(
     merged["revenue_yoy"] = _revenue_yoy
     merged["revenue_mom"] = _revenue_mom
     merged["revenue_3m_yoy"] = _revenue_3m_yoy
+
+    # ── 外資持股比例 5 日變化 ─────────────────────────────────────────────────
+    _foreign_holding_pct = 0.0
+    _foreign_holding_chg5d = 0.0
+    if shareholding_df is not None and not shareholding_df.empty and "stock_id" in shareholding_df.columns:
+        _sid_str = str(stock_info.get("stock_id", ""))
+        _stk_sh = shareholding_df[shareholding_df["stock_id"].astype(str) == _sid_str].sort_values("date")
+        if len(_stk_sh) >= 2:
+            _latest_pct = float(_stk_sh["ForeignInvestmentSharesRatio"].iloc[-1])
+            _prev5_pct = float(_stk_sh["ForeignInvestmentSharesRatio"].iloc[max(0, len(_stk_sh) - 6)])
+            _foreign_holding_pct = round(_latest_pct, 2)
+            _foreign_holding_chg5d = round(_latest_pct - _prev5_pct, 2)
+    merged["foreign_holding_pct"] = _foreign_holding_pct
+    merged["foreign_holding_chg5d"] = _foreign_holding_chg5d
+
+    # ── 董監持股異動（近 30 天淨買股數）────────────────────────────────────────
+    _insider_net_30d = 0
+    if insider_df is not None and not insider_df.empty and "stock_id" in insider_df.columns:
+        _sid_str = str(stock_info.get("stock_id", ""))
+        _stk_ins = insider_df[insider_df["stock_id"].astype(str) == _sid_str]
+        if not _stk_ins.empty and "net_buy_amount" in _stk_ins.columns:
+            _insider_net_30d = int(_stk_ins["net_buy_amount"].sum())
+    merged["insider_net_30d"] = _insider_net_30d
+
+    # ── 庫藏股買回 ───────────────────────────────────────────────────────────
+    _sid_str = str(stock_info.get("stock_id", ""))
+    _has_buyback = (buyback_ids is not None) and (_sid_str in buyback_ids)
+    merged["has_buyback"] = _has_buyback
 
     # ── 跌停連續天數 ──────────────────────────────────────────────────────────
     # Taiwan daily limit ≈ 10%; use -9.5% threshold to account for rounding
@@ -500,7 +531,21 @@ def prepare_stock_signals(
          (-30.0 if _revenue_yoy < -0.10 else 0.0))
     )
 
-    # ── 8. 風險扣分 ────────────────────────────────────────────────────────────
+    # ── 8a. 外資持股 5 日變化加成 ─────────────────────────────────────────────
+    _fh_chg = _foreign_holding_chg5d
+    _fh_bonus = 20.0 if _fh_chg > 1.0 else (10.0 if _fh_chg > 0.3 else (-15.0 if _fh_chg < -1.0 else 0.0))
+
+    # ── 8b. 董監近 30 天淨買加成 ──────────────────────────────────────────────
+    _insider_bonus = (
+        20.0 if _insider_net_30d > 500_000 else
+        (10.0 if _insider_net_30d > 100_000 else
+         (-15.0 if _insider_net_30d < -500_000 else 0.0))
+    )
+
+    # ── 8c. 庫藏股護盤加成 ────────────────────────────────────────────────────
+    _buyback_bonus = 15.0 if _has_buyback else 0.0
+
+    # ── 9. 風險扣分 ────────────────────────────────────────────────────────────
     # RSI 過熱：已追高，短線回檔風險高
     _rsi_penalty = np.where(_rsi14 > 90, -80.0,
                    np.where(_rsi14 > 85, -60.0, 0.0))
@@ -526,6 +571,9 @@ def prepare_stock_signals(
         + _f_bonus
         + _margin_bonus
         + _revenue_bonus
+        + _fh_bonus
+        + _insider_bonus
+        + _buyback_bonus
         + _rsi_penalty
         + _dist_penalty
         + _blowout_penalty
