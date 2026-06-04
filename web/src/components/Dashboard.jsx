@@ -61,7 +61,7 @@ function ScoreCell({ score, entry_signal }) {
   )
 }
 
-function StockTable({ stocks, onSelect, notionMap = {} }) {
+function WatchlistView({ stocks, onSelect, notionMap = {} }) {
   if (!stocks || stocks.length === 0) {
     return (
       <div style={{ padding: '40px 20px', textAlign: 'center' }}>
@@ -71,73 +71,80 @@ function StockTable({ stocks, onSelect, notionMap = {} }) {
     )
   }
 
-  const cols = [
-    { key: 'rank',               label: '#',    width: 32 },
-    { key: 'stock_id',           label: '股號', width: 58 },
-    { key: 'name',               label: '名稱', width: 76, align: 'left' },
-    { key: 'entry_score',        label: '分數', width: 68 },
-    { key: 'entry_signal',       label: '訊號', width: 40 },
-    { key: 'close',              label: '收盤', width: 58 },
-    { key: 'rsi14',              label: 'RSI',  width: 44 },
-    { key: 'adx14',              label: 'ADX',  width: 44 },
-    { key: 'volume_ratio',       label: '量比', width: 44 },
-    { key: 'foreign_buy_streak', label: '外資', width: 48 },
-    { key: 'invest_trust_streak',label: '投信', width: 48 },
-    { key: 'notion',             label: 'N',    width: 20 },
-  ]
+  const maxScore = Math.max(...stocks.map(s => s.entry_score || 0), 1)
 
   return (
-    <div style={{
-      margin: '0 16px 16px',
-      background: 'var(--ios-bg2)',
-      borderRadius: 16,
-      overflow: 'hidden',
-      boxShadow: 'var(--shadow-card)',
-      border: '0.5px solid rgba(255,255,255,0.07)',
-    }}>
-      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <table className="ios-table" style={{ minWidth: 560 }}>
-          <thead>
-            <tr>
-              {cols.map(c => (
-                <th key={c.key} style={{
-                  textAlign: c.align || 'center',
-                  width: c.width,
-                  whiteSpace: 'nowrap',
-                }}>{c.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {stocks.map(s => (
-              <tr
-                key={s.stock_id}
-                onClick={() => onSelect && onSelect(s)}
-                style={{
-                  background: s.entry_signal ? 'rgba(48,209,88,0.06)' : 'transparent',
-                  cursor: 'pointer',
-                }}
-              >
-                <td style={{ color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{s.rank}</td>
-                <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--ios-blue)', fontSize: 13 }}>{s.stock_id}</td>
-                <td style={{ textAlign: 'left', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14 }}>{s.name}</td>
-                <td><ScoreCell score={s.entry_score} entry_signal={s.entry_signal} /></td>
-                <td><SignalBadge entry_signal={s.entry_signal} /></td>
-                <td style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{s.close.toFixed(1)}</td>
-                <td style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: s.rsi14 > 70 ? 'var(--ios-red)' : s.rsi14 < 30 ? 'var(--ios-green)' : 'var(--ios-label)' }}>{s.rsi14.toFixed(0)}</td>
-                <td style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: s.adx14 > 25 ? 'var(--ios-yellow)' : 'var(--ios-label)' }}>{s.adx14.toFixed(0)}</td>
-                <td style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: s.volume_ratio > 2 ? 'var(--ios-orange)' : 'var(--ios-label)' }}>{s.volume_ratio.toFixed(1)}x</td>
-                <td><StreakBadge value={s.foreign_buy_streak} /></td>
-                <td><StreakBadge value={s.invest_trust_streak} /></td>
-                <td>
-                  {notionMap[s.stock_id] && (
-                    <span style={{ fontSize: 10, color: 'var(--ios-blue)', fontWeight: 700 }}>N</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div style={{ margin: '0 12px 16px' }}>
+      <div style={{ background: 'var(--ios-bg2)', borderRadius: 16, overflow: 'hidden', border: '0.5px solid var(--ios-sep)', boxShadow: 'var(--shadow-card)' }}>
+        {stocks.map((s, idx) => {
+          const normScore = Math.min(Math.round((s.entry_score || 0) / maxScore * 100), 99)
+          const isEntry = s.entry_signal
+          const scoreColor = isEntry ? 'var(--ios-green)' : normScore >= 70 ? 'var(--ios-blue)' : 'var(--ios-label2)'
+          const techDots = [
+            (s.rsi14 || 0) > 50 && (s.rsi14 || 0) < 75,
+            (s.adx14 || 0) > 20,
+            (s.volume_ratio || 0) > 1.3,
+            (s.adx14 || 0) > 27,
+            (s.rsi14 || 0) > 60,
+          ].filter(Boolean).length
+          const chipDots = [
+            (s.foreign_buy_streak || 0) >= 1,
+            (s.foreign_buy_streak || 0) >= 2,
+            (s.foreign_buy_streak || 0) >= 3,
+            (s.invest_trust_streak || 0) >= 1,
+            (s.invest_trust_streak || 0) >= 2,
+          ].filter(Boolean).length
+
+          return (
+            <div
+              key={s.stock_id}
+              onClick={() => onSelect && onSelect(s)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px',
+                borderBottom: idx < stocks.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
+                background: isEntry ? 'rgba(34,197,94,0.04)' : 'transparent',
+                cursor: 'pointer', transition: 'background 0.1s',
+              }}
+            >
+              {/* Rank */}
+              <div style={{ fontSize: 12, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)', minWidth: 20, textAlign: 'right' }}>{s.rank || idx + 1}</div>
+
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 5 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>{s.stock_id}</span>
+                  <span style={{ fontSize: 13, color: 'var(--ios-label)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                  {notionMap[s.stock_id] && <span style={{ fontSize: 9, color: 'var(--ios-blue)', fontWeight: 700, flexShrink: 0 }}>N</span>}
+                </div>
+                {/* Score bar */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                  <div style={{ flex: 1, height: 3, background: 'var(--ios-fill2)', borderRadius: 9999 }}>
+                    <div style={{ height: '100%', width: `${normScore}%`, background: `linear-gradient(90deg,${scoreColor === 'var(--ios-green)' ? '#22C55E' : scoreColor === 'var(--ios-blue)' ? '#3B82F6' : '#94A3B8'}70,${scoreColor === 'var(--ios-green)' ? '#22C55E' : scoreColor === 'var(--ios-blue)' ? '#3B82F6' : '#94A3B8'})`, borderRadius: 9999 }} />
+                  </div>
+                  <span style={{ fontSize: 11, color: scoreColor, fontWeight: 700, minWidth: 22, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{normScore}</span>
+                </div>
+                {/* Dots + close */}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                    <span style={{ fontSize: 9, color: 'var(--ios-label3)', marginRight: 2 }}>技</span>
+                    {[0,1,2,3,4].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i < techDots ? '#3B82F6' : 'var(--ios-bg4)' }} />)}
+                  </div>
+                  <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                    <span style={{ fontSize: 9, color: 'var(--ios-label3)', marginRight: 2 }}>籌</span>
+                    {[0,1,2,3,4].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i < chipDots ? '#22C55E' : 'var(--ios-bg4)' }} />)}
+                  </div>
+                  {s.close != null && <span style={{ fontSize: 11, color: 'var(--ios-label3)', marginLeft: 'auto', fontFamily: 'var(--font-mono)' }}>{s.close.toFixed(1)}</span>}
+                </div>
+              </div>
+
+              {/* Signal */}
+              {isEntry
+                ? <span style={{ fontSize: 11, color: '#22C55E', fontWeight: 700, background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '4px 10px', whiteSpace: 'nowrap', flexShrink: 0 }}>進場</span>
+                : <span style={{ fontSize: 11, color: '#3B82F6', fontWeight: 600, background: 'rgba(59,130,246,0.10)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '4px 10px', whiteSpace: 'nowrap', flexShrink: 0 }}>觀察</span>
+              }
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -297,9 +304,9 @@ export default function Dashboard({ data, error }) {
   const marginStats = scan.margin_stats || {}
 
   const viewOptions = [
-    { id: 'all',       label: `全部 (${stocks.length})` },
-    { id: 'entry',     label: `✓ 訊號 (${entryStocks.length})` },
-    { id: 'limitdown', label: `🔴 跌停 (${limitDownAlerts.length})` },
+    { id: 'all',       label: `全部` },
+    { id: 'entry',     label: `進場 ${entryStocks.length > 0 ? `·${entryStocks.length}` : ''}` },
+    { id: 'limitdown', label: `🔴 跌停` },
   ]
 
   return (
@@ -345,13 +352,6 @@ export default function Dashboard({ data, error }) {
               padding: '8px 12px', fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap', fontWeight: 600,
             }}
           >↓ 全部</a>
-        </div>
-
-        {/* Stats row */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <StatCard label="掃描總數" value={scan.total_scanned?.toLocaleString() || '—'} />
-          <StatCard label="進場訊號" value={scan.entry_count ?? '—'} color={scan.entry_count > 0 ? 'var(--ios-green)' : undefined} />
-          <StatCard label="TOP 50" value={stocks.length} color="var(--ios-blue)" />
         </div>
 
         {/* Segmented view selector */}
@@ -469,7 +469,7 @@ export default function Dashboard({ data, error }) {
               進場訊號 · {entryStocks.length} 支
             </div>
           )}
-          <StockTable
+          <WatchlistView
             stocks={viewTab === 'entry' ? entryStocks : viewTab === 'limitdown' ? limitDownAlerts : stocks}
             onSelect={setSelectedStock}
             notionMap={notionMap}

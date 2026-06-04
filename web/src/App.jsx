@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Overview from './components/Overview.jsx'
 import Dashboard from './components/Dashboard.jsx'
 import NewsFeed from './components/NewsFeed.jsx'
 import PredictionPanel from './components/PredictionPanel.jsx'
@@ -21,6 +22,7 @@ function startsOnHScrollable(target, root) {
 }
 
 const TABS = [
+  { key: 'overview',  label: '總覽', icon: '⚡' },
   { key: 'dashboard', label: '掃描', icon: '📊' },
   { key: 'news',      label: '新聞', icon: '📰' },
   { key: 'predict',   label: '預測', icon: '🔮' },
@@ -29,6 +31,7 @@ const TABS = [
 ]
 
 const TAB_TITLES = {
+  overview:  '今日總覽',
   dashboard: '掃描結果',
   news:      '市場新聞',
   predict:   '盤前預測',
@@ -161,6 +164,7 @@ export default function App() {
   const tabContent = (() => {
     if (loading) return null
     switch (tab) {
+      case 'overview':  return <Overview data={data} />
       case 'dashboard': return <Dashboard data={data} error={error} />
       case 'news':      return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} />
       case 'predict':   return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />

@@ -34,37 +34,37 @@
 
 /* ── Dark Theme (default) ─────────────────────────────────────────── */
 :root {
-  /* Backgrounds — zinc-tinted dark */
-  --ios-bg:   #0d0d11;
-  --ios-bg2:  #17171c;
-  --ios-bg3:  #1f1f25;
-  --ios-bg4:  #2a2a31;
+  /* Backgrounds — deep navy, Bloomberg/TradingView feel */
+  --ios-bg:   #070B14;
+  --ios-bg2:  #0F172A;
+  --ios-bg3:  #1A2438;
+  --ios-bg4:  #243347;
 
   /* Text hierarchy */
-  --ios-label:  #f0f0f5;
-  --ios-label2: #8a8a93;
-  --ios-label3: #56565e;
-  --ios-label4: #38383f;
+  --ios-label:  #F8FAFC;
+  --ios-label2: #94A3B8;
+  --ios-label3: #475569;
+  --ios-label4: #334155;
 
   /* Borders / separators */
-  --ios-sep:         rgba(255,255,255,0.07);
-  --ios-sep-opaque:  #2a2a31;
+  --ios-sep:         rgba(255,255,255,0.08);
+  --ios-sep-opaque:  #1E293B;
 
   /* Fill states (for inputs, hover, buttons) */
-  --ios-fill:   rgba(255,255,255,0.10);
-  --ios-fill2:  rgba(255,255,255,0.07);
-  --ios-fill3:  rgba(255,255,255,0.05);
-  --ios-fill4:  rgba(255,255,255,0.03);
+  --ios-fill:   rgba(255,255,255,0.08);
+  --ios-fill2:  rgba(255,255,255,0.05);
+  --ios-fill3:  rgba(255,255,255,0.03);
+  --ios-fill4:  rgba(255,255,255,0.02);
 
-  /* Accent palette */
-  --ios-blue:   #4a9eff;
-  --ios-green:  #30d158;
-  --ios-red:    #ff453a;
-  --ios-orange: #ff9500;
-  --ios-yellow: #ffd60a;
-  --ios-purple: #bf5af2;
-  --ios-pink:   #ff375f;
-  --ios-teal:   #40cbe0;
+  /* Accent palette — financial-grade */
+  --ios-blue:   #3B82F6;
+  --ios-green:  #22C55E;
+  --ios-red:    #EF4444;
+  --ios-orange: #F97316;
+  --ios-yellow: #F59E0B;
+  --ios-purple: #A855F7;
+  --ios-pink:   #EC4899;
+  --ios-teal:   #14B8A6;
 
   /* Aliases */
   --bg:      var(--ios-bg);

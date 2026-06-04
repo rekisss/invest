@@ -264,6 +264,46 @@ function buildDynamicTabs(news, customRules = []) {
   return tabs
 }
 
+function getSentiment(title, hint) {
+  const t = (title || '') + ' ' + (hint || '')
+  if (/買超|利多|看好|創高|突破|拿下|接單|升值|降息|解盲.*過關|FDA.*核准/.test(t) && !/賣超|利空|看壞|跌停|重挫|暴跌/.test(t)) return 'bull'
+  if (/賣超|利空|看壞|跌停|重挫|暴跌|空單增|賣壓|放空/.test(t)) return 'bear'
+  if (hint?.match(/^(📈|✅|💰|💊|📦|🌊.*走強)/)) return 'bull'
+  if (hint?.match(/^(📉|⚠️|💸)/)) return 'bear'
+  return 'neutral'
+}
+
+function getImportance(title, summary, tags) {
+  let s = 1
+  if (/台積電|TSMC|Fed|聯準會|FOMC/.test(title)) s += 2
+  if (/外資|三大法人|升息|降息/.test(title)) s += 1
+  if (/法說會|財報|EPS|超預期/.test(title)) s += 1
+  if (/跌停|漲停|暴跌|暴漲|崩跌/.test(title)) s += 2
+  if ((tags || []).includes('台積電') || (tags || []).includes('貨幣政策')) s += 1
+  if ((summary?.length || 0) > 120) s += 1
+  return Math.min(s, 5)
+}
+
+function Stars({ n }) {
+  return (
+    <span style={{ fontSize: 10, letterSpacing: 0.5, lineHeight: 1 }}>
+      <span style={{ color: '#F59E0B' }}>{'★'.repeat(n)}</span>
+      <span style={{ color: '#334155' }}>{'★'.repeat(5 - n)}</span>
+    </span>
+  )
+}
+
+function SentimentBadge({ sentiment }) {
+  const cfg = {
+    bull:    { label: '利多', color: '#22C55E', bg: 'rgba(34,197,94,0.12)' },
+    bear:    { label: '利空', color: '#EF4444', bg: 'rgba(239,68,68,0.12)' },
+    neutral: { label: '中性', color: '#94A3B8', bg: 'transparent' },
+  }[sentiment] || { label: '中性', color: '#94A3B8', bg: 'transparent' }
+  return (
+    <span style={{ fontSize: 10, color: cfg.color, background: cfg.bg, borderRadius: 4, padding: '1px 6px', fontWeight: 700 }}>{cfg.label}</span>
+  )
+}
+
 function timeAgo(dateStr) {
   if (!dateStr) return ''
   try {
@@ -421,7 +461,9 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
   const allRules = [...KEYWORD_RULES, ...customRules]
   const mainTag = item.tags?.[0]
   const rule = mainTag ? allRules.find(r => r.tag === mainTag) : null
-  const hint = isOpen ? generateHint(item.title, item.tags || []) : null
+  const hint = generateHint(item.title, item.tags || [])
+  const sentiment = getSentiment(item.title, hint)
+  const importance = getImportance(item.title, item.summary, item.tags)
   const stockCodes = isOpen ? [...new Set([...item.title.matchAll(STOCK_CODE_RE)].map(m => m[1]))] : []
 
   const borderColor = rule?.color || 'transparent'
@@ -430,11 +472,11 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
       borderBottom: '0.5px solid var(--ios-sep)',
       background: isOpen ? `linear-gradient(90deg, ${borderColor}08 0%, var(--ios-bg2) 40%)` : 'transparent',
       transition: 'background 0.18s',
-      borderLeft: `2.5px solid ${isOpen ? borderColor : 'transparent'}`,
+      borderLeft: `2.5px solid ${isOpen ? borderColor : sentiment === 'bull' ? 'rgba(34,197,94,0.4)' : sentiment === 'bear' ? 'rgba(239,68,68,0.4)' : 'transparent'}`,
     }}>
       <div
         onClick={onToggle}
-        style={{ padding: '13px 14px 13px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start' }}
+        style={{ padding: '12px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start' }}
       >
         <div style={{
           width: 32, height: 32, borderRadius: 8, flexShrink: 0,
@@ -445,7 +487,9 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.5, color: 'var(--ios-label)', letterSpacing: '-0.1px' }}>{item.title}</div>
           <div style={{ display: 'flex', gap: 5, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            {(item.tags || []).slice(0, 3).map(tag => <TagChip key={tag} tag={tag} customRules={customRules} />)}
+            <SentimentBadge sentiment={sentiment} />
+            <Stars n={importance} />
+            {(item.tags || []).slice(0, 2).map(tag => <TagChip key={tag} tag={tag} customRules={customRules} />)}
             <span style={{ fontSize: 10, color: 'var(--ios-label4)', marginLeft: 1 }}>
               {item.source && `${item.source} · `}{timeAgo(item.published)}
             </span>
