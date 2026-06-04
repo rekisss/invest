@@ -234,7 +234,7 @@ function RiskFactors({ factors }) {
 }
 
 /* ── Main Export ─────────────────────────────────────────────────── */
-export default function Overview({ data }) {
+export default function Overview({ data, error }) {
   const pred = data?.prediction || null
   const sortedDates = [...(data?.dates || [])].sort((a, b) => b.localeCompare(a))
   const latestDate = sortedDates[0]
@@ -242,6 +242,16 @@ export default function Overview({ data }) {
   const stocks = scan.top_stocks || []
   const top5 = stocks.slice(0, 5)
   const maxScore = stocks.length > 0 ? Math.max(...stocks.map(s => s.entry_score || 0), 1) : 2000
+
+  if (error && !data) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10, color: '#94A3B8' }}>
+        <div style={{ fontSize: 36 }}>⚠️</div>
+        <div style={{ fontSize: 15, color: '#EF4444' }}>資料載入失敗</div>
+        <div style={{ fontSize: 12, color: '#475569', fontFamily: 'monospace' }}>{error}</div>
+      </div>
+    )
+  }
 
   if (!data) {
     return (
