@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import StockDetailModal from './StockDetailModal'
 
 const BASE = import.meta.env.BASE_URL
@@ -262,10 +262,15 @@ function PersistentSection({ items, onSelect }) {
 
 /* ── Main Component ──────────────────────────────────────────────── */
 export default function Dashboard({ data, error }) {
+  const sortedDates = useMemo(
+    () => [...(data?.dates || [])].sort((a, b) => b.localeCompare(a)),
+    [data?.dates]
+  )
   const [selectedDate, setSelectedDate] = useState(() => {
     if (!data?.dates?.length) return null
+    const sorted = [...data.dates].sort((a, b) => b.localeCompare(a))
     const todayTW = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
-    return data.dates.includes(todayTW) ? todayTW : (data.dates[0] || null)
+    return sorted.includes(todayTW) ? todayTW : (sorted[0] || null)
   })
   const [selectedStock, setSelectedStock] = useState(null)
   const [viewTab, setViewTab] = useState('all')
@@ -320,7 +325,7 @@ export default function Dashboard({ data, error }) {
               WebkitAppearance: 'none', appearance: 'none',
             }}
           >
-            {data.dates.map(d => {
+            {sortedDates.map(d => {
               const s = data.scans[d]
               const partial = s?.is_partial ? ' ⚠' : ''
               return <option key={d} value={d}>{d}（{s?.total_scanned ?? 0} 支）{partial}</option>
