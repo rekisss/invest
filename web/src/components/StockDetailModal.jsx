@@ -102,7 +102,7 @@ function CandleSVG({ data }) {
   return (
     <svg
       viewBox={`0 0 ${W} ${H + PT + 18}`}
-      style={{ width: '100%', display: 'block', background: 'var(--ios-bg)', borderRadius: 10, cursor: 'crosshair', touchAction: 'none' }}
+      style={{ width: '100%', display: 'block', background: 'var(--ios-bg)', borderRadius: 10, cursor: 'crosshair', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setHovered(null)}
       onTouchStart={handleTouchStart}
