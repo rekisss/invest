@@ -1,22 +1,22 @@
 {
-  "date": "2026-06-04",
-  "generated_at": "11:33",
-  "xgb_prob_up": 0.395,
+  "date": "2026-06-05",
+  "generated_at": "08:01",
+  "xgb_prob_up": 0.396,
   "xgb_label": "偏空",
   "market_data": {
     "vix": null,
     "nasdaq_ret": null,
     "sox_ret": null,
     "tsm_adr_ret": null,
-    "futures_net": -66772.0,
+    "futures_net": -69476.0,
     "night_change": null,
     "pcr": null,
-    "taiex_rsi": 78.02095869001664,
-    "macd_hist": 546.8911334577683,
-    "dist_ma60": 22.673317772392053,
+    "taiex_rsi": 71.09641782093391,
+    "macd_hist": 437.39765146220225,
+    "dist_ma60": 19.890020107039174,
     "night_trend": null
   },
-  "ai_insight": "# 今日操盤要點\n\n・加權RSI達78已進入超買區域，需警惕短期獲利了結壓力，建議設定停利點並控制風險敞口。\n\n・外資期貨淨空單逾6.6萬口，與現貨淨買超形成背離，暗示機構可能分批獲利，應留意拉回時的支撐。\n\n・股價距MA60漲幅逾22%，MACD正動能仍強但需觀察是否出現鈍化，短線宜採高檔震盪策略，避免追高。",
+  "ai_insight": "# 今日操盤要點\n\n・加權RSI達71進入超買區域，MACD正動能強勁但需警惕高檔回檔風險，宜控制風險部位。\n・外資期貨淨空94口、現貨大幅淨賣，機構面臨套利平倉壓力，短線承接力道需觀察。\n・股價距MA60乖離近20%處於高位，AI類股上漲機率僅四成，應優先關注獲利了結點位。",
   "regime": {
     "label": "double_whipsaw",
     "label_zh": "🔄 多空雙巴日",
@@ -26,7 +26,7 @@
     "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
     "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
     "danger_signals": [
-      "外資空單極重（-66,772口），軋空風險高"
+      "外資空單極重（-69,476口），軋空風險高"
     ],
     "forbidden_actions": [
       "禁止反彈高點追多（軋空陷阱）"
@@ -38,7 +38,7 @@
     "factors": [
       {
         "name": "外資空單極重",
-        "description": "-66,772口，軋空/崩潰雙向風險",
+        "description": "-69,476口，軋空/崩潰雙向風險",
         "action": "避免重押方向"
       }
     ]
