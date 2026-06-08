@@ -1,22 +1,22 @@
 {
-  "date": "2026-06-05",
-  "generated_at": "10:55",
-  "xgb_prob_up": 0.396,
+  "date": "2026-06-08",
+  "generated_at": "08:01",
+  "xgb_prob_up": 0.448,
   "xgb_label": "偏空",
   "market_data": {
     "vix": null,
     "nasdaq_ret": null,
     "sox_ret": null,
     "tsm_adr_ret": null,
-    "futures_net": -69476.0,
+    "futures_net": -69146.0,
     "night_change": null,
     "pcr": null,
-    "taiex_rsi": 71.09641782093391,
-    "macd_hist": 437.39765146220225,
-    "dist_ma60": 19.890020107039174,
+    "taiex_rsi": 66.18887233349642,
+    "macd_hist": 222.71977331766902,
+    "dist_ma60": 17.661874810787225,
     "night_trend": null
   },
-  "ai_insight": "# 今日操盤要點\n\n・加權指數RSI達71進入超買區域，MACD正動能仍強但須防高檔回檔，宜逢高減碼獲利了結。\n\n・外資期貨與現貨同步大幅賣超，顯示機構調節信號明確，短線應提防外資反向操作帶來震盪。\n\n・AI概念股漲幅機率僅四成，而整體技術面過熱訊號增加，建議聚焦基本面確實的權值股，避免追高風險資產。",
+  "ai_insight": "# 今日操盤要點\n\n・加權RSI逼近70過熱區間，MACD正動能強勁但需警惕高檔回調風險，建議獲利了結部位。\n\n・外資期貨大幅淨賣近七萬口，現貨同步淨流出，外資轉向逃命信號，留意殺盤風險。\n\n・AI題材上漲機率不足五成且漲幅已遠離60日線逾17%，技術面高檔乏力，宜謹慎追高。",
   "regime": {
     "label": "double_whipsaw",
     "label_zh": "🔄 多空雙巴日",
@@ -26,7 +26,7 @@
     "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
     "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
     "danger_signals": [
-      "外資空單極重（-69,476口），軋空風險高"
+      "外資空單極重（-69,146口），軋空風險高"
     ],
     "forbidden_actions": [
       "禁止反彈高點追多（軋空陷阱）"
@@ -38,13 +38,13 @@
     "factors": [
       {
         "name": "外資空單極重",
-        "description": "-69,476口，軋空/崩潰雙向風險",
+        "description": "-69,146口，軋空/崩潰雙向風險",
         "action": "避免重押方向"
       }
     ]
   },
   "news_sentiment": {
-    "market_impact": 0.0,
+    "market_impact": -0.25,
     "key_events": [],
     "bullish_count": 0,
     "bearish_count": 0
