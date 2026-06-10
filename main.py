@@ -3118,6 +3118,7 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
             "xgb_label": pred.get("label", ""),
             "market_data": {
                 "vix":         _safe_float(_us_row.get("vix")),
+                "sp500_ret":   _safe_float(_us_row.get("sp500_ret1")),
                 "nasdaq_ret":  _safe_float(_us_row.get("nasdaq_ret1")),
                 "sox_ret":     _safe_float(_us_row.get("sox_ret1")),
                 "tsm_adr_ret": _safe_float(_us_row.get("tsm_adr_ret1")),

@@ -87,6 +87,64 @@ function RiskCard({ risk, marketData }) {
   )
 }
 
+/* ── Market Signals Card ─────────────────────────────────────────── */
+function MarketSignalsCard({ marketData }) {
+  if (!marketData) return null
+
+  const fmt = (v, digits = 1) => {
+    if (v == null) return null
+    const n = Number(v)
+    const sign = n > 0 ? '+' : ''
+    return `${sign}${(n * 100).toFixed(digits)}%`
+  }
+  const color = v => v == null ? 'rgba(255,255,255,0.30)' : v > 0 ? '#30D158' : v < 0 ? '#FF453A' : '#FF9F0A'
+
+  const usRows = [
+    { label: 'S&P500', val: marketData.sp500_ret, fmt: fmt(marketData.sp500_ret) },
+    { label: 'NASDAQ', val: marketData.nasdaq_ret, fmt: fmt(marketData.nasdaq_ret) },
+    { label: 'SOX',    val: marketData.sox_ret,    fmt: fmt(marketData.sox_ret) },
+    { label: 'TSM',    val: marketData.tsm_adr_ret, fmt: fmt(marketData.tsm_adr_ret) },
+  ].filter(r => r.fmt != null)
+
+  const riskRows = [
+    marketData.jpy_ret  != null && { label: '日圓',  val: marketData.jpy_ret,  fmt: fmt(marketData.jpy_ret, 2) },
+    marketData.hyg_ret  != null && { label: 'HYG',   val: marketData.hyg_ret,  fmt: fmt(marketData.hyg_ret) },
+    marketData.arkk_ret != null && { label: 'ARKK',  val: marketData.arkk_ret, fmt: fmt(marketData.arkk_ret) },
+  ].filter(Boolean)
+
+  if (usRows.length === 0 && riskRows.length === 0) return null
+
+  return (
+    <div className="glass-panel" style={{ padding: '12px 14px' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>美股夜盤 · 籌碼</div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        {usRows.length > 0 && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginBottom: 2 }}>美股</div>
+            {usRows.map(r => (
+              <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.50)' }}>{r.label}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: color(r.val) }}>{r.fmt}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {riskRows.length > 0 && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, borderLeft: '1px solid #1E293B', paddingLeft: 12 }}>
+            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginBottom: 2 }}>風險情緒</div>
+            {riskRows.map(r => (
+              <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.50)' }}>{r.label}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: color(r.val) }}>{r.fmt}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /* ── Scenario Block ──────────────────────────────────────────────── */
 function ScenarioBlock({ scenario, prob }) {
   const pct = Math.round((prob ?? 0.5) * 100)
@@ -284,12 +342,15 @@ export default function Overview({ data, error }) {
           }
         </div>
 
-        {/* Row 2: Scenario */}
+        {/* Row 2: US Market + Risk Signals */}
+        <MarketSignalsCard marketData={marketData} />
+
+        {/* Row 3: Scenario */}
         {(scenario?.main_scenario || scenario?.best_strategy) && (
           <ScenarioBlock scenario={scenario} prob={prob} />
         )}
 
-        {/* Row 3: TOP 5 */}
+        {/* Row 4: TOP 5 */}
         {top5.length > 0 && (
           <div className="glass-panel" style={{ overflow: 'hidden' }}>
             <div style={{ padding: '12px 14px 10px', borderBottom: '1px solid #1E293B', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -305,14 +366,14 @@ export default function Overview({ data, error }) {
           </div>
         )}
 
-        {/* Row 4: AI Advice */}
+        {/* Row 5: AI Advice */}
         <AIAdviceBlock
           aiInsight={aiInsight}
           dangerSignals={scenario?.danger_signals}
           forbiddenActions={scenario?.forbidden_actions}
         />
 
-        {/* Row 5: Risk Factors */}
+        {/* Row 6: Risk Factors */}
         <RiskFactors factors={risk?.factors} />
 
       </div>
