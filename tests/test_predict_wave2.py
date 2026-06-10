@@ -11,41 +11,21 @@ import pytest
 # ── Buyback count signal ───────────────────────────────────────────────────────
 
 class TestFetchBuybackStocksCount:
-    def test_returns_set_on_success(self):
-        from data_loader import fetch_buyback_stocks
-        client = MagicMock()
-        client.fetch_dataset.return_value = pd.DataFrame({
-            "stock_id": ["2330", "2317", "2454"],
-            "date": ["2026-06-01"] * 3,
-        })
-        result = fetch_buyback_stocks(client, "2026-06-10", lookback=30)
-        assert isinstance(result, set)
-        assert len(result) == 3
-        assert "2330" in result
+    """FinMind has no buyback dataset (server enum rejects TaiwanStockBuyBack and
+    TaiwanStockRepurchase), so fetch_buyback_stocks is a stub returning empty set
+    without API calls."""
 
-    def test_returns_empty_set_on_failure(self):
+    def test_returns_empty_set(self):
         from data_loader import fetch_buyback_stocks
         client = MagicMock()
-        client.fetch_dataset.side_effect = RuntimeError("API error")
         result = fetch_buyback_stocks(client, "2026-06-10", lookback=30)
         assert result == set()
 
-    def test_returns_empty_set_on_empty_response(self):
+    def test_makes_no_api_calls(self):
         from data_loader import fetch_buyback_stocks
         client = MagicMock()
-        client.fetch_dataset.return_value = pd.DataFrame()
-        result = fetch_buyback_stocks(client, "2026-06-10", lookback=30)
-        assert result == set()
-
-    def test_deduplicates_stock_ids(self):
-        from data_loader import fetch_buyback_stocks
-        client = MagicMock()
-        client.fetch_dataset.return_value = pd.DataFrame({
-            "stock_id": ["2330", "2330", "2317"],
-            "date": ["2026-06-01", "2026-06-05", "2026-06-01"],
-        })
-        result = fetch_buyback_stocks(client, "2026-06-10", lookback=30)
-        assert len(result) == 2
+        fetch_buyback_stocks(client, "2026-06-10", lookback=30)
+        client.fetch_dataset.assert_not_called()
 
 
 # ── Claude insight context ─────────────────────────────────────────────────────
