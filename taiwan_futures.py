@@ -203,15 +203,17 @@ def fetch_night_session(
     """Fetch TX night session summary for the given trade date.
 
     Returns dict(close, change, high, low, last_hour_trend) or empty dict on failure.
-    The night session for trade date D runs 15:00 on D-1 through 05:00 on D.
-    We fetch the daily row for date_str and look for a night-session indicator;
-    if the dataset has no session split, returns an empty dict (graceful skip).
+    The night session relevant to trade date D starts 15:00 on the previous
+    trading day, and FinMind records it under that previous day's date with
+    trading_session="after_market" — so we must look back several days, not
+    just at date_str (which has no data yet when running pre-market).
     """
     try:
+        start = (pd.Timestamp(date_str) - pd.Timedelta(days=5)).strftime("%Y-%m-%d")
         frame = client.fetch_dataset(
             "TaiwanFuturesDaily",
             data_id=code,
-            start_date=date_str,
+            start_date=start,
             end_date=date_str,
         )
     except Exception as exc:
@@ -225,21 +227,28 @@ def fetch_night_session(
     frame.columns = [c.lower().strip() for c in frame.columns]
     frame["date"] = pd.to_datetime(frame["date"])
 
-    # Check if there's a session column (FinMind sometimes splits day/night)
+    # FinMind splits sessions via trading_session: "position" (day) /
+    # "after_market" (night). Keep night/夜 patterns for other variants.
     session_col = next(
-        (c for c in frame.columns if "session" in c or "trading_session" in c or "夜盤" in c),
+        (c for c in frame.columns if "session" in c or "夜盤" in c),
         None,
     )
-    if session_col is not None:
-        night_rows = frame[frame[session_col].astype(str).str.contains("night|夜|2", case=False, na=False)]
-        if night_rows.empty:
-            return {}
-        row = night_rows.iloc[-1]
-    elif len(frame) > 1:
-        # Multiple rows for same date → second row is often night session
-        row = frame.iloc[-1]
-    else:
+    if session_col is None:
         return {}
+    night_mask = frame[session_col].astype(str).str.contains(
+        "after_market|night|夜", case=False, na=False
+    )
+    night_rows = frame[night_mask]
+    if night_rows.empty:
+        return {}
+    latest_date = night_rows["date"].max()
+    night_rows = night_rows[night_rows["date"] == latest_date]
+    if "volume" in night_rows.columns and len(night_rows) > 1:
+        # Multiple contracts per date — highest volume = near-month contract
+        vol = pd.to_numeric(night_rows["volume"], errors="coerce").fillna(0)
+        row = night_rows.loc[vol.idxmax()]
+    else:
+        row = night_rows.iloc[-1]
 
     def _n(col: str) -> float:
         v = row.get(col)
@@ -262,9 +271,22 @@ def fetch_night_session(
     if math.isnan(close):
         return {}
 
-    # Derive change from previous day's daily close if open is available
+    # Change vs same-date day-session close (the natural baseline for the
+    # night move); fall back to night open if no day row is available
+    change = float("nan")
+    try:
+        day_rows = frame[~night_mask & (frame["date"] == latest_date)]
+        if "contract_date" in frame.columns and "contract_date" in row.index:
+            day_rows = day_rows[day_rows["contract_date"] == row["contract_date"]]
+        if not day_rows.empty:
+            day_close = pd.to_numeric(day_rows["close"], errors="coerce").dropna()
+            if not day_close.empty:
+                change = close - float(day_close.iloc[-1])
+    except Exception:
+        pass
     open_ = _n("open")
-    change = close - open_ if not math.isnan(open_) else float("nan")
+    if math.isnan(change) and not math.isnan(open_):
+        change = close - open_
 
     # last_hour_trend: compare close to high — if close is near high it's up
     last_hour_trend = "—"
