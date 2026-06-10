@@ -3,6 +3,7 @@ import { STOCK_AGENTS } from './StockAgents.jsx'
 
 const MODEL = 'claude-haiku-4-5-20251001'
 const MAX_TOKENS = 600
+const MAX_MESSAGES = 100
 const INPUT_COST_PER_1M = 0.80
 const OUTPUT_COST_PER_1M = 4.00
 const SESSION_BUDGET = 5.0
@@ -412,14 +413,19 @@ export default function AgentPanel({ apiKey, onClearKey }) {
     if (!text || loading || budgetOver) return
 
     const userMsg = { role: 'user', content: text }
-    const newMessages = [...messages, userMsg]
+    const allMessages = [...messages, userMsg]
+    // Trim oldest messages if over limit to prevent unbounded growth
+    const newMessages = allMessages.length > MAX_MESSAGES ? allMessages.slice(-MAX_MESSAGES) : allMessages
     setMessages(newMessages)
     setInput('')
     if (textareaRef.current) textareaRef.current.style.height = '44px'
     setLoading(true)
 
     const assistantMsgId = Date.now()
-    setMessages(prev => [...prev, { role: 'assistant', content: '', id: assistantMsgId, streaming: true }])
+    setMessages(prev => {
+      const updated = [...prev, { role: 'assistant', content: '', id: assistantMsgId, streaming: true }]
+      return updated.length > MAX_MESSAGES ? updated.slice(-MAX_MESSAGES) : updated
+    })
 
     try {
       const history = newMessages.map(m => ({ role: m.role, content: m.content }))
