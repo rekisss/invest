@@ -136,6 +136,8 @@ _INST_FEATURES = [
     "foreign_inst_norm", "trust_inst_norm",
     "margin_purchase_chg", "short_sale_chg",
     "pcr",
+    "market_revenue_yoy",         # market-aggregate monthly revenue YoY growth
+    "market_foreign_holding_chg", # market-aggregate foreign holding 5d pct change
 ]
 
 

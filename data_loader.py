@@ -797,6 +797,135 @@ def fetch_all_shareholding(
     return result
 
 
+def compute_market_revenue_signal(
+    client: "FinMindClient",
+    end_date: str,
+) -> pd.DataFrame:
+    """Compute market-aggregate monthly revenue YoY signal for MarketPredictor.
+
+    Fetches 14 months of TaiwanStockMonthRevenue (one API call), computes
+    median YoY growth across all stocks per month, returns DataFrame(date,
+    market_revenue_yoy) indexed to month-end dates. MarketPredictor ffill()
+    propagates these monthly values to all trading days in each month.
+    Empty DataFrame on failure.
+    """
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockMonthRevenue",
+            use_cache=True,
+            start_date=(pd.Timestamp(end_date) - pd.DateOffset(months=14)).strftime("%Y-%m-%d"),
+            end_date=end_date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 市場月營收信號取得失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+    if frame.empty:
+        return pd.DataFrame()
+
+    frame = frame.copy()
+    frame.columns = [c.lower().strip() for c in frame.columns]
+    if "stock_id" not in frame.columns:
+        return pd.DataFrame()
+
+    rev_col = next(
+        (c for c in frame.columns if "revenue" in c and "year" not in c and "month" not in c),
+        next((c for c in frame.columns if "revenue" in c), None),
+    )
+    if rev_col is None:
+        return pd.DataFrame()
+
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+    frame[rev_col] = pd.to_numeric(frame[rev_col], errors="coerce")
+    frame = frame.dropna(subset=["date", rev_col]).copy()
+    frame["year_month"] = frame["date"].dt.to_period("M")
+
+    # Pivot: stock_id × year_month → latest revenue value
+    pivot = (
+        frame.sort_values(["stock_id", "date"])
+        .groupby(["stock_id", "year_month"])[rev_col]
+        .last()
+        .unstack("year_month")
+    )
+
+    results = []
+    for col in sorted(pivot.columns):
+        prev_col = col - 12
+        if prev_col not in pivot.columns:
+            continue
+        curr = pivot[col]
+        prev = pivot[prev_col]
+        mask = (curr > 0) & (prev > 0)
+        if mask.sum() < 10:
+            continue
+        yoy = ((curr - prev) / prev)[mask].clip(-1.0, 5.0)
+        month_end = pd.Timestamp(col.to_timestamp()) + pd.offsets.MonthEnd(0)
+        results.append({"date": month_end, "market_revenue_yoy": float(yoy.median())})
+
+    if not results:
+        return pd.DataFrame()
+
+    result_df = pd.DataFrame(results).sort_values("date").reset_index(drop=True)
+    print(f"[data_loader] 市場月營收YoY信號：{len(result_df)} 個月份，最新 {result_df['market_revenue_yoy'].iloc[-1]:.2%}", file=sys.stderr)
+    return result_df
+
+
+def compute_market_shareholding_signal(
+    client: "FinMindClient",
+    end_date: str,
+) -> pd.DataFrame:
+    """Compute market-aggregate foreign shareholding 5-day change signal.
+
+    Fetches TaiwanStockShareholding for the last 20 days (one API call),
+    computes daily median foreign holding % across all stocks, then the
+    5-day pct change. Returns DataFrame(date, market_foreign_holding_chg).
+    Empty DataFrame on failure.
+    """
+    start = (pd.Timestamp(end_date) - pd.Timedelta(days=20)).strftime("%Y-%m-%d")
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockShareholding",
+            use_cache=True,
+            start_date=start,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 外資持股市場信號取得失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+    if frame.empty:
+        return pd.DataFrame()
+
+    frame = frame.copy()
+    frame.columns = [c.strip() for c in frame.columns]
+    if "stock_id" not in frame.columns:
+        return pd.DataFrame()
+
+    ratio_col = next(
+        (c for c in frame.columns if "ForeignInvestmentSharesRatio" in c
+         or "foreigninvestmentsharesratio" in c.lower()),
+        next((c for c in frame.columns if "ratio" in c.lower() and "foreign" in c.lower()), None),
+    )
+    if ratio_col is None:
+        return pd.DataFrame()
+
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+    frame[ratio_col] = pd.to_numeric(frame[ratio_col], errors="coerce")
+    frame = frame.dropna(subset=["date", ratio_col]).copy()
+
+    daily_median = (
+        frame.groupby("date")[ratio_col]
+        .median()
+        .reset_index()
+        .rename(columns={ratio_col: "median_holding"})
+        .sort_values("date")
+    )
+    daily_median["market_foreign_holding_chg"] = daily_median["median_holding"].pct_change(5) * 100
+    result = daily_median[["date", "market_foreign_holding_chg"]].dropna().reset_index(drop=True)
+    print(f"[data_loader] 外資持股市場信號：{len(result)} 筆", file=sys.stderr)
+    return result
+
+
 def fetch_all_insider_trading(
     client: "FinMindClient",
     end_date: str,
