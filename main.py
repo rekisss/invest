@@ -2806,18 +2806,19 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         return
 
     # Fetch auxiliary data in parallel (all graceful-degrade on failure)
-    with ThreadPoolExecutor(max_workers=11) as _pool:
-        _f_us          = _pool.submit(fetch_us_features, train_start, today)
-        _f_futures     = _pool.submit(fetch_futures_daily, client, train_start, today)
-        _f_inst        = _pool.submit(fetch_futures_institutional, client, train_start, today)
-        _f_calendar    = _pool.submit(fetch_upcoming_events)
-        _f_mkinst      = _pool.submit(fetch_market_institutional, client, train_start, today)
-        _f_margin      = _pool.submit(fetch_market_margin, client, train_start, today)
-        _f_pcr         = _pool.submit(fetch_options_pcr, client, train_start, today)
-        _f_night       = _pool.submit(fetch_night_session, client, today)
-        _f_revenue_sig = _pool.submit(compute_market_revenue_signal, client, today)
-        _f_holding_sig = _pool.submit(compute_market_shareholding_signal, client, today)
-        _f_buyback     = _pool.submit(fetch_buyback_stocks, client, today, 30)
+    with ThreadPoolExecutor(max_workers=12) as _pool:
+        _f_us           = _pool.submit(fetch_us_features, train_start, today)
+        _f_futures      = _pool.submit(fetch_futures_daily, client, train_start, today)
+        _f_inst         = _pool.submit(fetch_futures_institutional, client, train_start, today)
+        _f_calendar     = _pool.submit(fetch_upcoming_events)
+        _f_mkinst       = _pool.submit(fetch_market_institutional, client, train_start, today)
+        _f_margin       = _pool.submit(fetch_market_margin, client, train_start, today)
+        _f_pcr          = _pool.submit(fetch_options_pcr, client, train_start, today)
+        _f_night        = _pool.submit(fetch_night_session, client, today)
+        _f_revenue_sig  = _pool.submit(compute_market_revenue_signal, client, today)
+        _f_holding_sig  = _pool.submit(compute_market_shareholding_signal, client, today)
+        _f_buyback      = _pool.submit(fetch_buyback_stocks, client, today, 30)
+        _f_disposition  = _pool.submit(fetch_disposition_stocks, client, today)
         us_df              = _f_us.result()
         futures_raw        = _f_futures.result()
         inst_raw           = _f_inst.result()
@@ -2829,6 +2830,7 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         revenue_signal_df  = _f_revenue_sig.result()
         holding_signal_df  = _f_holding_sig.result()
         buyback_stocks     = _f_buyback.result()
+        disposition_stocks = _f_disposition.result()
 
     futures_df = build_futures_features(market_df, futures_raw, inst_raw)
 
@@ -2939,6 +2941,8 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
             _chipset_parts.append(f"外資持股5日 `{_hld_chg:+.2f}%`")
     if buyback_stocks:
         _chipset_parts.append(f"庫藏股 `{len(buyback_stocks)}支`")
+    if disposition_stocks:
+        _chipset_parts.append(f"⚠️處置股 `{len(disposition_stocks)}支`")
     chipset_block = ("💼 **籌碼**\n   " + " | ".join(_chipset_parts)) if _chipset_parts else ""
 
     scenario_block = ("🎯 **市場結構分析**\n   " + scenario_text.replace("\n", "\n   ")) if scenario_text else ""
@@ -3013,6 +3017,9 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
             else None
         ),
         "buyback_count": len(buyback_stocks) if buyback_stocks else 0,
+        "disposition_count": len(disposition_stocks) if disposition_stocks else 0,
+        "jpy_ret": _safe_float(_us_row.get("jpy_ret1")),
+        "arkk_ret": _safe_float(_us_row.get("arkk_ret1")),
     }
     ai_insight = generate_premarket_insight(_pm_market, _taiex_tech)
 
@@ -3124,6 +3131,10 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
                 "taiex_ret_5d":  _taiex_tech.get("ret_5d"),
                 "taiex_ret_20d": _taiex_tech.get("ret_20d"),
                 "buyback_count": len(buyback_stocks) if buyback_stocks else 0,
+                "disposition_count": len(disposition_stocks) if disposition_stocks else 0,
+                "jpy_ret":   _safe_float(_us_row.get("jpy_ret1")),
+                "arkk_ret":  _safe_float(_us_row.get("arkk_ret1")),
+                "hyg_ret":   _safe_float(_us_row.get("hyg_ret1")),
                 "night_trend": (night_data.get("last_hour_trend") if isinstance(night_data, dict) else None),
                 "market_revenue_yoy": (
                     round(float(revenue_signal_df["market_revenue_yoy"].iloc[-1]), 4)
