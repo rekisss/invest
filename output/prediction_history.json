@@ -1,7 +1,7 @@
 [
   {
     "date": "2026-06-11",
-    "generated_at": "00:46",
+    "generated_at": "00:53",
     "xgb_prob_up": 0.443,
     "xgb_label": "偏空",
     "market_data": {
@@ -28,7 +28,7 @@
       "market_revenue_yoy": null,
       "market_foreign_holding_chg": null
     },
-    "ai_insight": "# 今日操盤要點\n\n・加權指數技術面呈高檔整理，RSI 53處中性偏弱、MACD直方翻空，短線留意MA20支撑，靠近均線處可適度減碼。\n\n・外資期貨淨空單逾6萬口，現貨同步淨賣出，籌碼面偏弱，操作上應降低風險部位，等待外資情緒轉折信號。\n\n・AI類股上漲機率不足五成，在當前弱勢氛圍下宜回避追高，建議聚焦基本面強勢且離MA60近的個股逢低布局。",
+    "ai_insight": "# 今日操盤要點\n\n・外資期貨淨空單逾萬口且現貨全面賣超，短期承受拋售壓力，宜留意跌破MA20的風險。\n\n・加權指數距MA60高檔11.4%、RSI處中位偏弱，技術面顯示漲勢疲態，震盪整理機率高。\n\n・AI族群漲機率不足半數、MACD直方轉空訊號明確，應避免追高，優先挑選基本面穩健個股。",
     "regime": {
       "label": "double_whipsaw",
       "label_zh": "🔄 多空雙巴日",
@@ -56,7 +56,7 @@
       ]
     },
     "news_sentiment": {
-      "market_impact": 0.0,
+      "market_impact": -0.14,
       "key_events": [],
       "bullish_count": 0,
       "bearish_count": 0
