@@ -1014,30 +1014,13 @@ def fetch_buyback_stocks(
 ) -> set:
     """Return set of stock_ids with active buyback (庫藏股買回) in the past lookback days.
 
-    Tries TaiwanStockBuyBack first, falls back to TaiwanStockRepurchase.
-    Returns empty set on failure.
+    FinMind's API has no buyback dataset (TaiwanStockBuyBack / TaiwanStockRepurchase
+    are both rejected by the server-side dataset enum), so this always returns an
+    empty set without making API calls. Downstream consumers treat buyback_count=0
+    as "no data" and skip the display. A future data source could be the TWSE
+    OpenAPI (openapi.twse.com.tw), which publishes treasury-stock reports.
     """
-    start = (pd.Timestamp(end_date) - pd.Timedelta(days=lookback)).strftime("%Y-%m-%d")
-    frame = pd.DataFrame()
-    for dataset in ("TaiwanStockBuyBack", "TaiwanStockRepurchase"):
-        try:
-            frame = client.fetch_dataset(
-                dataset,
-                use_cache=True,
-                start_date=start,
-                end_date=end_date,
-            )
-            if not frame.empty:
-                break
-        except Exception as exc:
-            print(f"[data_loader] 庫藏股資料({dataset})取得失敗（graceful skip）: {exc}", file=sys.stderr)
-
-    if frame.empty or "stock_id" not in frame.columns:
-        return set()
-
-    result = set(frame["stock_id"].astype(str).unique())
-    print(f"[data_loader] 庫藏股買回：{len(result)} 支", file=sys.stderr)
-    return result
+    return set()
 
 
 def clean_cache(cache_dir: Path | str, max_age_days: int = 30) -> int:

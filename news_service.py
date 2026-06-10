@@ -295,8 +295,9 @@ def fetch_finmind_market_news(
     """Fetch market news from FinMind TaiwanStockNews for key stocks (best-effort)."""
     if top_stocks is None:
         top_stocks = ["2330", "2317", "2454", "3008", "2382"]
+    # TaiwanStockNews API rejects end_date (returns one day of data per call) —
+    # pass only start_date
     start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
-    end = datetime.now().strftime("%Y-%m-%d")
     rows: list[dict[str, object]] = []
     for stock_id in top_stocks:
         try:
@@ -304,7 +305,6 @@ def fetch_finmind_market_news(
                 "TaiwanStockNews",
                 data_id=stock_id,
                 start_date=start,
-                end_date=end,
                 use_cache=True,
                 cache_ttl_days=0.25,
             )

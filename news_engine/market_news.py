@@ -36,15 +36,14 @@ def fetch_market_sentiment(
     # Source 2: FinMind TaiwanStockNews for key stocks
     if finmind_client is not None:
         from datetime import datetime, timedelta
+        # TaiwanStockNews API rejects end_date (one day of data per call)
         start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
-        end = datetime.now().strftime("%Y-%m-%d")
         for stock_id in ["2330", "2317", "2454", "3008"]:
             try:
                 df = finmind_client.fetch_dataset(
                     "TaiwanStockNews",
                     data_id=stock_id,
                     start_date=start,
-                    end_date=end,
                     use_cache=True,
                     cache_ttl_days=0.25,
                 )
