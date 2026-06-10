@@ -49,6 +49,49 @@ _US_TICKERS = {
     "hyg":     "HYG",      # High-yield bonds — credit market health
 }
 
+# Stooq fallback symbols — Yahoo Finance blocks many datacenter IPs (e.g. GitHub
+# Actions runners), Stooq's CSV endpoint doesn't. Features only use pct-change,
+# so scale differences (e.g. yield index vs futures) don't matter.
+_STOOQ_SYMBOLS = {
+    "sp500":   "^spx",
+    "nasdaq":  "^ndq",
+    "sox":     "^sox",
+    "vix":     "^vix",
+    "dxy":     "dx.f",      # dollar-index futures
+    "us10y":   "10yusy.b",  # US 10Y yield
+    "gold":    "gc.f",
+    "oil":     "cl.f",
+    "us2y":    "2yusy.b",   # US 2Y yield
+    "usdcny":  "usdcny",
+    "twd":     "usdtwd",
+    "tsm_adr": "tsm.us",
+    "nvda":    "nvda.us",
+    "jpy":     "usdjpy",
+    "arkk":    "arkk.us",
+    "hyg":     "hyg.us",
+}
+
+
+def _fetch_stooq_close(symbol: str, start_date: str, end_date: str) -> pd.Series | None:
+    """Fetch daily close prices from Stooq's free CSV endpoint. Returns None on failure."""
+    import requests
+    from io import StringIO
+
+    url = (
+        "https://stooq.com/q/d/l/"
+        f"?s={symbol}&d1={start_date.replace('-', '')}&d2={end_date.replace('-', '')}&i=d"
+    )
+    resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+    text = resp.text.strip()
+    if not text.startswith("Date"):
+        return None  # "No data" / error page
+    df = pd.read_csv(StringIO(text))
+    if df.empty or "Close" not in df.columns:
+        return None
+    df["Date"] = pd.to_datetime(df["Date"])
+    return pd.Series(df["Close"].values, index=df["Date"])
+
 
 def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
     """Download US market indicators via yfinance. Returns empty DataFrame on failure."""
@@ -71,6 +114,26 @@ def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
                 col_frames.append(close.rename(key))
             except Exception:
                 failed.append(ticker)
+
+        # Stooq fallback for tickers Yahoo refused (datacenter-IP blocking)
+        if failed:
+            recovered: list[str] = []
+            for key, ticker in _US_TICKERS.items():
+                if ticker not in failed:
+                    continue
+                stooq_sym = _STOOQ_SYMBOLS.get(key)
+                if not stooq_sym:
+                    continue
+                try:
+                    close = _fetch_stooq_close(stooq_sym, start_date, end_dt)
+                    if close is not None and not close.empty:
+                        col_frames.append(close.rename(key))
+                        recovered.append(ticker)
+                except Exception:
+                    pass
+            failed = [t for t in failed if t not in recovered]
+            if recovered:
+                print(f"[ai] Stooq 後備補回 {len(recovered)} 個 ticker", file=sys.stderr)
 
         if failed:
             print(f"[ai] yfinance 跳過失敗 ticker: {failed}", file=sys.stderr)
