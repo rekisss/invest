@@ -1,5 +1,57 @@
 [
   {
+    "date": "2026-06-10",
+    "generated_at": "08:01",
+    "xgb_prob_up": 0.437,
+    "xgb_label": "偏空",
+    "market_data": {
+      "vix": null,
+      "nasdaq_ret": null,
+      "sox_ret": null,
+      "tsm_adr_ret": null,
+      "futures_net": -61871.0,
+      "night_change": null,
+      "pcr": null,
+      "taiex_rsi": 60.776473785331866,
+      "macd_hist": -292.75564461190334,
+      "dist_ma60": 15.68326688099102,
+      "night_trend": null
+    },
+    "ai_insight": "# 今日操盤要點\n\n・外資持續大幅淨賣(-98%現貨、-61,871口期貨)，留意集中賣壓是否引發跌勢加速，應設定停損點控管風險。\n\n・加權RSI已達61進入偏高區域，配合MACD負直方轉弱訊號，短線回檔壓力升溫，逢高應考慮獲利了結。\n\n・股價距MA60已上漲15.7%，AI題材漲幅機率僅44%，宜謹慎評估追高風險，優先關注籌碼面轉強信號再進場。",
+    "regime": {
+      "label": "double_whipsaw",
+      "label_zh": "🔄 多空雙巴日",
+      "win_rate": 45.0
+    },
+    "scenario": {
+      "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+      "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
+      "danger_signals": [
+        "外資空單極重（-61,871口），軋空風險高"
+      ],
+      "forbidden_actions": [
+        "禁止反彈高點追多（軋空陷阱）"
+      ]
+    },
+    "risk": {
+      "level": "medium",
+      "score": 0.25,
+      "factors": [
+        {
+          "name": "外資空單極重",
+          "description": "-61,871口，軋空/崩潰雙向風險",
+          "action": "避免重押方向"
+        }
+      ]
+    },
+    "news_sentiment": {
+      "market_impact": 0.0,
+      "key_events": [],
+      "bullish_count": 0,
+      "bearish_count": 0
+    }
+  },
+  {
     "date": "2026-06-09",
     "generated_at": "08:01",
     "xgb_prob_up": 0.452,
