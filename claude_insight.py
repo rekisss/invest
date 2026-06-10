@@ -109,12 +109,20 @@ def generate_premarket_insight(
         f"外資現貨 {_fmt(md.get('cash_norm'), '+.0%')} | PCR {_fmt(md.get('pcr'), '.2f')}",
         f"NQ {_fmt(md.get('nasdaq_ret'), '+.1%')} | SOX {_fmt(md.get('sox_ret'), '+.1%')} | TSM {_fmt(md.get('tsm_adr_ret'), '+.1%')}",
     ]
+    if md.get("market_revenue_yoy") is not None:
+        lines_ctx.append(f"市場月營收YoY {_fmt(md.get('market_revenue_yoy'), '+.1%')}")
+    if md.get("market_foreign_holding_chg") is not None:
+        lines_ctx.append(f"外資持股5日變化 {_fmt(md.get('market_foreign_holding_chg'), '+.2f', '%')}")
+    if md.get("buyback_count", 0) > 0:
+        lines_ctx.append(f"庫藏股買回中 {md['buyback_count']} 支")
     if tech:
         lines_ctx.append(
             f"加權RSI {_fmt(tech.get('rsi14'), '.0f')} | "
             f"MACD直方 {_fmt(tech.get('macd_hist'), '+.1f')} | "
             f"距MA60 {_fmt(tech.get('dist_ma60'), '+.1f', '%')}"
         )
+        if tech.get("dist_ma20") is not None:
+            lines_ctx.append(f"距MA20 {_fmt(tech.get('dist_ma20'), '+.1f', '%')}")
 
     context = "\n".join(lines_ctx)
     prompt = (
