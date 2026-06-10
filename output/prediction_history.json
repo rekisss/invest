@@ -1,5 +1,68 @@
 [
   {
+    "date": "2026-06-11",
+    "generated_at": "00:35",
+    "xgb_prob_up": 0.443,
+    "xgb_label": "偏空",
+    "market_data": {
+      "vix": null,
+      "sp500_ret": null,
+      "nasdaq_ret": null,
+      "sox_ret": null,
+      "tsm_adr_ret": null,
+      "futures_net": -61949.0,
+      "night_change": null,
+      "pcr": null,
+      "taiex_rsi": 52.593785348708685,
+      "macd_hist": -593.4841839707465,
+      "dist_ma20": -0.2624847869224345,
+      "dist_ma60": 11.384246198515747,
+      "taiex_ret_5d": -6.9416261050644685,
+      "taiex_ret_20d": 4.504146770492112,
+      "buyback_count": 0,
+      "disposition_count": 0,
+      "jpy_ret": null,
+      "arkk_ret": null,
+      "hyg_ret": null,
+      "night_trend": null,
+      "market_revenue_yoy": null,
+      "market_foreign_holding_chg": null
+    },
+    "ai_insight": "根據提供的盤前資料，今日操盤要點如下：\n\n・外資期貨淨空單近六萬口，現貨賣壓持續，應留意外資動向可能對盤勢造成下行壓力，建議謹慎控管風險部位。\n\n・加權指數距MA20僅差負0.3%，技術面已接近短期均線支撐，若跌破需設定停損點以避免進一步回檔。\n\n・MACD直方柱持續走負且RSI處中位53，動能仍偏弱，短期缺乏明顯買氣，可等待籌碼穩定及技術指標好轉後再積",
+    "regime": {
+      "label": "double_whipsaw",
+      "label_zh": "🔄 多空雙巴日",
+      "win_rate": 45.0
+    },
+    "scenario": {
+      "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+      "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
+      "danger_signals": [
+        "外資空單極重（-61,949口），軋空風險高"
+      ],
+      "forbidden_actions": [
+        "禁止反彈高點追多（軋空陷阱）"
+      ]
+    },
+    "risk": {
+      "level": "medium",
+      "score": 0.25,
+      "factors": [
+        {
+          "name": "外資空單極重",
+          "description": "-61,949口，軋空/崩潰雙向風險",
+          "action": "避免重押方向"
+        }
+      ]
+    },
+    "news_sentiment": {
+      "market_impact": 0.0,
+      "key_events": [],
+      "bullish_count": 0,
+      "bearish_count": 0
+    }
+  },
+  {
     "date": "2026-06-10",
     "generated_at": "23:58",
     "xgb_prob_up": 0.401,
