@@ -40,6 +40,9 @@ function parseCSV(content) {
   }).filter(row => row.stock_id)
 }
 function toNum(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n }
+// 2-decimal rounding keeps data.json lean — full-precision floats cost
+// ~17 chars each across 30+ fields × 200+ rows
+function r2(v) { return Math.round(toNum(v) * 100) / 100 }
 function toBool(v) { return v === 'True' || v === 'true' || v === '1' }
 
 // ── HTTP fetch helper ────────────────────────────────────────────────────────
@@ -293,26 +296,26 @@ function processScanData() {
     const mapStock = (row, extra = {}) => ({
       stock_id: row.stock_id, name: row.name || '',
       industry_category: row.industry_category || '',
-      close: toNum(row.close), volume_ratio: toNum(row.volume_ratio),
-      rsi14: toNum(row.rsi14), adx14: toNum(row.adx14),
+      close: r2(row.close), volume_ratio: r2(row.volume_ratio),
+      rsi14: r2(row.rsi14), adx14: r2(row.adx14),
       entry_score: Math.round(toNum(row.entry_score)),
       entry_signal: toBool(row.entry_signal),
       foreign_buy_streak: toNum(row.foreign_buy_streak),
       invest_trust_streak: toNum(row.invest_trust_streak),
       dealer_buy_streak: toNum(row.dealer_buy_streak),
       f_score: toNum(row.f_score), condition_count: toNum(row.condition_count),
-      margin_change_5d: toNum(row.margin_change_5d),
-      short_ratio: toNum(row.short_ratio),
+      margin_change_5d: r2(row.margin_change_5d),
+      short_ratio: r2(row.short_ratio),
       entry_reason: row.entry_reason || '',
       limit_down_streak: toNum(row.limit_down_streak),
       // extra technical fields for detail panel
-      macd: toNum(row.macd), macd_signal: toNum(row.macd_signal), macd_hist: toNum(row.macd_hist),
-      bb_pct_b: toNum(row.bb_pct_b), stoch_k: toNum(row.stoch_k), stoch_d: toNum(row.stoch_d),
-      rsi14: toNum(row.rsi14), adx14: toNum(row.adx14), atr14: toNum(row.atr14),
-      ema20: toNum(row.ema20), ema60: toNum(row.ema60),
-      foreign_net: toNum(row.foreign_net), invest_trust_net: toNum(row.invest_trust_net), dealer_net: toNum(row.dealer_net),
-      momentum_score: toNum(row.momentum_score), relative_strength_5d: toNum(row.relative_strength_5d),
-      return_5d: toNum(row.return_5d), day_return: toNum(row.day_return),
+      macd: r2(row.macd), macd_signal: r2(row.macd_signal), macd_hist: r2(row.macd_hist),
+      bb_pct_b: r2(row.bb_pct_b), stoch_k: r2(row.stoch_k), stoch_d: r2(row.stoch_d),
+      atr14: r2(row.atr14),
+      ema20: r2(row.ema20), ema60: r2(row.ema60),
+      foreign_net: r2(row.foreign_net), invest_trust_net: r2(row.invest_trust_net), dealer_net: r2(row.dealer_net),
+      momentum_score: r2(row.momentum_score), relative_strength_5d: r2(row.relative_strength_5d),
+      return_5d: r2(row.return_5d), day_return: r2(row.day_return),
       skip_reason: row.skip_reason || '',
       // attach price history only for latest date (to keep JSON lean)
       price_history: isLatest ? (priceHistoryMap[row.stock_id] || []) : undefined,

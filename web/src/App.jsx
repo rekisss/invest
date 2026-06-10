@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import Overview from './components/Overview.jsx'
-import Dashboard from './components/Dashboard.jsx'
-import NewsFeed from './components/NewsFeed.jsx'
-import PredictionPanel from './components/PredictionPanel.jsx'
-import ApiKeyInput from './components/ApiKeyInput.jsx'
-import AgentPanel from './components/AgentPanel.jsx'
-import QuotaPanel from './components/QuotaPanel.jsx'
+
+// Lazy-load non-landing tabs so the initial bundle only contains Overview
+const Dashboard = lazy(() => import('./components/Dashboard.jsx'))
+const NewsFeed = lazy(() => import('./components/NewsFeed.jsx'))
+const PredictionPanel = lazy(() => import('./components/PredictionPanel.jsx'))
+const ApiKeyInput = lazy(() => import('./components/ApiKeyInput.jsx'))
+const AgentPanel = lazy(() => import('./components/AgentPanel.jsx'))
+const QuotaPanel = lazy(() => import('./components/QuotaPanel.jsx'))
 
 const BASE = import.meta.env.BASE_URL || '/'
 
@@ -250,7 +252,13 @@ export default function App() {
             }}
             onAnimationEnd={() => setSlideDir(null)}
           >
-            {tabContent}
+            <Suspense fallback={
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                <div style={{ width: 28, height: 28, border: '3px solid var(--ios-fill3)', borderTop: '3px solid var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              </div>
+            }>
+              {tabContent}
+            </Suspense>
           </div>
         )}
       </div>
