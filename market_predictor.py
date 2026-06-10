@@ -44,6 +44,9 @@ _US_TICKERS = {
     "twd":     "TWD=X",
     "tsm_adr": "TSM",
     "nvda":    "NVDA",
+    "jpy":     "JPY=X",    # Yen — risk-off signal (yen up = Asia risk-off)
+    "arkk":    "ARKK",     # ARK Innovation ETF — tech risk appetite
+    "hyg":     "HYG",      # High-yield bonds — credit market health
 }
 
 
@@ -125,6 +128,9 @@ _US_FEATURES = [
     "sox_ret1", "dxy_ret1", "us10y_ret1",
     "gold_ret1", "oil_ret1", "us2y_ret1", "usdcny_ret1", "twd_ret1",
     "tsm_adr_ret1", "nvda_ret1",
+    "jpy_ret1",   # JPY appreciation = Asia risk-off
+    "arkk_ret1",  # innovation ETF = tech risk appetite
+    "hyg_ret1",   # HYG = credit market health
 ]
 
 _FUTURES_FEATURES = [

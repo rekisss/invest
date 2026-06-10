@@ -115,6 +115,12 @@ def generate_premarket_insight(
         lines_ctx.append(f"外資持股5日變化 {_fmt(md.get('market_foreign_holding_chg'), '+.2f', '%')}")
     if md.get("buyback_count", 0) > 0:
         lines_ctx.append(f"庫藏股買回中 {md['buyback_count']} 支")
+    if md.get("disposition_count", 0) > 0:
+        lines_ctx.append(f"⚠️處置股 {md['disposition_count']} 支（風險警示）")
+    if md.get("jpy_ret") is not None:
+        lines_ctx.append(f"日圓 {_fmt(md.get('jpy_ret'), '+.1%')}（升值=亞洲避險）")
+    if md.get("arkk_ret") is not None:
+        lines_ctx.append(f"ARKK {_fmt(md.get('arkk_ret'), '+.1%')}（科技情緒）")
     if tech:
         lines_ctx.append(
             f"加權RSI {_fmt(tech.get('rsi14'), '.0f')} | "
