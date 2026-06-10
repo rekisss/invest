@@ -1,22 +1,22 @@
 {
   "date": "2026-06-10",
-  "generated_at": "08:01",
-  "xgb_prob_up": 0.437,
+  "generated_at": "23:58",
+  "xgb_prob_up": 0.401,
   "xgb_label": "偏空",
   "market_data": {
     "vix": null,
     "nasdaq_ret": null,
     "sox_ret": null,
     "tsm_adr_ret": null,
-    "futures_net": -61871.0,
+    "futures_net": -61949.0,
     "night_change": null,
     "pcr": null,
-    "taiex_rsi": 60.776473785331866,
-    "macd_hist": -292.75564461190334,
-    "dist_ma60": 15.68326688099102,
+    "taiex_rsi": 52.593785337379344,
+    "macd_hist": -593.4841839166988,
+    "dist_ma60": 11.384246198515747,
     "night_trend": null
   },
-  "ai_insight": "# 今日操盤要點\n\n・外資持續大幅淨賣(-98%現貨、-61,871口期貨)，留意集中賣壓是否引發跌勢加速，應設定停損點控管風險。\n\n・加權RSI已達61進入偏高區域，配合MACD負直方轉弱訊號，短線回檔壓力升溫，逢高應考慮獲利了結。\n\n・股價距MA60已上漲15.7%，AI題材漲幅機率僅44%，宜謹慎評估追高風險，優先關注籌碼面轉強信號再進場。",
+  "ai_insight": "今日操盤要點\n\n・外資期貨大幅淨賣超近六萬口，現貨同步全面賣出，留意上午是否承接不足引發跳空下殺。\n\n・加權RSI 53介於中性區間、MACD直方轉負，技術面由多轉空訊號浮現，短線反彈風險提升。\n\n・AI族群上漲機率僅四成，股價距MA60仍有正乖離，應留意高檔回檔壓力，逢高分批調節部位為佳。",
   "regime": {
     "label": "double_whipsaw",
     "label_zh": "🔄 多空雙巴日",
@@ -26,7 +26,7 @@
     "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
     "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
     "danger_signals": [
-      "外資空單極重（-61,871口），軋空風險高"
+      "外資空單極重（-61,949口），軋空風險高"
     ],
     "forbidden_actions": [
       "禁止反彈高點追多（軋空陷阱）"
@@ -38,7 +38,7 @@
     "factors": [
       {
         "name": "外資空單極重",
-        "description": "-61,871口，軋空/崩潰雙向風險",
+        "description": "-61,949口，軋空/崩潰雙向風險",
         "action": "避免重押方向"
       }
     ]
