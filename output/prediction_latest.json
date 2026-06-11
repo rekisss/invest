@@ -1,6 +1,6 @@
 {
   "date": "2026-06-11",
-  "generated_at": "07:21",
+  "generated_at": "08:01",
   "xgb_prob_up": 0.443,
   "xgb_label": "偏空",
   "market_data": {
@@ -27,7 +27,7 @@
     "market_revenue_yoy": null,
     "market_foreign_holding_chg": null
   },
-  "ai_insight": "# 今日操盤要點\n\n・外資期貨大幅淨賣超逾6萬口，夜盤下跌近千點，應提高風險警戒，留意開盤是否延續弱勢。\n\n・加權距MA20僅負0.3%處於高檔，RSI接近中線53，MACD直方持續負值，短線獲利了結壓力不小。\n\n・AI類股上漲機率低於五成，現貨外資全數賣超，宜避免追高科技股，逢高減碼為宜。",
+  "ai_insight": "# 今日操盤要點\n\n・外資期貨大幅淨賣超逾萬口，夜盤跌幅近千點，短期承壓明顯，應控制風險部位並觀察開盤跌深是否有買盤承接。\n\n・加權指數距MA20僅差負0.3%，技術面處於短期支撑邊緣，若跌破此關鍵線則需提防進一步回檔至MA60。\n\n・MACD直方值轉負且力道加大，RSI於中位偏弱，AI題材上漲機率不足半數，建議避免追高，以守為主。",
   "regime": {
     "label": "double_whipsaw",
     "label_zh": "🔄 多空雙巴日",
@@ -62,7 +62,7 @@
     ]
   },
   "news_sentiment": {
-    "market_impact": -0.14,
+    "market_impact": 0.24,
     "key_events": [],
     "bullish_count": 0,
     "bearish_count": 0
