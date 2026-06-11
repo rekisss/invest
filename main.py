@@ -2877,6 +2877,27 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
             return None
 
     _us_row = us_df.iloc[-1] if not us_df.empty else {}
+
+    # If tsm_adr_ret1 missing (yfinance + Stooq both blocked from CI),
+    # proxy from FinMind 2330 daily return (same company, near-identical movement).
+    _us_row_dict = _us_row.to_dict() if hasattr(_us_row, "to_dict") else dict(_us_row)
+    _tsm_val = _us_row_dict.get("tsm_adr_ret1")
+    if _tsm_val is None or (isinstance(_tsm_val, float) and pd.isna(_tsm_val)):
+        try:
+            _tsm_raw = client.fetch_dataset(
+                "TaiwanStockPrice", stock_id="2330",
+                start_date=(pd.Timestamp(today) - pd.Timedelta(days=10)).strftime("%Y-%m-%d"),
+                end_date=today,
+            )
+            if not _tsm_raw.empty and "close" in _tsm_raw.columns and len(_tsm_raw) >= 2:
+                _tsm_raw = _tsm_raw.sort_values("date")
+                _c = _tsm_raw["close"].astype(float)
+                _us_row_dict["tsm_adr_ret1"] = float(_c.iloc[-1]) / float(_c.iloc[-2]) - 1
+                _safe_print("[predict] tsm_adr_ret1 從 FinMind 2330 補入")
+        except Exception as _tsm_exc:
+            _safe_print(f"[predict] tsm_adr proxy 取得失敗（skip）: {_tsm_exc}")
+    _us_row = _us_row_dict
+
     _ft_row = futures_df.iloc[-1] if not futures_df.empty else {}
     _mk_row = mkinst_df.iloc[-1] if not mkinst_df.empty else {}
     _pcr_val = float(pcr_df["pcr"].iloc[-1]) if not pcr_df.empty else None

@@ -44,17 +44,106 @@ _US_TICKERS = {
     "twd":     "TWD=X",
     "tsm_adr": "TSM",
     "nvda":    "NVDA",
+    "jpy":     "JPY=X",
+    "arkk":    "ARKK",
+    "hyg":     "HYG",
 }
+
+# Stooq fallback symbols — Yahoo Finance blocks many datacenter IPs (e.g. GitHub
+# Actions runners), Stooq's CSV endpoint doesn't require auth.
+_STOOQ_SYMBOLS = {
+    "sp500":   "^spx",
+    "nasdaq":  "^ndq",
+    "sox":     "^sox",
+    "vix":     "^vix",
+    "dxy":     "dx.f",
+    "us10y":   "10yusy.b",
+    "gold":    "gc.f",
+    "oil":     "cl.f",
+    "us2y":    "2yusy.b",
+    "usdcny":  "usdcny",
+    "twd":     "usdtwd",
+    "tsm_adr": "tsm.us",
+    "nvda":    "nvda.us",
+    "jpy":     "usdjpy",
+    "arkk":    "arkk.us",
+    "hyg":     "hyg.us",
+}
+
+# FRED (Federal Reserve) series — not IP-blocked by any known provider.
+# Covers macro indicators; SOX/individual stocks/ARKK/HYG unavailable on FRED.
+_FRED_SERIES = {
+    "sp500":  "SP500",
+    "nasdaq": "NASDAQCOM",          # NASDAQ Composite
+    "vix":    "VIXCLS",
+    "us10y":  "DGS10",
+    "us2y":   "DGS2",
+    "gold":   "GOLDAMGBD228NLBM",
+    "oil":    "DCOILWTICO",
+    "jpy":    "DEXJPUS",
+    "usdcny": "DEXCHUS",
+}
+_FRED_BASE = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+
+
+def _fetch_stooq_close(symbol: str, start_date: str, end_date: str) -> "pd.Series | None":
+    """Fetch daily close prices from Stooq's free CSV endpoint. Returns None on failure."""
+    import requests
+    from io import StringIO
+
+    url = (
+        "https://stooq.com/q/d/l/"
+        f"?s={symbol}&d1={start_date.replace('-', '')}&d2={end_date.replace('-', '')}&i=d"
+    )
+    resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+    text = resp.text.strip()
+    if not text.startswith("Date"):
+        return None
+    df = pd.read_csv(StringIO(text))
+    if df.empty or "Close" not in df.columns:
+        return None
+    df["Date"] = pd.to_datetime(df["Date"])
+    return pd.Series(df["Close"].values, index=df["Date"])
+
+
+def _fetch_fred_close(series_id: str, start_date: str, end_date: str) -> "pd.Series | None":
+    """Fetch a FRED time series as a pd.Series indexed by date. Returns None on failure."""
+    import requests
+    from io import StringIO
+    try:
+        resp = requests.get(
+            _FRED_BASE,
+            params={"id": series_id, "vintage_date": end_date},
+            timeout=15,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        resp.raise_for_status()
+        text = resp.text.strip()
+        if not text.startswith("DATE"):
+            return None
+        df = pd.read_csv(StringIO(text))
+        df.columns = [c.strip() for c in df.columns]
+        val_col = next((c for c in df.columns if c != "DATE"), None)
+        if val_col is None:
+            return None
+        df["DATE"] = pd.to_datetime(df["DATE"])
+        df[val_col] = pd.to_numeric(df[val_col], errors="coerce")
+        df = df[df["DATE"] >= start_date].dropna(subset=[val_col])
+        if df.empty:
+            return None
+        return pd.Series(df[val_col].values, index=df["DATE"])
+    except Exception:
+        return None
 
 
 def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
-    """Download US market indicators via yfinance. Returns empty DataFrame on failure."""
+    """Download US market indicators via yfinance with Stooq + FRED fallbacks."""
     if not _YF_OK:
         return pd.DataFrame()
     try:
         end_dt = (datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=2)).strftime("%Y-%m-%d")
 
-        # Download each ticker individually so one failure doesn't drop all features
         col_frames: list[pd.Series] = []
         failed: list[str] = []
         for key, ticker in _US_TICKERS.items():
@@ -69,6 +158,44 @@ def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
             except Exception:
                 failed.append(ticker)
 
+        # Stooq fallback for tickers Yahoo refused (datacenter-IP blocking)
+        if failed:
+            recovered: list[str] = []
+            for key, ticker in _US_TICKERS.items():
+                if ticker not in failed:
+                    continue
+                stooq_sym = _STOOQ_SYMBOLS.get(key)
+                if not stooq_sym:
+                    continue
+                try:
+                    close = _fetch_stooq_close(stooq_sym, start_date, end_dt)
+                    if close is not None and not close.empty:
+                        col_frames.append(close.rename(key))
+                        recovered.append(ticker)
+                except Exception:
+                    pass
+            failed = [t for t in failed if t not in recovered]
+            if recovered:
+                print(f"[ai] Stooq 後備補回 {len(recovered)} 個 ticker", file=sys.stderr)
+
+        # FRED fallback — Federal Reserve open data, not IP-blocked.
+        # Covers macro signals (VIX, yields, gold, oil, FX, NASDAQ); SOX/stocks unavailable.
+        if failed:
+            fred_recovered: list[str] = []
+            for key, ticker in _US_TICKERS.items():
+                if ticker not in failed:
+                    continue
+                fred_id = _FRED_SERIES.get(key)
+                if not fred_id:
+                    continue
+                close = _fetch_fred_close(fred_id, start_date, end_dt)
+                if close is not None and not close.empty:
+                    col_frames.append(close.rename(key))
+                    fred_recovered.append(ticker)
+            failed = [t for t in failed if t not in fred_recovered]
+            if fred_recovered:
+                print(f"[ai] FRED 後備補回 {len(fred_recovered)} 個 ticker", file=sys.stderr)
+
         if failed:
             print(f"[ai] yfinance 跳過失敗 ticker: {failed}", file=sys.stderr)
         if not col_frames:
@@ -79,12 +206,10 @@ def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
         closes.index.name = "date"
         result = closes.reset_index()
 
-        # Compute 1-day returns and 5-day returns for each
         for col in [c for c in _US_TICKERS if c in result.columns]:
             result[f"{col}_ret1"] = result[col].pct_change(1)
             result[f"{col}_ret5"] = result[col].pct_change(5)
 
-        # Keep only derived features + date (drop raw prices to save memory)
         feat_cols = ["date"] + [c for c in result.columns if "_ret" in c or c == "vix"]
         result = result[[c for c in feat_cols if c in result.columns]]
         result["date"] = pd.to_datetime(result["date"]).dt.normalize()
