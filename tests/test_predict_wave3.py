@@ -108,10 +108,14 @@ class TestDispositionStocksSignal:
         assert len(result) >= 1
 
     def test_fetch_disposition_returns_empty_set_on_failure(self):
+        import data_loader
         from data_loader import fetch_disposition_stocks
         client = MagicMock()
         client.fetch_dataset.side_effect = RuntimeError("API error")
-        result = fetch_disposition_stocks(client, "2026-06-10")
+        # Block the TWSE/TPEx open-data fallback so we test the fully-degraded path
+        data_loader._open_data_cache.clear()
+        with patch("data_loader._http_get_json", side_effect=RuntimeError("no network")):
+            result = fetch_disposition_stocks(client, "2026-06-10")
         assert isinstance(result, set)
         assert len(result) == 0
 
