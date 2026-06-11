@@ -71,6 +71,51 @@ _STOOQ_SYMBOLS = {
     "hyg":     "hyg.us",
 }
 
+# FRED series — US Federal Reserve open data, not IP-blocked.
+# Covers most macro indicators; individual stocks (TSM, NVDA, ARKK, HYG)
+# and composite indices (NASDAQ, SOX) are not available on FRED.
+_FRED_SERIES = {
+    "sp500":  "SP500",        # S&P 500 (1-day lag on FRED)
+    "vix":    "VIXCLS",       # CBOE VIX
+    "us10y":  "DGS10",        # 10-year Treasury yield
+    "us2y":   "DGS2",         # 2-year Treasury yield
+    "gold":   "GOLDAMGBD228NLBM",  # Gold London AM fix (USD/troy oz)
+    "oil":    "DCOILWTICO",   # WTI crude spot (USD/bbl)
+    "jpy":    "DEXJPUS",      # USD/JPY spot
+    "usdcny": "DEXCHUS",      # USD/CNY spot
+}
+_FRED_BASE = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+
+
+def _fetch_fred_close(series_id: str, start_date: str, end_date: str) -> pd.Series | None:
+    """Fetch a FRED time series as a pd.Series indexed by date. Returns None on failure."""
+    import requests
+    from io import StringIO
+    try:
+        resp = requests.get(
+            _FRED_BASE,
+            params={"id": series_id, "vintage_date": end_date},
+            timeout=15,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        resp.raise_for_status()
+        text = resp.text.strip()
+        if not text.startswith("DATE"):
+            return None
+        df = pd.read_csv(StringIO(text))
+        df.columns = [c.strip() for c in df.columns]
+        val_col = next((c for c in df.columns if c != "DATE"), None)
+        if val_col is None:
+            return None
+        df["DATE"] = pd.to_datetime(df["DATE"])
+        df[val_col] = pd.to_numeric(df[val_col], errors="coerce")
+        df = df[df["DATE"] >= start_date].dropna(subset=[val_col])
+        if df.empty:
+            return None
+        return pd.Series(df[val_col].values, index=df["DATE"])
+    except Exception:
+        return None
+
 
 def _fetch_stooq_close(symbol: str, start_date: str, end_date: str) -> pd.Series | None:
     """Fetch daily close prices from Stooq's free CSV endpoint. Returns None on failure."""
@@ -134,6 +179,24 @@ def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
             failed = [t for t in failed if t not in recovered]
             if recovered:
                 print(f"[ai] Stooq 後備補回 {len(recovered)} 個 ticker", file=sys.stderr)
+
+        # FRED fallback — US Federal Reserve open data, not IP-blocked by any known provider.
+        # Covers macro signals (VIX, yields, gold, oil, FX); NASDAQ/SOX/individual stocks unavailable.
+        if failed:
+            fred_recovered: list[str] = []
+            for key, ticker in _US_TICKERS.items():
+                if ticker not in failed:
+                    continue
+                fred_id = _FRED_SERIES.get(key)
+                if not fred_id:
+                    continue
+                close = _fetch_fred_close(fred_id, start_date, end_dt)
+                if close is not None and not close.empty:
+                    col_frames.append(close.rename(key))
+                    fred_recovered.append(ticker)
+            failed = [t for t in failed if t not in fred_recovered]
+            if fred_recovered:
+                print(f"[ai] FRED 後備補回 {len(fred_recovered)} 個 ticker", file=sys.stderr)
 
         if failed:
             print(f"[ai] yfinance 跳過失敗 ticker: {failed}", file=sys.stderr)

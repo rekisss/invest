@@ -1175,6 +1175,87 @@ def compute_market_revenue_signal(
     return result_df
 
 
+def _inst_net_buy_shareholding_signal(
+    client: "FinMindClient",
+    end_date: str,
+) -> pd.DataFrame:
+    """Proxy for market_foreign_holding_chg using TaiwanStockTotalInstitutionalInvestors.
+
+    TaiwanStockTotalInstitutionalInvestors is available at FinMind register level.
+    We use daily market-total foreign net buy (億元) rolling-normalised as a proxy
+    for whether foreign holdings are increasing or decreasing — sign and magnitude
+    are directionally equivalent to a 5-day shareholding % change.
+
+    Returns DataFrame(date, market_foreign_holding_chg) in the same schema
+    expected by MarketPredictor, or empty DataFrame on failure.
+    """
+    start = (pd.Timestamp(end_date) - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockTotalInstitutionalInvestors",
+            use_cache=True,
+            start_date=start,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 三大法人市場合計取得失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+    if frame.empty:
+        return pd.DataFrame()
+
+    frame = frame.copy()
+    frame.columns = [c.lower().strip() for c in frame.columns]
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+
+    inst_col = next(
+        (c for c in frame.columns if c in ("institutional_investors", "name", "identity_type")),
+        None,
+    )
+    if inst_col is None:
+        return pd.DataFrame()
+
+    net_col = next((c for c in frame.columns if c in ("diff", "net")), None)
+    if net_col is None:
+        if "buy" in frame.columns and "sell" in frame.columns:
+            frame["buy"]  = pd.to_numeric(frame["buy"],  errors="coerce").fillna(0)
+            frame["sell"] = pd.to_numeric(frame["sell"], errors="coerce").fillna(0)
+            frame["diff"] = frame["buy"] - frame["sell"]
+            net_col = "diff"
+        else:
+            return pd.DataFrame()
+
+    frame[net_col] = pd.to_numeric(frame[net_col], errors="coerce").fillna(0)
+
+    inst_str = frame[inst_col].astype(str)
+    foreign_mask = inst_str.str.contains("外資|Foreign", na=False)
+    foreign = (
+        frame[foreign_mask]
+        .groupby("date")[net_col]
+        .sum()
+        .reset_index()
+        .rename(columns={net_col: "foreign_net"})
+        .sort_values("date")
+    )
+    if len(foreign) < 6:
+        return pd.DataFrame()
+
+    # 5-day cumulative sum as proxy for holding change direction
+    foreign["foreign_net"] = pd.to_numeric(foreign["foreign_net"], errors="coerce").fillna(0)
+    rolling_std = foreign["foreign_net"].rolling(20, min_periods=5).std()
+    denom = rolling_std.replace(0, float("nan")).fillna(1)
+    foreign["market_foreign_holding_chg"] = (foreign["foreign_net"].rolling(5).sum() / denom).round(4)
+    result = foreign[["date", "market_foreign_holding_chg"]].dropna().reset_index(drop=True)
+
+    if not result.empty:
+        print(
+            f"[data_loader] 外資持股市場信號（三大法人代理）：{len(result)} 筆，"
+            f"最新 {result['market_foreign_holding_chg'].iloc[-1]:.3f}",
+            file=sys.stderr,
+        )
+    return result
+
+
 def compute_market_shareholding_signal(
     client: "FinMindClient",
     end_date: str,
@@ -1195,7 +1276,10 @@ def compute_market_shareholding_signal(
             end_date=end_date,
         )
     except Exception as exc:
-        print(f"[data_loader] 外資持股市場信號 FinMind 取得失敗，改用 TWSE 公開資料: {exc}", file=sys.stderr)
+        print(f"[data_loader] 外資持股市場信號 FinMind 取得失敗，改用三大法人買賣超代理: {exc}", file=sys.stderr)
+        result = _inst_net_buy_shareholding_signal(client, end_date)
+        if not result.empty:
+            return result
         return _opendata_market_shareholding_signal(end_date)
 
     if frame.empty:
