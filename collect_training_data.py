@@ -566,7 +566,11 @@ def main() -> None:
         print(f"   大盤 {len(market)} 個交易日（{market['date'].min().date()} ~ {market['date'].max().date()}）")
 
     # 2b. Bulk institutional data (optional, needs FINMIND_TOKEN)
-    _inst_start = (date.today() - timedelta(days=365)).strftime("%Y-%m-%d")
+    # Use full training period so institutional features aren't zeros for early rows.
+    # Default period "3y" → ~1125 days; add 30-day buffer for calendar gaps.
+    _period_days_map = {"1y": 400, "2y": 770, "3y": 1125, "5y": 1860}
+    _inst_lookback = _period_days_map.get(getattr(args, "period", "3y"), 1125)
+    _inst_start = (date.today() - timedelta(days=_inst_lookback)).strftime("%Y-%m-%d")
     _inst_end   = date.today().strftime("%Y-%m-%d")
     inst_dict: dict[str, pd.DataFrame] = _fetch_bulk_institutional(_inst_start, _inst_end)
 
