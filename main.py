@@ -3498,13 +3498,38 @@ def run_aggregate(args: argparse.Namespace) -> None:
         .drop_duplicates(subset=["stock_id"])
         .reset_index(drop=True)
     )
+    # ── 後處理：評分正規化 + 分級（A/B/C/D/X）+ 市場多空調整 ─────────────────────
+    _regime_label = "未知"
+    try:
+        from post_process import enrich as _pp_enrich
+        # Attempt to read market regime from breadth data if available in columns
+        if "market_type" in all_candidates.columns:
+            _regime_label = str(all_candidates["market_type"].iloc[0])
+        all_candidates = _pp_enrich(all_candidates, regime_label=_regime_label)
+    except Exception as _pp_exc:
+        _safe_print(f"[aggregate] post_process 略過: {_pp_exc}")
+
     top = all_candidates.head(args.top_n)
 
-    lines = [
+    # ── 日曆風險提示 ─────────────────────────────────────────────────────────────
+    _cal_risk: str | None = None
+    try:
+        from calendar_guard import get_calendar_risk_label as _cal_label
+        _cal_risk = _cal_label(args.end)
+    except Exception:
+        pass
+
+    _header_lines = [
         f"🌙 **全市場掃描 TOP {args.top_n}** · {args.end}",
         f"共 {len(frames)} 批次 · 掃描 {total_stocks} 支",
-        "",
     ]
+    if _cal_risk:
+        _header_lines.append(f"📅 {_cal_risk}")
+    if _regime_label in ("熊市",):
+        _header_lines.append("⚠️ **當前市場處於熊市，所有訊號風險較高，建議降低部位或觀望**")
+    _header_lines.append("")
+
+    lines = _header_lines
     for rank, (_, row) in enumerate(top.iterrows(), 1):
         close = _float_or(row.get("close"))
         score = _float_or(row.get("entry_score"))
@@ -3532,9 +3557,11 @@ def run_aggregate(args: argparse.Namespace) -> None:
             _margin_tag = f" 📉融資 `-{abs(_margin_chg):.1f}%`"
         elif _margin_chg > 5.0:
             _margin_tag = f" ⚠️融資 `+{_margin_chg:.1f}%`"
+        _grade = row.get("grade", "")
+        _grade_tag = f" `[{_grade}]`" if _grade else ""
         lines.append("━━━━━━━━━━━━━━━━━━━━")
         lines.append(
-            f"**#{rank} {row.get('stock_id')}** {row.get('name', '')}{ind_tag}{price_note}{f_tag}"
+            f"**#{rank} {row.get('stock_id')}** {row.get('name', '')}{ind_tag}{price_note}{f_tag}{_grade_tag}"
             f"  分 `{score:.0f}` | `{cond}/{_MAX_CONDITION_COUNT}條`"
         )
         lines.append(f"💰 收 `{close:.2f}` | 進場 `{entry_zone}` | 停損 `{stop}` | 目標 `{target}` | R:R `{rr}`")
