@@ -1,7 +1,7 @@
 {
   "date": "2026-06-11",
-  "generated_at": "15:07",
-  "xgb_prob_up": 0.443,
+  "generated_at": "17:53",
+  "xgb_prob_up": 0.416,
   "xgb_label": "偏空",
   "market_data": {
     "vix": null,
@@ -9,15 +9,15 @@
     "nasdaq_ret": null,
     "sox_ret": null,
     "tsm_adr_ret": null,
-    "futures_net": -61949.0,
+    "futures_net": -63168.0,
     "night_change": -626.0,
     "pcr": null,
-    "taiex_rsi": 52.593785348708685,
-    "macd_hist": -593.4841839707465,
-    "dist_ma20": -0.2624847869224345,
-    "dist_ma60": 11.384246198515747,
-    "taiex_ret_5d": -6.9416261050644685,
-    "taiex_ret_20d": 4.504146770492112,
+    "taiex_rsi": 52.473119090231485,
+    "macd_hist": -787.1770123500223,
+    "dist_ma20": -0.4844550748266174,
+    "dist_ma60": 10.850754456674473,
+    "taiex_ret_5d": -5.400553899027328,
+    "taiex_ret_20d": 3.503770977228826,
     "buyback_count": 0,
     "disposition_count": 80,
     "jpy_ret": null,
@@ -25,9 +25,9 @@
     "hyg_ret": null,
     "night_trend": "↓ 走弱",
     "market_revenue_yoy": 0.0859,
-    "market_foreign_holding_chg": -7.1772
+    "market_foreign_holding_chg": -6.5065
   },
-  "ai_insight": "# 今日操盤要點\n\n・夜盤跌幅擴大至626點且外資期貨淨賣超6萬口，加上外資持股5日下滑7.18%，顯示外資持續減碼，開盤應警惕低開走勢，短線宜控制風險。\n\n・加權指數距MA20僅-0.3%處於均線附近，MACD動能轉弱（直方-593.5），若跌破20日線應設定停損，反彈則需站上距MA60+11.4%的高點才能確認反轉。\n\n・處置股達80支創風險警示，結合月營收YoY仍有+8.6%支",
+  "ai_insight": "# 今日操盤要點\n\n・外資連續賣超期貨逾6萬口且現貨持股5日下滑6.51%，夜盤跌626點顯示短期承接力道不足，宜控制風險部位並留意技術破位。\n\n・處置股達80支創風險警示，加權指數雖距MA60近11%但距MA20僅差0.5%，MACD直方轉負呈弱勢整理，反彈機會宜謹慎介入。\n\n・市場月營收年增8.6%基本面尚可，惟AI上漲機率僅42%顯示漲勢動能減弱，建議聚焦類",
   "regime": {
     "label": "double_whipsaw",
     "label_zh": "🔄 多空雙巴日",
@@ -37,7 +37,7 @@
     "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
     "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
     "danger_signals": [
-      "外資空單極重（-61,949口），軋空風險高",
+      "外資空單極重（-63,168口），軋空風險高",
       "夜盤缺口 -626pt 過大，易反轉"
     ],
     "forbidden_actions": [
@@ -51,7 +51,7 @@
     "factors": [
       {
         "name": "外資空單極重",
-        "description": "-61,949口，軋空/崩潰雙向風險",
+        "description": "-63,168口，軋空/崩潰雙向風險",
         "action": "避免重押方向"
       },
       {
