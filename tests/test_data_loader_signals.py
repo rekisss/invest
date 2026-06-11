@@ -79,9 +79,13 @@ class TestComputeMarketRevenueSignal:
                 assert d == d + pd.offsets.MonthEnd(0), f"Date {d} is not month-end"
 
     def test_returns_empty_on_api_failure(self):
+        import data_loader
         client = _make_client()
         client.fetch_dataset.side_effect = RuntimeError("API down")
-        result = compute_market_revenue_signal(client, "2026-06-10")
+        # Block the open-data fallback too, so we exercise the fully-degraded path
+        data_loader._open_data_cache.clear()
+        with patch("data_loader._http_get_json", side_effect=RuntimeError("no network")):
+            result = compute_market_revenue_signal(client, "2026-06-10")
         assert isinstance(result, pd.DataFrame)
         assert result.empty
 
@@ -146,9 +150,12 @@ class TestComputeMarketShareholdingSignal:
         assert result["market_foreign_holding_chg"].notna().all()
 
     def test_returns_empty_on_api_failure(self):
+        import data_loader
         client = _make_client()
         client.fetch_dataset.side_effect = RuntimeError("quota exceeded")
-        result = compute_market_shareholding_signal(client, "2026-06-10")
+        data_loader._open_data_cache.clear()
+        with patch("data_loader._http_get_json", side_effect=RuntimeError("no network")):
+            result = compute_market_shareholding_signal(client, "2026-06-10")
         assert result.empty
 
     def test_returns_empty_on_empty_response(self):
