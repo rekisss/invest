@@ -1,8 +1,8 @@
 [
   {
     "date": "2026-06-11",
-    "generated_at": "13:14",
-    "xgb_prob_up": 0.415,
+    "generated_at": "15:07",
+    "xgb_prob_up": 0.443,
     "xgb_label": "偏空",
     "market_data": {
       "vix": null,
@@ -11,7 +11,7 @@
       "sox_ret": null,
       "tsm_adr_ret": null,
       "futures_net": -61949.0,
-      "night_change": -973.0,
+      "night_change": -626.0,
       "pcr": null,
       "taiex_rsi": 52.593785348708685,
       "macd_hist": -593.4841839707465,
@@ -25,10 +25,10 @@
       "arkk_ret": null,
       "hyg_ret": null,
       "night_trend": "↓ 走弱",
-      "market_revenue_yoy": 0.0749,
-      "market_foreign_holding_chg": null
+      "market_revenue_yoy": 0.0859,
+      "market_foreign_holding_chg": -7.1772
     },
-    "ai_insight": "# 今日操盤要點\n\n・ 夜盤跌973點走弱且外資期貨大幅淨賣近6.2萬口，開盤應留意外資動向，短期震盪加劇，操作宜保持防守姿態。\n\n・ 處置股警示達80支創風險高峰，應迴避地雷個股，改以大型權值股及營收成長股（YoY +7.5%）作為防禦選擇。\n\n・ 加權指數雖距MA60有11.4%漲幅但貼近MA20（-0.3%），RSI 53處中位置，MACD直方轉弱，技術面短線整理",
+    "ai_insight": "# 今日操盤要點\n\n・夜盤跌幅擴大至626點且外資期貨淨賣超6萬口，加上外資持股5日下滑7.18%，顯示外資持續減碼，開盤應警惕低開走勢，短線宜控制風險。\n\n・加權指數距MA20僅-0.3%處於均線附近，MACD動能轉弱（直方-593.5），若跌破20日線應設定停損，反彈則需站上距MA60+11.4%的高點才能確認反轉。\n\n・處置股達80支創風險警示，結合月營收YoY仍有+8.6%支",
     "regime": {
       "label": "double_whipsaw",
       "label_zh": "🔄 多空雙巴日",
@@ -39,7 +39,7 @@
       "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
       "danger_signals": [
         "外資空單極重（-61,949口），軋空風險高",
-        "夜盤缺口 -973pt 過大，易反轉"
+        "夜盤缺口 -626pt 過大，易反轉"
       ],
       "forbidden_actions": [
         "禁止追空缺口超過200pt",
@@ -57,7 +57,7 @@
         },
         {
           "name": "夜盤大缺口",
-          "description": "夜盤 -973pt，開盤後可能快速反轉",
+          "description": "夜盤 -626pt，開盤後可能快速反轉",
           "action": "禁止追缺口超過200pt"
         }
       ]
