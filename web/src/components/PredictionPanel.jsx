@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+
+const HIST_PAGE_SIZE = 20
 
 const RISK_COLOR = { LOW: 'var(--ios-green)', MEDIUM: 'var(--ios-yellow)', HIGH: 'var(--ios-orange)', EXTREME: 'var(--ios-red)' }
 const RISK_LABEL = { LOW: '低風險', MEDIUM: '中風險', HIGH: '高風險', EXTREME: '極高風險' }
@@ -144,6 +146,12 @@ export default function PredictionPanel({ prediction, history = [] }) {
 
   const { xgb_prob_up, xgb_label, date, generated_at, regime, scenario, risk, news_sentiment, market_data, ai_insight } = prediction
   const riskLevel = risk?.level?.replace('RiskLevel.', '') || 'MEDIUM'
+  const [histPage, setHistPage] = useState(0)
+  const histTotalPages = Math.ceil(history.length / HIST_PAGE_SIZE)
+  const pagedHistory = useMemo(
+    () => history.slice(histPage * HIST_PAGE_SIZE, (histPage + 1) * HIST_PAGE_SIZE),
+    [history, histPage]
+  )
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -272,12 +280,39 @@ export default function PredictionPanel({ prediction, history = [] }) {
           </Card>
         )}
 
-        {/* History */}
+        {/* History with pagination */}
         {history.length > 0 && (
           <Card title={`歷史記錄（${history.length} 筆）`}>
             <div style={{ margin: '0 -16px' }}>
-              {history.map((entry, i) => <HistoryRow key={entry.date || i} entry={entry} />)}
+              {pagedHistory.map((entry, i) => <HistoryRow key={entry.date || i} entry={entry} />)}
             </div>
+            {histTotalPages > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, paddingTop: 12 }}>
+                <button
+                  onClick={() => setHistPage(p => Math.max(0, p - 1))}
+                  disabled={histPage === 0}
+                  style={{
+                    background: histPage === 0 ? 'var(--ios-fill2)' : 'var(--ios-blue)',
+                    color: histPage === 0 ? 'var(--ios-label3)' : '#fff',
+                    border: 'none', borderRadius: 9999, padding: '5px 14px', fontSize: 12,
+                    cursor: histPage === 0 ? 'default' : 'pointer',
+                  }}
+                >上一頁</button>
+                <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>
+                  {histPage + 1} / {histTotalPages}
+                </span>
+                <button
+                  onClick={() => setHistPage(p => Math.min(histTotalPages - 1, p + 1))}
+                  disabled={histPage >= histTotalPages - 1}
+                  style={{
+                    background: histPage >= histTotalPages - 1 ? 'var(--ios-fill2)' : 'var(--ios-blue)',
+                    color: histPage >= histTotalPages - 1 ? 'var(--ios-label3)' : '#fff',
+                    border: 'none', borderRadius: 9999, padding: '5px 14px', fontSize: 12,
+                    cursor: histPage >= histTotalPages - 1 ? 'default' : 'pointer',
+                  }}
+                >下一頁</button>
+              </div>
+            )}
           </Card>
         )}
       </div>

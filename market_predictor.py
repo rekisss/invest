@@ -44,23 +44,24 @@ _US_TICKERS = {
     "twd":     "TWD=X",
     "tsm_adr": "TSM",
     "nvda":    "NVDA",
-    "jpy":     "JPY=X",
-    "arkk":    "ARKK",
-    "hyg":     "HYG",
+    "jpy":     "JPY=X",    # Yen — risk-off signal (yen up = Asia risk-off)
+    "arkk":    "ARKK",     # ARK Innovation ETF — tech risk appetite
+    "hyg":     "HYG",      # High-yield bonds — credit market health
 }
 
 # Stooq fallback symbols — Yahoo Finance blocks many datacenter IPs (e.g. GitHub
-# Actions runners), Stooq's CSV endpoint doesn't require auth.
+# Actions runners), Stooq's CSV endpoint doesn't. Features only use pct-change,
+# so scale differences (e.g. yield index vs futures) don't matter.
 _STOOQ_SYMBOLS = {
     "sp500":   "^spx",
     "nasdaq":  "^ndq",
     "sox":     "^sox",
     "vix":     "^vix",
-    "dxy":     "dx.f",
-    "us10y":   "10yusy.b",
+    "dxy":     "dx.f",      # dollar-index futures
+    "us10y":   "10yusy.b",  # US 10Y yield
     "gold":    "gc.f",
     "oil":     "cl.f",
-    "us2y":    "2yusy.b",
+    "us2y":    "2yusy.b",   # US 2Y yield
     "usdcny":  "usdcny",
     "twd":     "usdtwd",
     "tsm_adr": "tsm.us",
@@ -70,44 +71,24 @@ _STOOQ_SYMBOLS = {
     "hyg":     "hyg.us",
 }
 
-# FRED (Federal Reserve) series — not IP-blocked by any known provider.
-# Covers macro indicators; SOX/individual stocks/ARKK/HYG unavailable on FRED.
+# FRED series — US Federal Reserve open data, not IP-blocked.
+# Covers most macro indicators; individual stocks (TSM, NVDA, ARKK, HYG)
+# and SOX are not available on FRED.
 _FRED_SERIES = {
-    "sp500":  "SP500",
-    "nasdaq": "NASDAQCOM",          # NASDAQ Composite
-    "vix":    "VIXCLS",
-    "us10y":  "DGS10",
-    "us2y":   "DGS2",
-    "gold":   "GOLDAMGBD228NLBM",
-    "oil":    "DCOILWTICO",
-    "jpy":    "DEXJPUS",
-    "usdcny": "DEXCHUS",
+    "sp500":  "SP500",        # S&P 500 (1-day lag on FRED)
+    "nasdaq": "NASDAQCOM",    # NASDAQ Composite
+    "vix":    "VIXCLS",       # CBOE VIX
+    "us10y":  "DGS10",        # 10-year Treasury yield
+    "us2y":   "DGS2",         # 2-year Treasury yield
+    "gold":   "GOLDAMGBD228NLBM",  # Gold London AM fix (USD/troy oz)
+    "oil":    "DCOILWTICO",   # WTI crude spot (USD/bbl)
+    "jpy":    "DEXJPUS",      # USD/JPY spot
+    "usdcny": "DEXCHUS",      # USD/CNY spot
 }
 _FRED_BASE = "https://fred.stlouisfed.org/graph/fredgraph.csv"
 
 
-def _fetch_stooq_close(symbol: str, start_date: str, end_date: str) -> "pd.Series | None":
-    """Fetch daily close prices from Stooq's free CSV endpoint. Returns None on failure."""
-    import requests
-    from io import StringIO
-
-    url = (
-        "https://stooq.com/q/d/l/"
-        f"?s={symbol}&d1={start_date.replace('-', '')}&d2={end_date.replace('-', '')}&i=d"
-    )
-    resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-    resp.raise_for_status()
-    text = resp.text.strip()
-    if not text.startswith("Date"):
-        return None
-    df = pd.read_csv(StringIO(text))
-    if df.empty or "Close" not in df.columns:
-        return None
-    df["Date"] = pd.to_datetime(df["Date"])
-    return pd.Series(df["Close"].values, index=df["Date"])
-
-
-def _fetch_fred_close(series_id: str, start_date: str, end_date: str) -> "pd.Series | None":
+def _fetch_fred_close(series_id: str, start_date: str, end_date: str) -> pd.Series | None:
     """Fetch a FRED time series as a pd.Series indexed by date. Returns None on failure."""
     import requests
     from io import StringIO
@@ -135,6 +116,27 @@ def _fetch_fred_close(series_id: str, start_date: str, end_date: str) -> "pd.Ser
         return pd.Series(df[val_col].values, index=df["DATE"])
     except Exception:
         return None
+
+
+def _fetch_stooq_close(symbol: str, start_date: str, end_date: str) -> pd.Series | None:
+    """Fetch daily close prices from Stooq's free CSV endpoint. Returns None on failure."""
+    import requests
+    from io import StringIO
+
+    url = (
+        "https://stooq.com/q/d/l/"
+        f"?s={symbol}&d1={start_date.replace('-', '')}&d2={end_date.replace('-', '')}&i=d"
+    )
+    resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+    text = resp.text.strip()
+    if not text.startswith("Date"):
+        return None  # "No data" / error page
+    df = pd.read_csv(StringIO(text))
+    if df.empty or "Close" not in df.columns:
+        return None
+    df["Date"] = pd.to_datetime(df["Date"])
+    return pd.Series(df["Close"].values, index=df["Date"])
 
 
 def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
@@ -178,8 +180,8 @@ def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
             if recovered:
                 print(f"[ai] Stooq 後備補回 {len(recovered)} 個 ticker", file=sys.stderr)
 
-        # FRED fallback — Federal Reserve open data, not IP-blocked.
-        # Covers macro signals (VIX, yields, gold, oil, FX, NASDAQ); SOX/stocks unavailable.
+        # FRED fallback — US Federal Reserve open data, not IP-blocked by any known provider.
+        # Covers macro signals (VIX, yields, gold, oil, FX, NASDAQ); SOX/individual stocks unavailable.
         if failed:
             fred_recovered: list[str] = []
             for key, ticker in _US_TICKERS.items():
@@ -250,6 +252,9 @@ _US_FEATURES = [
     "sox_ret1", "dxy_ret1", "us10y_ret1",
     "gold_ret1", "oil_ret1", "us2y_ret1", "usdcny_ret1", "twd_ret1",
     "tsm_adr_ret1", "nvda_ret1",
+    "jpy_ret1",   # JPY appreciation = Asia risk-off
+    "arkk_ret1",  # innovation ETF = tech risk appetite
+    "hyg_ret1",   # HYG = credit market health
 ]
 
 _FUTURES_FEATURES = [
@@ -261,6 +266,8 @@ _INST_FEATURES = [
     "foreign_inst_norm", "trust_inst_norm",
     "margin_purchase_chg", "short_sale_chg",
     "pcr",
+    "market_revenue_yoy",         # market-aggregate monthly revenue YoY growth
+    "market_foreign_holding_chg", # market-aggregate foreign holding 5d pct change
 ]
 
 

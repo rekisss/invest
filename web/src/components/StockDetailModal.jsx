@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
 const pct = (v) => (v == null || isNaN(v) ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
@@ -21,31 +21,35 @@ function CandleSVG({ data }) {
   const [hovered, setHovered] = useState(null)
   const touchRef = useRef(null)
 
-  if (!data || data.length < 2) return (
+  const chart = useMemo(() => {
+    if (!data || data.length < 2) return null
+    const bars = data.slice(-60)
+    const W = 460, CH = 200, VH = 45, GAP = 6, H = CH + GAP + VH
+    const PL = 42, PR = 6, PT = 8
+    const maxP = Math.max(...bars.map(d => d.high))
+    const minP = Math.min(...bars.map(d => d.low))
+    const pRange = maxP - minP || 1
+    const maxVol = Math.max(...bars.map(d => d.volume), 1)
+    const n = bars.length
+    const slotW = (W - PL - PR) / n
+    const bW = Math.max(slotW * 0.65, 1.5)
+    const toY = p => PT + (1 - (p - minP) / pRange) * CH
+    const toX = i => PL + (i + 0.5) * slotW
+    const gridLevels = [0, 1/3, 2/3, 1].map(t => ({
+      price: minP + t * pRange, y: PT + (1 - t) * CH,
+    }))
+    const xStep = Math.max(1, Math.floor(n / 5))
+    const xLabels = bars.map((d, i) => ({ i, label: d.time.slice(5) })).filter((_, i) => i % xStep === 0 || i === n - 1)
+    return { bars, W, CH, VH, GAP, H, PL, PR, PT, maxP, minP, pRange, maxVol, n, slotW, bW, toY, toX, gridLevels, xLabels }
+  }, [data])
+
+  if (!chart) return (
     <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
       暫無歷史 K 線資料
     </div>
   )
 
-  const bars = data.slice(-60)
-  const W = 460, CH = 200, VH = 45, GAP = 6, H = CH + GAP + VH
-  const PL = 42, PR = 6, PT = 8
-
-  const maxP = Math.max(...bars.map(d => d.high))
-  const minP = Math.min(...bars.map(d => d.low))
-  const pRange = maxP - minP || 1
-  const maxVol = Math.max(...bars.map(d => d.volume), 1)
-  const n = bars.length
-  const slotW = (W - PL - PR) / n
-  const bW = Math.max(slotW * 0.65, 1.5)
-  const toY = p => PT + (1 - (p - minP) / pRange) * CH
-  const toX = i => PL + (i + 0.5) * slotW
-
-  const gridLevels = [0, 1/3, 2/3, 1].map(t => ({
-    price: minP + t * pRange, y: PT + (1 - t) * CH,
-  }))
-  const xStep = Math.max(1, Math.floor(n / 5))
-  const xLabels = bars.map((d, i) => ({ i, label: d.time.slice(5) })).filter((_, i) => i % xStep === 0 || i === n - 1)
+  const { bars, W, CH, VH, GAP, H, PL, PR, PT, maxVol, slotW, bW, toY, toX, gridLevels, xLabels } = chart
 
   const getIdxFromClientX = (clientX, svgEl) => {
     const rect = svgEl.getBoundingClientRect()
@@ -102,7 +106,7 @@ function CandleSVG({ data }) {
   return (
     <svg
       viewBox={`0 0 ${W} ${H + PT + 18}`}
-      style={{ width: '100%', display: 'block', background: 'var(--ios-bg)', borderRadius: 10, cursor: 'crosshair', touchAction: 'none' }}
+      style={{ width: '100%', display: 'block', background: 'var(--ios-bg)', borderRadius: 10, cursor: 'crosshair', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setHovered(null)}
       onTouchStart={handleTouchStart}

@@ -632,6 +632,311 @@ def fetch_options_pcr(
     return result[["date", "pcr"]].dropna().sort_values("date").reset_index(drop=True)
 
 
+# ── 免費官方公開資料 fallback（TWSE OpenAPI / TPEx OpenAPI）───────────────────
+# FinMind sponsor 等級限定的資料集（處置股、月營收、外資持股）在 API 拒絕時，
+# 改用證交所/櫃買中心的免費公開端點，輸出格式與 FinMind 版本一致。
+# 僅在 FinMind 拋出例外（如 register 等級 400）時觸發，不影響原有流程。
+
+_TWSE_PUNISH_URL    = "https://openapi.twse.com.tw/v1/announcement/punish"
+_TPEX_PUNISH_URL    = "https://www.tpex.org.tw/openapi/v1/tpex_disposal_information"
+_TWSE_MONTH_REV_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap05_L"
+_TPEX_MONTH_REV_URL = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O"
+_TWSE_QFIIS_URL     = "https://www.twse.com.tw/rwd/zh/fund/MI_QFIIS"
+
+_OPEN_DATA_TIMEOUT = 20
+_open_data_cache: dict[str, object] = {}
+
+
+def _http_get_json(url: str, params: dict | None = None):
+    resp = requests.get(
+        url,
+        params=params,
+        timeout=_OPEN_DATA_TIMEOUT,
+        headers={"accept": "application/json", "User-Agent": "Mozilla/5.0"},
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _opendata_fetch_rows(url: str, label: str) -> list:
+    """Fetch a JSON-array open-data endpoint with in-process caching."""
+    key = f"rows::{url}"
+    if key in _open_data_cache:
+        return _open_data_cache[key]  # type: ignore[return-value]
+    try:
+        rows = _http_get_json(url)
+        rows = rows if isinstance(rows, list) else []
+    except Exception as exc:
+        print(f"[data_loader] {label} 公開資料取得失敗: {exc}", file=sys.stderr)
+        rows = []
+    _open_data_cache[key] = rows
+    return rows
+
+
+def _find_key(row: dict, *needles: str, exclude: tuple[str, ...] = ()) -> str | None:
+    """Find the first dict key containing any needle substring (schema-tolerant)."""
+    for k in row.keys():
+        ks = str(k)
+        if any(n in ks for n in needles) and not any(x in ks for x in exclude):
+            return k
+    return None
+
+
+def _roc_ym_to_month_end(text) -> pd.Timestamp | None:
+    """ROC year-month like '11505' or '114/05' → month-end Timestamp."""
+    digits = re.sub(r"\D", "", str(text))
+    if len(digits) < 4:
+        return None
+    try:
+        year, month = int(digits[:-2]) + 1911, int(digits[-2:])
+        if not 1 <= month <= 12:
+            return None
+        return pd.Timestamp(year=year, month=month, day=1) + pd.offsets.MonthEnd(0)
+    except ValueError:
+        return None
+
+
+def _roc_date_to_ts(text) -> pd.Timestamp | None:
+    """ROC date like '1140612' or '114/06/12' → Timestamp."""
+    digits = re.sub(r"\D", "", str(text))
+    if len(digits) < 6:
+        return None
+    try:
+        return pd.Timestamp(
+            year=int(digits[:-4]) + 1911, month=int(digits[-4:-2]), day=int(digits[-2:])
+        )
+    except ValueError:
+        return None
+
+
+def _to_float(text) -> float:
+    try:
+        return float(str(text).replace(",", "").strip() or 0)
+    except ValueError:
+        return 0.0
+
+
+def _opendata_disposition_stocks(date: str) -> set[str]:
+    """處置股 fallback：TWSE announcement/punish + TPEx disposal_information."""
+    try:
+        today_ts = pd.Timestamp(date)
+        result: set[str] = set()
+        for url, label in ((_TWSE_PUNISH_URL, "TWSE 處置股"), (_TPEX_PUNISH_URL, "TPEx 處置股")):
+            for row in _opendata_fetch_rows(url, label):
+                if not isinstance(row, dict):
+                    continue
+                code_key = _find_key(row, "證券代號", "公司代號", "代號", "Code")
+                if not code_key:
+                    continue
+                code = str(row[code_key]).strip()
+                if not code:
+                    continue
+                # 過濾已結束的處置期間（格式如 "1140530~1140612"）
+                period_key = _find_key(row, "處置起訖", "處置起迄", "處置期間", "Period")
+                if period_key:
+                    parts = re.split(r"[~～—–-]+", str(row[period_key]))
+                    end_ts = _roc_date_to_ts(parts[-1]) if parts else None
+                    if end_ts is not None and end_ts < today_ts:
+                        continue
+                result.add(code)
+        if result:
+            print(f"[data_loader] 處置股（TWSE/TPEx 公開資料）：{len(result)} 支", file=sys.stderr)
+        return result
+    except Exception as exc:
+        print(f"[data_loader] 處置股公開資料 fallback 失敗（graceful skip）: {exc}", file=sys.stderr)
+        return set()
+
+
+def _opendata_monthly_revenue() -> pd.DataFrame:
+    """月營收 fallback：MOPS 彙總表（上市 t187ap05_L + 上櫃 mopsfin_t187ap05_O）。
+
+    每支股票合成 3 列（當月 / 上月 / 去年同月），足以讓 strategy.py 計算
+    revenue_yoy 與 revenue_mom（revenue_3m_yoy 因資料不足維持 0，安全降級）。
+    """
+    try:
+        records = []
+        for url, label in ((_TWSE_MONTH_REV_URL, "上市月營收"), (_TPEX_MONTH_REV_URL, "上櫃月營收")):
+            for row in _opendata_fetch_rows(url, label):
+                if not isinstance(row, dict):
+                    continue
+                code_key = _find_key(row, "公司代號", "證券代號", "代號", "Code")
+                ym_key = _find_key(row, "資料年月", "年月", "YearMonth")
+                cur_key = _find_key(row, "當月營收", exclude=("去年", "累計"))
+                if not (code_key and ym_key and cur_key):
+                    continue
+                month_end = _roc_ym_to_month_end(row[ym_key])
+                sid = str(row[code_key]).strip()
+                cur = _to_float(row[cur_key])
+                if month_end is None or not sid or cur <= 0:
+                    continue
+                records.append({"stock_id": sid, "date": month_end, "revenue": cur})
+                prev_key = _find_key(row, "上月營收", exclude=("比較", "增減"))
+                if prev_key and (prev := _to_float(row[prev_key])) > 0:
+                    records.append({
+                        "stock_id": sid,
+                        "date": month_end - pd.offsets.MonthEnd(1),
+                        "revenue": prev,
+                    })
+                yoy_key = _find_key(row, "去年當月營收")
+                if yoy_key and (yoy := _to_float(row[yoy_key])) > 0:
+                    records.append({
+                        "stock_id": sid,
+                        "date": month_end - pd.DateOffset(years=1) + pd.offsets.MonthEnd(0),
+                        "revenue": yoy,
+                    })
+        frame = pd.DataFrame(records)
+        if frame.empty:
+            return frame
+        frame = (
+            frame.drop_duplicates(subset=["stock_id", "date"], keep="first")
+            .sort_values(["stock_id", "date"])
+            .reset_index(drop=True)
+        )
+        print(
+            f"[data_loader] 月營收（MOPS 公開資料）：{len(frame)} 筆"
+            f"（{frame['stock_id'].nunique()} 支股票）",
+            file=sys.stderr,
+        )
+        return frame
+    except Exception as exc:
+        print(f"[data_loader] 月營收公開資料 fallback 失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+
+def _opendata_market_revenue_signal() -> pd.DataFrame:
+    """市場月營收 YoY fallback：取彙總表「去年同月增減(%)」全市場中位數（單月）。"""
+    try:
+        yoys: list[float] = []
+        month_end: pd.Timestamp | None = None
+        for url, label in ((_TWSE_MONTH_REV_URL, "上市月營收"), (_TPEX_MONTH_REV_URL, "上櫃月營收")):
+            for row in _opendata_fetch_rows(url, label):
+                if not isinstance(row, dict):
+                    continue
+                chg_key = _find_key(row, "去年同月增減")
+                ym_key = _find_key(row, "資料年月", "年月", "YearMonth")
+                if not (chg_key and ym_key):
+                    continue
+                me = _roc_ym_to_month_end(row[ym_key])
+                if me is None:
+                    continue
+                month_end = max(month_end, me) if month_end is not None else me
+                yoys.append(_to_float(row[chg_key]) / 100.0)
+        if len(yoys) < 10 or month_end is None:
+            return pd.DataFrame()
+        med = float(pd.Series(yoys).clip(-1.0, 5.0).median())
+        print(f"[data_loader] 市場月營收YoY（MOPS 公開資料）：最新 {med:.2%}", file=sys.stderr)
+        return pd.DataFrame([{"date": month_end, "market_revenue_yoy": med}])
+    except Exception as exc:
+        print(f"[data_loader] 市場月營收公開資料 fallback 失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+
+_QFIIS_TIMEOUT = 5  # seconds — keep short; TWSE can be slow from CI IPs
+
+
+def _opendata_shareholding_day(day: pd.Timestamp) -> pd.DataFrame:
+    """單日 TWSE MI_QFIIS（外資及陸資持股統計），含快取與禮貌性延遲。"""
+    key = f"qfiis::{day:%Y%m%d}"
+    if key in _open_data_cache:
+        return _open_data_cache[key]  # type: ignore[return-value]
+    frame = pd.DataFrame()
+    try:
+        resp = requests.get(
+            _TWSE_QFIIS_URL,
+            params={"date": day.strftime("%Y%m%d"), "selectType": "ALLBUT0999", "response": "json"},
+            timeout=_QFIIS_TIMEOUT,
+            headers={"accept": "application/json", "User-Agent": "Mozilla/5.0"},
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        time.sleep(0.15)  # 禮貌性延遲，避免對 TWSE 過快連續請求
+        if isinstance(payload, dict) and payload.get("stat") == "OK" and payload.get("data"):
+            fields = [str(f) for f in payload.get("fields", [])]
+            code_idx = next((i for i, f in enumerate(fields) if "代號" in f), 0)
+            ratio_idx = next(
+                (i for i, f in enumerate(fields) if "全體" in f and "比率" in f),
+                next((i for i, f in enumerate(fields) if "持股比率" in f), None),
+            )
+            if ratio_idx is not None:
+                rows = [
+                    {
+                        "stock_id": str(r[code_idx]).strip(),
+                        "date": day.normalize(),
+                        "ForeignInvestmentSharesRatio": _to_float(r[ratio_idx]),
+                    }
+                    for r in payload["data"]
+                    if isinstance(r, (list, tuple)) and len(r) > max(code_idx, ratio_idx)
+                ]
+                frame = pd.DataFrame(rows)
+    except Exception:
+        pass
+    _open_data_cache[key] = frame
+    return frame
+
+
+def _opendata_shareholding(end_date: str, lookback: int, budget_s: float = 25.0) -> pd.DataFrame:
+    """外資持股比例 fallback：逐日抓 TWSE MI_QFIIS（僅上市；上櫃缺資料安全降級為 0）。
+
+    budget_s caps the total elapsed time so a slow/blocked TWSE never stalls the run.
+    """
+    try:
+        # pct_change(5) needs ≥6 rows; cap at 8 to stay well within budget
+        target_days = max(6, min(int(lookback * 0.6) or 6, 8))
+        frames: list[pd.DataFrame] = []
+        day = pd.Timestamp(end_date)
+        deadline = time.monotonic() + budget_s
+        for _ in range(target_days + 14):  # extra buffer for weekends/holidays
+            if len(frames) >= target_days:
+                break
+            if time.monotonic() > deadline:
+                print(
+                    f"[data_loader] 外資持股公開資料超時（{budget_s:.0f}s），已取得 {len(frames)} 日",
+                    file=sys.stderr,
+                )
+                break
+            if day.dayofweek < 5:
+                f = _opendata_shareholding_day(day)
+                if not f.empty:
+                    frames.append(f)
+            day -= pd.Timedelta(days=1)
+        if not frames:
+            return pd.DataFrame()
+        result = (
+            pd.concat(frames, ignore_index=True)
+            .sort_values(["stock_id", "date"])
+            .reset_index(drop=True)
+        )
+        print(
+            f"[data_loader] 外資持股比例（TWSE 公開資料）：{len(result)} 筆"
+            f"（{result['stock_id'].nunique()} 支股票 / {len(frames)} 個交易日）",
+            file=sys.stderr,
+        )
+        return result
+    except Exception as exc:
+        print(f"[data_loader] 外資持股公開資料 fallback 失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+
+def _opendata_market_shareholding_signal(end_date: str) -> pd.DataFrame:
+    """市場外資持股 5 日變化 fallback：MI_QFIIS 每日中位數 → pct_change(5)。"""
+    try:
+        frame = _opendata_shareholding(end_date, lookback=10, budget_s=25.0)
+        if frame.empty:
+            return pd.DataFrame()
+        daily = frame.groupby("date")["ForeignInvestmentSharesRatio"].median().sort_index()
+        chg = (daily.pct_change(5) * 100).dropna()
+        if chg.empty:
+            return pd.DataFrame()
+        result = pd.DataFrame(
+            {"date": chg.index, "market_foreign_holding_chg": chg.values}
+        ).reset_index(drop=True)
+        print(f"[data_loader] 外資持股市場信號（TWSE 公開資料）：{len(result)} 筆", file=sys.stderr)
+        return result
+    except Exception as exc:
+        print(f"[data_loader] 外資持股市場信號 fallback 失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+
 def fetch_disposition_stocks(
     client: "FinMindClient",
     date: str,
@@ -650,8 +955,8 @@ def fetch_disposition_stocks(
             end_date=date,
         )
     except Exception as exc:
-        print(f"[data_loader] 處置股資料取得失敗（graceful skip）: {exc}", file=sys.stderr)
-        return set()
+        print(f"[data_loader] 處置股 FinMind 取得失敗，改用 TWSE/TPEx 公開資料: {exc}", file=sys.stderr)
+        return _opendata_disposition_stocks(date)
 
     if frame.empty:
         return set()
@@ -723,8 +1028,8 @@ def fetch_all_monthly_revenue(
             end_date=end_date,
         )
     except Exception as exc:
-        print(f"[data_loader] 月營收資料取得失敗（graceful skip）: {exc}", file=sys.stderr)
-        return pd.DataFrame()
+        print(f"[data_loader] 月營收 FinMind 取得失敗，改用 MOPS 公開資料: {exc}", file=sys.stderr)
+        return _opendata_monthly_revenue()
 
     if frame.empty:
         return pd.DataFrame()
@@ -769,8 +1074,8 @@ def fetch_all_shareholding(
             end_date=end_date,
         )
     except Exception as exc:
-        print(f"[data_loader] 外資持股比例資料取得失敗（graceful skip）: {exc}", file=sys.stderr)
-        return pd.DataFrame()
+        print(f"[data_loader] 外資持股比例 FinMind 取得失敗，改用 TWSE 公開資料: {exc}", file=sys.stderr)
+        return _opendata_shareholding(end_date, lookback)
 
     if frame.empty:
         return pd.DataFrame()
@@ -794,6 +1099,219 @@ def fetch_all_shareholding(
     result = frame[["stock_id", "date", ratio_col]].rename(columns={ratio_col: "ForeignInvestmentSharesRatio"})
     result = result.dropna(subset=["date"]).sort_values(["stock_id", "date"]).reset_index(drop=True)
     print(f"[data_loader] 外資持股比例：{len(result)} 筆（{result['stock_id'].nunique()} 支股票）", file=sys.stderr)
+    return result
+
+
+def compute_market_revenue_signal(
+    client: "FinMindClient",
+    end_date: str,
+) -> pd.DataFrame:
+    """Compute market-aggregate monthly revenue YoY signal for MarketPredictor.
+
+    Fetches 14 months of TaiwanStockMonthRevenue (one API call), computes
+    median YoY growth across all stocks per month, returns DataFrame(date,
+    market_revenue_yoy) indexed to month-end dates. MarketPredictor ffill()
+    propagates these monthly values to all trading days in each month.
+    Empty DataFrame on failure.
+    """
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockMonthRevenue",
+            use_cache=True,
+            start_date=(pd.Timestamp(end_date) - pd.DateOffset(months=14)).strftime("%Y-%m-%d"),
+            end_date=end_date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 市場月營收 FinMind 取得失敗，改用 MOPS 公開資料: {exc}", file=sys.stderr)
+        return _opendata_market_revenue_signal()
+
+    if frame.empty:
+        return pd.DataFrame()
+
+    frame = frame.copy()
+    frame.columns = [c.lower().strip() for c in frame.columns]
+    if "stock_id" not in frame.columns:
+        return pd.DataFrame()
+
+    rev_col = next(
+        (c for c in frame.columns if "revenue" in c and "year" not in c and "month" not in c),
+        next((c for c in frame.columns if "revenue" in c), None),
+    )
+    if rev_col is None:
+        return pd.DataFrame()
+
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+    frame[rev_col] = pd.to_numeric(frame[rev_col], errors="coerce")
+    frame = frame.dropna(subset=["date", rev_col]).copy()
+    frame["year_month"] = frame["date"].dt.to_period("M")
+
+    # Pivot: stock_id × year_month → latest revenue value
+    pivot = (
+        frame.sort_values(["stock_id", "date"])
+        .groupby(["stock_id", "year_month"])[rev_col]
+        .last()
+        .unstack("year_month")
+    )
+
+    results = []
+    for col in sorted(pivot.columns):
+        prev_col = col - 12
+        if prev_col not in pivot.columns:
+            continue
+        curr = pivot[col]
+        prev = pivot[prev_col]
+        mask = (curr > 0) & (prev > 0)
+        if mask.sum() < 10:
+            continue
+        yoy = ((curr - prev) / prev)[mask].clip(-1.0, 5.0)
+        month_end = pd.Timestamp(col.to_timestamp()) + pd.offsets.MonthEnd(0)
+        results.append({"date": month_end, "market_revenue_yoy": float(yoy.median())})
+
+    if not results:
+        return pd.DataFrame()
+
+    result_df = pd.DataFrame(results).sort_values("date").reset_index(drop=True)
+    print(f"[data_loader] 市場月營收YoY信號：{len(result_df)} 個月份，最新 {result_df['market_revenue_yoy'].iloc[-1]:.2%}", file=sys.stderr)
+    return result_df
+
+
+def _inst_net_buy_shareholding_signal(
+    client: "FinMindClient",
+    end_date: str,
+) -> pd.DataFrame:
+    """Proxy for market_foreign_holding_chg using TaiwanStockTotalInstitutionalInvestors.
+
+    TaiwanStockTotalInstitutionalInvestors is available at FinMind register level.
+    We use daily market-total foreign net buy (億元) rolling-normalised as a proxy
+    for whether foreign holdings are increasing or decreasing — sign and magnitude
+    are directionally equivalent to a 5-day shareholding % change.
+
+    Returns DataFrame(date, market_foreign_holding_chg) in the same schema
+    expected by MarketPredictor, or empty DataFrame on failure.
+    """
+    start = (pd.Timestamp(end_date) - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockTotalInstitutionalInvestors",
+            use_cache=True,
+            start_date=start,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 三大法人市場合計取得失敗（graceful skip）: {exc}", file=sys.stderr)
+        return pd.DataFrame()
+
+    if frame.empty:
+        return pd.DataFrame()
+
+    frame = frame.copy()
+    frame.columns = [c.lower().strip() for c in frame.columns]
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+
+    inst_col = next(
+        (c for c in frame.columns if c in ("institutional_investors", "name", "identity_type")),
+        None,
+    )
+    if inst_col is None:
+        return pd.DataFrame()
+
+    net_col = next((c for c in frame.columns if c in ("diff", "net")), None)
+    if net_col is None:
+        if "buy" in frame.columns and "sell" in frame.columns:
+            frame["buy"]  = pd.to_numeric(frame["buy"],  errors="coerce").fillna(0)
+            frame["sell"] = pd.to_numeric(frame["sell"], errors="coerce").fillna(0)
+            frame["diff"] = frame["buy"] - frame["sell"]
+            net_col = "diff"
+        else:
+            return pd.DataFrame()
+
+    frame[net_col] = pd.to_numeric(frame[net_col], errors="coerce").fillna(0)
+
+    inst_str = frame[inst_col].astype(str)
+    foreign_mask = inst_str.str.contains("外資|Foreign", na=False)
+    foreign = (
+        frame[foreign_mask]
+        .groupby("date")[net_col]
+        .sum()
+        .reset_index()
+        .rename(columns={net_col: "foreign_net"})
+        .sort_values("date")
+    )
+    if len(foreign) < 6:
+        return pd.DataFrame()
+
+    # 5-day cumulative sum as proxy for holding change direction
+    foreign["foreign_net"] = pd.to_numeric(foreign["foreign_net"], errors="coerce").fillna(0)
+    rolling_std = foreign["foreign_net"].rolling(20, min_periods=5).std()
+    denom = rolling_std.replace(0, float("nan")).fillna(1)
+    foreign["market_foreign_holding_chg"] = (foreign["foreign_net"].rolling(5).sum() / denom).round(4)
+    result = foreign[["date", "market_foreign_holding_chg"]].dropna().reset_index(drop=True)
+
+    if not result.empty:
+        print(
+            f"[data_loader] 外資持股市場信號（三大法人代理）：{len(result)} 筆，"
+            f"最新 {result['market_foreign_holding_chg'].iloc[-1]:.3f}",
+            file=sys.stderr,
+        )
+    return result
+
+
+def compute_market_shareholding_signal(
+    client: "FinMindClient",
+    end_date: str,
+) -> pd.DataFrame:
+    """Compute market-aggregate foreign shareholding 5-day change signal.
+
+    Fetches TaiwanStockShareholding for the last 20 days (one API call),
+    computes daily median foreign holding % across all stocks, then the
+    5-day pct change. Returns DataFrame(date, market_foreign_holding_chg).
+    Empty DataFrame on failure.
+    """
+    start = (pd.Timestamp(end_date) - pd.Timedelta(days=20)).strftime("%Y-%m-%d")
+    try:
+        frame = client.fetch_dataset(
+            "TaiwanStockShareholding",
+            use_cache=True,
+            start_date=start,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        print(f"[data_loader] 外資持股市場信號 FinMind 取得失敗，改用三大法人買賣超代理: {exc}", file=sys.stderr)
+        result = _inst_net_buy_shareholding_signal(client, end_date)
+        if not result.empty:
+            return result
+        return _opendata_market_shareholding_signal(end_date)
+
+    if frame.empty:
+        return pd.DataFrame()
+
+    frame = frame.copy()
+    frame.columns = [c.strip() for c in frame.columns]
+    if "stock_id" not in frame.columns:
+        return pd.DataFrame()
+
+    ratio_col = next(
+        (c for c in frame.columns if "ForeignInvestmentSharesRatio" in c
+         or "foreigninvestmentsharesratio" in c.lower()),
+        next((c for c in frame.columns if "ratio" in c.lower() and "foreign" in c.lower()), None),
+    )
+    if ratio_col is None:
+        return pd.DataFrame()
+
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+    frame[ratio_col] = pd.to_numeric(frame[ratio_col], errors="coerce")
+    frame = frame.dropna(subset=["date", ratio_col]).copy()
+
+    daily_median = (
+        frame.groupby("date")[ratio_col]
+        .median()
+        .reset_index()
+        .rename(columns={ratio_col: "median_holding"})
+        .sort_values("date")
+    )
+    daily_median["market_foreign_holding_chg"] = daily_median["median_holding"].pct_change(5) * 100
+    result = daily_median[["date", "market_foreign_holding_chg"]].dropna().reset_index(drop=True)
+    print(f"[data_loader] 外資持股市場信號：{len(result)} 筆", file=sys.stderr)
     return result
 
 
@@ -885,30 +1403,13 @@ def fetch_buyback_stocks(
 ) -> set:
     """Return set of stock_ids with active buyback (庫藏股買回) in the past lookback days.
 
-    Tries TaiwanStockBuyBack first, falls back to TaiwanStockRepurchase.
-    Returns empty set on failure.
+    FinMind's API has no buyback dataset (TaiwanStockBuyBack / TaiwanStockRepurchase
+    are both rejected by the server-side dataset enum), so this always returns an
+    empty set without making API calls. Downstream consumers treat buyback_count=0
+    as "no data" and skip the display. A future data source could be the TWSE
+    OpenAPI (openapi.twse.com.tw), which publishes treasury-stock reports.
     """
-    start = (pd.Timestamp(end_date) - pd.Timedelta(days=lookback)).strftime("%Y-%m-%d")
-    frame = pd.DataFrame()
-    for dataset in ("TaiwanStockBuyBack", "TaiwanStockRepurchase"):
-        try:
-            frame = client.fetch_dataset(
-                dataset,
-                use_cache=True,
-                start_date=start,
-                end_date=end_date,
-            )
-            if not frame.empty:
-                break
-        except Exception as exc:
-            print(f"[data_loader] 庫藏股資料({dataset})取得失敗（graceful skip）: {exc}", file=sys.stderr)
-
-    if frame.empty or "stock_id" not in frame.columns:
-        return set()
-
-    result = set(frame["stock_id"].astype(str).unique())
-    print(f"[data_loader] 庫藏股買回：{len(result)} 支", file=sys.stderr)
-    return result
+    return set()
 
 
 def clean_cache(cache_dir: Path | str, max_age_days: int = 30) -> int:

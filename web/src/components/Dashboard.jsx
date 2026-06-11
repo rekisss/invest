@@ -1,5 +1,16 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import StockDetailModal from './StockDetailModal'
+
+const PAGE_SIZE = 50
+
+const SORT_OPTIONS = [
+  { value: 'entry_score',       label: '分數' },
+  { value: 'rsi14',             label: 'RSI' },
+  { value: 'adx14',             label: 'ADX' },
+  { value: 'volume_ratio',      label: '量比' },
+  { value: 'foreign_buy_streak',label: '外資連買' },
+  { value: 'close',             label: '收盤價' },
+]
 
 const BASE = import.meta.env.BASE_URL
 
@@ -84,10 +95,10 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
           const vol = s.volume_ratio || 0
           const foreignStreak = s.foreign_buy_streak || 0
           const investStreak = s.invest_trust_streak || 0
-          const scoreColor = isEntry ? '#22C55E' : normScore >= 70 ? '#3B82F6' : '#94A3B8'
-          const rsiColor = rsi > 65 ? '#22C55E' : rsi < 40 ? '#EF4444' : '#94A3B8'
-          const adxColor = adx > 25 ? '#60A5FA' : '#94A3B8'
-          const volColor = vol > 1.8 ? '#F59E0B' : vol > 1.3 ? '#94A3B8' : '#475569'
+          const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
+          const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
+          const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
+          const volColor = vol > 1.8 ? '#FF9F0A' : vol > 1.3 ? '#94A3B8' : '#475569'
 
           return (
             <div
@@ -114,8 +125,8 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
                   {notionMap[s.stock_id] && <span style={{ fontSize: 9, color: 'var(--ios-blue)', fontWeight: 700, marginLeft: 4 }}>N</span>}
                 </span>
                 {isEntry
-                  ? <span style={{ fontSize: 10, fontWeight: 700, color: '#22C55E', background: 'rgba(34,197,94,0.13)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>進場</span>
-                  : <span style={{ fontSize: 10, fontWeight: 600, color: '#3B82F6', background: 'rgba(59,130,246,0.10)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>觀察</span>
+                  ? <span style={{ fontSize: 10, fontWeight: 700, color: '#30D158', background: 'rgba(48,209,88,0.14)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>進場</span>
+                  : <span style={{ fontSize: 10, fontWeight: 600, color: '#0A84FF', background: 'rgba(10,132,255,0.12)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>觀察</span>
                 }
               </div>
 
@@ -151,12 +162,12 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
                   </span>
                 )}
                 {foreignStreak > 0 && (
-                  <span style={{ fontSize: 11, color: '#22C55E', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 11, color: '#30D158', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     外+<strong>{foreignStreak}</strong>天
                   </span>
                 )}
                 {investStreak > 0 && (
-                  <span style={{ fontSize: 11, color: '#A855F7', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 11, color: '#BF5AF2', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     投+<strong>{investStreak}</strong>天
                   </span>
                 )}
@@ -296,6 +307,10 @@ export default function Dashboard({ data, error }) {
   })
   const [selectedStock, setSelectedStock] = useState(null)
   const [viewTab, setViewTab] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortField, setSortField] = useState('entry_score')
+  const [sortDir, setSortDir] = useState('desc')
+  const [page, setPage] = useState(0)
   const notionMap = data?.notionMap || {}
 
   if (error || !data || !data.dates || data.dates.length === 0) {
@@ -318,6 +333,30 @@ export default function Dashboard({ data, error }) {
   const pred = data.prediction || null
   const aiText = scan.ai_picks_text || ''
   const marginStats = scan.margin_stats || {}
+
+  // Reset page whenever filters or tab/date change
+  useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate])
+
+  const baseStocks = viewTab === 'entry' ? entryStocks : viewTab === 'limitdown' ? limitDownAlerts : stocks
+
+  const filteredAndSorted = useMemo(() => {
+    let list = baseStocks
+    const q = searchQuery.trim().toLowerCase()
+    if (q) {
+      list = list.filter(s =>
+        String(s.stock_id).includes(q) ||
+        (s.name || '').toLowerCase().includes(q)
+      )
+    }
+    return [...list].sort((a, b) => {
+      const va = a[sortField] ?? -Infinity
+      const vb = b[sortField] ?? -Infinity
+      return sortDir === 'desc' ? vb - va : va - vb
+    })
+  }, [baseStocks, searchQuery, sortField, sortDir])
+
+  const totalPages = Math.ceil(filteredAndSorted.length / PAGE_SIZE)
+  const pagedStocks = filteredAndSorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   const viewOptions = [
     { id: 'all',       label: `全部` },
@@ -370,8 +409,41 @@ export default function Dashboard({ data, error }) {
           >↓ 全部</a>
         </div>
 
+        {/* Search + Sort row */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="🔍 搜尋股號/名稱…"
+            style={{
+              flex: 1, background: 'var(--ios-bg3)', border: 'none', color: 'var(--ios-label)',
+              borderRadius: 10, padding: '7px 12px', fontSize: 13, outline: 'none',
+              WebkitAppearance: 'none',
+            }}
+          />
+          <select
+            value={sortField}
+            onChange={e => setSortField(e.target.value)}
+            style={{
+              background: 'var(--ios-bg3)', border: 'none', color: 'var(--ios-label2)',
+              borderRadius: 10, padding: '7px 10px', fontSize: 12, cursor: 'pointer',
+              WebkitAppearance: 'none', appearance: 'none', flexShrink: 0,
+            }}
+          >
+            {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <button
+            onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
+            style={{
+              background: 'var(--ios-bg3)', border: 'none', color: 'var(--ios-label2)',
+              borderRadius: 10, padding: '7px 10px', fontSize: 13, cursor: 'pointer', flexShrink: 0,
+            }}
+          >{sortDir === 'desc' ? '↓' : '↑'}</button>
+        </div>
+
         {/* Segmented view selector */}
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: 8 }}>
           <div className="ios-segmented">
             {viewOptions.map(v => (
               <button
@@ -480,17 +552,50 @@ export default function Dashboard({ data, error }) {
 
         {/* Main stock table */}
         <div style={{ marginTop: 12 }}>
-          {entryStocks.length > 0 && viewTab === 'all' && (
-            <div style={{ padding: '0 20px 6px', fontSize: 12, fontWeight: 600, color: 'var(--ios-green)', textTransform: 'uppercase', letterSpacing: 0.3 }}>
-              進場訊號 · {entryStocks.length} 支
-            </div>
-          )}
+          <div style={{ padding: '0 20px 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            {entryStocks.length > 0 && viewTab === 'all' && !searchQuery && (
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ios-green)', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                進場訊號 · {entryStocks.length} 支
+              </span>
+            )}
+            {searchQuery && (
+              <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>
+                找到 {filteredAndSorted.length} 支
+              </span>
+            )}
+          </div>
           <WatchlistView
-            stocks={viewTab === 'entry' ? entryStocks : viewTab === 'limitdown' ? limitDownAlerts : stocks}
+            stocks={pagedStocks}
             globalMaxScore={globalMaxScore}
             onSelect={setSelectedStock}
             notionMap={notionMap}
           />
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '12px 20px 4px' }}>
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+                style={{
+                  background: page === 0 ? 'var(--ios-fill2)' : 'var(--ios-blue)',
+                  color: page === 0 ? 'var(--ios-label3)' : '#fff',
+                  border: 'none', borderRadius: 9999, padding: '6px 16px', fontSize: 13, cursor: page === 0 ? 'default' : 'pointer',
+                }}
+              >上一頁</button>
+              <span style={{ fontSize: 13, color: 'var(--ios-label2)' }}>
+                {page + 1} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                style={{
+                  background: page >= totalPages - 1 ? 'var(--ios-fill2)' : 'var(--ios-blue)',
+                  color: page >= totalPages - 1 ? 'var(--ios-label3)' : '#fff',
+                  border: 'none', borderRadius: 9999, padding: '6px 16px', fontSize: 13, cursor: page >= totalPages - 1 ? 'default' : 'pointer',
+                }}
+              >下一頁</button>
+            </div>
+          )}
         </div>
 
         {/* Secondary sections */}

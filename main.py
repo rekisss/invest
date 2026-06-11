@@ -30,6 +30,8 @@ from backtest import run_backtest
 from data_loader import (
     FinMindClient,
     clean_cache,
+    compute_market_revenue_signal,
+    compute_market_shareholding_signal,
     fetch_all_insider_trading,
     fetch_all_margin_data,
     fetch_all_monthly_revenue,
@@ -2804,33 +2806,47 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         return
 
     # Fetch auxiliary data in parallel (all graceful-degrade on failure)
-    with ThreadPoolExecutor(max_workers=8) as _pool:
-        _f_us       = _pool.submit(fetch_us_features, train_start, today)
-        _f_futures  = _pool.submit(fetch_futures_daily, client, train_start, today)
-        _f_inst     = _pool.submit(fetch_futures_institutional, client, train_start, today)
-        _f_calendar = _pool.submit(fetch_upcoming_events)
-        _f_mkinst   = _pool.submit(fetch_market_institutional, client, train_start, today)
-        _f_margin   = _pool.submit(fetch_market_margin, client, train_start, today)
-        _f_pcr      = _pool.submit(fetch_options_pcr, client, train_start, today)
-        _f_night    = _pool.submit(fetch_night_session, client, today)
-        us_df           = _f_us.result()
-        futures_raw     = _f_futures.result()
-        inst_raw        = _f_inst.result()
-        calendar_events = _f_calendar.result()
-        mkinst_df       = _f_mkinst.result()
-        margin_df       = _f_margin.result()
-        pcr_df          = _f_pcr.result()
-        night_data      = _f_night.result()
+    with ThreadPoolExecutor(max_workers=12) as _pool:
+        _f_us           = _pool.submit(fetch_us_features, train_start, today)
+        _f_futures      = _pool.submit(fetch_futures_daily, client, train_start, today)
+        _f_inst         = _pool.submit(fetch_futures_institutional, client, train_start, today)
+        _f_calendar     = _pool.submit(fetch_upcoming_events)
+        _f_mkinst       = _pool.submit(fetch_market_institutional, client, train_start, today)
+        _f_margin       = _pool.submit(fetch_market_margin, client, train_start, today)
+        _f_pcr          = _pool.submit(fetch_options_pcr, client, train_start, today)
+        _f_night        = _pool.submit(fetch_night_session, client, today)
+        _f_revenue_sig  = _pool.submit(compute_market_revenue_signal, client, today)
+        _f_holding_sig  = _pool.submit(compute_market_shareholding_signal, client, today)
+        _f_buyback      = _pool.submit(fetch_buyback_stocks, client, today, 30)
+        _f_disposition  = _pool.submit(fetch_disposition_stocks, client, today)
+        us_df              = _f_us.result()
+        futures_raw        = _f_futures.result()
+        inst_raw           = _f_inst.result()
+        calendar_events    = _f_calendar.result()
+        mkinst_df          = _f_mkinst.result()
+        margin_df          = _f_margin.result()
+        pcr_df             = _f_pcr.result()
+        night_data         = _f_night.result()
+        revenue_signal_df  = _f_revenue_sig.result()
+        holding_signal_df  = _f_holding_sig.result()
+        buyback_stocks     = _f_buyback.result()
+        disposition_stocks = _f_disposition.result()
 
     futures_df = build_futures_features(market_df, futures_raw, inst_raw)
 
-    # Merge 三大法人 + 融資融券 + PCR into a single inst_df for MarketPredictor
+    # Merge 三大法人 + 融資融券 + PCR + 市場月營收信號 + 外資持股信號 into inst_df
     inst_feat_df: pd.DataFrame | None = None
     _inst_frames = [df for df in (mkinst_df, margin_df, pcr_df) if not df.empty]
     if _inst_frames:
         inst_feat_df = _inst_frames[0]
         for _f in _inst_frames[1:]:
             inst_feat_df = inst_feat_df.merge(_f, on="date", how="outer")
+    for _sig_df in (revenue_signal_df, holding_signal_df):
+        if not _sig_df.empty and "date" in _sig_df.columns:
+            if inst_feat_df is None:
+                inst_feat_df = _sig_df
+            else:
+                inst_feat_df = inst_feat_df.merge(_sig_df, on="date", how="outer")
 
     # Market-level news sentiment (Google RSS + FinMind combined)
     news_client = NewsClient(Path(args.output) / "news_cache")
@@ -2936,6 +2952,18 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
             _chipset_parts.append(f"現貨 `{_fni*100:+.0f}%`（標準化）")
     if _pcr_val is not None:
         _chipset_parts.append(f"PCR `{_pcr_val:.2f}`")
+    if not revenue_signal_df.empty:
+        _rev_yoy = revenue_signal_df["market_revenue_yoy"].iloc[-1]
+        _rev_icon = "📈" if _rev_yoy > 0.05 else ("📉" if _rev_yoy < -0.05 else "➡️")
+        _chipset_parts.append(f"{_rev_icon}市場營收YoY `{_rev_yoy:+.1%}`")
+    if not holding_signal_df.empty and "market_foreign_holding_chg" in holding_signal_df.columns:
+        _hld_chg = holding_signal_df["market_foreign_holding_chg"].iloc[-1]
+        if abs(_hld_chg) >= 0.01:
+            _chipset_parts.append(f"外資持股5日 `{_hld_chg:+.2f}%`")
+    if buyback_stocks:
+        _chipset_parts.append(f"庫藏股 `{len(buyback_stocks)}支`")
+    if disposition_stocks:
+        _chipset_parts.append(f"⚠️處置股 `{len(disposition_stocks)}支`")
     chipset_block = ("💼 **籌碼**\n   " + " | ".join(_chipset_parts)) if _chipset_parts else ""
 
     scenario_block = ("🎯 **市場結構分析**\n   " + scenario_text.replace("\n", "\n   ")) if scenario_text else ""
@@ -2943,7 +2971,10 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
     # ── TAIEX 技術指標 (RSI / MACD 直方 / 距MA60) ─────────────────────────────
     from indicators import add_rsi, add_macd
     _close = market_df["close"].astype(float)
-    _taiex_tech: dict[str, float | None] = {"rsi14": None, "macd_hist": None, "dist_ma60": None}
+    _taiex_tech: dict[str, float | None] = {
+        "rsi14": None, "macd_hist": None, "dist_ma60": None,
+        "dist_ma20": None, "ret_5d": None, "ret_20d": None,
+    }
     try:
         _rsi_s = add_rsi(_close, 14)
         _taiex_tech["rsi14"] = float(_rsi_s.iloc[-1]) if not _rsi_s.empty else None
@@ -2955,10 +2986,17 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
     except Exception:
         pass
     try:
+        _last_close = _close.iloc[-1]
         if len(_close) >= 60:
             _ma60 = _close.rolling(60).mean().iloc[-1]
-            _last_close = _close.iloc[-1]
             _taiex_tech["dist_ma60"] = (_last_close / _ma60 - 1) * 100 if _ma60 else None
+        if len(_close) >= 20:
+            _ma20 = _close.rolling(20).mean().iloc[-1]
+            _taiex_tech["dist_ma20"] = (_last_close / _ma20 - 1) * 100 if _ma20 else None
+        if len(_close) >= 6:
+            _taiex_tech["ret_5d"] = (_last_close / _close.iloc[-6] - 1) * 100
+        if len(_close) >= 21:
+            _taiex_tech["ret_20d"] = (_last_close / _close.iloc[-21] - 1) * 100
     except Exception:
         pass
 
@@ -2967,8 +3005,14 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         _tech_parts.append(f"RSI `{_taiex_tech['rsi14']:.0f}`")
     if _taiex_tech["macd_hist"] is not None:
         _tech_parts.append(f"MACD直方 `{_taiex_tech['macd_hist']:+.1f}`")
+    if _taiex_tech["dist_ma20"] is not None:
+        _tech_parts.append(f"距MA20 `{_taiex_tech['dist_ma20']:+.1f}%`")
     if _taiex_tech["dist_ma60"] is not None:
         _tech_parts.append(f"距MA60 `{_taiex_tech['dist_ma60']:+.1f}%`")
+    if _taiex_tech["ret_5d"] is not None:
+        _tech_parts.append(f"5日報酬 `{_taiex_tech['ret_5d']:+.1f}%`")
+    if _taiex_tech["ret_20d"] is not None:
+        _tech_parts.append(f"20日報酬 `{_taiex_tech['ret_20d']:+.1f}%`")
     taiex_block = ("📈 **加權技術**\n   " + " | ".join(_tech_parts)) if _tech_parts else ""
 
     # ── Claude 盤前解讀 ────────────────────────────────────────────────────────
@@ -2984,6 +3028,19 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         "nasdaq_ret":   _safe_float(_us_row.get("nasdaq_ret1")),
         "sox_ret":      _safe_float(_us_row.get("sox_ret1")),
         "tsm_adr_ret":  _safe_float(_us_row.get("tsm_adr_ret1")),
+        "market_revenue_yoy": (
+            round(float(revenue_signal_df["market_revenue_yoy"].iloc[-1]), 4)
+            if not revenue_signal_df.empty else None
+        ),
+        "market_foreign_holding_chg": (
+            round(float(holding_signal_df["market_foreign_holding_chg"].iloc[-1]), 4)
+            if not holding_signal_df.empty and "market_foreign_holding_chg" in holding_signal_df.columns
+            else None
+        ),
+        "buyback_count": len(buyback_stocks) if buyback_stocks else 0,
+        "disposition_count": len(disposition_stocks) if disposition_stocks else 0,
+        "jpy_ret": _safe_float(_us_row.get("jpy_ret1")),
+        "arkk_ret": _safe_float(_us_row.get("arkk_ret1")),
     }
     ai_insight = generate_premarket_insight(_pm_market, _taiex_tech)
 
@@ -3082,6 +3139,7 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
             "xgb_label": pred.get("label", ""),
             "market_data": {
                 "vix":         _safe_float(_us_row.get("vix")),
+                "sp500_ret":   _safe_float(_us_row.get("sp500_ret1")),
                 "nasdaq_ret":  _safe_float(_us_row.get("nasdaq_ret1")),
                 "sox_ret":     _safe_float(_us_row.get("sox_ret1")),
                 "tsm_adr_ret": _safe_float(_us_row.get("tsm_adr_ret1")),
@@ -3090,8 +3148,25 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
                 "pcr":         (round(_pcr_val, 3) if _pcr_val is not None else None),
                 "taiex_rsi":   _taiex_tech.get("rsi14"),
                 "macd_hist":   _taiex_tech.get("macd_hist"),
+                "dist_ma20":   _taiex_tech.get("dist_ma20"),
                 "dist_ma60":   _taiex_tech.get("dist_ma60"),
+                "taiex_ret_5d":  _taiex_tech.get("ret_5d"),
+                "taiex_ret_20d": _taiex_tech.get("ret_20d"),
+                "buyback_count": len(buyback_stocks) if buyback_stocks else 0,
+                "disposition_count": len(disposition_stocks) if disposition_stocks else 0,
+                "jpy_ret":   _safe_float(_us_row.get("jpy_ret1")),
+                "arkk_ret":  _safe_float(_us_row.get("arkk_ret1")),
+                "hyg_ret":   _safe_float(_us_row.get("hyg_ret1")),
                 "night_trend": (night_data.get("last_hour_trend") if isinstance(night_data, dict) else None),
+                "market_revenue_yoy": (
+                    round(float(revenue_signal_df["market_revenue_yoy"].iloc[-1]), 4)
+                    if not revenue_signal_df.empty else None
+                ),
+                "market_foreign_holding_chg": (
+                    round(float(holding_signal_df["market_foreign_holding_chg"].iloc[-1]), 4)
+                    if not holding_signal_df.empty and "market_foreign_holding_chg" in holding_signal_df.columns
+                    else None
+                ),
             },
         }
         if ai_insight:

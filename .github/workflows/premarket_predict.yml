@@ -1,8 +1,8 @@
 name: 盤前預測 (08:00 CST)
 
 on:
-  schedule:
-    - cron: '0 0 * * 1-5'   # 08:00 CST 週一~週五（台股開盤前）
+  # schedule:
+  #   - cron: '0 0 * * 1-5'   # 08:00 CST 週一~週五（台股開盤前）
   workflow_dispatch:
 
 permissions:

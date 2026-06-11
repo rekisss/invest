@@ -127,7 +127,7 @@ def fetch_taiwan_structure(
     # Night session
     try:
         from taiwan_futures import fetch_night_session
-        night = fetch_night_session(finmind_client, trade_date=end_date)
+        night = fetch_night_session(finmind_client, end_date)
         if night:
             struct.night_change = float(night.get("change", 0))
             struct.night_change_pct = float(night.get("change_pct", 0))
