@@ -1,8 +1,8 @@
 [
   {
     "date": "2026-06-11",
-    "generated_at": "09:50",
-    "xgb_prob_up": 0.443,
+    "generated_at": "13:14",
+    "xgb_prob_up": 0.415,
     "xgb_label": "偏空",
     "market_data": {
       "vix": null,
@@ -20,15 +20,15 @@
       "taiex_ret_5d": -6.9416261050644685,
       "taiex_ret_20d": 4.504146770492112,
       "buyback_count": 0,
-      "disposition_count": 0,
+      "disposition_count": 80,
       "jpy_ret": null,
       "arkk_ret": null,
       "hyg_ret": null,
       "night_trend": "↓ 走弱",
-      "market_revenue_yoy": null,
+      "market_revenue_yoy": 0.0749,
       "market_foreign_holding_chg": null
     },
-    "ai_insight": "# 今日操盤要點\n\n・外資期貨大幅淨賣超逾6萬口且現貨同步賣超，夜盤跌近千點走弱，開盤需注意破底風險與支撐力度。\n\n・加權指數雖距MA60仍有11.4%上升空間，但已接近MA20，RSI在中位、MACD直方深度負值，短線陷入盤整疲弱。\n\n・AI概率雖維持44%，但缺乏外資買盤支撐，建議控制風險部位，優先觀察大盤能否守住技術支撐再逢低介入。",
+    "ai_insight": "# 今日操盤要點\n\n・ 夜盤跌973點走弱且外資期貨大幅淨賣近6.2萬口，開盤應留意外資動向，短期震盪加劇，操作宜保持防守姿態。\n\n・ 處置股警示達80支創風險高峰，應迴避地雷個股，改以大型權值股及營收成長股（YoY +7.5%）作為防禦選擇。\n\n・ 加權指數雖距MA60有11.4%漲幅但貼近MA20（-0.3%），RSI 53處中位置，MACD直方轉弱，技術面短線整理",
     "regime": {
       "label": "double_whipsaw",
       "label_zh": "🔄 多空雙巴日",
