@@ -73,9 +73,10 @@ _STOOQ_SYMBOLS = {
 
 # FRED series — US Federal Reserve open data, not IP-blocked.
 # Covers most macro indicators; individual stocks (TSM, NVDA, ARKK, HYG)
-# and composite indices (NASDAQ, SOX) are not available on FRED.
+# and SOX are not available on FRED.
 _FRED_SERIES = {
     "sp500":  "SP500",        # S&P 500 (1-day lag on FRED)
+    "nasdaq": "NASDAQCOM",    # NASDAQ Composite
     "vix":    "VIXCLS",       # CBOE VIX
     "us10y":  "DGS10",        # 10-year Treasury yield
     "us2y":   "DGS2",         # 2-year Treasury yield
@@ -139,13 +140,12 @@ def _fetch_stooq_close(symbol: str, start_date: str, end_date: str) -> pd.Series
 
 
 def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
-    """Download US market indicators via yfinance. Returns empty DataFrame on failure."""
+    """Download US market indicators via yfinance with Stooq + FRED fallbacks."""
     if not _YF_OK:
         return pd.DataFrame()
     try:
         end_dt = (datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=2)).strftime("%Y-%m-%d")
 
-        # Download each ticker individually so one failure doesn't drop all features
         col_frames: list[pd.Series] = []
         failed: list[str] = []
         for key, ticker in _US_TICKERS.items():
@@ -181,7 +181,7 @@ def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
                 print(f"[ai] Stooq 後備補回 {len(recovered)} 個 ticker", file=sys.stderr)
 
         # FRED fallback — US Federal Reserve open data, not IP-blocked by any known provider.
-        # Covers macro signals (VIX, yields, gold, oil, FX); NASDAQ/SOX/individual stocks unavailable.
+        # Covers macro signals (VIX, yields, gold, oil, FX, NASDAQ); SOX/individual stocks unavailable.
         if failed:
             fred_recovered: list[str] = []
             for key, ticker in _US_TICKERS.items():
@@ -208,12 +208,10 @@ def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
         closes.index.name = "date"
         result = closes.reset_index()
 
-        # Compute 1-day returns and 5-day returns for each
         for col in [c for c in _US_TICKERS if c in result.columns]:
             result[f"{col}_ret1"] = result[col].pct_change(1)
             result[f"{col}_ret5"] = result[col].pct_change(5)
 
-        # Keep only derived features + date (drop raw prices to save memory)
         feat_cols = ["date"] + [c for c in result.columns if "_ret" in c or c == "vix"]
         result = result[[c for c in feat_cols if c in result.columns]]
         result["date"] = pd.to_datetime(result["date"]).dt.normalize()
