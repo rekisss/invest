@@ -158,7 +158,9 @@ class TestComputeMarketShareholdingSignal:
         client = _make_client()
         client.fetch_dataset.side_effect = RuntimeError("quota exceeded")
         data_loader._open_data_cache.clear()
-        with patch("data_loader._http_get_json", side_effect=RuntimeError("no network")):
+        # Also patch the TWSE open-data fallback (uses requests.get directly, not _http_get_json)
+        with patch("data_loader._http_get_json", side_effect=RuntimeError("no network")), \
+             patch("data_loader._opendata_market_shareholding_signal", return_value=pd.DataFrame()):
             result = compute_market_shareholding_signal(client, "2026-06-10")
         assert result.empty
 
