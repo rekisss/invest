@@ -7,7 +7,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from data_loader import compute_market_revenue_signal, compute_market_shareholding_signal
+from data_loader import (
+    compute_market_revenue_signal,
+    compute_market_shareholding_signal,
+    _inst_net_buy_shareholding_signal,
+)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -178,6 +182,64 @@ class TestComputeMarketShareholdingSignal:
         if not result.empty:
             dates = pd.to_datetime(result["date"])
             assert (dates.diff().dropna() >= pd.Timedelta(0)).all()
+
+
+# ── Institutional net-buy proxy for shareholding signal ───────────────────────
+
+def _inst_total_frame(n_days: int = 25) -> pd.DataFrame:
+    """Synthetic TaiwanStockTotalInstitutionalInvestors response."""
+    rows = []
+    base = pd.Timestamp("2026-06-10")
+    for d in range(n_days):
+        day = (base - pd.Timedelta(days=d)).strftime("%Y-%m-%d")
+        for inst, net in [("外資", 5_000_000_000), ("投信", 1_000_000_000), ("自營", -500_000_000)]:
+            rows.append({"name": inst, "date": day, "buy": max(0, net), "sell": max(0, -net)})
+    return pd.DataFrame(rows)
+
+
+class TestInstNetBuyShareholdingSignal:
+    def test_returns_correct_columns(self):
+        client = _make_client()
+        client.fetch_dataset.return_value = _inst_total_frame()
+        result = _inst_net_buy_shareholding_signal(client, "2026-06-10")
+        assert isinstance(result, pd.DataFrame)
+        assert not result.empty
+        assert "date" in result.columns
+        assert "market_foreign_holding_chg" in result.columns
+
+    def test_positive_when_foreign_net_buying(self):
+        client = _make_client()
+        client.fetch_dataset.return_value = _inst_total_frame()
+        result = _inst_net_buy_shareholding_signal(client, "2026-06-10")
+        assert not result.empty
+        assert result["market_foreign_holding_chg"].iloc[-1] > 0
+
+    def test_returns_empty_on_api_failure(self):
+        client = _make_client()
+        client.fetch_dataset.side_effect = RuntimeError("quota")
+        result = _inst_net_buy_shareholding_signal(client, "2026-06-10")
+        assert result.empty
+
+    def test_returns_empty_on_insufficient_rows(self):
+        client = _make_client()
+        # Only 2 days — pct_change(5) will all be NaN after rolling(5)
+        client.fetch_dataset.return_value = _inst_total_frame(n_days=2)
+        result = _inst_net_buy_shareholding_signal(client, "2026-06-10")
+        assert result.empty
+
+    def test_fallback_uses_inst_proxy_before_twse(self):
+        """compute_market_shareholding_signal uses inst proxy before TWSE open-data fallback."""
+        import data_loader
+        client = _make_client()
+        # FinMind shareholding fails (register level)
+        client.fetch_dataset.side_effect = [
+            RuntimeError("status=400 register"),  # TaiwanStockShareholding call
+            _inst_total_frame(),                   # TaiwanStockTotalInstitutionalInvestors call
+        ]
+        data_loader._open_data_cache.clear()
+        result = compute_market_shareholding_signal(client, "2026-06-10")
+        assert not result.empty
+        assert "market_foreign_holding_chg" in result.columns
 
 
 # ── MarketPredictor integration with new INST_FEATURES ─────────────────────────
