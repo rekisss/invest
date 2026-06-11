@@ -831,6 +831,9 @@ def _opendata_market_revenue_signal() -> pd.DataFrame:
         return pd.DataFrame()
 
 
+_QFIIS_TIMEOUT = 5  # seconds — keep short; TWSE can be slow from CI IPs
+
+
 def _opendata_shareholding_day(day: pd.Timestamp) -> pd.DataFrame:
     """單日 TWSE MI_QFIIS（外資及陸資持股統計），含快取與禮貌性延遲。"""
     key = f"qfiis::{day:%Y%m%d}"
@@ -838,11 +841,15 @@ def _opendata_shareholding_day(day: pd.Timestamp) -> pd.DataFrame:
         return _open_data_cache[key]  # type: ignore[return-value]
     frame = pd.DataFrame()
     try:
-        payload = _http_get_json(
+        resp = requests.get(
             _TWSE_QFIIS_URL,
             params={"date": day.strftime("%Y%m%d"), "selectType": "ALLBUT0999", "response": "json"},
+            timeout=_QFIIS_TIMEOUT,
+            headers={"accept": "application/json", "User-Agent": "Mozilla/5.0"},
         )
-        time.sleep(0.25)  # 禮貌性延遲，避免對 TWSE 過快連續請求
+        resp.raise_for_status()
+        payload = resp.json()
+        time.sleep(0.15)  # 禮貌性延遲，避免對 TWSE 過快連續請求
         if isinstance(payload, dict) and payload.get("stat") == "OK" and payload.get("data"):
             fields = [str(f) for f in payload.get("fields", [])]
             code_idx = next((i for i, f in enumerate(fields) if "代號" in f), 0)
@@ -867,14 +874,25 @@ def _opendata_shareholding_day(day: pd.Timestamp) -> pd.DataFrame:
     return frame
 
 
-def _opendata_shareholding(end_date: str, lookback: int) -> pd.DataFrame:
-    """外資持股比例 fallback：逐日抓 TWSE MI_QFIIS（僅上市；上櫃缺資料安全降級為 0）。"""
+def _opendata_shareholding(end_date: str, lookback: int, budget_s: float = 25.0) -> pd.DataFrame:
+    """外資持股比例 fallback：逐日抓 TWSE MI_QFIIS（僅上市；上櫃缺資料安全降級為 0）。
+
+    budget_s caps the total elapsed time so a slow/blocked TWSE never stalls the run.
+    """
     try:
-        target_days = max(6, min(int(lookback * 0.7) or 6, 15))
+        # pct_change(5) needs ≥6 rows; cap at 8 to stay well within budget
+        target_days = max(6, min(int(lookback * 0.6) or 6, 8))
         frames: list[pd.DataFrame] = []
         day = pd.Timestamp(end_date)
-        for _ in range(target_days + 10):  # 多留假日緩衝
+        deadline = time.monotonic() + budget_s
+        for _ in range(target_days + 14):  # extra buffer for weekends/holidays
             if len(frames) >= target_days:
+                break
+            if time.monotonic() > deadline:
+                print(
+                    f"[data_loader] 外資持股公開資料超時（{budget_s:.0f}s），已取得 {len(frames)} 日",
+                    file=sys.stderr,
+                )
                 break
             if day.dayofweek < 5:
                 f = _opendata_shareholding_day(day)
@@ -902,7 +920,7 @@ def _opendata_shareholding(end_date: str, lookback: int) -> pd.DataFrame:
 def _opendata_market_shareholding_signal(end_date: str) -> pd.DataFrame:
     """市場外資持股 5 日變化 fallback：MI_QFIIS 每日中位數 → pct_change(5)。"""
     try:
-        frame = _opendata_shareholding(end_date, lookback=20)
+        frame = _opendata_shareholding(end_date, lookback=10, budget_s=25.0)
         if frame.empty:
             return pd.DataFrame()
         daily = frame.groupby("date")["ForeignInvestmentSharesRatio"].median().sort_index()

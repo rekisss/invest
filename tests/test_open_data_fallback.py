@@ -162,8 +162,15 @@ class TestMonthlyRevenueFallback:
 # ── Shareholding fallback ─────────────────────────────────────────────────────
 
 class TestShareholdingFallback:
+    @staticmethod
+    def _mock_requests_get(url, **kwargs):
+        mock = MagicMock()
+        mock.raise_for_status.return_value = None
+        mock.json.return_value = QFIIS_PAYLOAD
+        return mock
+
     def test_parses_qfiis_ratio_column(self):
-        with patch("data_loader._http_get_json", side_effect=_fake_http):
+        with patch("data_loader.requests.get", side_effect=self._mock_requests_get):
             frame = _opendata_shareholding("2026-06-10", lookback=10)
         assert not frame.empty
         assert set(frame.columns) == {"stock_id", "date", "ForeignInvestmentSharesRatio"}
@@ -173,13 +180,13 @@ class TestShareholdingFallback:
     def test_finmind_failure_triggers_fallback(self):
         client = MagicMock()
         client.fetch_dataset.side_effect = RuntimeError("status=400 level register")
-        with patch("data_loader._http_get_json", side_effect=_fake_http):
+        with patch("data_loader.requests.get", side_effect=self._mock_requests_get):
             frame = fetch_all_shareholding(client, "2026-06-10", lookback=10)
         assert not frame.empty
         assert "ForeignInvestmentSharesRatio" in frame.columns
 
     def test_market_signal_structure(self):
-        with patch("data_loader._http_get_json", side_effect=_fake_http):
+        with patch("data_loader.requests.get", side_effect=self._mock_requests_get):
             sig = _opendata_market_shareholding_signal("2026-06-10")
         # Constant ratios across days → 5d change = 0, but structure must hold
         if not sig.empty:
@@ -187,7 +194,9 @@ class TestShareholdingFallback:
             assert (sig["market_foreign_holding_chg"] == 0).all()
 
     def test_network_failure_returns_empty(self):
-        with patch("data_loader._http_get_json", side_effect=RuntimeError("down")):
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = RuntimeError("down")
+        with patch("data_loader.requests.get", return_value=mock_resp):
             assert _opendata_shareholding("2026-06-10", lookback=10).empty
             assert _opendata_market_shareholding_signal("2026-06-10").empty
 
