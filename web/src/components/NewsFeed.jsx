@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 
 const CUSTOM_RULES_KEY = 'news_custom_rules'
 const CUSTOM_COLORS = ['#58a6ff', '#3fb950', '#ffa657', '#f85149', '#bc8cff', '#f9c74f', '#79c0ff', '#56d364']
 const CUSTOM_ICONS = ['📌', '⭐', '🏭', '💡', '🔥', '🏗️', '💰', '🎯', '🔋', '🚀', '🌐', '🏆']
+
+const REFRESH_INTERVAL = 5 * 60 * 1000   // 5 min
+const NEW_BADGE_MS     = 30 * 60 * 1000  // items < 30 min old get NEW badge
 
 function loadCustomRules() {
   try { return JSON.parse(localStorage.getItem(CUSTOM_RULES_KEY) || '[]') } catch { return [] }
@@ -39,6 +42,13 @@ const QUERIES = [
   { q: '半導體 CoWoS 先進封裝 when:1d' },
   { q: '生技 醫療 新藥 FDA when:1d' },
   { q: '聯準會 Fed 降息 升息 when:1d' },
+]
+
+// Direct RSS sources — fetched in addition to Google News search
+const DIRECT_RSS = [
+  { url: 'https://money.udn.com/rssfeed/news/1001/5591', name: '經濟日報' },
+  { url: 'https://www.moneydj.com/RSS/news.aspx',        name: 'MoneyDJ' },
+  { url: 'https://news.cnyes.com/rss/category/tw_stock', name: '鉅亨網' },
 ]
 
 async function fetchRSS(rssUrl) {
@@ -157,16 +167,24 @@ function parseRSS(xml) {
 
 async function loadLiveNews() {
   const allNews = []
-  const results = await Promise.allSettled(
-    QUERIES.map(async ({ q }) => {
-      const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`
-      return (await fetchRSS(rssUrl)).slice(0, 8)
-    })
-  )
+
+  // Fetch Google News queries + direct RSS sources in parallel
+  const googleFetches = QUERIES.map(async ({ q }) => {
+    const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`
+    return (await fetchRSS(rssUrl)).slice(0, 8)
+  })
+  const directFetches = DIRECT_RSS.map(async ({ url, name }) => {
+    const items = await fetchRSS(url)
+    return items.slice(0, 10).map(i => ({ ...i, source: i.source || name }))
+  })
+
+  const results = await Promise.allSettled([...googleFetches, ...directFetches])
   for (const r of results) {
     if (r.status === 'fulfilled') allNews.push(...r.value)
   }
+
   const seen = new Set()
+  const now = Date.now()
   return allNews
     .filter(item => {
       const key = item.title.slice(0, 30)
@@ -176,10 +194,18 @@ async function loadLiveNews() {
     })
     .map(item => {
       const tags = detectTags(item.title, item.summary)
-      return { ...item, tags }
+      const ts = item.published ? new Date(item.published).getTime() : 0
+      const isNew = ts > 0 && (now - ts) < NEW_BADGE_MS
+      return { ...item, tags, _ts: ts, isNew }
     })
-    .sort((a, b) => new Date(b.published || 0) - new Date(a.published || 0))
-    .slice(0, 60)
+    // Items with no date go to bottom; otherwise newest first
+    .sort((a, b) => {
+      if (!a._ts && !b._ts) return 0
+      if (!a._ts) return 1
+      if (!b._ts) return -1
+      return b._ts - a._ts
+    })
+    .slice(0, 80)
 }
 
 function buildTrending(news) {
@@ -485,7 +511,17 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
           fontSize: 16,
         }}>{rule?.icon || '📰'}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.5, color: 'var(--ios-label)', letterSpacing: '-0.1px' }}>{item.title}</div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+            {item.isNew && (
+              <span style={{
+                flexShrink: 0, fontSize: 9, fontWeight: 800, color: '#fff',
+                background: 'var(--ios-red)', borderRadius: 4, padding: '2px 5px',
+                letterSpacing: 0.3, lineHeight: 1.4, marginTop: 2,
+                animation: 'newBlink 1.5s ease-in-out 3',
+              }}>NEW</span>
+            )}
+            <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.5, color: 'var(--ios-label)', letterSpacing: '-0.1px' }}>{item.title}</div>
+          </div>
           <div style={{ display: 'flex', gap: 5, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             <SentimentBadge sentiment={sentiment} />
             <Stars n={importance} />
@@ -576,6 +612,14 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
   const [filter, setFilter] = useState('all')
   const [customRules, setCustomRules] = useState(loadCustomRules)
   const [showCustomPanel, setShowCustomPanel] = useState(false)
+  const [nowTs, setNowTs] = useState(Date.now())
+  const clockRef = useRef(null)
+
+  // Tick every 30 s so "N 分前更新" label stays current
+  useEffect(() => {
+    clockRef.current = setInterval(() => setNowTs(Date.now()), 30_000)
+    return () => clearInterval(clockRef.current)
+  }, [])
 
   const doFetch = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -601,7 +645,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
 
   useEffect(() => {
     doFetch(false)
-    const timer = setInterval(() => doFetch(true), 10 * 60 * 1000)
+    const timer = setInterval(() => doFetch(true), REFRESH_INTERVAL)
     return () => clearInterval(timer)
   }, [doFetch])
 
@@ -640,6 +684,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <style>{`@keyframes newBlink{0%,100%{opacity:1}50%{opacity:0.35}}`}</style>
       {/* Trending bar */}
       {news.length > 0 && (
         <TrendingBar news={news} onFilter={tag => { setFilter(tag); setOpenIdx(null) }} />
@@ -671,9 +716,11 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 12px 7px' }}>
           <div style={{ fontSize: 10, color: 'var(--ios-label3)' }}>
-            {lastUpdated
-              ? `即時新聞 · 更新於 ${lastUpdated.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`
-              : '即時新聞'}
+            {lastUpdated ? (() => {
+              const diffMin = Math.round((nowTs - lastUpdated.getTime()) / 60_000)
+              const label = diffMin <= 0 ? '剛剛' : diffMin < 60 ? `${diffMin} 分前` : `${Math.round(diffMin / 60)} 小時前`
+              return `即時新聞 · ${label}更新`
+            })() : '即時新聞'}
             {refreshing && <span style={{ marginLeft: 6 }}>· 更新中…</span>}
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
