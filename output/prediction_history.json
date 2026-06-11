@@ -1,7 +1,7 @@
 [
   {
     "date": "2026-06-11",
-    "generated_at": "17:53",
+    "generated_at": "18:43",
     "xgb_prob_up": 0.416,
     "xgb_label": "偏空",
     "market_data": {
@@ -20,7 +20,7 @@
       "taiex_ret_5d": -5.400553899027328,
       "taiex_ret_20d": 3.503770977228826,
       "buyback_count": 0,
-      "disposition_count": 80,
+      "disposition_count": 84,
       "jpy_ret": null,
       "arkk_ret": null,
       "hyg_ret": null,
@@ -28,7 +28,7 @@
       "market_revenue_yoy": 0.0859,
       "market_foreign_holding_chg": -6.5065
     },
-    "ai_insight": "# 今日操盤要點\n\n・外資連續賣超期貨逾6萬口且現貨持股5日下滑6.51%，夜盤跌626點顯示短期承接力道不足，宜控制風險部位並留意技術破位。\n\n・處置股達80支創風險警示，加權指數雖距MA60近11%但距MA20僅差0.5%，MACD直方轉負呈弱勢整理，反彈機會宜謹慎介入。\n\n・市場月營收年增8.6%基本面尚可，惟AI上漲機率僅42%顯示漲勢動能減弱，建議聚焦類",
+    "ai_insight": "# 今日操盤要點\n\n・夜盤跌幅擴大至626點且外資期貨淨空單逾6萬口，搭配現貨連5日淨賣超，建議謹慎看待開盤走勢，短線偏弱格局尚未改善。\n\n・處置股警示達84支創風險高位，加權RSI中性偏弱且MACD直方線持續走負，宜迴避低檔股票並留意融資爆量個股的補跌風險。\n\n・股價已反彈至MA20上方但距MA60仍有距離，月營收年增8.6%基本面未崩，可逢低佈局但應以",
     "regime": {
       "label": "double_whipsaw",
       "label_zh": "🔄 多空雙巴日",
