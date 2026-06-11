@@ -1,18 +1,22 @@
-import { useState } from 'react'
+import { useState, useMemo, memo } from 'react'
 
 /* ── SVG Direction Gauge ─────────────────────────────────────────── */
-function DirectionGauge({ prob = 0.5, winRate }) {
-  const pct = Math.max(2, Math.min(98, Math.round((prob ?? 0.5) * 100)))
-  const isBull = pct >= 55, isBear = pct <= 45
-  const color = isBull ? '#30D158' : isBear ? '#FF453A' : '#FF9F0A'
-  const confidence = isBull ? pct : isBear ? (100 - pct) : 50
-
-  const cx = 80, cy = 72, r = 58
-  const ang = ((-180 + pct * 1.8) * Math.PI) / 180
-  const nx = (cx + r * Math.cos(ang)).toFixed(2)
-  const ny = (cy + r * Math.sin(ang)).toFixed(2)
-  const nx2 = (cx + (r - 16) * Math.cos(ang)).toFixed(2)
-  const ny2 = (cy + (r - 16) * Math.sin(ang)).toFixed(2)
+const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
+  const { pct, isBull, isBear, color, confidence, cx, cy, r, nx, ny, nx2, ny2 } = useMemo(() => {
+    const pct = Math.max(2, Math.min(98, Math.round((prob ?? 0.5) * 100)))
+    const isBull = pct >= 55, isBear = pct <= 45
+    const color = isBull ? '#30D158' : isBear ? '#FF453A' : '#FF9F0A'
+    const confidence = isBull ? pct : isBear ? (100 - pct) : 50
+    const cx = 80, cy = 72, r = 58
+    const ang = ((-180 + pct * 1.8) * Math.PI) / 180
+    return {
+      pct, isBull, isBear, color, confidence, cx, cy, r,
+      nx:  (cx + r * Math.cos(ang)).toFixed(2),
+      ny:  (cy + r * Math.sin(ang)).toFixed(2),
+      nx2: (cx + (r - 16) * Math.cos(ang)).toFixed(2),
+      ny2: (cy + (r - 16) * Math.sin(ang)).toFixed(2),
+    }
+  }, [prob])
 
   return (
     <div className="glass-panel" style={{ flex: 1, padding: '12px 12px 10px', display: 'flex', flexDirection: 'column' }}>
@@ -47,7 +51,7 @@ function DirectionGauge({ prob = 0.5, winRate }) {
       </div>
     </div>
   )
-}
+})
 
 /* ── Risk Card ───────────────────────────────────────────────────── */
 function RiskCard({ risk, marketData }) {
