@@ -317,6 +317,18 @@ function processScanData() {
       momentum_score: r2(row.momentum_score), relative_strength_5d: r2(row.relative_strength_5d),
       return_5d: r2(row.return_5d), day_return: r2(row.day_return),
       skip_reason: row.skip_reason || '',
+      // cross-sectional signals (added by Wave 2 scan_enrich.py)
+      grade: row.grade || '',
+      score_pct: toNum(row.score_pct),
+      regime_label: row.regime_label || '',
+      market_rs_rank: toNum(row.market_rs_rank),
+      sector_rs: r2(row.sector_rs),
+      sector_rs_rank: toNum(row.sector_rs_rank),
+      sector_breadth_60: toNum(row.sector_breadth_60),
+      sector_vol_zscore: r2(row.sector_vol_zscore),
+      is_sector_leader: toBool(row.is_sector_leader),
+      sector_stock_count: toNum(row.sector_stock_count),
+      data_quality_ok: toBool(row.data_quality_ok),
       // attach price history only for latest date (to keep JSON lean)
       price_history: isLatest ? (priceHistoryMap[row.stock_id] || []) : undefined,
       ...extra,
@@ -618,6 +630,18 @@ if (aggregateLatest) {
       momentum_score: r.momentum_score || 0, relative_strength_5d: r.relative_strength_5d || 0,
       return_5d: r.return_5d || 0, day_return: r.day_return || 0,
       skip_reason: r.skip_reason || '',
+      // cross-sectional signals
+      grade: r.grade || '',
+      score_pct: r.score_pct || 0,
+      regime_label: r.regime_label || '',
+      market_rs_rank: r.market_rs_rank || 0,
+      sector_rs: r.sector_rs || 0,
+      sector_rs_rank: r.sector_rs_rank || 0,
+      sector_breadth_60: r.sector_breadth_60 || 0,
+      sector_vol_zscore: r.sector_vol_zscore || 0,
+      is_sector_leader: !!r.is_sector_leader,
+      sector_stock_count: r.sector_stock_count || 0,
+      data_quality_ok: !!r.data_quality_ok,
       price_history: undefined,   // no OHLCV history in aggregate JSON (CSV already deleted)
     }))
     const aggLimitDown = (aggregateLatest.limit_down_alerts || []).map(r => ({
@@ -638,6 +662,7 @@ if (aggregateLatest) {
       })),
       margin_stats: aggregateLatest.margin_stats || {},
       ai_picks_text: aggregateLatest.ai_picks_text || '',
+      calendar_risk: aggregateLatest.calendar_risk || '',
       from_aggregate_json: true,
     }
     if (!dates.includes(aggDate)) dates.unshift(aggDate)
