@@ -297,6 +297,13 @@ def _enrich_fscores(df: pd.DataFrame, token: str) -> pd.DataFrame:
                 continue
             if not _diag_logged:
                 _log(f"財報欄位診斷（{sid}）: income={list(inc.columns[:8])} bal={list(bal.columns[:8])} cf={list(cf.columns[:8])}")
+                # Show pivoted balance sheet column names — these must match fundamentals.py aliases
+                try:
+                    from fundamentals import _pivot as _fp
+                    bal_wide = _fp(bal)
+                    _log(f"  資產負債表 pivot 欄位：{list(bal_wide.columns[:15])}")
+                except Exception as _pe:
+                    _log(f"  pivot 失敗：{_pe}")
                 _diag_logged = True
             result = compute_f_score(inc, bal, cf)
             if isinstance(result, dict) and "f_score" in result:
