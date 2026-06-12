@@ -1,0 +1,147 @@
+name: 全盤掃描2（橫截面信號 + F-Score 補抓）
+
+# 架構說明：
+# Wave 1（全盤掃描）每支股票獨立計算，無法取得跨股票的相對信號。
+# Wave 2（本 workflow）在 Wave 1 提交後執行：
+#   1. 橫截面信號（純計算，不需 API）：
+#      - sector_rs:         個股分數 vs 同類股中位數
+#      - sector_rs_rank:    類股內百分位排名
+#      - market_rs_rank:    全市場百分位排名
+#      - sector_breadth_60: 同類股站上 EMA60 比例
+#      - sector_vol_zscore: 量比相對類股 z-score
+#      - is_sector_leader:  類股前 3 名旗手
+#   2. F-Score 補抓（Wave 1 配額重置後，補抓 f_score == -1 的股票）
+#
+# 觸發方式：
+#   - 自動：Wave 1（全市場掃描）完成後自動觸發
+#   - 手動：workflow_dispatch（可指定日期與是否補抓 F-Score）
+#
+# 完成後彙整（全市場彙整 TOP 20）可使用包含橫截面信號的完整資料。
+
+on:
+  workflow_run:
+    workflows: ["全市場掃描"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "掃描日期（YYYY-MM-DD，留空自動取最新）"
+        required: false
+        default: ""
+      skip_fscore:
+        description: "跳過 F-Score 補抓（節省配額）"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout（含 Wave 1 batch_seq CSV）
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest Wave 1 results
+        run: git pull --rebase origin main || true
+
+      - name: 確認 Wave 1 資料存在
+        id: check
+        run: |
+          DATE="${{ github.event.inputs.date }}"
+          if [ -z "$DATE" ]; then
+            DATE=$(ls output/full_scan/batch_seq*_*.csv 2>/dev/null \
+                   | grep -oP '\d{4}-\d{2}-\d{2}' | sort | tail -1)
+          fi
+          if [ -z "$DATE" ]; then
+            echo "❌ 找不到任何 batch_seq CSV，請先執行全盤掃描" >&2
+            exit 1
+          fi
+          COUNT=$(ls output/full_scan/batch_seq*_${DATE}.csv 2>/dev/null | wc -l)
+          ROWS=$(for f in output/full_scan/batch_seq*_${DATE}.csv; do
+                   [ -f "$f" ] && tail -n +2 "$f" | wc -l; done | awk '{s+=$1}END{print s}')
+          echo "date=$DATE"    >> "$GITHUB_OUTPUT"
+          echo "csv_count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "total_rows=$ROWS" >> "$GITHUB_OUTPUT"
+          echo "Wave 1 資料：$COUNT 個批次 / $ROWS 支股票 / 日期 $DATE"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: 執行橫截面信號補充
+        env:
+          # 使用任一帳號（Wave 1 結束後配額已重置）
+          FINMIND_TOKEN:   ${{ github.event.inputs.skip_fscore == 'true' && '' || secrets.FINMIND_TOKEN }}
+          FINMIND_TOKEN_2: ${{ github.event.inputs.skip_fscore == 'true' && '' || secrets.FINMIND_TOKEN_2 }}
+        run: |
+          python scan_enrich.py \
+            --scan-dir output/full_scan \
+            --date "${{ steps.check.outputs.date }}"
+
+      - name: 顯示補充結果摘要
+        run: |
+          DATE="${{ steps.check.outputs.date }}"
+          echo "=== 橫截面信號補充摘要 ==="
+          for f in output/full_scan/batch_seq*_${DATE}.csv; do
+            if [ -f "$f" ]; then
+              ROWS=$(tail -n +2 "$f" | wc -l)
+              # Check if sector_rs column exists (first CSV only)
+              HAS_RS=$(head -1 "$f" | grep -c "sector_rs" || true)
+              echo "  $(basename $f): $ROWS 支 (sector_rs=$([ $HAS_RS -gt 0 ] && echo '✓' || echo '✗'))"
+            fi
+          done
+
+      - name: Commit enriched CSVs
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          git pull --rebase -X theirs origin main || true
+          git add output/full_scan/ || true
+          DATE="${{ steps.check.outputs.date }}"
+          git diff --staged --quiet || git commit -m "scan2: 橫截面補充 ${DATE} (${ROWS:-?}支)"
+          for i in 1 2 3; do
+            git push && break
+            sleep $((i * 10))
+            git pull --rebase -X theirs origin main || true
+            git add output/full_scan/ || true
+            git diff --staged --quiet || git commit -m "scan2: 橫截面補充 ${DATE} retry${i}" || true
+          done
+
+      - name: Notify Discord 完成
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          DATE="${{ steps.check.outputs.date }}"
+          ROWS="${{ steps.check.outputs.total_rows }}"
+          STATUS="${{ job.status }}"
+          EMOJI=$([ "$STATUS" = "success" ] && echo "✅" || echo "⚠️")
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"${EMOJI} **全盤掃描2完成** · ${DATE} · ${ROWS} 支股票已補充橫截面信號（類股相對強弱、廣度、旗手）\"}" \
+            "$DISCORD_WEBHOOK_URL" || true
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"content\": \"⚠️ **全盤掃描2失敗** · $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST · 請檢查 Actions logs\"}" \
+            "$DISCORD_WEBHOOK_URL" || true
