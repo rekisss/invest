@@ -255,15 +255,15 @@ def _enrich_fscores(df: pd.DataFrame, token: str) -> pd.DataFrame:
         df["f_score_enriched"] = -1
         return df
 
-    # Limit to top 50 by entry_score to avoid burning hourly quota (3 API calls per stock)
+    # Limit to top 10 by entry_score to get diagnostic data without burning 13+ min on zero results
     if "entry_score" in df.columns:
         missing_df = df[pd.to_numeric(df["f_score"], errors="coerce").fillna(-1) < 0]
-        if len(missing_df) > 50:
+        if len(missing_df) > 10:
             missing_ids = (
                 missing_df.sort_values("entry_score", ascending=False)
-                .head(50)["stock_id"].astype(str).tolist()
+                .head(10)["stock_id"].astype(str).tolist()
             )
-            _log(f"限制補抓前 50 支（依分數排序，每支 3 API 呼叫）")
+            _log(f"限制補抓前 10 支（診斷模式，待確認財報欄位後再擴增）")
 
     try:
         from data_loader import FinMindClient, fetch_fundamentals
@@ -284,6 +284,7 @@ def _enrich_fscores(df: pd.DataFrame, token: str) -> pd.DataFrame:
         client._auth_headers_cache = {"Authorization": f"Bearer {token}"}
 
     ok = fail = data_miss = 0
+    _diag_logged = False  # log columns for the first non-empty stock only
     for sid in missing_ids:
         try:
             fundamentals = fetch_fundamentals(client, sid, start_date, end_date)
@@ -294,6 +295,9 @@ def _enrich_fscores(df: pd.DataFrame, token: str) -> pd.DataFrame:
                 data_miss += 1
                 time.sleep(0.5)
                 continue
+            if not _diag_logged:
+                _log(f"財報欄位診斷（{sid}）: income={list(inc.columns[:8])} bal={list(bal.columns[:8])} cf={list(cf.columns[:8])}")
+                _diag_logged = True
             result = compute_f_score(inc, bal, cf)
             if isinstance(result, dict) and "f_score" in result:
                 fs = result["f_score"]
