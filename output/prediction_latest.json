@@ -1,8 +1,8 @@
 {
-  "date": "2026-06-11",
-  "generated_at": "18:43",
-  "xgb_prob_up": 0.416,
-  "xgb_label": "偏空",
+  "date": "2026-06-12",
+  "generated_at": "08:03",
+  "xgb_prob_up": 0.686,
+  "xgb_label": "看多",
   "market_data": {
     "vix": null,
     "sp500_ret": null,
@@ -10,38 +10,38 @@
     "sox_ret": null,
     "tsm_adr_ret": null,
     "futures_net": -63168.0,
-    "night_change": -626.0,
+    "night_change": 1007.0,
     "pcr": null,
-    "taiex_rsi": 52.473119090231485,
-    "macd_hist": -787.1770123500223,
+    "taiex_rsi": 52.473119067115775,
+    "macd_hist": -787.1770123261963,
     "dist_ma20": -0.4844550748266174,
     "dist_ma60": 10.850754456674473,
     "taiex_ret_5d": -5.400553899027328,
     "taiex_ret_20d": 3.503770977228826,
     "buyback_count": 0,
-    "disposition_count": 84,
+    "disposition_count": 76,
     "jpy_ret": null,
     "arkk_ret": null,
     "hyg_ret": null,
-    "night_trend": "↓ 走弱",
-    "market_revenue_yoy": 0.0859,
+    "night_trend": "↑ 偏強",
+    "market_revenue_yoy": 0.093,
     "market_foreign_holding_chg": -6.5065
   },
-  "ai_insight": "# 今日操盤要點\n\n・夜盤跌幅擴大至626點且外資期貨淨空單逾6萬口，搭配現貨連5日淨賣超，建議謹慎看待開盤走勢，短線偏弱格局尚未改善。\n\n・處置股警示達84支創風險高位，加權RSI中性偏弱且MACD直方線持續走負，宜迴避低檔股票並留意融資爆量個股的補跌風險。\n\n・股價已反彈至MA20上方但距MA60仍有距離，月營收年增8.6%基本面未崩，可逢低佈局但應以",
+  "ai_insight": "# 今日操盤要點\n\n・夜盤強勢上漲逾千點，惟外資期貨大幅淨賣超逾六萬口且現貨持股連跌，應留意高檔震盪與外資籌碼變化，短線不宜過度樂觀。\n\n・處置股達76支創高風險警示，加權指數雖距MA60正乖離但接近MA20，建議避開地雷個股，以防黑天鵝事件衝擊。\n\n・AI族群漲勢概率偏高惟缺乏題材支撐，MACD空頭走弱配合月營收年增動能，操作上應聚焦",
   "regime": {
-    "label": "double_whipsaw",
-    "label_zh": "🔄 多空雙巴日",
-    "win_rate": 45.0
+    "label": "range_bound",
+    "label_zh": "😴 區間震盪日",
+    "win_rate": 53.0
   },
   "scenario": {
-    "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
-    "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
+    "main_scenario": "無強烈方向訊號，台股可能在區間內震盪，注意盤中族群輪動",
+    "best_strategy": "區間操作 / 選強勢族群個股 / 勿重押方向",
     "danger_signals": [
       "外資空單極重（-63,168口），軋空風險高",
-      "夜盤缺口 -626pt 過大，易反轉"
+      "夜盤缺口 +1007pt 過大，易反轉"
     ],
     "forbidden_actions": [
-      "禁止追空缺口超過200pt",
+      "禁止追多缺口超過200pt",
       "禁止反彈高點追多（軋空陷阱）"
     ]
   },
@@ -56,13 +56,13 @@
       },
       {
         "name": "夜盤大缺口",
-        "description": "夜盤 -626pt，開盤後可能快速反轉",
+        "description": "夜盤 +1007pt，開盤後可能快速反轉",
         "action": "禁止追缺口超過200pt"
       }
     ]
   },
   "news_sentiment": {
-    "market_impact": 0.24,
+    "market_impact": 0.03,
     "key_events": [],
     "bullish_count": 0,
     "bearish_count": 0
