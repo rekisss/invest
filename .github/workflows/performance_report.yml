@@ -1,0 +1,47 @@
+name: Weekly Performance Report
+
+on:
+  schedule:
+    # Every Monday 09:00 CST = 01:00 UTC
+    - cron: "0 1 * * 1"
+  workflow_dispatch:
+    inputs:
+      holding_days:
+        description: "Holding period (calendar days)"
+        default: "7"
+        required: false
+      top_n:
+        description: "Top N picks to evaluate"
+        default: "20"
+        required: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run performance report
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python performance_tracker.py \
+            --scan-dir output/full_scan \
+            --holding-days ${{ github.event.inputs.holding_days || '7' }} \
+            --top-n ${{ github.event.inputs.top_n || '20' }} \
+            --notify
