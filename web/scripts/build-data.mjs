@@ -253,12 +253,15 @@ function processScanData() {
     } catch (e) { console.warn(`Skip ${file}: ${e.message}`) }
   }
   // Filter out dates with too few unique stocks (incomplete / partial scans)
+  // Exception: always include the most recent available date (even if partial)
+  // so users see today's data immediately after the scan completes.
   const uniqueCountPerDate = {}
   for (const [date, rows] of Object.entries(dateMap)) {
     uniqueCountPerDate[date] = new Set(rows.map(r => r.stock_id)).size
   }
-  const dates = Object.keys(dateMap).sort().reverse()
-    .filter(d => uniqueCountPerDate[d] >= MIN_VALID_STOCKS)
+  const _allDatesDesc = Object.keys(dateMap).sort().reverse()
+  const dates = _allDatesDesc
+    .filter((d, i) => i === 0 || uniqueCountPerDate[d] >= MIN_VALID_STOCKS)
     .slice(0, MAX_DATES)
   const scans = {}
   const stockHistory = {}
