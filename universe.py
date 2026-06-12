@@ -98,7 +98,7 @@ def build_auto_universe(stock_info: pd.DataFrame, max_symbols: int = 120) -> pd.
     frame = stock_info.copy()
     frame["stock_id"] = frame["stock_id"].astype(str).str.strip()
     frame["stock_name"] = frame["stock_name"].astype(str).str.strip()
-    frame["industry_category"] = frame["industry_category"].astype(str).str.strip()
+    frame["industry_category"] = frame["industry_category"].fillna("其他").astype(str).str.strip().replace("nan", "其他").replace("", "其他")
     frame["type"] = frame["type"].astype(str).str.strip().str.lower()
 
     frame = frame[frame["stock_id"].map(_is_numeric_stock_id)]
