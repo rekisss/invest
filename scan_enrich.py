@@ -103,6 +103,7 @@ def _save_enriched(df: pd.DataFrame, scan_dir: Path, date: str) -> None:
                 "sector_rs", "sector_rs_rank", "market_rs_rank",
                 "sector_breadth_60", "sector_vol_zscore",
                 "is_sector_leader", "sector_stock_count",
+                "grade",
             ]
             for col in _new_cols:
                 if col in df.columns:
@@ -255,15 +256,16 @@ def _enrich_fscores(df: pd.DataFrame, token: str) -> pd.DataFrame:
         df["f_score_enriched"] = -1
         return df
 
-    # Limit to top 10 by entry_score to get diagnostic data without burning 13+ min on zero results
+    # Limit to top 200 by entry_score to avoid burning entire quota on one enrichment run.
+    # F-Score fetch makes 3 API calls per stock; 200 stocks ≈ 600 calls ≈ 1 hour quota.
     if "entry_score" in df.columns:
         missing_df = df[pd.to_numeric(df["f_score"], errors="coerce").fillna(-1) < 0]
-        if len(missing_df) > 10:
+        if len(missing_df) > 200:
             missing_ids = (
                 missing_df.sort_values("entry_score", ascending=False)
-                .head(10)["stock_id"].astype(str).tolist()
+                .head(200)["stock_id"].astype(str).tolist()
             )
-            _log(f"限制補抓前 10 支（診斷模式，待確認財報欄位後再擴增）")
+            _log(f"限制補抓前 200 支（共 {len(missing_df)} 支缺失）")
 
     try:
         from data_loader import FinMindClient, fetch_fundamentals
@@ -356,6 +358,73 @@ def _fetch_industry_map(token: str) -> dict[str, str]:
         return {}
 
 
+# ── A/B/C/D 可交易等級 ────────────────────────────────────────────────────────
+
+def _assign_grades(df: pd.DataFrame) -> pd.DataFrame:
+    """Assign tradability grade A/B/C/D/X to each stock.
+
+    X — immediate exclusion (limit-down streak, very low f_score, nearly no volume)
+    D — risky / weak signal (high RSI without entry, low volume, f_score poor)
+    C — chasing risk (overbought / overextended from MA)
+    B — valid entry with caution flag (RSI/return borderline)
+    A — cleanest entry (all conditions met, institutional buying confirmed)
+
+    Uses sector_breadth_60 when available (Wave-2 enriched), otherwise falls back.
+    """
+    g = pd.Series("D", index=df.index, name="grade")
+
+    def _col(name: str, default=0.0) -> pd.Series:
+        if name in df.columns:
+            return pd.to_numeric(df[name], errors="coerce").fillna(default)
+        return pd.Series(default, index=df.index)
+
+    entry_signal     = df["entry_signal"].astype(bool) if "entry_signal" in df.columns else pd.Series(False, index=df.index)
+    condition_count  = _col("condition_count")
+    rsi14            = _col("rsi14", 50)
+    return_5d        = _col("return_5d") * 100          # convert to %
+    volume_ratio     = _col("volume_ratio", 1.0)
+    foreign_streak   = _col("foreign_buy_streak")
+    trust_streak     = _col("invest_trust_streak")
+    f_score          = _col("f_score", -1)
+    limit_down       = _col("limit_down_streak")
+    sector_breadth   = _col("sector_breadth_60", 50)    # default 50% if not enriched
+    margin_chg       = _col("margin_change_5d")
+
+    # X: immediate exclusion
+    x_mask = (limit_down >= 1) | (f_score.between(0, 2)) | (volume_ratio < 0.3)
+    g[x_mask] = "X"
+
+    # D: base (already set)
+    # C: overbought / overextended
+    c_mask = (~x_mask) & ((return_5d >= 20) | (rsi14 >= 80))
+    g[c_mask] = "C"
+
+    # B: valid entry but with at least one caution flag
+    b_mask = (
+        (~x_mask) & (~c_mask) & entry_signal
+        & (condition_count >= 6)
+        & ((rsi14 >= 75) | (return_5d >= 12) | (margin_chg > 5) | (volume_ratio < 1.0))
+    )
+    g[b_mask] = "B"
+
+    # A: cleanest entry — all conditions tight, institutional confirmation, sector healthy
+    institutional_ok = (foreign_streak >= 2) | (trust_streak >= 2)
+    a_mask = (
+        (~x_mask) & (~c_mask) & entry_signal
+        & (condition_count >= 7)
+        & (rsi14 < 75)
+        & (return_5d < 12)
+        & (volume_ratio >= 1.5)
+        & institutional_ok
+        & (sector_breadth >= 40)
+    )
+    g[a_mask] = "A"
+
+    df = df.copy()
+    df["grade"] = g
+    return df
+
+
 # ── 主流程 ─────────────────────────────────────────────────────────────────────
 
 def run_enrichment(scan_dir: Path, date: str, token: str = "") -> None:
@@ -394,7 +463,13 @@ def run_enrichment(scan_dir: Path, date: str, token: str = "") -> None:
         _log("FINMIND_TOKEN 未設定，跳過 F-Score 補抓")
         df["f_score_enriched"] = -1
 
-    # Step 3: Write back enriched CSVs
+    # Step 3: A/B/C/D grade assignment (pure computation, no API needed)
+    _log("計算 A/B/C/D 可交易等級…")
+    df = _assign_grades(df)
+    grade_dist = df["grade"].value_counts().to_dict()
+    _log(f"  等級分布：A={grade_dist.get('A',0)} B={grade_dist.get('B',0)} C={grade_dist.get('C',0)} D={grade_dist.get('D',0)} X={grade_dist.get('X',0)}")
+
+    # Step 4: Write back enriched CSVs
     _log("回寫 enriched batch_seq CSV…")
     _save_enriched(df, scan_dir, date)
 

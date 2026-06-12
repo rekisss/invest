@@ -196,13 +196,13 @@ const TOP50_COLS = ['rank','stock_id','name','industry_category',
   'ema20','ema60','foreign_buy_streak','invest_trust_streak','dealer_buy_streak',
   'foreign_net','invest_trust_net','dealer_net','f_score','condition_count',
   'margin_change_5d','short_ratio','relative_strength_5d','return_5d','day_return',
-  'momentum_score','revenue_yoy','revenue_mom','entry_reason','skip_reason','limit_down_streak']
+  'momentum_score','revenue_yoy','revenue_mom','sma5','sma10','grade','entry_reason','skip_reason','limit_down_streak']
 
 const ALL_COLS = ['rank','stock_id','name','industry_category',
   'entry_score','entry_signal','close','volume_ratio',
   'rsi14','adx14','foreign_buy_streak','invest_trust_streak','dealer_buy_streak',
   'f_score','condition_count','margin_change_5d','relative_strength_5d',
-  'return_5d','revenue_yoy','entry_reason','limit_down_streak']
+  'return_5d','revenue_yoy','sma5','sma10','grade','entry_reason','limit_down_streak']
 
 function rowsToCSV(rows, cols) {
   const esc = v => {
@@ -319,6 +319,9 @@ function processScanData() {
       foreign_net: r2(row.foreign_net), invest_trust_net: r2(row.invest_trust_net), dealer_net: r2(row.dealer_net),
       momentum_score: r2(row.momentum_score), relative_strength_5d: r2(row.relative_strength_5d),
       return_5d: r2(row.return_5d), day_return: r2(row.day_return),
+      revenue_yoy: r2(row.revenue_yoy), revenue_mom: r2(row.revenue_mom),
+      sma5: r2(row.sma5), sma10: r2(row.sma10),
+      ma5_above_ma10: toBool(row.ma5_above_ma10),
       skip_reason: row.skip_reason || '',
       // cross-sectional signals (added by Wave 2 scan_enrich.py)
       grade: row.grade || '',

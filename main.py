@@ -681,6 +681,7 @@ def collect_signals(
         "revenue_yoy", "revenue_mom", "revenue_3m_yoy",
         "foreign_holding_pct", "foreign_holding_chg5d",
         "insider_net_30d", "has_buyback",
+        "sma5", "sma10", "ma5_above_ma10",
     ]
     _signal_cols_present: list[str] = []  # resolved on first result
     _checkpoint_written = False           # tracks whether checkpoint header was written

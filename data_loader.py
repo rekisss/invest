@@ -521,58 +521,142 @@ def fetch_market_margin(
     return out.reset_index(drop=True)
 
 
+def _opendata_margin_day(day: pd.Timestamp) -> pd.DataFrame:
+    """單日 TWSE MI_MARGN（融資融券餘額），含快取。
+
+    Returns DataFrame with columns: stock_id, date, MarginPurchaseTodayBalance, ShortSaleTodayBalance.
+    Only covers TWSE-listed stocks (not TPEX OTC stocks).
+    """
+    key = f"margin::{day:%Y%m%d}"
+    if key in _open_data_cache:
+        return _open_data_cache[key]  # type: ignore[return-value]
+    frame = pd.DataFrame()
+    try:
+        resp = requests.get(
+            _TWSE_MARGIN_URL,
+            params={"date": day.strftime("%Y%m%d"), "selectType": "ALL", "response": "json"},
+            timeout=15,
+            headers={"accept": "application/json", "User-Agent": "Mozilla/5.0"},
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        time.sleep(0.15)
+        if isinstance(payload, dict) and payload.get("stat") == "OK" and payload.get("data"):
+            fields = [str(f) for f in payload.get("fields", [])]
+            code_idx = next((i for i, f in enumerate(fields) if "代號" in f), 0)
+            margin_idx = next(
+                (i for i, f in enumerate(fields) if "融資" in f and "餘額" in f), None
+            )
+            short_idx = next(
+                (i for i, f in enumerate(fields) if "融券" in f and "餘額" in f), None
+            )
+            if margin_idx is not None:
+                rows = []
+                for r in payload["data"]:
+                    if not isinstance(r, (list, tuple)) or len(r) <= code_idx:
+                        continue
+                    row: dict[str, object] = {
+                        "stock_id": str(r[code_idx]).strip(),
+                        "date": day.normalize(),
+                        "MarginPurchaseTodayBalance": _to_float(r[margin_idx]) if len(r) > margin_idx else 0.0,
+                    }
+                    if short_idx is not None and len(r) > short_idx:
+                        row["ShortSaleTodayBalance"] = _to_float(r[short_idx])
+                    rows.append(row)
+                frame = pd.DataFrame(rows)
+    except Exception:
+        pass
+    _open_data_cache[key] = frame
+    return frame
+
+
 def fetch_all_margin_data(
     client: "FinMindClient",
     end_date: str,
     lookback: int = 10,
 ) -> pd.DataFrame:
-    """Batch fetch margin/short today-balance for ALL stocks (one API call).
+    """Batch fetch margin/short today-balance for ALL stocks.
+
+    Strategy:
+    1. Try FinMind range query (works on premium plans).
+    2. Fall back to TWSE open data MI_MARGN (TWSE-listed stocks only; no auth needed).
 
     Returns columns: stock_id, date, MarginPurchaseTodayBalance, ShortSaleTodayBalance.
     """
     start = (pd.Timestamp(end_date) - pd.Timedelta(days=lookback)).strftime("%Y-%m-%d")
+
+    def _process_finmind(frame: pd.DataFrame) -> pd.DataFrame:
+        frame = frame.copy()
+        frame.columns = [c.lower().strip() for c in frame.columns]
+        frame["date"] = pd.to_datetime(frame["date"])
+        margin_col = next(
+            (c for c in frame.columns if "marginpurchasetodaybalance" in c
+             or ("margin" in c and "today" in c and "balance" in c and "short" not in c)),
+            None,
+        )
+        short_col = next(
+            (c for c in frame.columns if "shortsaletodaybalance" in c
+             or ("short" in c and "today" in c and "balance" in c)),
+            None,
+        )
+        if "stock_id" not in frame.columns or margin_col is None:
+            return pd.DataFrame()
+        keep = ["stock_id", "date", margin_col]
+        rename = {margin_col: "MarginPurchaseTodayBalance"}
+        if short_col:
+            keep.append(short_col)
+            rename[short_col] = "ShortSaleTodayBalance"
+        result = frame[keep].rename(columns=rename)
+        result["MarginPurchaseTodayBalance"] = pd.to_numeric(result["MarginPurchaseTodayBalance"], errors="coerce").fillna(0)
+        if "ShortSaleTodayBalance" in result.columns:
+            result["ShortSaleTodayBalance"] = pd.to_numeric(result["ShortSaleTodayBalance"], errors="coerce").fillna(0)
+        return result.sort_values(["stock_id", "date"]).reset_index(drop=True)
+
+    # ── Try 1: FinMind range query (premium plans) ──────────────────────────
     try:
         frame = client.fetch_dataset(
             "TaiwanStockMarginPurchaseShortSale",
             start_date=start,
             end_date=end_date,
         )
+        if not frame.empty:
+            result = _process_finmind(frame)
+            if not result.empty:
+                print(f"[data_loader] 融資資料（FinMind）：{len(result)} 筆", file=sys.stderr)
+                return result
     except Exception as exc:
-        print(f"[data_loader] 全市場融資資料取得失敗（graceful skip）: {exc}", file=sys.stderr)
-        return pd.DataFrame()
+        print(f"[data_loader] FinMind 融資資料取得失敗，改用 TWSE 公開資料: {exc}", file=sys.stderr)
 
-    if frame.empty:
-        return pd.DataFrame()
+    # ── Try 2: TWSE open data MI_MARGN fallback ──────────────────────────────
+    try:
+        target_days = max(6, min(int(lookback * 0.6) or 6, 8))
+        frames: list[pd.DataFrame] = []
+        day = pd.Timestamp(end_date)
+        deadline = time.monotonic() + 30.0
+        for _ in range(target_days + 14):
+            if len(frames) >= target_days or time.monotonic() > deadline:
+                break
+            if day.dayofweek < 5:
+                f = _opendata_margin_day(day)
+                if not f.empty:
+                    frames.append(f)
+            day -= pd.Timedelta(days=1)
+        if frames:
+            result = (
+                pd.concat(frames, ignore_index=True)
+                .sort_values(["stock_id", "date"])
+                .reset_index(drop=True)
+            )
+            print(
+                f"[data_loader] 融資資料（TWSE 公開資料）：{len(result)} 筆"
+                f"（{result['stock_id'].nunique()} 支 / {len(frames)} 日）",
+                file=sys.stderr,
+            )
+            return result
+    except Exception as exc:
+        print(f"[data_loader] TWSE 融資公開資料 fallback 失敗（graceful skip）: {exc}", file=sys.stderr)
 
-    frame = frame.copy()
-    frame.columns = [c.lower().strip() for c in frame.columns]
-    frame["date"] = pd.to_datetime(frame["date"])
-
-    margin_col = next(
-        (c for c in frame.columns if "marginpurchasetodaybalance" in c
-         or ("margin" in c and "today" in c and "balance" in c and "short" not in c)),
-        None,
-    )
-    short_col = next(
-        (c for c in frame.columns if "shortsaletodaybalance" in c
-         or ("short" in c and "today" in c and "balance" in c)),
-        None,
-    )
-
-    if "stock_id" not in frame.columns or margin_col is None:
-        return pd.DataFrame()
-
-    keep = ["stock_id", "date", margin_col]
-    rename = {margin_col: "MarginPurchaseTodayBalance"}
-    if short_col:
-        keep.append(short_col)
-        rename[short_col] = "ShortSaleTodayBalance"
-
-    result = frame[keep].rename(columns=rename)
-    result["MarginPurchaseTodayBalance"] = pd.to_numeric(result["MarginPurchaseTodayBalance"], errors="coerce").fillna(0)
-    if "ShortSaleTodayBalance" in result.columns:
-        result["ShortSaleTodayBalance"] = pd.to_numeric(result["ShortSaleTodayBalance"], errors="coerce").fillna(0)
-    return result.sort_values(["stock_id", "date"]).reset_index(drop=True)
+    return pd.DataFrame()
 
 
 def fetch_options_pcr(
@@ -642,6 +726,7 @@ _TPEX_PUNISH_URL    = "https://www.tpex.org.tw/openapi/v1/tpex_disposal_informat
 _TWSE_MONTH_REV_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap05_L"
 _TPEX_MONTH_REV_URL = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O"
 _TWSE_QFIIS_URL     = "https://www.twse.com.tw/rwd/zh/fund/MI_QFIIS"
+_TWSE_MARGIN_URL    = "https://www.twse.com.tw/rwd/zh/marginTrade/MI_MARGN"
 
 _OPEN_DATA_TIMEOUT = 20
 _open_data_cache: dict[str, object] = {}
