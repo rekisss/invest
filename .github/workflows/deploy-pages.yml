@@ -8,6 +8,7 @@ on:
     workflows:
       - K線資料更新
       - 全市場掃描
+      - 全盤掃描2（橫截面信號 + F-Score 補抓）
       - 全市場彙整 TOP 20 (20:00 CST 週二~週六)
       - 盤前預測 (08:00 CST)
       - 盤後總結 (14:15 CST)
@@ -32,7 +33,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # Deploy on push/dispatch always; for workflow_run, allow success OR failure
+    # (partial scans may fail overall but still commit useful CSV data to main)
+    if: github.event_name != 'workflow_run' || contains(fromJSON('["success","failure"]'), github.event.workflow_run.conclusion)
     steps:
       - uses: actions/checkout@v5
         with:
