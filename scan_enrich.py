@@ -68,6 +68,9 @@ def _load_all_batch_csvs(scan_dir: Path, date: str) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
     df = pd.concat(frames, ignore_index=True)
+    # Normalise industry_category: pandas reads the string "nan" back as NaN
+    if "industry_category" in df.columns:
+        df["industry_category"] = df["industry_category"].fillna("其他").replace({"nan": "其他", "NaN": "其他", "None": "其他", "": "其他"})
     # 去重，保留最高分
     if "entry_score" in df.columns and "stock_id" in df.columns:
         df = (
@@ -252,27 +255,51 @@ def _enrich_fscores(df: pd.DataFrame, token: str) -> pd.DataFrame:
         df["f_score_enriched"] = -1
         return df
 
-    # Limit to avoid burning too much quota (top 200 by entry_score)
+    # Limit to top 50 by entry_score to avoid burning hourly quota (3 API calls per stock)
     if "entry_score" in df.columns:
         missing_df = df[pd.to_numeric(df["f_score"], errors="coerce").fillna(-1) < 0]
-        if len(missing_df) > 200:
+        if len(missing_df) > 50:
             missing_ids = (
                 missing_df.sort_values("entry_score", ascending=False)
-                .head(200)["stock_id"].astype(str).tolist()
+                .head(50)["stock_id"].astype(str).tolist()
             )
-            _log(f"限制補抓前 200 支（依分數排序）")
+            _log(f"限制補抓前 50 支（依分數排序，每支 3 API 呼叫）")
+
+    try:
+        from data_loader import FinMindClient, fetch_fundamentals
+    except ImportError:
+        _log("⚠️ data_loader 模組未找到，跳過 F-Score 補抓")
+        df["f_score_enriched"] = -1
+        return df
 
     import time
+    from datetime import datetime, timedelta
+
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=3 * 365)).strftime("%Y-%m-%d")
+
+    client = FinMindClient()
+    # If FinMindClient couldn't pick up FINMIND_TOKEN but we have one, inject it
+    if token and not client._auth_headers_cache:
+        client._auth_headers_cache = {"Authorization": f"Bearer {token}"}
+
     ok = fail = 0
     for sid in missing_ids:
         try:
-            result = compute_f_score(sid, token=token)
+            fundamentals = fetch_fundamentals(client, sid, start_date, end_date)
+            result = compute_f_score(
+                fundamentals.get("income", pd.DataFrame()),
+                fundamentals.get("balance", pd.DataFrame()),
+                fundamentals.get("cashflow", pd.DataFrame()),
+            )
             if isinstance(result, dict) and "f_score" in result:
                 fs = result["f_score"]
                 if isinstance(fs, (int, float)) and fs >= 0:
                     enriched[sid] = int(fs)
                     ok += 1
-            time.sleep(0.12)  # ~8 calls/sec, well under 600/hr
+            # fetch_fundamentals makes 3 calls; FinMindClient already sleeps 0.3s each.
+            # Extra sleep to keep total rate ≤ 600 calls/hr across the enrichment run.
+            time.sleep(1.0)
         except Exception:
             fail += 1
 
