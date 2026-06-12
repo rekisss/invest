@@ -54,7 +54,7 @@ const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
 })
 
 /* ── Risk Card ───────────────────────────────────────────────────── */
-function RiskCard({ risk, marketData }) {
+function RiskCard({ risk, marketData, calendarRisk }) {
   const level = (risk?.level || '').replace('RiskLevel.', '') || 'MEDIUM'
   const score = risk?.score || 0.5
   const cfg = {
@@ -65,6 +65,7 @@ function RiskCard({ risk, marketData }) {
   }[level] || { label: '中風險', color: '#FF9F0A', bg: 'rgba(245,158,11,0.13)' }
 
   const rows = [
+    calendarRisk && ['日曆風險', calendarRisk, '#FF9F0A'],
     marketData?.vix != null && ['VIX', marketData.vix.toFixed(1), marketData.vix > 25 ? '#FF453A' : marketData.vix > 18 ? '#FF9F0A' : '#30D158'],
     marketData?.futures_net != null && ['外資期貨', `${marketData.futures_net > 0 ? '+' : ''}${Math.round(marketData.futures_net).toLocaleString()}`, marketData.futures_net > 0 ? '#30D158' : '#FF453A'],
     marketData?.night_change != null && ['夜盤', `${marketData.night_change > 0 ? '+' : ''}${Math.round(marketData.night_change)}`, marketData.night_change > 0 ? '#30D158' : '#FF453A'],
@@ -186,11 +187,14 @@ function ScenarioBlock({ scenario, prob }) {
   )
 }
 
+const GRADE_COLOR = { A: '#FFD60A', B: '#30D158', C: '#FF9F0A', D: '#64748B', X: '#FF453A' }
+
 /* ── Stock Mini Row (TOP 5) ──────────────────────────────────────── */
 function StockMiniRow({ stock, rank, maxScore, isLast }) {
   const normScore = Math.min(Math.round((stock.entry_score || 0) / maxScore * 100), 99)
   const isEntry = stock.entry_signal
   const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : 'rgba(255,255,255,0.50)'
+  const grade = stock.grade || ''
 
   const techDots = [
     (stock.rsi14 || 0) > 50 && (stock.rsi14 || 0) < 75,
@@ -233,7 +237,10 @@ function StockMiniRow({ stock, rank, maxScore, isLast }) {
           </div>
         </div>
       </div>
-      <div style={{ flexShrink: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+        {grade && (
+          <span style={{ fontSize: 11, fontWeight: 800, color: GRADE_COLOR[grade] || '#64748B', background: `${GRADE_COLOR[grade] || '#64748B'}20`, borderRadius: 5, padding: '1px 6px', letterSpacing: 0.3 }}>{grade}</span>
+        )}
         {isEntry
           ? <span style={{ fontSize: 11, color: '#30D158', fontWeight: 700, background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '4px 10px' }}>進場</span>
           : <span style={{ fontSize: 11, color: '#0A84FF', fontWeight: 600, background: 'rgba(59,130,246,0.10)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '4px 10px' }}>觀察</span>
@@ -330,6 +337,7 @@ export default function Overview({ data, error }) {
   const marketData = pred?.market_data || null
   const winRate = pred?.regime?.win_rate || null
   const aiInsight = pred?.ai_insight || ''
+  const calendarRisk = data?.aggregateLatest?.calendar_risk || scan?.calendar_risk || ''
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: '#070B14' }}>
@@ -338,8 +346,8 @@ export default function Overview({ data, error }) {
         {/* Row 1: Gauge + Risk */}
         <div style={{ display: 'flex', gap: 10 }}>
           <DirectionGauge prob={prob} winRate={winRate} />
-          {(risk || marketData)
-            ? <RiskCard risk={risk} marketData={marketData} />
+          {(risk || marketData || calendarRisk)
+            ? <RiskCard risk={risk} marketData={marketData} calendarRisk={calendarRisk} />
             : <div className="glass-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>暫無風險資料</span>
               </div>

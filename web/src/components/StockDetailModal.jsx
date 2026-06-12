@@ -368,9 +368,39 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           <Row label="入場分數" value={s.entry_score} valueStyle={{ color: scoreColor, fontSize: 16 }} />
           <Row label="條件達成數" value={`${s.condition_count} 個`} />
           <Row label="入場訊號" value={s.entry_signal ? '✅ 是' : '❌ 否'} />
+          {s.grade && (() => {
+            const gc = { A: '#FFD60A', B: 'var(--ios-green)', C: 'var(--ios-orange)', D: 'var(--ios-label3)', X: 'var(--ios-red)' }
+            return <Row label="評級" value={s.grade} valueStyle={{ color: gc[s.grade] || 'var(--ios-label3)', fontSize: 18, fontWeight: 800 }} />
+          })()}
+          {s.regime_label && s.regime_label !== '未知' && (
+            <Row label="市場體制" value={s.regime_label} valueStyle={{ color: s.regime_label === '牛市' ? 'var(--ios-green)' : s.regime_label === '熊市' ? 'var(--ios-red)' : 'var(--ios-yellow)' }} />
+          )}
           {s.entry_reason && <Row label="入場理由" value={s.entry_reason} valueStyle={{ color: 'var(--ios-green)', fontSize: 11 }} />}
           {s.skip_reason && <Row label="跳過原因" value={s.skip_reason} valueStyle={{ color: 'var(--ios-red)', fontSize: 11 }} />}
         </Section>
+
+        {/* 橫截面信號 */}
+        {(s.market_rs_rank > 0 || s.is_sector_leader) && (
+          <Section title="橫截面信號">
+            {s.market_rs_rank > 0 && (
+              <Row label="全市場百分位排名" value={`${Math.round(s.market_rs_rank)}%`} valueStyle={{ color: s.market_rs_rank >= 90 ? '#FFD60A' : s.market_rs_rank >= 75 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
+            )}
+            {s.sector_rs_rank > 0 && (
+              <Row label="類股內百分位排名" value={`${Math.round(s.sector_rs_rank)}%`} valueStyle={{ color: s.sector_rs_rank >= 90 ? '#FFD60A' : s.sector_rs_rank >= 75 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
+            )}
+            {s.sector_rs != null && s.sector_rs !== 0 && (
+              <Row label="類股相對強弱" value={fmt(s.sector_rs, 0)} valueStyle={{ color: s.sector_rs > 0 ? 'var(--ios-red)' : 'var(--ios-green)' }} />
+            )}
+            {s.sector_breadth_60 > 0 && (
+              <Row label="類股廣度(EMA60以上)" value={`${Math.round(s.sector_breadth_60)}%`} valueStyle={{ color: s.sector_breadth_60 >= 60 ? 'var(--ios-green)' : s.sector_breadth_60 <= 30 ? 'var(--ios-red)' : 'var(--ios-label)' }} />
+            )}
+            {s.sector_vol_zscore != null && s.sector_vol_zscore !== 0 && (
+              <Row label="量比Z分數" value={fmt(s.sector_vol_zscore, 2)} valueStyle={{ color: s.sector_vol_zscore > 1 ? 'var(--ios-yellow)' : s.sector_vol_zscore < -1 ? 'var(--ios-label3)' : 'var(--ios-label)' }} />
+            )}
+            <Row label="類股旗手" value={s.is_sector_leader ? '⭐ 是' : '—'} valueStyle={{ color: s.is_sector_leader ? '#FFD60A' : 'var(--ios-label3)' }} />
+            {s.sector_stock_count > 0 && <Row label="類股掃描支數" value={`${s.sector_stock_count} 支`} />}
+          </Section>
+        )}
 
         {/* 技術指標 */}
         <Section title="技術指標">

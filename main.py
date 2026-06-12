@@ -3707,6 +3707,7 @@ def run_aggregate(args: argparse.Namespace) -> None:
                 "surge_count": _surge_cnt if "_surge_cnt" in dir() else 0,
             },
             "ai_picks_text": _ai_text if "_ai_text" in dir() else "",
+            "calendar_risk": _cal_risk or "",
         }
         _agg_out = Path(args.output) / "aggregate_latest.json"
         _agg_out.write_text(_agg_json_lib.dumps(_agg_payload, ensure_ascii=False, default=str), encoding="utf-8")

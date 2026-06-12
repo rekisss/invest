@@ -5,12 +5,34 @@ const PAGE_SIZE = 50
 
 const SORT_OPTIONS = [
   { value: 'entry_score',       label: '分數' },
+  { value: 'market_rs_rank',    label: '市場RS' },
+  { value: 'sector_rs_rank',    label: '類股RS' },
   { value: 'rsi14',             label: 'RSI' },
   { value: 'adx14',             label: 'ADX' },
   { value: 'volume_ratio',      label: '量比' },
   { value: 'foreign_buy_streak',label: '外資連買' },
   { value: 'close',             label: '收盤價' },
 ]
+
+const GRADE_STYLE = {
+  A: { color: '#FFD60A', bg: 'rgba(255,214,10,0.15)',  border: 'rgba(255,214,10,0.35)' },
+  B: { color: '#30D158', bg: 'rgba(48,209,88,0.13)',   border: 'rgba(48,209,88,0.32)' },
+  C: { color: '#FF9F0A', bg: 'rgba(255,159,10,0.13)',  border: 'rgba(255,159,10,0.32)' },
+  D: { color: '#94A3B8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.22)' },
+  X: { color: '#FF453A', bg: 'rgba(255,69,58,0.13)',   border: 'rgba(255,69,58,0.32)' },
+}
+
+function GradeBadge({ grade }) {
+  if (!grade) return null
+  const g = GRADE_STYLE[grade] || GRADE_STYLE.D
+  return (
+    <span style={{
+      fontSize: 11, fontWeight: 800, color: g.color,
+      background: g.bg, border: `1px solid ${g.border}`,
+      borderRadius: 6, padding: '1px 6px', flexShrink: 0, letterSpacing: 0.3,
+    }}>{grade}</span>
+  )
+}
 
 const BASE = import.meta.env.BASE_URL
 
@@ -95,6 +117,9 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
           const vol = s.volume_ratio || 0
           const foreignStreak = s.foreign_buy_streak || 0
           const investStreak = s.invest_trust_streak || 0
+          const grade = s.grade || ''
+          const isSectorLeader = !!s.is_sector_leader
+          const marketRsRank = s.market_rs_rank || 0
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -124,6 +149,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
                   {s.name}
                   {notionMap[s.stock_id] && <span style={{ fontSize: 9, color: 'var(--ios-blue)', fontWeight: 700, marginLeft: 4 }}>N</span>}
                 </span>
+                <GradeBadge grade={grade} />
                 {isEntry
                   ? <span style={{ fontSize: 10, fontWeight: 700, color: '#30D158', background: 'rgba(48,209,88,0.14)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>進場</span>
                   : <span style={{ fontSize: 10, fontWeight: 600, color: '#0A84FF', background: 'rgba(10,132,255,0.12)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>觀察</span>
@@ -170,6 +196,14 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
                   <span style={{ fontSize: 11, color: '#BF5AF2', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     投+<strong>{investStreak}</strong>天
                   </span>
+                )}
+                {marketRsRank > 0 && (
+                  <span style={{ fontSize: 11, color: marketRsRank >= 90 ? '#FFD60A' : '#64748B', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                    RS<strong>{Math.round(marketRsRank)}</strong>
+                  </span>
+                )}
+                {isSectorLeader && (
+                  <span style={{ fontSize: 11, color: '#FFD60A', whiteSpace: 'nowrap' }}>⭐旗手</span>
                 )}
               </div>
             </div>
