@@ -283,15 +283,18 @@ def _enrich_fscores(df: pd.DataFrame, token: str) -> pd.DataFrame:
     if token and not client._auth_headers_cache:
         client._auth_headers_cache = {"Authorization": f"Bearer {token}"}
 
-    ok = fail = 0
+    ok = fail = data_miss = 0
     for sid in missing_ids:
         try:
             fundamentals = fetch_fundamentals(client, sid, start_date, end_date)
-            result = compute_f_score(
-                fundamentals.get("income", pd.DataFrame()),
-                fundamentals.get("balance", pd.DataFrame()),
-                fundamentals.get("cashflow", pd.DataFrame()),
-            )
+            inc = fundamentals.get("income", pd.DataFrame())
+            bal = fundamentals.get("balance", pd.DataFrame())
+            cf  = fundamentals.get("cashflow", pd.DataFrame())
+            if inc.empty and bal.empty and cf.empty:
+                data_miss += 1
+                time.sleep(0.5)
+                continue
+            result = compute_f_score(inc, bal, cf)
             if isinstance(result, dict) and "f_score" in result:
                 fs = result["f_score"]
                 if isinstance(fs, (int, float)) and fs >= 0:
@@ -303,9 +306,43 @@ def _enrich_fscores(df: pd.DataFrame, token: str) -> pd.DataFrame:
         except Exception:
             fail += 1
 
-    _log(f"F-Score 補抓完成：成功 {ok} / 失敗 {fail}")
+    _log(f"F-Score 補抓完成：成功 {ok} / 資料空白 {data_miss} / 失敗 {fail}")
     df["f_score_enriched"] = df["stock_id"].astype(str).map(enriched).fillna(-1).astype(int)
     return df
+
+
+# ── 類股資料補填 ────────────────────────────────────────────────────────────────
+
+def _fetch_industry_map(token: str) -> dict[str, str]:
+    """Fetch industry_category for all stocks from TaiwanStockInfo (1 API call).
+
+    Returns a dict mapping stock_id → industry_category for stocks that have
+    a non-null category.  Returns {} on failure so callers degrade gracefully.
+    """
+    try:
+        from data_loader import FinMindClient
+        client = FinMindClient()
+        if token and not client._auth_headers_cache:
+            client._auth_headers_cache = {"Authorization": f"Bearer {token}"}
+        df = client.fetch_dataset("TaiwanStockInfo", use_cache=True, cache_ttl_days=7)
+        if df.empty:
+            _log("⚠️ TaiwanStockInfo 回傳空資料，無法補填類股")
+            return {}
+        _log(f"TaiwanStockInfo 欄位：{list(df.columns)}")
+        if "industry_category" not in df.columns:
+            _log("⚠️ TaiwanStockInfo 無 industry_category 欄位，無法補填類股")
+            return {}
+        mapping: dict[str, str] = {}
+        for _, row in df.iterrows():
+            sid = str(row.get("stock_id", "")).strip()
+            cat = str(row.get("industry_category", "")).strip()
+            if sid and cat and cat not in ("nan", "None", "", "其他"):
+                mapping[sid] = cat
+        _log(f"TaiwanStockInfo 取得 {len(mapping)} 支有效類股資料（共 {len(df)} 支）")
+        return mapping
+    except Exception as exc:
+        _log(f"⚠️ 無法取得 TaiwanStockInfo: {exc}")
+        return {}
 
 
 # ── 主流程 ─────────────────────────────────────────────────────────────────────
@@ -318,7 +355,17 @@ def run_enrichment(scan_dir: Path, date: str, token: str = "") -> None:
         _log(f"❌ 找不到 {date} 的 batch_seq CSV，請確認 Wave 1 已完成並提交")
         sys.exit(1)
 
-    _log(f"讀入 {len(df)} 支股票資料（{df['industry_category'].nunique() if 'industry_category' in df.columns else '?'} 個類股）")
+    n_sectors = df["industry_category"].nunique() if "industry_category" in df.columns else 0
+    _log(f"讀入 {len(df)} 支股票資料（{n_sectors} 個類股）")
+
+    # If all stocks are uncategorized (batch CSVs had "nan" industry_category),
+    # fetch real categories from TaiwanStockInfo (1 API call, very cheap on quota).
+    if "industry_category" in df.columns and n_sectors <= 1 and token:
+        _log("industry_category 缺失，從 TaiwanStockInfo 補填…")
+        ind_map = _fetch_industry_map(token)
+        if ind_map:
+            df["industry_category"] = df["stock_id"].astype(str).map(ind_map).fillna("其他")
+            _log(f"補填後：{df['industry_category'].nunique()} 個類股")
 
     # Step 1: Cross-sectional signals (no API needed)
     _log("計算橫截面信號…")
