@@ -40,8 +40,9 @@ _SOFT_SCORE_COLS = [
     "kd_golden_cross", "obv_uptrend", "adx_trending", "stronger_than_market",
     "bb_squeeze_breakout", "breakout_volume_confirm",
     "williams_r_recovery", "cci_momentum", "mfi_strong", "above_ichimoku_cloud",
+    "ma5_above_ma10",
 ]
-_SOFT_SCORE_WEIGHTS = np.array([30, 35, 15, 25, 20, 15, 15, 10, 30, 20, 15, 15, 10, 20], dtype=np.float64)
+_SOFT_SCORE_WEIGHTS = np.array([30, 35, 15, 25, 20, 15, 15, 10, 30, 20, 15, 15, 10, 20, 15], dtype=np.float64)
 
 _BREADTH_COLS = [
     "above_ema60", "ema60_gt_ema120", "market_above_ma60",
@@ -224,6 +225,8 @@ def prepare_stock_signals(
     frame[_bb.columns] = _bb.values
     _stoch = add_stochastic(frame["high"], frame["low"], frame["close"], config.kd_k_period, config.kd_d_period)
     frame[_stoch.columns] = _stoch.values
+    frame["sma5"]  = add_sma(frame["close"], 5)
+    frame["sma10"] = add_sma(frame["close"], 10)
     frame["obv"] = add_obv(frame["close"], frame["volume"])
     frame["obv_ma"] = add_sma(frame["obv"], config.obv_ma_window)
     frame["williams_r"] = add_williams_r(frame["high"], frame["low"], frame["close"])
@@ -449,6 +452,11 @@ def prepare_stock_signals(
 
     # MFI > 50: money is flowing into the stock (volume-weighted buying pressure)
     merged["mfi_strong"] = _mfi_arr > 50
+
+    # MA5 above MA10: short-term trend confirmation (5-day SMA crossed above 10-day SMA)
+    _sma5_arr  = merged["sma5"].to_numpy(dtype=float)
+    _sma10_arr = merged["sma10"].to_numpy(dtype=float)
+    merged["ma5_above_ma10"] = _sma5_arr > _sma10_arr
 
     # ── Candlestick filters (compute numpy arrays once; reuse for ichimoku) ──
     _open_arr = merged["open"].to_numpy(dtype=float)
