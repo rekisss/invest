@@ -17,17 +17,240 @@ function isOTC(stockId) {
          (n >= 6000 && n <= 6999) || (n >= 8000 && n <= 8999) || (n >= 9200 && n <= 9999)
 }
 
-function CandleSVG({ data }) {
+// ── Technical indicator computation ─────────────────────────────────────────
+
+function smaCalc(arr, n) {
+  return arr.map((_, i) => {
+    if (i < n - 1) return null
+    return arr.slice(i - n + 1, i + 1).reduce((a, b) => a + b, 0) / n
+  })
+}
+
+function emaCalc(arr, n) {
+  const k = 2 / (n + 1)
+  const result = new Array(arr.length).fill(null)
+  let prev = null
+  for (let i = 0; i < arr.length; i++) {
+    if (prev === null) {
+      if (i === n - 1) {
+        prev = arr.slice(0, n).reduce((a, b) => a + b, 0) / n
+        result[i] = prev
+      }
+    } else {
+      prev = arr[i] * k + prev * (1 - k)
+      result[i] = prev
+    }
+  }
+  return result
+}
+
+function bollingerCalc(arr, n = 20, mult = 2) {
+  return arr.map((_, i) => {
+    if (i < n - 1) return null
+    const slice = arr.slice(i - n + 1, i + 1)
+    const mean = slice.reduce((a, b) => a + b, 0) / n
+    const std = Math.sqrt(slice.reduce((a, b) => a + (b - mean) ** 2, 0) / n)
+    return { mid: mean, upper: mean + mult * std, lower: mean - mult * std }
+  })
+}
+
+function macdCalc(arr, fast = 12, slow = 26, sig = 9) {
+  const eFast = emaCalc(arr, fast)
+  const eSlow = emaCalc(arr, slow)
+  const macdLine = arr.map((_, i) =>
+    eFast[i] != null && eSlow[i] != null ? eFast[i] - eSlow[i] : null
+  )
+  const nonNull = macdLine.map((v, i) => ({ v, i })).filter(x => x.v != null)
+  const k = 2 / (sig + 1)
+  let sigVal = null
+  let nCount = 0
+  const signalLine = new Array(arr.length).fill(null)
+  for (const { v, i } of nonNull) {
+    nCount++
+    if (sigVal === null) {
+      if (nCount === sig) {
+        const startI = nonNull[0].i
+        const vals = macdLine.slice(startI, startI + sig).filter(x => x != null)
+        sigVal = vals.reduce((a, b) => a + b, 0) / sig
+        signalLine[i] = sigVal
+      }
+    } else {
+      sigVal = v * k + sigVal * (1 - k)
+      signalLine[i] = sigVal
+    }
+  }
+  const hist = macdLine.map((m, i) =>
+    m != null && signalLine[i] != null ? m - signalLine[i] : null
+  )
+  return { macdLine, signalLine, hist }
+}
+
+function rsiCalc(arr, n = 14) {
+  const result = new Array(arr.length).fill(null)
+  if (arr.length < n + 1) return result
+  let avgGain = 0, avgLoss = 0
+  for (let i = 1; i <= n; i++) {
+    const d = arr[i] - arr[i - 1]
+    if (d > 0) avgGain += d; else avgLoss -= d
+  }
+  avgGain /= n; avgLoss /= n
+  result[n] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss)
+  for (let i = n + 1; i < arr.length; i++) {
+    const d = arr[i] - arr[i - 1]
+    avgGain = (avgGain * (n - 1) + (d > 0 ? d : 0)) / n
+    avgLoss = (avgLoss * (n - 1) + (d < 0 ? -d : 0)) / n
+    result[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss)
+  }
+  return result
+}
+
+function kdCalc(bars, n = 9, m = 3) {
+  const kArr = new Array(bars.length).fill(null)
+  const dArr = new Array(bars.length).fill(null)
+  let prevK = 50, prevD = 50
+  for (let i = n - 1; i < bars.length; i++) {
+    const slice = bars.slice(i - n + 1, i + 1)
+    const hh = Math.max(...slice.map(b => b.high))
+    const ll = Math.min(...slice.map(b => b.low))
+    const rsv = hh === ll ? 50 : (bars[i].close - ll) / (hh - ll) * 100
+    const k = ((m - 1) * prevK + rsv) / m
+    const d = ((m - 1) * prevD + k) / m
+    kArr[i] = k; dArr[i] = d
+    prevK = k; prevD = d
+  }
+  return { kArr, dArr }
+}
+
+// Build a polyline points string, splitting at nulls into segments
+function toPolySegs(values, toXFn, toYFn) {
+  const segments = []
+  let cur = []
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i]
+    if (v == null) {
+      if (cur.length >= 2) segments.push(cur.join(' '))
+      cur = []
+    } else {
+      cur.push(`${toXFn(i).toFixed(1)},${toYFn(v).toFixed(1)}`)
+    }
+  }
+  if (cur.length >= 2) segments.push(cur.join(' '))
+  return segments
+}
+
+// ── Sub-chart panel (MACD / RSI / KD) ───────────────────────────────────────
+
+const CHART_W = 460
+const CHART_PL = 42
+const CHART_PR = 6
+
+function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHoverIdx, yFixed }) {
+  const H = 72, PT = 6
+  const n = bars.length
+  const slotW = (CHART_W - CHART_PL - CHART_PR) / n
+  const toX = i => CHART_PL + (i + 0.5) * slotW
+
+  const allVals = [
+    ...(lines || []).flatMap(l => l.values.filter(v => v != null)),
+    ...(histSeries ? histSeries.values.filter(v => v != null) : []),
+  ]
+  const rawMin = allVals.length ? Math.min(...allVals) : 0
+  const rawMax = allVals.length ? Math.max(...allVals) : 1
+  const pad = (rawMax - rawMin) * 0.08 || 1
+  const minV = yFixed ? yFixed[0] : rawMin - pad
+  const maxV = yFixed ? yFixed[1] : rawMax + pad
+  const range = maxV - minV || 1
+  const toY = v => PT + (1 - (v - minV) / range) * (H - PT * 2)
+
+  const bW = Math.max(slotW * 0.6, 1)
+
+  const handleMove = (clientX, svgEl) => {
+    if (!onHoverIdx) return
+    const rect = svgEl.getBoundingClientRect()
+    const svgX = (clientX - rect.left) / rect.width * CHART_W
+    const idx = Math.floor((svgX - CHART_PL) / slotW)
+    onHoverIdx(idx >= 0 && idx < n ? idx : null)
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${CHART_W} ${H + PT + 4}`}
+      style={{ width: '100%', display: 'block', background: 'rgba(20,20,22,0.85)', borderTop: '0.5px solid #2C2C2E', marginTop: 2 }}
+      onMouseMove={e => handleMove(e.clientX, e.currentTarget)}
+      onMouseLeave={() => onHoverIdx?.(null)}
+    >
+      {/* Zero line or reference lines */}
+      {(hBands || []).map((b, i) => (
+        <g key={i}>
+          <line x1={CHART_PL} y1={toY(b.value)} x2={CHART_W - CHART_PR} y2={toY(b.value)}
+            stroke={b.color || '#48484A'} strokeWidth={0.5} strokeDasharray="4,3" opacity={0.65} />
+          <text x={CHART_W - CHART_PR + 3} y={toY(b.value) + 3.5} fontSize={7} fill={b.color || '#48484A'} opacity={0.85}>{b.label ?? b.value}</text>
+        </g>
+      ))}
+
+      {/* Histogram bars */}
+      {histSeries && histSeries.values.map((v, i) => {
+        if (v == null) return null
+        const x = toX(i), zero = toY(0), y = toY(v), h = Math.abs(y - zero)
+        return <rect key={i} x={x - bW / 2} y={Math.min(y, zero)} width={bW} height={Math.max(h, 0.5)}
+          fill={v >= 0 ? '#FF453A' : '#30D158'} opacity={0.75} />
+      })}
+
+      {/* Line series */}
+      {(lines || []).map((series, si) =>
+        toPolySegs(series.values, toX, toY).map((pts, sj) => (
+          <polyline key={`${si}-${sj}`} points={pts} fill="none"
+            stroke={series.color} strokeWidth={series.width || 1.2} opacity={series.opacity || 0.9} />
+        ))
+      )}
+
+      {/* Y-axis labels (3 levels) */}
+      {[0, 0.5, 1].map(t => {
+        const v = minV + t * range
+        const y = PT + (1 - t) * (H - PT * 2)
+        const label = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : Math.abs(v) < 10 ? v.toFixed(1) : v.toFixed(0)
+        return (
+          <text key={t} x={CHART_PL - 3} y={y + 3.5} fontSize={7.5} fill="#48484A" textAnchor="end">{label}</text>
+        )
+      })}
+
+      {/* Chart label */}
+      <text x={CHART_PL + 3} y={PT + 9} fontSize={8} fill="#636366" fontWeight="bold">{label}</text>
+
+      {/* Hover values */}
+      {hoveredIdx != null && (lines || []).map((series, si) => {
+        const v = series.values[hoveredIdx]
+        if (v == null) return null
+        const disp = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1)
+        return (
+          <text key={si} x={CHART_PL + 36 + si * 58} y={PT + 9} fontSize={8} fill={series.color}>
+            {series.label}:{disp}
+          </text>
+        )
+      })}
+
+      {/* Crosshair */}
+      {hoveredIdx != null && hoveredIdx >= 0 && hoveredIdx < n && (
+        <line x1={toX(hoveredIdx)} y1={0} x2={toX(hoveredIdx)} y2={H + PT}
+          stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="2,2" opacity={0.55} />
+      )}
+    </svg>
+  )
+}
+
+// ── Candlestick chart ────────────────────────────────────────────────────────
+
+function CandleSVG({ data, maLines, bbBands, onHoverIdx }) {
   const [hovered, setHovered] = useState(null)
   const touchRef = useRef(null)
 
   const chart = useMemo(() => {
     if (!data || data.length < 2) return null
     const bars = data.slice(-60)
-    const W = 460, CH = 200, VH = 45, GAP = 6, H = CH + GAP + VH
-    const PL = 42, PR = 6, PT = 8
-    const maxP = Math.max(...bars.map(d => d.high))
-    const minP = Math.min(...bars.map(d => d.low))
+    const W = CHART_W, CH = 200, VH = 45, GAP = 6, H = CH + GAP + VH
+    const PL = CHART_PL, PR = CHART_PR, PT = 8
+    const maxP = Math.max(...bars.map(d => d.high), ...(bbBands?.upper?.filter(Boolean) || []))
+    const minP = Math.min(...bars.map(d => d.low),  ...(bbBands?.lower?.filter(Boolean) || []))
     const pRange = maxP - minP || 1
     const maxVol = Math.max(...bars.map(d => d.volume), 1)
     const n = bars.length
@@ -40,8 +263,8 @@ function CandleSVG({ data }) {
     }))
     const xStep = Math.max(1, Math.floor(n / 5))
     const xLabels = bars.map((d, i) => ({ i, label: d.time.slice(5) })).filter((_, i) => i % xStep === 0 || i === n - 1)
-    return { bars, W, CH, VH, GAP, H, PL, PR, PT, maxP, minP, pRange, maxVol, n, slotW, bW, toY, toX, gridLevels, xLabels }
-  }, [data])
+    return { bars, W, CH, VH, GAP, H, PL, PR, PT, maxVol, n, slotW, bW, toY, toX, gridLevels, xLabels }
+  }, [data, bbBands])
 
   if (!chart) return (
     <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
@@ -51,68 +274,76 @@ function CandleSVG({ data }) {
 
   const { bars, W, CH, VH, GAP, H, PL, PR, PT, maxVol, slotW, bW, toY, toX, gridLevels, xLabels } = chart
 
-  const getIdxFromClientX = (clientX, svgEl) => {
+  const getIdx = (clientX, svgEl) => {
     const rect = svgEl.getBoundingClientRect()
     const svgX = (clientX - rect.left) / rect.width * W
     return Math.floor((svgX - PL) / slotW)
   }
 
-  const setBar = (idx) => {
-    if (idx >= 0 && idx < bars.length) setHovered({ idx, bar: bars[idx], x: toX(idx) })
-    else setHovered(null)
+  const setBar = (idx, svgEl) => {
+    if (idx >= 0 && idx < bars.length) {
+      setHovered({ idx, bar: bars[idx], x: toX(idx) })
+      onHoverIdx?.(idx)
+    } else {
+      setHovered(null)
+      onHoverIdx?.(null)
+    }
   }
 
-  const handleMouseMove = (e) => {
-    setBar(getIdxFromClientX(e.clientX, e.currentTarget))
-  }
+  const handleMouseMove = (e) => setBar(getIdx(e.clientX, e.currentTarget), e.currentTarget)
+  const handleMouseLeave = () => { setHovered(null); onHoverIdx?.(null) }
 
   const handleTouchStart = (e) => {
     const touch = e.touches[0]
     const svg = e.currentTarget
     touchRef.current = {
-      active: false,
-      startX: touch.clientX,
+      active: false, startX: touch.clientX,
       timer: setTimeout(() => {
         if (touchRef.current) {
           touchRef.current.active = true
-          setBar(getIdxFromClientX(touchRef.current.lastX ?? touchRef.current.startX, svg))
+          setBar(getIdx(touchRef.current.lastX ?? touchRef.current.startX, svg))
         }
       }, 300),
-      lastX: touch.clientX,
-      svgEl: svg,
+      lastX: touch.clientX, svgEl: svg,
     }
   }
-
   const handleTouchMove = (e) => {
     const touch = e.touches[0]
     if (!touchRef.current) return
     touchRef.current.lastX = touch.clientX
     if (touchRef.current.active) {
       e.preventDefault()
-      setBar(getIdxFromClientX(touch.clientX, touchRef.current.svgEl))
+      setBar(getIdx(touch.clientX, touchRef.current.svgEl))
     }
   }
-
   const handleTouchEnd = () => {
     if (touchRef.current?.timer) clearTimeout(touchRef.current.timer)
     touchRef.current = null
-    setHovered(null)
+    setHovered(null); onHoverIdx?.(null)
   }
 
   const tipW = 118, tipH = 94
   const tipX = hovered ? (hovered.x > W / 2 ? hovered.x - tipW - 6 : hovered.x + 8) : 0
   const tipY = PT + 4
 
+  // Build polyline segments for MA/BB
+  const bbSegs = bbBands ? {
+    upper: toPolySegs(bbBands.upper, toX, toY),
+    mid:   toPolySegs(bbBands.mid,   toX, toY),
+    lower: toPolySegs(bbBands.lower, toX, toY),
+  } : null
+
   return (
     <svg
       viewBox={`0 0 ${W} ${H + PT + 18}`}
-      style={{ width: '100%', display: 'block', background: 'var(--ios-bg)', borderRadius: 10, cursor: 'crosshair', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
+      style={{ width: '100%', display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
       onMouseMove={handleMouseMove}
-      onMouseLeave={() => setHovered(null)}
+      onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
+      {/* Grid */}
       {gridLevels.map(({ y, price }, j) => (
         <g key={j}>
           <line x1={PL} y1={y} x2={W - 6} y2={y} stroke="#2C2C2E" strokeWidth={0.5} />
@@ -121,6 +352,15 @@ function CandleSVG({ data }) {
           </text>
         </g>
       ))}
+
+      {/* Bollinger Bands */}
+      {bbSegs && <>
+        {bbSegs.upper.map((pts, i) => <polyline key={`bbu${i}`} points={pts} fill="none" stroke="rgba(10,132,255,0.45)" strokeWidth={0.8} strokeDasharray="4,3" />)}
+        {bbSegs.mid.map((pts, i)   => <polyline key={`bbm${i}`} points={pts} fill="none" stroke="rgba(10,132,255,0.28)" strokeWidth={0.8} />)}
+        {bbSegs.lower.map((pts, i) => <polyline key={`bbl${i}`} points={pts} fill="none" stroke="rgba(10,132,255,0.45)" strokeWidth={0.8} strokeDasharray="4,3" />)}
+      </>}
+
+      {/* Candles + volume */}
       {bars.map((d, i) => {
         const x = toX(i), color = candleColor(d.open, d.close)
         const bodyTop = toY(Math.max(d.open, d.close))
@@ -136,10 +376,20 @@ function CandleSVG({ data }) {
           </g>
         )
       })}
+
+      {/* MA overlays */}
+      {(maLines || []).map((ma, mi) =>
+        toPolySegs(ma.values, toX, toY).map((pts, sj) => (
+          <polyline key={`ma${mi}-${sj}`} points={pts} fill="none" stroke={ma.color} strokeWidth={1.2} opacity={0.85} />
+        ))
+      )}
+
+      {/* X-axis labels */}
       {xLabels.map(({ i, label }) => (
         <text key={i} x={toX(i)} y={H + PT + 12} fontSize={8.5} fill="#636366" textAnchor="middle">{label}</text>
       ))}
 
+      {/* Tooltip */}
       {hovered && (() => {
         const b = hovered.bar
         const closeColor = candleColor(b.open, b.close)
@@ -166,6 +416,8 @@ function CandleSVG({ data }) {
     </svg>
   )
 }
+
+// ── Interval + resample ──────────────────────────────────────────────────────
 
 const INTERVAL_LABELS = [
   { id: '1d',  label: '日' },
@@ -200,53 +452,172 @@ function resampleBars(dailyBars, unit) {
   return Object.values(buckets).sort((a, b) => a.time.localeCompare(b.time))
 }
 
+// ── KLineChart: orchestrates candlestick + all sub-charts ────────────────────
+
+const MA_LINES_DEF = [
+  { label: 'MA5',   color: '#5AC8FA', fn: c => smaCalc(c, 5),  },
+  { label: 'MA10',  color: '#FF9F0A', fn: c => smaCalc(c, 10), },
+  { label: 'EMA20', color: '#BF5AF2', fn: c => emaCalc(c, 20), },
+  { label: 'EMA60', color: '#FFD60A', fn: c => emaCalc(c, 60), },
+]
+
+const TOGGLE_DEFS = [
+  { key: 'ma',   label: 'MA',   color: '#5AC8FA' },
+  { key: 'bb',   label: 'BB',   color: '#0A84FF' },
+  { key: 'macd', label: 'MACD', color: '#FF9F0A' },
+  { key: 'rsi',  label: 'RSI',  color: '#BF5AF2' },
+  { key: 'kd',   label: 'KD',   color: '#30D158' },
+]
+
 function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const cnyesUrl = `https://www.cnyes.com/twstock/${stockId}`
   const wantgooUrl = `https://www.wantgoo.com/stock/${stockId}`
 
-  const daily = Array.isArray(priceHistory) ? priceHistory : []
-  const weekly = (Array.isArray(priceHistoryWk) && priceHistoryWk.length >= 2)
-    ? priceHistoryWk : resampleBars(daily, 'week')
-  const monthly = (Array.isArray(priceHistoryMo) && priceHistoryMo.length >= 2)
-    ? priceHistoryMo : resampleBars(daily, 'month')
-
+  const daily   = Array.isArray(priceHistory) ? priceHistory : []
+  const weekly  = (Array.isArray(priceHistoryWk) && priceHistoryWk.length >= 2) ? priceHistoryWk : resampleBars(daily, 'week')
+  const monthly = (Array.isArray(priceHistoryMo) && priceHistoryMo.length >= 2) ? priceHistoryMo : resampleBars(daily, 'month')
   const dataMap = { '1d': daily, '1wk': weekly, '1mo': monthly }
 
   const [chartInterval, setChartInterval] = useState(
     () => INTERVAL_LABELS.find(t => dataMap[t.id].length >= 2)?.id || '1d'
   )
-  const data = dataMap[chartInterval]
+  const [active, setActive] = useState({ ma: true, bb: false, macd: true, rsi: true, kd: false })
+  const [hoveredIdx, setHoveredIdx] = useState(null)
+
+  const toggle = key => setActive(prev => ({ ...prev, [key]: !prev[key] }))
+
+  const bars = (dataMap[chartInterval] || []).slice(-60)
+
+  const indicators = useMemo(() => {
+    if (bars.length < 2) return null
+    const closes = bars.map(d => d.close)
+    const bb = bollingerCalc(closes, 20, 2)
+    return {
+      maLines: MA_LINES_DEF.map(m => ({ ...m, values: m.fn(closes) })),
+      bbBands: {
+        upper: bb.map(v => v?.upper ?? null),
+        mid:   bb.map(v => v?.mid   ?? null),
+        lower: bb.map(v => v?.lower ?? null),
+      },
+      macd: macdCalc(closes),
+      rsi: rsiCalc(closes),
+      kd: kdCalc(bars),
+    }
+  }, [bars])
 
   const unitLabel = { '1d': '個交易日', '1wk': '週', '1mo': '個月' }
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 8, alignItems: 'center' }}>
-        <div className="ios-segmented" style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--ios-fill4)', borderRadius: 8 }}>
+      {/* Top controls row */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* Interval */}
+        <div style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--ios-fill4)', borderRadius: 8 }}>
           {INTERVAL_LABELS.map(t => {
-            const available = dataMap[t.id].length >= 2
-            const active = chartInterval === t.id
+            const avail = dataMap[t.id].length >= 2
+            const isActive = chartInterval === t.id
             return (
-              <button
-                key={t.id}
-                onClick={() => available && setChartInterval(t.id)}
-                style={{
-                  background: active ? 'var(--ios-bg3)' : 'transparent',
-                  border: 'none',
-                  color: active ? 'var(--ios-label)' : 'var(--ios-label3)',
-                  borderRadius: 6, padding: '4px 14px', fontSize: 12,
-                  cursor: available ? 'pointer' : 'default', fontWeight: active ? 600 : 400,
-                  boxShadow: active ? '0 1px 4px rgba(0,0,0,0.3)' : 'none',
-                  transition: 'all 0.15s',
-                }}
-              >{t.label}</button>
+              <button key={t.id} onClick={() => avail && setChartInterval(t.id)} style={{
+                background: isActive ? 'var(--ios-bg3)' : 'transparent',
+                border: 'none', color: isActive ? 'var(--ios-label)' : 'var(--ios-label3)',
+                borderRadius: 6, padding: '4px 14px', fontSize: 12,
+                cursor: avail ? 'pointer' : 'default', fontWeight: isActive ? 600 : 400,
+                boxShadow: isActive ? '0 1px 4px rgba(0,0,0,0.3)' : 'none', transition: 'all 0.15s',
+              }}>{t.label}</button>
             )
           })}
         </div>
+        {/* Indicator toggles */}
+        {TOGGLE_DEFS.map(({ key, label, color }) => (
+          <button key={key} onClick={() => toggle(key)} style={{
+            background: active[key] ? `${color}20` : 'var(--ios-fill4)',
+            color: active[key] ? color : 'var(--ios-label3)',
+            border: `0.5px solid ${active[key] ? color : 'transparent'}`,
+            borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600,
+            transition: 'all 0.15s',
+          }}>{label}</button>
+        ))}
       </div>
-      <CandleSVG data={data} />
+
+      {/* MA legend */}
+      {active.ma && indicators && (
+        <div style={{ display: 'flex', gap: 10, marginBottom: 5, flexWrap: 'wrap', paddingLeft: 2 }}>
+          {MA_LINES_DEF.map(m => (
+            <span key={m.label} style={{ fontSize: 10, color: m.color, fontWeight: 600 }}>— {m.label}</span>
+          ))}
+          {active.bb && <span style={{ fontSize: 10, color: 'rgba(10,132,255,0.7)', fontWeight: 600 }}>— BB(20)</span>}
+        </div>
+      )}
+
+      {/* Main candlestick chart */}
+      {bars.length >= 2 ? (
+        <CandleSVG
+          data={bars}
+          maLines={active.ma && indicators ? indicators.maLines : []}
+          bbBands={active.bb && indicators ? indicators.bbBands : null}
+          onHoverIdx={setHoveredIdx}
+        />
+      ) : (
+        <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
+          暫無歷史 K 線資料
+        </div>
+      )}
+
+      {/* MACD sub-chart */}
+      {active.macd && indicators && bars.length >= 26 && (
+        <SubChartSVG
+          bars={bars}
+          label="MACD(12,26,9)"
+          histSeries={{ values: indicators.macd.hist }}
+          lines={[
+            { color: '#0A84FF', label: 'MACD', values: indicators.macd.macdLine, width: 1 },
+            { color: '#FF453A', label: 'Signal', values: indicators.macd.signalLine, width: 1 },
+          ]}
+          hBands={[{ value: 0, color: '#48484A', label: '' }]}
+          hoveredIdx={hoveredIdx}
+          onHoverIdx={setHoveredIdx}
+        />
+      )}
+
+      {/* RSI sub-chart */}
+      {active.rsi && indicators && bars.length >= 15 && (
+        <SubChartSVG
+          bars={bars}
+          label="RSI(14)"
+          lines={[{ color: '#BF5AF2', label: 'RSI', values: indicators.rsi, width: 1.2 }]}
+          hBands={[
+            { value: 70, color: '#FF453A', label: '70' },
+            { value: 50, color: '#48484A', label: '50' },
+            { value: 30, color: '#30D158', label: '30' },
+          ]}
+          hoveredIdx={hoveredIdx}
+          onHoverIdx={setHoveredIdx}
+          yFixed={[0, 100]}
+        />
+      )}
+
+      {/* KD sub-chart */}
+      {active.kd && indicators && bars.length >= 9 && (
+        <SubChartSVG
+          bars={bars}
+          label="KD(9,3)"
+          lines={[
+            { color: '#FF9F0A', label: 'K', values: indicators.kd.kArr, width: 1 },
+            { color: '#0A84FF', label: 'D', values: indicators.kd.dArr, width: 1 },
+          ]}
+          hBands={[
+            { value: 80, color: '#FF453A', label: '80' },
+            { value: 20, color: '#30D158', label: '20' },
+          ]}
+          hoveredIdx={hoveredIdx}
+          onHoverIdx={setHoveredIdx}
+          yFixed={[0, 100]}
+        />
+      )}
+
+      {/* Footer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, flexWrap: 'wrap', gap: 6 }}>
-        {data.length >= 2 && <span style={{ fontSize: 10, color: 'var(--ios-label3)' }}>近 {data.length} {unitLabel[chartInterval]}</span>}
+        {bars.length >= 2 && <span style={{ fontSize: 10, color: 'var(--ios-label3)' }}>近 {bars.length} {unitLabel[chartInterval]}</span>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <a href={cnyesUrl} target="_blank" rel="noopener noreferrer"
             style={{ fontSize: 11, color: 'var(--ios-blue)', textDecoration: 'none', padding: '4px 10px', background: 'var(--ios-fill4)', borderRadius: 8, border: '0.5px solid var(--ios-sep)' }}>
@@ -261,6 +632,8 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
     </div>
   )
 }
+
+// ── Shared layout components ─────────────────────────────────────────────────
 
 function Row({ label, value, valueStyle }) {
   return (
@@ -279,6 +652,8 @@ function Section({ title, children }) {
     </div>
   )
 }
+
+// ── Main modal ───────────────────────────────────────────────────────────────
 
 export default function StockDetailModal({ stock, notionInfo, onClose }) {
   if (!stock) return null
@@ -332,8 +707,8 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           >✕</button>
         </div>
 
-        {/* K 線圖 */}
-        <Section title="K 線圖">
+        {/* K 線圖 + 指標子圖 */}
+        <Section title="K 線圖 &amp; 技術指標">
           <KLineChart key={s.stock_id} stockId={s.stock_id} priceHistory={s.price_history} priceHistoryWk={s.price_history_wk} priceHistoryMo={s.price_history_mo} />
         </Section>
 
@@ -402,8 +777,8 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           </Section>
         )}
 
-        {/* 技術指標 */}
-        <Section title="技術指標">
+        {/* 技術指標（當日快照） */}
+        <Section title="技術指標（當日快照）">
           <Row label="收盤價" value={`${fmt(s.close, 1)} 元`} />
           <Row label="日漲跌" value={pct(s.day_return != null ? s.day_return * 100 : null)} valueStyle={{ color: colorNum(s.day_return) }} />
           <Row label="5日報酬" value={pct(s.return_5d != null ? s.return_5d * 100 : null)} valueStyle={{ color: colorNum(s.return_5d) }} />
@@ -457,6 +832,9 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
         {/* 基本面 */}
         <Section title="基本面">
           <Row label="F-Score" value={`${fmt(s.f_score, 0)} / 9`} valueStyle={{ color: s.f_score >= 7 ? 'var(--ios-green)' : s.f_score <= 3 ? 'var(--ios-red)' : 'var(--ios-label)' }} />
+          {s.revenue_yoy != null && s.revenue_yoy !== 0 && (
+            <Row label="月營收 YoY" value={pct(s.revenue_yoy * 100)} valueStyle={{ color: s.revenue_yoy > 0 ? 'var(--ios-red)' : 'var(--ios-green)' }} />
+          )}
         </Section>
       </div>
     </div>
