@@ -29,6 +29,10 @@ def _week_bounds(
     if week_start is not None and week_end is not None:
         return week_start, week_end
 
+    if week_start is not None:
+        ws_date = datetime.date.fromisoformat(week_start)
+        return week_start, (ws_date + datetime.timedelta(days=6)).strftime("%Y-%m-%d")
+
     today = datetime.date.today()
     # Find the most recent Monday that is >= 7 days ago so the full week
     # (Mon-Fri) has completed.
