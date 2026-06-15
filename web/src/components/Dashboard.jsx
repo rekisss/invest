@@ -327,6 +327,131 @@ function PersistentSection({ items, onSelect }) {
   return <AlertTable title="📅 跨日持續強勢（近14天 TOP 50）" accentColor="var(--ios-blue)" stocks={items} columns={cols} onSelect={onSelect} />
 }
 
+/* ── Outcome Stats Panel ─────────────────────────────────────────── */
+function OutcomeStatsPanel({ outcomeStats }) {
+  if (!outcomeStats) return null
+  const grades = ['A', 'B', 'C', 'D']
+  const hasData = grades.some(g => (outcomeStats[g]?.total || 0) >= 10)
+  if (!hasData) return null
+
+  return (
+    <div style={{
+      margin: '10px 16px 0',
+      background: 'var(--ios-bg2)',
+      borderRadius: 16, padding: '14px 16px',
+      boxShadow: 'var(--shadow-card)',
+      border: '0.5px solid rgba(255,255,255,0.06)',
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
+        📊 系統勝率驗證（5日後實際表現）
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {grades.map(g => {
+          const st = outcomeStats[g] || {}
+          const wr = st.win_rate
+          const enough = (st.total || 0) >= 10
+          const gStyle = GRADE_STYLE[g] || GRADE_STYLE.D
+          const wr_color = !enough ? 'var(--ios-label3)' : wr >= 55 ? 'var(--ios-green)' : wr >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)'
+          return (
+            <div key={g} style={{
+              flex: 1, background: 'rgba(255,255,255,0.03)',
+              borderRadius: 12, padding: '10px 8px', textAlign: 'center',
+              border: `0.5px solid ${gStyle.border}`,
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: gStyle.color, marginBottom: 5 }}>{g}</div>
+              <div style={{ fontSize: 19, fontWeight: 700, color: wr_color, fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+                {enough ? `${wr}%` : '—'}
+              </div>
+              {enough && st.avg_return_pct != null && (
+                <div style={{ fontSize: 10, color: st.avg_return_pct >= 0 ? 'var(--ios-green)' : 'var(--ios-red)', marginTop: 3 }}>
+                  均{st.avg_return_pct >= 0 ? '+' : ''}{st.avg_return_pct}%
+                </div>
+              )}
+              <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 2 }}>
+                {enough ? `${st.total}筆` : '資料不足'}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 8, textAlign: 'right' }}>
+        基於歷史掃描交叉驗算（入場後第5個交易日收盤）
+      </div>
+    </div>
+  )
+}
+
+/* ── Daily Action Panel ──────────────────────────────────────────── */
+function DailyActionPanel({ scan, prevScan, persistent }) {
+  if (!scan) return null
+  const stocks = scan.top_stocks || []
+
+  const prevIds = new Set((prevScan?.top_stocks || []).map(s => s.stock_id))
+  const newAGrade = stocks.filter(s => s.grade === 'A' && !prevIds.has(s.stock_id)).slice(0, 5)
+  const multiDay = (persistent || []).filter(p => p.days_in_top >= 3).slice(0, 5)
+  const decayWarnings = stocks.filter(s => s.momentum_decay_signal && s.entry_signal).slice(0, 3)
+
+  if (newAGrade.length === 0 && multiDay.length === 0 && decayWarnings.length === 0) return null
+
+  return (
+    <div style={{
+      margin: '10px 16px 0',
+      background: 'linear-gradient(135deg, rgba(10,132,255,0.08) 0%, var(--ios-bg2) 65%)',
+      borderRadius: 16, padding: '14px 16px',
+      boxShadow: 'var(--shadow-card)',
+      borderLeft: '3px solid var(--ios-blue)',
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-blue)', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
+        🎯 今日行動重點
+      </div>
+
+      {newAGrade.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ios-yellow)', marginBottom: 4 }}>✦ 新進 A 級候選</div>
+          {newAGrade.map(s => (
+            <div key={s.stock_id} style={{ fontSize: 13, color: 'var(--ios-label)', marginLeft: 12, lineHeight: 2 }}>
+              <b style={{ fontFamily: 'var(--font-mono)', color: 'var(--ios-blue)' }}>{s.stock_id}</b>
+              {' '}{s.name}
+              {s.expected_hold_days > 0 && (
+                <span style={{ color: 'var(--ios-label3)', fontSize: 11 }}> · 預估持股 {s.expected_hold_days} 天</span>
+              )}
+              {s.entry_reason && (
+                <span style={{ color: 'var(--ios-label3)', fontSize: 11 }}> · {s.entry_reason.split(';')[0]}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {multiDay.length > 0 && (
+        <div style={{ marginBottom: decayWarnings.length > 0 ? 8 : 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ios-green)', marginBottom: 4 }}>↗ 持續強勢（{multiDay.length} 支連續入榜）</div>
+          {multiDay.map(s => (
+            <div key={s.stock_id} style={{ fontSize: 13, color: 'var(--ios-label)', marginLeft: 12, lineHeight: 2 }}>
+              <b style={{ fontFamily: 'var(--font-mono)', color: 'var(--ios-blue)' }}>{s.stock_id}</b>
+              {' '}{s.name}
+              <span style={{ color: 'var(--ios-green)', fontWeight: 600 }}> {s.days_in_top}天</span>
+              {s.score_trend > 0 && <span style={{ color: 'var(--ios-green)', fontSize: 11 }}> ↑分數持續上升</span>}
+              {s.score_trend < -50 && <span style={{ color: 'var(--ios-yellow)', fontSize: 11 }}> ↓分數滑落，留意出場</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {decayWarnings.length > 0 && (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ios-red)', marginBottom: 4 }}>⚠ 動能衰退留意</div>
+          {decayWarnings.map(s => (
+            <div key={s.stock_id} style={{ fontSize: 13, color: 'var(--ios-label3)', marginLeft: 12, lineHeight: 2 }}>
+              {s.stock_id} {s.name} — 5日動能高於2日均值，趨勢可能減速
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ── Main Component ──────────────────────────────────────────────── */
 export default function Dashboard({ data, error }) {
   const sortedDates = useMemo(
@@ -367,6 +492,11 @@ export default function Dashboard({ data, error }) {
   const pred = data.prediction || null
   const aiText = scan.ai_picks_text || ''
   const marginStats = scan.margin_stats || {}
+  const outcomeStats = data.outcomeStats || null
+  const prevDateIdx = sortedDates.indexOf(selectedDate)
+  const prevScan = prevDateIdx >= 0 && prevDateIdx + 1 < sortedDates.length
+    ? (data.scans[sortedDates[prevDateIdx + 1]] || null)
+    : null
 
   // Reset page whenever filters or tab/date change
   useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate])
@@ -563,6 +693,10 @@ export default function Dashboard({ data, error }) {
             <pre style={{ fontSize: 13, color: 'var(--ios-label)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, fontFamily: 'inherit', lineHeight: 1.65 }}>{aiText}</pre>
           </div>
         )}
+
+        {/* Outcome stats + daily action panels */}
+        <OutcomeStatsPanel outcomeStats={outcomeStats} />
+        <DailyActionPanel scan={scan} prevScan={prevScan} persistent={persistent} />
 
         {/* Margin chip stats */}
         {(marginStats.clean_count > 0 || marginStats.surge_count > 0) && (
