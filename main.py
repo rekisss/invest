@@ -3221,7 +3221,7 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
 
     _safe_print(message)
     if args.notify:
-        send_discord_messages([message])
+        send_discord_messages(split_message(message))
 
 
 def _check_positions(
