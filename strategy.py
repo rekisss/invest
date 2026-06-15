@@ -64,6 +64,10 @@ _CANDIDATE_COLS = [
     "lr_slope_20", "lr_slope_60",
     "f_score",
     "revenue_yoy", "revenue_mom", "revenue_3m_yoy",
+    "kd_level_score", "bb_level_signal",
+    "gap_to_20d_high_pct", "breakout_proximity_score",
+    "obv_strength", "foreign_buy_accel", "invest_trust_accel",
+    "expected_hold_days", "momentum_decay_signal", "estimated_sl_days",
     "entry_reason", "skip_reason",
 ]
 _WATCH_COLS = [
@@ -458,6 +462,48 @@ def prepare_stock_signals(
     _sma10_arr = merged["sma10"].to_numpy(dtype=float)
     merged["ma5_above_ma10"] = _sma5_arr > _sma10_arr
 
+    # ── 新增評分信號（加法，不改現有欄位）────────────────────────────────────────
+    # KD 梯度：超賣加分，超買扣分（比單純黃金交叉更細膩）
+    merged["kd_level_score"] = np.where(
+        _stoch_k_arr < 20, 20.0,
+        np.where(_stoch_k_arr < 30, 10.0,
+        np.where(_stoch_k_arr < 70,  0.0,
+        np.where(_stoch_k_arr < 80, -10.0, -20.0))))
+
+    # BB%B 梯度：下緣（超賣）加分，上緣（超買）扣分
+    _bb_pct_b_arr = merged["bb_pct_b"].to_numpy(dtype=float)
+    merged["bb_level_signal"] = np.where(
+        _bb_pct_b_arr < 0.1, 25.0,
+        np.where(_bb_pct_b_arr < 0.2, 12.0,
+        np.where(_bb_pct_b_arr < 0.8,  0.0,
+        np.where(_bb_pct_b_arr < 0.9, -12.0, -25.0))))
+
+    # 距 20 日高點百分比：越接近突破點，趨勢訊號越強
+    _safe_close_h20 = np.where(_close_arr > 0, _close_arr, np.nan)
+    _gap_20d = np.nan_to_num(
+        np.where(_h20_arr > 0, (_h20_arr - _close_arr) / _safe_close_h20 * 100, 999.0),
+        nan=999.0,
+    )
+    merged["gap_to_20d_high_pct"] = _gap_20d
+    merged["breakout_proximity_score"] = np.where(
+        _gap_20d < 1.0, 25.0,
+        np.where(_gap_20d < 2.0, 15.0,
+        np.where(_gap_20d < 3.5,  8.0, 0.0)))
+
+    # OBV 強度：OBV 偏離 MA 的 z-score（用 60 日滾動標準差正規化，封頂 ±2σ）
+    _obv_diff = _obv_arr - _obv_ma_arr
+    _obv_std_arr = pd.Series(_obv_arr).rolling(60, min_periods=20).std().to_numpy()
+    _safe_obv_std = np.where(_obv_std_arr > 0, _obv_std_arr, np.nan)
+    merged["obv_strength"] = np.clip(
+        np.nan_to_num(_obv_diff / _safe_obv_std, nan=0.0), -2.0, 2.0
+    )
+
+    # 籌碼加速度：外資/投信連買天數今日比昨日多（籌碼強化中）
+    _fb_prev = np.empty(_n, dtype=float); _fb_prev[0] = 0.0; _fb_prev[1:] = _fb_streak[:-1]
+    _it_prev = np.empty(_n, dtype=float); _it_prev[0] = 0.0; _it_prev[1:] = _it_streak[:-1]
+    merged["foreign_buy_accel"] = (_fb_streak > _fb_prev) & (_fb_streak >= 2)
+    merged["invest_trust_accel"] = (_it_streak > _it_prev) & (_it_streak >= 2)
+
     # ── Candlestick filters (compute numpy arrays once; reuse for ichimoku) ──
     _open_arr = merged["open"].to_numpy(dtype=float)
     _high_arr = merged["high"].to_numpy(dtype=float)
@@ -570,6 +616,19 @@ def prepare_stock_signals(
     # 融資暴增：散戶追買，籌碼不乾淨
     _margin_chg_penalty = -40.0 if _margin_chg_5d > 20.0 else 0.0
 
+    # ── 10. 新增梯度加成（純加法，不改現有邏輯）──────────────────────────────────
+    _kd_bonus  = merged["kd_level_score"].to_numpy(dtype=float)
+    _bb_bonus  = merged["bb_level_signal"].to_numpy(dtype=float)
+    _bp_bonus  = merged["breakout_proximity_score"].to_numpy(dtype=float)
+    # OBV z-score [-2,2] × 12 → 最多 ±24 分
+    _obv_bonus = merged["obv_strength"].to_numpy(dtype=float) * 12.0
+    # 籌碼加速：外資或投信連買天數今日增加 → +20 分（主力持續進場訊號）
+    _accel_bonus = np.where(
+        merged["foreign_buy_accel"].to_numpy(dtype=bool)
+        | merged["invest_trust_accel"].to_numpy(dtype=bool),
+        20.0, 0.0,
+    )
+
     merged["entry_score"] = (
         _hard_score
         + _rs_score
@@ -586,6 +645,11 @@ def prepare_stock_signals(
         + _dist_penalty
         + _blowout_penalty
         + _margin_chg_penalty
+        + _kd_bonus
+        + _bb_bonus
+        + _bp_bonus
+        + _obv_bonus
+        + _accel_bonus
     )
 
     # Momentum score (0-100): 量能 40% + 波動度 30% + 尾盤強度 30%
@@ -598,6 +662,28 @@ def prepare_stock_signals(
     merged["momentum_score"] = (
         _vol_comp * 0.40 + _volat_comp * 0.30 + _tail_comp * 0.30
     ).round(1)
+
+    # ── 持股期間預測（純新增欄位，供出場參考）────────────────────────────────────
+    # ADX + ATR 決定「強度×波動度」組合，估算最佳持股天數
+    _atr_pct_h = np.nan_to_num(_atr_arr / np.where(_close_arr > 0, _close_arr, np.nan) * 100, nan=0.0)
+    _hold_est = np.where((_adx14 > 30) & (_atr_pct_h > 2.0), 10,
+                np.where((_adx14 > 25) & (_vr_arr > 1.8), 8,
+                np.where(_adx14 > 20, 5, 3)))
+    _hold_est = np.where(_atr_pct_h > 3.0, np.maximum(3, _hold_est - 2), _hold_est)
+    _hold_est = np.where(_rs5d_arr > 0.05, _hold_est + 2, _hold_est)
+    merged["expected_hold_days"] = _hold_est.astype(np.int32)
+
+    # 動能衰減預警：5 日平均動能 > 2 日平均動能 = 近期強、最新開始弱
+    _mom_2d = pd.Series(_rs5d_arr).rolling(2, min_periods=1).mean().to_numpy()
+    _mom_5d = pd.Series(_rs5d_arr).rolling(5, min_periods=1).mean().to_numpy()
+    merged["momentum_decay_signal"] = (_mom_5d > _mom_2d) & (_mom_5d > 0.02)
+
+    # ATR 止損觸發預估天數（按 config.atr_stop_multiplier×ATR 止損距離÷日均波動估算）
+    _sl_dist = _atr_arr * config.atr_stop_multiplier
+    _daily_vol_est = np.where(_atr_arr > 0, _atr_arr / 1.5, np.nan)
+    merged["estimated_sl_days"] = np.clip(
+        np.nan_to_num(_sl_dist / _daily_vol_est, nan=20.0), 1, 20
+    ).astype(np.int32)
 
     merged["macd_death_cross"] = (
         (_p_macd >= _p_macd_sig)

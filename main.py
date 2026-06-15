@@ -682,6 +682,10 @@ def collect_signals(
         "foreign_holding_pct", "foreign_holding_chg5d",
         "insider_net_30d", "has_buyback",
         "sma5", "sma10", "ma5_above_ma10",
+        "kd_level_score", "bb_level_signal",
+        "gap_to_20d_high_pct", "breakout_proximity_score",
+        "obv_strength", "foreign_buy_accel", "invest_trust_accel",
+        "expected_hold_days", "momentum_decay_signal", "estimated_sl_days",
     ]
     _signal_cols_present: list[str] = []  # resolved on first result
     _checkpoint_written = False           # tracks whether checkpoint header was written
