@@ -380,7 +380,60 @@ function processScanData() {
     .sort((a, b) => b.days_in_top - a.days_in_top || b.latest_score - a.latest_score).slice(0, 20)
   if (dates.length > 0 && scans[dates[0]]) scans[dates[0]].persistent = persistent
   cleanOldDownloads(dates, join(PUBLIC_DIR, 'downloads'))
-  return { dates, scans }
+  return { dates, scans, priceHistoryMap, dateMap }
+}
+
+// ── Outcome stats: 5-day win rate by grade ───────────────────────────────────
+// Reads from historical scan data already loaded; zero network calls.
+// For each stock on date D with grade G, checks if close price 5 trading days
+// later was higher. Skips the 5 most recent dates (no outcome yet).
+function computeOutcomeStats(dates, dateMap, priceHistoryMap) {
+  const gradeKeys = ['A', 'B', 'C', 'D']
+  const stats = {}
+  for (const g of gradeKeys) stats[g] = { wins: 0, total: 0, sumReturn: 0 }
+
+  if (dates.length < 6) return buildResult(stats)
+
+  // dates is sorted desc; skip dates[0..4] (too recent); process dates[5..]
+  for (let i = 5; i < dates.length; i++) {
+    const entryDate = dates[i]
+    const rows = dateMap[entryDate]
+    if (!rows) continue
+
+    for (const row of rows) {
+      const grade = (row.grade || '').trim()
+      if (!stats[grade]) continue
+
+      const sid = row.stock_id
+      const history = priceHistoryMap[sid]
+      if (!history || history.length < 6) continue
+
+      const entryIdx = history.findIndex(h => h.time === entryDate)
+      if (entryIdx < 0 || entryIdx + 5 >= history.length) continue
+
+      const entryPrice = history[entryIdx].close
+      const exitPrice  = history[entryIdx + 5].close
+      if (entryPrice <= 0 || exitPrice <= 0) continue
+
+      const ret = (exitPrice - entryPrice) / entryPrice
+      stats[grade].total++
+      stats[grade].sumReturn += ret
+      if (ret > 0) stats[grade].wins++
+    }
+  }
+  return buildResult(stats)
+
+  function buildResult(s) {
+    const out = {}
+    for (const [g, v] of Object.entries(s)) {
+      out[g] = {
+        total: v.total,
+        win_rate: v.total >= 10 ? Math.round(v.wins / v.total * 1000) / 10 : null,
+        avg_return_pct: v.total >= 10 ? Math.round(v.sumReturn / v.total * 10000) / 100 : null,
+      }
+    }
+    return out
+  }
 }
 
 // ── Notion stocks ────────────────────────────────────────────────────────────
@@ -609,8 +662,12 @@ async function fetchKLineData(stockIds, primaryToken, fallbackToken) {
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
-const { dates, scans } = processScanData()
+const { dates, scans, priceHistoryMap, dateMap } = processScanData()
 console.log(`Scan data: ${dates.length} dates, latest=${dates[0]}, stocks=${scans[dates[0]]?.total_scanned ?? 0}`)
+
+console.log('Computing grade outcome stats...')
+const outcomeStats = computeOutcomeStats(dates, dateMap, priceHistoryMap)
+console.log(`Outcome stats: A=${outcomeStats.A?.total ?? 0} B=${outcomeStats.B?.total ?? 0} C=${outcomeStats.C?.total ?? 0} D=${outcomeStats.D?.total ?? 0} records`)
 
 // Merge aggregate_latest.json: if its date is newer or not in CSV dates, inject it
 console.log('Reading aggregate_latest.json...')
@@ -796,5 +853,5 @@ if ((!latestScan || latestScan.total_scanned < MIN_VALID_STOCKS) && notionFullSt
 }
 
 mkdirSync(PUBLIC_DIR, { recursive: true })
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest, outcomeStats }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
