@@ -145,6 +145,7 @@ const CHART_PL = 42
 const CHART_PR = 6
 
 function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHoverIdx, yFixed }) {
+  const subTouchRef = useRef(null)
   const H = 72, PT = 6
   const n = bars.length
   const slotW = (CHART_W - CHART_PL - CHART_PR) / n
@@ -172,12 +173,28 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
     onHoverIdx(idx >= 0 && idx < n ? idx : null)
   }
 
+  const handleTouchStart = (e) => {
+    const t = e.touches[0]
+    subTouchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget }
+  }
+  const handleTouchMove = (e) => {
+    if (!subTouchRef.current) return
+    const t = e.touches[0]
+    const dx = Math.abs(t.clientX - subTouchRef.current.startX)
+    const dy = Math.abs(t.clientY - subTouchRef.current.startY)
+    if (dx > dy && dx > 5) handleMove(t.clientX, subTouchRef.current.svgEl)
+  }
+  const handleTouchEnd = () => { subTouchRef.current = null; onHoverIdx?.(null) }
+
   return (
     <svg
       viewBox={`0 0 ${CHART_W} ${H + PT + 4}`}
-      style={{ width: '100%', display: 'block', background: 'rgba(20,20,22,0.85)', borderTop: '0.5px solid #2C2C2E', marginTop: 2 }}
+      style={{ width: '100%', display: 'block', background: 'rgba(20,20,22,0.85)', borderTop: '0.5px solid #2C2C2E', marginTop: 2, touchAction: 'pan-y' }}
       onMouseMove={e => handleMove(e.clientX, e.currentTarget)}
       onMouseLeave={() => onHoverIdx?.(null)}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       {/* Zero line or reference lines */}
       {(hBands || []).map((b, i) => (
@@ -294,30 +311,22 @@ function CandleSVG({ data, maLines, bbBands, onHoverIdx }) {
   const handleMouseLeave = () => { setHovered(null); onHoverIdx?.(null) }
 
   const handleTouchStart = (e) => {
-    const touch = e.touches[0]
-    const svg = e.currentTarget
-    touchRef.current = {
-      active: false, startX: touch.clientX,
-      timer: setTimeout(() => {
-        if (touchRef.current) {
-          touchRef.current.active = true
-          setBar(getIdx(touchRef.current.lastX ?? touchRef.current.startX, svg))
-        }
-      }, 300),
-      lastX: touch.clientX, svgEl: svg,
-    }
+    const t = e.touches[0]
+    touchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget, active: false }
   }
   const handleTouchMove = (e) => {
-    const touch = e.touches[0]
     if (!touchRef.current) return
-    touchRef.current.lastX = touch.clientX
-    if (touchRef.current.active) {
-      e.preventDefault()
-      setBar(getIdx(touch.clientX, touchRef.current.svgEl))
+    const t = e.touches[0]
+    const dx = Math.abs(t.clientX - touchRef.current.startX)
+    const dy = Math.abs(t.clientY - touchRef.current.startY)
+    if (dx > dy && dx > 5) {
+      touchRef.current.active = true
+      setBar(getIdx(t.clientX, touchRef.current.svgEl))
+    } else if (dy > 8 && !touchRef.current.active) {
+      setHovered(null); onHoverIdx?.(null)
     }
   }
   const handleTouchEnd = () => {
-    if (touchRef.current?.timer) clearTimeout(touchRef.current.timer)
     touchRef.current = null
     setHovered(null); onHoverIdx?.(null)
   }
@@ -336,7 +345,7 @@ function CandleSVG({ data, maLines, bbBands, onHoverIdx }) {
   return (
     <svg
       viewBox={`0 0 ${W} ${H + PT + 18}`}
-      style={{ width: '100%', display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
+      style={{ width: '100%', display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
@@ -452,6 +461,50 @@ function resampleBars(dailyBars, unit) {
   return Object.values(buckets).sort((a, b) => a.time.localeCompare(b.time))
 }
 
+// ── Dynamic value strip (updates with crosshair) ─────────────────────────────
+
+function ChartValueStrip({ bars, indicators, active, hoveredIdx }) {
+  const i = hoveredIdx != null ? hoveredIdx : bars.length - 1
+  const bar = bars[i]
+  if (!bar || !indicators) return null
+
+  const rsi  = indicators.rsi[i]
+  const macdL = indicators.macd.macdLine[i]
+  const macdH = indicators.macd.hist[i]
+  const k = indicators.kd.kArr[i]
+  const d = indicators.kd.dArr[i]
+  const vn = (val, dec = 1) => val != null ? Number(val).toFixed(dec) : '—'
+
+  return (
+    <div style={{
+      display: 'flex', gap: 10, padding: '5px 2px 5px', fontSize: 10.5,
+      flexWrap: 'wrap', alignItems: 'center', borderBottom: '0.5px solid var(--ios-sep)',
+      marginBottom: 1, minHeight: 26,
+    }}>
+      <span style={{ color: 'var(--ios-label3)', fontSize: 10, minWidth: 44, flexShrink: 0 }}>
+        {hoveredIdx != null ? bar.time.slice(5) : '最新'}
+      </span>
+      {active.rsi && rsi != null && (
+        <span style={{ color: 'var(--ios-label3)' }}>
+          RSI <b style={{ color: rsi > 70 ? '#FF453A' : rsi < 30 ? '#30D158' : '#BF5AF2' }}>{vn(rsi)}</b>
+        </span>
+      )}
+      {active.macd && macdL != null && (
+        <span style={{ color: 'var(--ios-label3)' }}>
+          MACD <b style={{ color: '#0A84FF' }}>{vn(macdL, 2)}</b>
+          {macdH != null && <> <b style={{ color: macdH >= 0 ? '#FF453A' : '#30D158' }}>({macdH >= 0 ? '+' : ''}{vn(macdH, 2)})</b></>}
+        </span>
+      )}
+      {active.kd && k != null && (
+        <span style={{ color: 'var(--ios-label3)' }}>
+          K <b style={{ color: '#FF9F0A' }}>{vn(k)}</b>{' '}
+          D <b style={{ color: '#0A84FF' }}>{vn(d)}</b>
+        </span>
+      )}
+    </div>
+  )
+}
+
 // ── KLineChart: orchestrates candlestick + all sub-charts ────────────────────
 
 const MA_LINES_DEF = [
@@ -561,6 +614,11 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
           暫無歷史 K 線資料
         </div>
+      )}
+
+      {/* Dynamic indicator value strip — updates with crosshair */}
+      {bars.length >= 2 && indicators && (
+        <ChartValueStrip bars={bars} indicators={indicators} active={active} hoveredIdx={hoveredIdx} />
       )}
 
       {/* MACD sub-chart */}
