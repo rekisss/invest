@@ -497,7 +497,8 @@ export default function Dashboard({ data, error }) {
   const globalMaxScore = Math.max(...stocks.map(s => s.entry_score || 0), 1)
   const pred = data.prediction || null
   const aiText = scan.ai_picks_text || ''
-  const calendarRisk = data?.aggregateLatest?.calendar_risk || scan.calendar_risk || ''
+  const aggLatest = data?.aggregateLatest
+  const calendarRisk = scan.calendar_risk || (aggLatest?.date === selectedDate ? aggLatest.calendar_risk : '') || ''
   const marginStats = scan.margin_stats || {}
   const outcomeStats = data.outcomeStats || null
   const prevDateIdx = sortedDates.indexOf(selectedDate)
