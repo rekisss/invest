@@ -868,7 +868,19 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           <Row label="KD K值" value={fmt(s.stoch_k, 1)} />
           <Row label="KD D值" value={fmt(s.stoch_d, 1)} />
           <Row label="MACD" value={fmt(s.macd, 3)} />
+          <Row label="MACD訊號" value={fmt(s.macd_signal, 3)} valueStyle={{ color: colorNum(s.macd_signal) }} />
           <Row label="MACD柱" value={fmt(s.macd_hist, 3)} valueStyle={{ color: colorNum(s.macd_hist) }} />
+          <Row label="EMA120" value={fmt(s.ema120, 1)} />
+          <Row label="BB帶寬" value={fmt(s.bb_bandwidth, 2)} valueStyle={{ color: s.bb_bandwidth != null && s.bb_bandwidth < 0.05 ? 'var(--ios-yellow)' : 'var(--ios-label)' }} />
+          {s.williams_r != null && s.williams_r !== 0 && (
+            <Row label="Williams %R" value={fmt(s.williams_r, 1)} valueStyle={{ color: s.williams_r < -80 ? 'var(--ios-green)' : s.williams_r > -20 ? 'var(--ios-red)' : 'var(--ios-label)' }} />
+          )}
+          {s.cci20 != null && s.cci20 !== 0 && (
+            <Row label="CCI(20)" value={fmt(s.cci20, 1)} valueStyle={{ color: s.cci20 > 100 ? 'var(--ios-red)' : s.cci20 < -100 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
+          )}
+          {s.mfi14 != null && s.mfi14 !== 0 && (
+            <Row label="MFI(14)" value={fmt(s.mfi14, 1)} valueStyle={{ color: s.mfi14 > 80 ? 'var(--ios-red)' : s.mfi14 < 20 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
+          )}
           <Row label="動能分數" value={fmt(s.momentum_score, 0)} />
           <Row label="相對強度5日" value={pct(s.relative_strength_5d != null ? s.relative_strength_5d * 100 : null)} valueStyle={{ color: colorNum(s.relative_strength_5d) }} />
         </Section>
@@ -893,6 +905,18 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
             )}
             {s.obv_strength != null && s.obv_strength !== 0 && (
               <Row label="OBV強度" value={fmt(s.obv_strength, 2)} valueStyle={{ color: s.obv_strength > 0.5 ? 'var(--ios-green)' : s.obv_strength < -0.5 ? 'var(--ios-red)' : 'var(--ios-label)' }} />
+            )}
+            {s.close_20d_high > 0 && (
+              <Row label="20日高點壓力" value={`${fmt(s.close_20d_high, 1)} 元`} valueStyle={{ color: 'var(--ios-label2)' }} />
+            )}
+            {s.close_10d_low > 0 && (
+              <Row label="10日低點支撐" value={`${fmt(s.close_10d_low, 1)} 元`} valueStyle={{ color: 'var(--ios-label2)' }} />
+            )}
+            {s.lr_slope_20 != null && s.lr_slope_20 !== 0 && (
+              <Row label="短期趨勢斜率(20日)" value={fmt(s.lr_slope_20, 3)} valueStyle={{ color: s.lr_slope_20 > 0 ? 'var(--ios-green)' : 'var(--ios-red)' }} />
+            )}
+            {s.lr_slope_60 != null && s.lr_slope_60 !== 0 && (
+              <Row label="中期趨勢斜率(60日)" value={fmt(s.lr_slope_60, 3)} valueStyle={{ color: s.lr_slope_60 > 0 ? 'var(--ios-green)' : 'var(--ios-red)' }} />
             )}
           </Section>
         )}
@@ -919,6 +943,12 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
               <Row label="投信買賣超" value={fmtNet(s.invest_trust_net)} valueStyle={{ color: colorNum(s.invest_trust_net) }} />
               <Row label="自營商連買天數" value={fmtStreak(s.dealer_buy_streak)} valueStyle={{ color: s.dealer_buy_streak > 0 ? 'var(--ios-red)' : 'var(--ios-label3)' }} />
               <Row label="自營商買賣超" value={fmtNet(s.dealer_net)} valueStyle={{ color: colorNum(s.dealer_net) }} />
+              {s.foreign_holding_pct > 0 && (
+                <Row label="外資持股%" value={`${fmt(s.foreign_holding_pct, 1)}%`} valueStyle={{ color: s.foreign_holding_pct >= 30 ? 'var(--ios-red)' : 'var(--ios-label)' }} />
+              )}
+              {s.foreign_holding_chg5d != null && s.foreign_holding_chg5d !== 0 && (
+                <Row label="外資持股5日變化" value={`${s.foreign_holding_chg5d > 0 ? '+' : ''}${fmt(s.foreign_holding_chg5d, 2)}%`} valueStyle={{ color: s.foreign_holding_chg5d > 1 ? 'var(--ios-red)' : s.foreign_holding_chg5d < -1 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
+              )}
             </>)
           })()}
         </Section>
@@ -940,6 +970,9 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           )}
           {s.revenue_mom != null && s.revenue_mom !== 0 && (
             <Row label="月營收 MoM" value={pct(s.revenue_mom * 100)} valueStyle={{ color: s.revenue_mom > 0 ? 'var(--ios-red)' : 'var(--ios-green)' }} />
+          )}
+          {s.revenue_3m_yoy != null && s.revenue_3m_yoy !== 0 && (
+            <Row label="近3月累計 YoY" value={pct(s.revenue_3m_yoy * 100)} valueStyle={{ color: s.revenue_3m_yoy > 0.1 ? 'var(--ios-red)' : s.revenue_3m_yoy < 0 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
           )}
         </Section>
         {!s.data_quality_ok && s.data_quality_ok != null && (
