@@ -400,11 +400,14 @@ function computeOutcomeStats(dates, dateMap, priceHistoryMap) {
     const rows = dateMap[entryDate]
     if (!rows) continue
 
+    const seenIds = new Set()
     for (const row of rows) {
       const grade = (row.grade || '').trim()
       if (!stats[grade]) continue
 
       const sid = row.stock_id
+      if (seenIds.has(sid)) continue
+      seenIds.add(sid)
       const history = priceHistoryMap[sid]
       if (!history || history.length < 6) continue
 
