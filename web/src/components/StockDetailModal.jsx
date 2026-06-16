@@ -874,21 +874,23 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
         </Section>
 
         {/* 進場就位度 */}
-        {(s.gap_to_20d_high_pct !== 0 || s.breakout_proximity_score > 0 || s.obv_strength !== 0 || s.ma5_above_ma10 != null) && (
+        {((s.gap_to_20d_high_pct != null && s.gap_to_20d_high_pct !== 0) || s.breakout_proximity_score > 0 || (s.obv_strength != null && s.obv_strength !== 0) || s.ma5_above_ma10 != null) && (
           <Section title="進場就位度">
-            {s.gap_to_20d_high_pct !== 0 && s.gap_to_20d_high_pct != null && (
+            {s.gap_to_20d_high_pct != null && s.gap_to_20d_high_pct !== 0 && (
               <Row label="距20日高點" value={`${s.gap_to_20d_high_pct > 0 ? '+' : ''}${fmt(s.gap_to_20d_high_pct, 1)}%`} valueStyle={{ color: s.gap_to_20d_high_pct <= 2 ? 'var(--ios-yellow)' : s.gap_to_20d_high_pct > 10 ? 'var(--ios-label3)' : 'var(--ios-label)' }} />
             )}
             {s.breakout_proximity_score > 0 && (
               <Row label="突破就位分" value={`${fmt(s.breakout_proximity_score, 0)} / 10`} valueStyle={{ color: s.breakout_proximity_score >= 7 ? '#FFD60A' : s.breakout_proximity_score >= 4 ? 'var(--ios-label)' : 'var(--ios-label3)' }} />
             )}
-            {s.bb_level_signal !== 0 && s.bb_level_signal != null && (
+            {s.bb_level_signal != null && s.bb_level_signal !== 0 && (
               <Row label="布林帶位置分" value={`${s.bb_level_signal > 0 ? '+' : ''}${fmt(s.bb_level_signal, 0)}`} valueStyle={{ color: s.bb_level_signal > 0 ? 'var(--ios-green)' : 'var(--ios-red)' }} />
             )}
-            {s.kd_level_score !== 0 && s.kd_level_score != null && (
+            {s.kd_level_score != null && s.kd_level_score !== 0 && (
               <Row label="KD梯度分" value={`${s.kd_level_score > 0 ? '+' : ''}${fmt(s.kd_level_score, 0)}`} valueStyle={{ color: s.kd_level_score > 0 ? 'var(--ios-green)' : 'var(--ios-red)' }} />
             )}
-            <Row label="MA5 > MA10" value={s.ma5_above_ma10 ? '✅ 是' : '❌ 否'} valueStyle={{ color: s.ma5_above_ma10 ? 'var(--ios-green)' : 'var(--ios-label3)' }} />
+            {s.ma5_above_ma10 != null && (
+              <Row label="MA5 > MA10" value={s.ma5_above_ma10 ? '✅ 是' : '❌ 否'} valueStyle={{ color: s.ma5_above_ma10 ? 'var(--ios-green)' : 'var(--ios-label3)' }} />
+            )}
             {s.obv_strength != null && s.obv_strength !== 0 && (
               <Row label="OBV強度" value={fmt(s.obv_strength, 2)} valueStyle={{ color: s.obv_strength > 0.5 ? 'var(--ios-green)' : s.obv_strength < -0.5 ? 'var(--ios-red)' : 'var(--ios-label)' }} />
             )}
