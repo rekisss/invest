@@ -120,6 +120,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
           const grade = s.grade || ''
           const isSectorLeader = !!s.is_sector_leader
           const marketRsRank = s.market_rs_rank || 0
+          const scorePct = s.score_pct || 0
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -150,6 +151,11 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
                   {notionMap[s.stock_id] && <span style={{ fontSize: 9, color: 'var(--ios-blue)', fontWeight: 700, marginLeft: 4 }}>N</span>}
                 </span>
                 <GradeBadge grade={grade} />
+                {scorePct >= 90 && (
+                  <span style={{ fontSize: 9, fontWeight: 700, color: '#FFD60A', background: 'rgba(255,214,10,0.12)', borderRadius: 5, padding: '1px 5px', flexShrink: 0, letterSpacing: 0.2 }}>
+                    前{Math.max(1, Math.round(100 - scorePct))}%
+                  </span>
+                )}
                 {isEntry
                   ? <span style={{ fontSize: 10, fontWeight: 700, color: '#30D158', background: 'rgba(48,209,88,0.14)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>進場</span>
                   : <span style={{ fontSize: 10, fontWeight: 600, color: '#0A84FF', background: 'rgba(10,132,255,0.12)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>觀察</span>
@@ -189,12 +195,12 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
                 )}
                 {foreignStreak > 0 && (
                   <span style={{ fontSize: 11, color: '#30D158', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                    外+<strong>{foreignStreak}</strong>天
+                    外+<strong>{foreignStreak}</strong>天{s.foreign_buy_accel ? <span style={{ fontSize: 9, color: 'var(--ios-orange)', fontWeight: 700 }}>↑</span> : null}
                   </span>
                 )}
                 {investStreak > 0 && (
                   <span style={{ fontSize: 11, color: '#BF5AF2', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                    投+<strong>{investStreak}</strong>天
+                    投+<strong>{investStreak}</strong>天{s.invest_trust_accel ? <span style={{ fontSize: 9, color: 'var(--ios-orange)', fontWeight: 700 }}>↑</span> : null}
                   </span>
                 )}
                 {marketRsRank > 0 && (
@@ -491,6 +497,7 @@ export default function Dashboard({ data, error }) {
   const globalMaxScore = Math.max(...stocks.map(s => s.entry_score || 0), 1)
   const pred = data.prediction || null
   const aiText = scan.ai_picks_text || ''
+  const calendarRisk = data?.aggregateLatest?.calendar_risk || scan.calendar_risk || ''
   const marginStats = scan.margin_stats || {}
   const outcomeStats = data.outcomeStats || null
   const prevDateIdx = sortedDates.indexOf(selectedDate)
@@ -703,6 +710,13 @@ export default function Dashboard({ data, error }) {
           <div style={{ margin: '10px 16px 0', padding: '10px 14px', background: 'var(--ios-bg2)', borderRadius: 12, display: 'flex', gap: 16, flexWrap: 'wrap', boxShadow: 'var(--shadow-card)' }}>
             {marginStats.clean_count > 0 && <span style={{ fontSize: 13, color: 'var(--ios-label2)' }}>📉 融資籌碼乾淨：<b style={{ color: 'var(--ios-green)' }}>{marginStats.clean_count}</b> 支</span>}
             {marginStats.surge_count > 0 && <span style={{ fontSize: 13, color: 'var(--ios-label2)' }}>⚠️ 融資暴增警告：<b style={{ color: 'var(--ios-red)' }}>{marginStats.surge_count}</b> 支</span>}
+          </div>
+        )}
+
+        {/* Calendar risk notice */}
+        {calendarRisk && (
+          <div style={{ margin: '8px 16px 0', padding: '8px 12px', background: 'rgba(255,159,10,0.08)', borderRadius: 10, borderLeft: '3px solid var(--ios-orange)' }}>
+            <span style={{ fontSize: 13, color: 'var(--ios-orange)' }}>📅 {calendarRisk}</span>
           </div>
         )}
 

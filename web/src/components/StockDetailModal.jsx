@@ -803,6 +803,9 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
         {/* 評分 */}
         <Section title="入場評分">
           <Row label="入場分數" value={s.entry_score} valueStyle={{ color: scoreColor, fontSize: 16 }} />
+          {s.score_pct > 0 && (
+            <Row label="市場百分位" value={`前 ${Math.max(1, (100 - s.score_pct).toFixed(0))}%`} valueStyle={{ color: s.score_pct >= 95 ? '#FFD60A' : s.score_pct >= 85 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
+          )}
           <Row label="條件達成數" value={`${s.condition_count} 個`} />
           <Row label="入場訊號" value={s.entry_signal ? '✅ 是' : '❌ 否'} />
           {s.grade && (() => {
@@ -811,6 +814,17 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           })()}
           {s.regime_label && s.regime_label !== '未知' && (
             <Row label="市場體制" value={s.regime_label} valueStyle={{ color: s.regime_label === '牛市' ? 'var(--ios-green)' : s.regime_label === '熊市' ? 'var(--ios-red)' : 'var(--ios-yellow)' }} />
+          )}
+          {s.expected_hold_days > 0 && (
+            <Row label="預期持股天數" value={`${s.expected_hold_days} 天`} valueStyle={{ color: 'var(--ios-blue)' }} />
+          )}
+          {s.estimated_sl_days > 0 && (
+            <Row label="預估停損觸發" value={`${s.estimated_sl_days} 天內`} valueStyle={{ color: 'var(--ios-label3)' }} />
+          )}
+          {s.momentum_decay_signal && (
+            <div style={{ margin: '6px 0 2px', padding: '6px 10px', background: 'rgba(255,159,10,0.12)', border: '0.5px solid var(--ios-orange)', borderRadius: 8, fontSize: 11, color: 'var(--ios-orange)' }}>
+              ⚠️ 動能衰退訊號：此股動能已轉弱，注意追高風險
+            </div>
           )}
           {s.entry_reason && <Row label="入場理由" value={s.entry_reason} valueStyle={{ color: 'var(--ios-green)', fontSize: 11 }} />}
           {s.skip_reason && <Row label="跳過原因" value={s.skip_reason} valueStyle={{ color: 'var(--ios-red)', fontSize: 11 }} />}
@@ -859,6 +873,28 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           <Row label="相對強度5日" value={pct(s.relative_strength_5d != null ? s.relative_strength_5d * 100 : null)} valueStyle={{ color: colorNum(s.relative_strength_5d) }} />
         </Section>
 
+        {/* 進場就位度 */}
+        {(s.gap_to_20d_high_pct !== 0 || s.breakout_proximity_score > 0 || s.obv_strength !== 0 || s.ma5_above_ma10 != null) && (
+          <Section title="進場就位度">
+            {s.gap_to_20d_high_pct !== 0 && s.gap_to_20d_high_pct != null && (
+              <Row label="距20日高點" value={`${s.gap_to_20d_high_pct > 0 ? '+' : ''}${fmt(s.gap_to_20d_high_pct, 1)}%`} valueStyle={{ color: s.gap_to_20d_high_pct <= 2 ? 'var(--ios-yellow)' : s.gap_to_20d_high_pct > 10 ? 'var(--ios-label3)' : 'var(--ios-label)' }} />
+            )}
+            {s.breakout_proximity_score > 0 && (
+              <Row label="突破就位分" value={`${fmt(s.breakout_proximity_score, 0)} / 10`} valueStyle={{ color: s.breakout_proximity_score >= 7 ? '#FFD60A' : s.breakout_proximity_score >= 4 ? 'var(--ios-label)' : 'var(--ios-label3)' }} />
+            )}
+            {s.bb_level_signal !== 0 && s.bb_level_signal != null && (
+              <Row label="布林帶位置分" value={`${s.bb_level_signal > 0 ? '+' : ''}${fmt(s.bb_level_signal, 0)}`} valueStyle={{ color: s.bb_level_signal > 0 ? 'var(--ios-green)' : 'var(--ios-red)' }} />
+            )}
+            {s.kd_level_score !== 0 && s.kd_level_score != null && (
+              <Row label="KD梯度分" value={`${s.kd_level_score > 0 ? '+' : ''}${fmt(s.kd_level_score, 0)}`} valueStyle={{ color: s.kd_level_score > 0 ? 'var(--ios-green)' : 'var(--ios-red)' }} />
+            )}
+            <Row label="MA5 > MA10" value={s.ma5_above_ma10 ? '✅ 是' : '❌ 否'} valueStyle={{ color: s.ma5_above_ma10 ? 'var(--ios-green)' : 'var(--ios-label3)' }} />
+            {s.obv_strength != null && s.obv_strength !== 0 && (
+              <Row label="OBV強度" value={fmt(s.obv_strength, 2)} valueStyle={{ color: s.obv_strength > 0.5 ? 'var(--ios-green)' : s.obv_strength < -0.5 ? 'var(--ios-red)' : 'var(--ios-label)' }} />
+            )}
+          </Section>
+        )}
+
         {/* 法人籌碼 */}
         <Section title="三大法人籌碼">
           {(() => {
@@ -871,10 +907,13 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
             )
             const fmtNet = (v) => v == null || v === 0 ? '—' : `${v > 0 ? '+' : ''}${fmt(v, 0)}`
             const fmtStreak = (v) => v > 0 ? `${v} 天` : '—'
+            const AccelTag = ({ show }) => show
+              ? <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--ios-orange)', fontWeight: 700, background: 'rgba(255,159,10,0.12)', borderRadius: 4, padding: '1px 5px' }}>加速↑</span>
+              : null
             return (<>
-              <Row label="外資連買天數" value={fmtStreak(s.foreign_buy_streak)} valueStyle={{ color: s.foreign_buy_streak > 0 ? 'var(--ios-red)' : 'var(--ios-label3)' }} />
+              <Row label="外資連買天數" value={<>{fmtStreak(s.foreign_buy_streak)}<AccelTag show={s.foreign_buy_accel} /></>} valueStyle={{ color: s.foreign_buy_streak > 0 ? 'var(--ios-red)' : 'var(--ios-label3)' }} />
               <Row label="外資買賣超" value={fmtNet(s.foreign_net)} valueStyle={{ color: colorNum(s.foreign_net) }} />
-              <Row label="投信連買天數" value={fmtStreak(s.invest_trust_streak)} valueStyle={{ color: s.invest_trust_streak > 0 ? 'var(--ios-red)' : 'var(--ios-label3)' }} />
+              <Row label="投信連買天數" value={<>{fmtStreak(s.invest_trust_streak)}<AccelTag show={s.invest_trust_accel} /></>} valueStyle={{ color: s.invest_trust_streak > 0 ? 'var(--ios-red)' : 'var(--ios-label3)' }} />
               <Row label="投信買賣超" value={fmtNet(s.invest_trust_net)} valueStyle={{ color: colorNum(s.invest_trust_net) }} />
               <Row label="自營商連買天數" value={fmtStreak(s.dealer_buy_streak)} valueStyle={{ color: s.dealer_buy_streak > 0 ? 'var(--ios-red)' : 'var(--ios-label3)' }} />
               <Row label="自營商買賣超" value={fmtNet(s.dealer_net)} valueStyle={{ color: colorNum(s.dealer_net) }} />
@@ -897,7 +936,15 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           {s.revenue_yoy != null && s.revenue_yoy !== 0 && (
             <Row label="月營收 YoY" value={pct(s.revenue_yoy * 100)} valueStyle={{ color: s.revenue_yoy > 0 ? 'var(--ios-red)' : 'var(--ios-green)' }} />
           )}
+          {s.revenue_mom != null && s.revenue_mom !== 0 && (
+            <Row label="月營收 MoM" value={pct(s.revenue_mom * 100)} valueStyle={{ color: s.revenue_mom > 0 ? 'var(--ios-red)' : 'var(--ios-green)' }} />
+          )}
         </Section>
+        {!s.data_quality_ok && s.data_quality_ok != null && (
+          <div style={{ margin: '4px 0 10px', padding: '8px 12px', background: 'rgba(255,69,58,0.08)', border: '0.5px solid var(--ios-red)', borderRadius: 10, fontSize: 11, color: 'var(--ios-red)' }}>
+            ⚠️ 資料品質警示：此股票部分指標資料不完整，評分參考性較低
+          </div>
+        )}
       </div>
     </div>
   )
