@@ -464,14 +464,18 @@ def prepare_stock_signals(
 
     # ── 新增評分信號（加法，不改現有欄位）────────────────────────────────────────
     # KD 梯度：超賣加分，超買扣分（比單純黃金交叉更細膩）
+    # Guard NaN (insufficient history) → neutral 50 so missing data scores 0, not -20
+    _stoch_k_clean = np.nan_to_num(_stoch_k_arr, nan=50.0)
     merged["kd_level_score"] = np.where(
-        _stoch_k_arr < 20, 20.0,
-        np.where(_stoch_k_arr < 30, 10.0,
-        np.where(_stoch_k_arr < 70,  0.0,
-        np.where(_stoch_k_arr < 80, -10.0, -20.0))))
+        _stoch_k_clean < 20, 20.0,
+        np.where(_stoch_k_clean < 30, 10.0,
+        np.where(_stoch_k_clean < 70,  0.0,
+        np.where(_stoch_k_clean < 80, -10.0, -20.0))))
 
     # BB%B 梯度：下緣（超賣）加分，上緣（超買）扣分
     _bb_pct_b_arr = merged["bb_pct_b"].to_numpy(dtype=float)
+    # Guard NaN (insufficient history) → neutral 0.5 so missing data scores 0, not -25
+    _bb_pct_b_arr = np.nan_to_num(_bb_pct_b_arr, nan=0.5)
     merged["bb_level_signal"] = np.where(
         _bb_pct_b_arr < 0.1, 25.0,
         np.where(_bb_pct_b_arr < 0.2, 12.0,
