@@ -337,6 +337,22 @@ function processScanData() {
       momentum_decay_signal: toBool(row.momentum_decay_signal),
       estimated_sl_days: toNum(row.estimated_sl_days),
       skip_reason: row.skip_reason || '',
+      // advanced oscillators
+      williams_r: r2(row.williams_r),
+      cci20: r2(row.cci20),
+      mfi14: r2(row.mfi14),
+      bb_bandwidth: r2(row.bb_bandwidth),
+      ema120: r2(row.ema120),
+      // support / resistance levels
+      close_20d_high: r2(row.close_20d_high),
+      close_10d_low: r2(row.close_10d_low),
+      lr_slope_20: r2(row.lr_slope_20),
+      lr_slope_60: r2(row.lr_slope_60),
+      // institutional shareholding depth
+      foreign_holding_pct: r2(row.foreign_holding_pct),
+      foreign_holding_chg5d: r2(row.foreign_holding_chg5d),
+      // revenue momentum continuity
+      revenue_3m_yoy: r2(row.revenue_3m_yoy),
       // cross-sectional signals (added by Wave 2 scan_enrich.py)
       grade: row.grade || '',
       score_pct: toNum(row.score_pct),
