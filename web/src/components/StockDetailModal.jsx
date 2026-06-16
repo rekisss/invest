@@ -182,7 +182,10 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
     const t = e.touches[0]
     const dx = Math.abs(t.clientX - subTouchRef.current.startX)
     const dy = Math.abs(t.clientY - subTouchRef.current.startY)
-    if (dx > dy && dx > 5) handleMove(t.clientX, subTouchRef.current.svgEl)
+    if (dx > dy && dx > 5) {
+      e.stopPropagation()
+      handleMove(t.clientX, subTouchRef.current.svgEl)
+    }
   }
   const handleTouchEnd = () => { subTouchRef.current = null; onHoverIdx?.(null) }
 
@@ -320,6 +323,7 @@ function CandleSVG({ data, maLines, bbBands, onHoverIdx }) {
     const dx = Math.abs(t.clientX - touchRef.current.startX)
     const dy = Math.abs(t.clientY - touchRef.current.startY)
     if (dx > dy && dx > 5) {
+      e.stopPropagation()
       touchRef.current.active = true
       setBar(getIdx(t.clientX, touchRef.current.svgEl))
     } else if (dy > 8 && !touchRef.current.active) {
