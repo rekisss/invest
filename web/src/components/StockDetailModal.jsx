@@ -862,7 +862,10 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           <Row label="ADX(14)" value={fmt(s.adx14, 1)} valueStyle={{ color: s.adx14 > 25 ? 'var(--ios-blue)' : 'var(--ios-label)' }} />
           <Row label="ATR(14)" value={fmt(s.atr14, 2)} />
           <Row label="量比" value={`${fmt(s.volume_ratio, 1)}x`} valueStyle={{ color: s.volume_ratio > 2 ? 'var(--ios-yellow)' : 'var(--ios-label)' }} />
-          {s.volume_ma20 > 0 && <Row label="20日均量" value={s.volume_ma20 >= 1000 ? `${(s.volume_ma20 / 1000).toFixed(0)}K張` : `${fmt(s.volume_ma20, 0)}張`} valueStyle={{ color: 'var(--ios-label2)' }} />}
+          {s.volume_ma20 > 0 && (() => {
+            const lots = Math.round(s.volume_ma20 / 1000)
+            return <Row label="20日均量" value={lots >= 10000 ? `${(lots / 1000).toFixed(0)}K張` : `${lots.toLocaleString()}張`} valueStyle={{ color: 'var(--ios-label2)' }} />
+          })()}
           <Row label="EMA20" value={fmt(s.ema20, 1)} />
           <Row label="EMA60" value={fmt(s.ema60, 1)} />
           <Row label="布林帶位置" value={fmt(s.bb_pct_b, 2)} />
