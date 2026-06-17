@@ -1,5 +1,80 @@
 [
   {
+    "date": "2026-06-17",
+    "generated_at": "09:53",
+    "xgb_prob_up": 0.697,
+    "xgb_label": "看多",
+    "market_data": {
+      "vix": null,
+      "sp500_ret": null,
+      "nasdaq_ret": null,
+      "sox_ret": null,
+      "tsm_adr_ret": null,
+      "futures_net": -69847.0,
+      "night_change": -815.0,
+      "pcr": null,
+      "taiex_rsi": 63.44087258230388,
+      "macd_hist": -339.4927257066811,
+      "dist_ma20": 4.092201698589482,
+      "dist_ma60": 16.058173825852794,
+      "taiex_ret_5d": 2.6450767640437745,
+      "taiex_ret_20d": 14.245258788771608,
+      "buyback_count": 0,
+      "disposition_count": 41,
+      "jpy_ret": null,
+      "arkk_ret": null,
+      "hyg_ret": null,
+      "night_trend": "↓ 走弱",
+      "market_revenue_yoy": 0.1044,
+      "market_foreign_holding_chg": -0.2159
+    },
+    "ai_insight": "# 今日操盤要點\n\n・夜盤走弱跌815點且外資期貨大幅淨賣近7萬口，短線賣壓沉重，上午開盤留意2,800點整數關卡支撑，宜控制風險並觀察外資現貨是否跟進。\n\n・處置股41支創風險警示，加權RSI達63進入超買區域，MACD直方翻負，獲利了結賣壓可能加劇，應避免追高並留意個股爆雷風險。\n\n・月營收年增10.4%基本面仍佳但未能止跌，AI題材股仍具70%上漲機率，建",
+    "regime": {
+      "label": "double_whipsaw",
+      "label_zh": "🔄 多空雙巴日",
+      "win_rate": 45.0
+    },
+    "scenario": {
+      "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+      "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
+      "danger_signals": [
+        "外資空單極重（-69,847口），軋空風險高",
+        "夜盤缺口 -815pt 過大，易反轉"
+      ],
+      "forbidden_actions": [
+        "禁止追空缺口超過200pt",
+        "禁止反彈高點追多（軋空陷阱）"
+      ]
+    },
+    "risk": {
+      "level": "high",
+      "score": 0.5,
+      "factors": [
+        {
+          "name": "外資空單極重",
+          "description": "-69,847口，軋空/崩潰雙向風險",
+          "action": "避免重押方向"
+        },
+        {
+          "name": "夜盤大缺口",
+          "description": "夜盤 -815pt，開盤後可能快速反轉",
+          "action": "禁止追缺口超過200pt"
+        },
+        {
+          "name": "結算日",
+          "description": "2026-06-17 台指期結算日，波動加大",
+          "action": "降低槓桿"
+        }
+      ]
+    },
+    "news_sentiment": {
+      "market_impact": 0.63,
+      "key_events": [],
+      "bullish_count": 0,
+      "bearish_count": 0
+    }
+  },
+  {
     "date": "2026-06-16",
     "generated_at": "08:04",
     "xgb_prob_up": 0.594,
