@@ -585,6 +585,11 @@ export default function Dashboard({ data, error }) {
         {(data.last_scan_exec_date || data.generated_at) && (
           <div style={{ fontSize: 12, color: 'var(--ios-label3)', textAlign: 'right', paddingRight: 2, marginBottom: 4 }}>
             {data.last_scan_exec_date && `掃描執行日 ${data.last_scan_exec_date}`}
+            {(() => {
+              const dd = scan.data_date
+              if (dd && dd !== selectedDate) return ` · 資料日 ${dd.slice(5)}`
+              return null
+            })()}
             {data.generated_at && ` · 建置 ${new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(data.generated_at))} CST`}
           </div>
         )}

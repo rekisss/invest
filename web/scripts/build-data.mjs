@@ -325,6 +325,13 @@ function processScanData() {
       const sid = row.stock_id, score = toNum(row.entry_score)
       if (!stockMap[sid] || score > toNum(stockMap[sid].entry_score)) stockMap[sid] = row
     }
+    // Dominant data date = most frequent row.date among deduped stocks (mode, not max)
+    const ddCounts = {}
+    for (const row of Object.values(stockMap)) {
+      const d = (row.date || '').slice(0, 10)
+      if (d) ddCounts[d] = (ddCounts[d] || 0) + 1
+    }
+    const dominantDataDate = Object.entries(ddCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || date
     const allStocks = Object.values(stockMap).sort((a, b) => toNum(b.entry_score) - toNum(a.entry_score))
     const isLatest = date === dates[0]
     const mapStock = (row, extra = {}) => ({
@@ -401,7 +408,7 @@ function processScanData() {
       .filter(r => toNum(r.limit_down_streak) >= 3)
       .sort((a, b) => toNum(b.limit_down_streak) - toNum(a.limit_down_streak))
       .map(r => mapStock(r))
-    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, limit_down_alerts: limitDownAlerts, is_partial: allStocks.length < 500 }
+    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, limit_down_alerts: limitDownAlerts, is_partial: allStocks.length < 500, data_date: dominantDataDate }
     // Write static CSV download files (top50 + all) to public/downloads/
     try {
       writeDownloadCSVs(date, allStocks, join(PUBLIC_DIR, 'downloads'))
