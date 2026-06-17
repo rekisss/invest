@@ -499,7 +499,6 @@ export default function Dashboard({ data, error }) {
   const aiText = scan.ai_picks_text || ''
   const aggLatest = data?.aggregateLatest
   const calendarRisk = scan.calendar_risk || (aggLatest?.date === selectedDate ? aggLatest.calendar_risk : '') || ''
-  const scanDataDate = scan.data_date || selectedDate
   const marginStats = scan.margin_stats || {}
   const outcomeStats = data.outcomeStats || null
   const prevDateIdx = sortedDates.indexOf(selectedDate)
@@ -719,13 +718,6 @@ export default function Dashboard({ data, error }) {
         {calendarRisk && (
           <div style={{ margin: '8px 16px 0', padding: '8px 12px', background: 'rgba(255,159,10,0.08)', borderRadius: 10, borderLeft: '3px solid var(--ios-orange)' }}>
             <span style={{ fontSize: 13, color: 'var(--ios-orange)' }}>📅 {calendarRisk}</span>
-          </div>
-        )}
-
-        {/* Data date notice — shown when FinMind data hasn't caught up to scan date yet */}
-        {scanDataDate && scanDataDate !== selectedDate && (
-          <div style={{ margin: '8px 16px 0', padding: '8px 12px', background: 'rgba(10,132,255,0.08)', borderRadius: 10, borderLeft: '3px solid var(--ios-blue)' }}>
-            <span style={{ fontSize: 13, color: 'var(--ios-blue)' }}>ℹ️ 此次掃描（{selectedDate}）資料來自 {scanDataDate}，FinMind 三大法人資料隔日更新</span>
           </div>
         )}
 

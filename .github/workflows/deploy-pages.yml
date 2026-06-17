@@ -51,13 +51,9 @@ jobs:
         working-directory: web
         run: npm ci
 
-      - name: Get Taiwan date
-        run: echo "BUILD_SCAN_DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)" >> $GITHUB_ENV
-
       - name: Build scan data JSON
         working-directory: web
         env:
-          BUILD_SCAN_DATE: ${{ env.BUILD_SCAN_DATE }}
           FINMIND_TOKEN:        ${{ secrets.FINMIND_TOKEN }}
           FINMIND_TOKEN_2:      ${{ secrets.FINMIND_TOKEN_2 }}
           FINMIND_TOKEN_3:      ${{ secrets.FINMIND_TOKEN_3 }}
