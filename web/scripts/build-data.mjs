@@ -242,20 +242,47 @@ function cleanOldDownloads(currentDates, downloadsDir) {
 // ── Process scan CSVs ────────────────────────────────────────────────────────
 function processScanData() {
   if (!existsSync(SCAN_DIR)) return { dates: [], scans: {} }
-  const files = readdirSync(SCAN_DIR)
-    .filter(f => /^batch_seq\d+_\d{4}-\d{2}-\d{2}\.csv$/.test(f)).sort()
-  const dateMap = {}
-  for (const file of files) {
+  const allDirFiles = readdirSync(SCAN_DIR)
+
+  // Execution dates from _attempted_ filenames (the date the cron actually ran)
+  // These differ from FinMind data dates when overnight scans fetch previous-day data.
+  const execDates = [...new Set(
+    allDirFiles.map(f => { const m = f.match(/^_attempted_(\d{4}-\d{2}-\d{2})/) ; return m ? m[1] : null }).filter(Boolean)
+  )].sort()  // ascending
+
+  // Read all batch CSVs — initially group by row.date (FinMind data date)
+  const rawDateMap = {}
+  for (const file of allDirFiles.filter(f => /^batch_seq\d+_\d{4}-\d{2}-\d{2}\.csv$/.test(f))) {
     try {
       const rows = parseCSV(readFileSync(join(SCAN_DIR, file), 'utf-8'))
       for (const row of rows) {
-        const date = (row.date || '').slice(0, 10)   // use actual data date, not filename
+        const date = (row.date || '').slice(0, 10)
         if (!date || date < '2020-01-01' || date > '2099-12-31') continue
-        if (!dateMap[date]) dateMap[date] = []
-        dateMap[date].push(row)
+        ;(rawDateMap[date] = rawDateMap[date] || []).push(row)
       }
     } catch (e) { console.warn(`Skip ${file}: ${e.message}`) }
   }
+
+  // Remap data dates → execution dates (when _attempted_ files exist).
+  // Rule: a FinMind data date maps to the nearest exec date where
+  //   execDate >= dataDate AND (execDate - dataDate) <= 1 day.
+  // This handles the common case (data date = exec date) and the overnight case
+  // (data date = exec date - 1 day, because FinMind had no current-day data yet).
+  const dateMap = {}
+  if (execDates.length > 0) {
+    for (const [dataDate, rows] of Object.entries(rawDateMap)) {
+      const execDate = execDates.find(d => {
+        const diff = (new Date(d) - new Date(dataDate)) / 86400000
+        return diff >= 0 && diff <= 1
+      })
+      const key = execDate || dataDate  // fall back to data date for old/unmatched entries
+      ;(dateMap[key] = dateMap[key] || []).push(...rows)
+    }
+  } else {
+    // No _attempted_ files: keep data dates as-is (legacy / historical data)
+    Object.assign(dateMap, rawDateMap)
+  }
+
   // Filter out dates with too few unique stocks (incomplete / partial scans)
   // Exception: always include the most recent available date (even if partial)
   // so users see today's data immediately after the scan completes.
@@ -396,7 +423,7 @@ function processScanData() {
     .sort((a, b) => b.days_in_top - a.days_in_top || b.latest_score - a.latest_score).slice(0, 20)
   if (dates.length > 0 && scans[dates[0]]) scans[dates[0]].persistent = persistent
   cleanOldDownloads(dates, join(PUBLIC_DIR, 'downloads'))
-  return { dates, scans, priceHistoryMap, dateMap }
+  return { dates, scans, priceHistoryMap, dateMap, execDates }
 }
 
 // ── Outcome stats: 5-day win rate by grade ───────────────────────────────────
@@ -680,8 +707,17 @@ async function fetchKLineData(stockIds, primaryToken, fallbackToken) {
   return klineMap
 }
 
+// ── Last scan execution date (from _attempted_ filenames) ────────────────────
+function getLastScanExecDate() {
+  if (!existsSync(SCAN_DIR)) return null
+  const dates = readdirSync(SCAN_DIR)
+    .map(f => { const m = f.match(/^_attempted_(\d{4}-\d{2}-\d{2})/) ; return m ? m[1] : null })
+    .filter(Boolean).sort()
+  return dates.length ? dates[dates.length - 1] : null
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
-const { dates, scans, priceHistoryMap, dateMap } = processScanData()
+const { dates, scans, priceHistoryMap, dateMap, execDates } = processScanData()
 console.log(`Scan data: ${dates.length} dates, latest=${dates[0]}, stocks=${scans[dates[0]]?.total_scanned ?? 0}`)
 
 console.log('Computing grade outcome stats...')
@@ -693,8 +729,14 @@ console.log('Reading aggregate_latest.json...')
 const aggregateLatest = readAggregateLatest()
 if (aggregateLatest) {
   const aggDate = aggregateLatest.date
-  const isNewer = !dates.length || aggDate >= dates[0]
-  const isMissing = !scans[aggDate]
+  // Map aggregate's FinMind data date to the same exec-date key used in scans
+  // (same 1-day window rule as processScanData remap)
+  const aggExecDate = execDates.find(d => {
+    const diff = (new Date(d) - new Date(aggDate)) / 86400000
+    return diff >= 0 && diff <= 1
+  }) || aggDate
+  const isNewer = !dates.length || aggExecDate >= dates[0]
+  const isMissing = !scans[aggExecDate]
   const aggSufficient = (aggregateLatest.total_scanned || 0) >= MIN_VALID_STOCKS
   if ((isNewer || isMissing) && aggSufficient) {
     // Build scan entry from aggregate JSON (matches processScanData output format)
@@ -746,7 +788,7 @@ if (aggregateLatest) {
       close: r.close || 0, limit_down_streak: r.limit_down_streak || 0,
       entry_signal: !!r.entry_signal, entry_score: Math.round(r.entry_score || 0),
     }))
-    scans[aggDate] = {
+    scans[aggExecDate] = {
       total_scanned: aggregateLatest.total_scanned || aggTopStocks.length,
       entry_count: aggregateLatest.entry_count || 0,
       top_stocks: aggTopStocks,
@@ -761,8 +803,8 @@ if (aggregateLatest) {
       calendar_risk: aggregateLatest.calendar_risk || '',
       from_aggregate_json: true,
     }
-    if (!dates.includes(aggDate)) dates.unshift(aggDate)
-    console.log(`  Injected aggregate date ${aggDate}: ${aggregateLatest.total_scanned} stocks, ai=${!!aggregateLatest.ai_picks_text}`)
+    if (!dates.includes(aggExecDate)) dates.unshift(aggExecDate)
+    console.log(`  Injected aggregate date ${aggDate}→${aggExecDate}: ${aggregateLatest.total_scanned} stocks, ai=${!!aggregateLatest.ai_picks_text}`)
   }
 }
 
@@ -872,5 +914,7 @@ if ((!latestScan || latestScan.total_scanned < MIN_VALID_STOCKS) && notionFullSt
 }
 
 mkdirSync(PUBLIC_DIR, { recursive: true })
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest, outcomeStats }), 'utf-8')
+const lastScanExecDate = getLastScanExecDate()
+console.log(`Last scan execution date: ${lastScanExecDate ?? 'unknown'}`)
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest, outcomeStats }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
