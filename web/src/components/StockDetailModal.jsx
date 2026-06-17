@@ -862,6 +862,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           <Row label="ADX(14)" value={fmt(s.adx14, 1)} valueStyle={{ color: s.adx14 > 25 ? 'var(--ios-blue)' : 'var(--ios-label)' }} />
           <Row label="ATR(14)" value={fmt(s.atr14, 2)} />
           <Row label="量比" value={`${fmt(s.volume_ratio, 1)}x`} valueStyle={{ color: s.volume_ratio > 2 ? 'var(--ios-yellow)' : 'var(--ios-label)' }} />
+          {s.volume_ma20 > 0 && <Row label="20日均量" value={s.volume_ma20 >= 1000 ? `${(s.volume_ma20 / 1000).toFixed(0)}K張` : `${fmt(s.volume_ma20, 0)}張`} valueStyle={{ color: 'var(--ios-label2)' }} />}
           <Row label="EMA20" value={fmt(s.ema20, 1)} />
           <Row label="EMA60" value={fmt(s.ema60, 1)} />
           <Row label="布林帶位置" value={fmt(s.bb_pct_b, 2)} />
@@ -872,18 +873,70 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
           <Row label="MACD柱" value={fmt(s.macd_hist, 3)} valueStyle={{ color: colorNum(s.macd_hist) }} />
           <Row label="EMA120" value={fmt(s.ema120, 1)} />
           <Row label="BB帶寬" value={fmt(s.bb_bandwidth, 2)} valueStyle={{ color: s.bb_bandwidth != null && s.bb_bandwidth < 0.05 ? 'var(--ios-yellow)' : 'var(--ios-label)' }} />
-          {s.williams_r != null && s.williams_r !== 0 && (
-            <Row label="Williams %R" value={fmt(s.williams_r, 1)} valueStyle={{ color: s.williams_r < -80 ? 'var(--ios-green)' : s.williams_r > -20 ? 'var(--ios-red)' : 'var(--ios-label)' }} />
-          )}
-          {s.cci20 != null && s.cci20 !== 0 && (
-            <Row label="CCI(20)" value={fmt(s.cci20, 1)} valueStyle={{ color: s.cci20 > 100 ? 'var(--ios-red)' : s.cci20 < -100 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
-          )}
-          {s.mfi14 != null && s.mfi14 !== 0 && (
-            <Row label="MFI(14)" value={fmt(s.mfi14, 1)} valueStyle={{ color: s.mfi14 > 80 ? 'var(--ios-red)' : s.mfi14 < 20 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
-          )}
+          <Row label="Williams %R" value={fmt(s.williams_r, 1)} valueStyle={{ color: s.williams_r < -80 ? 'var(--ios-green)' : s.williams_r > -20 ? 'var(--ios-red)' : 'var(--ios-label)' }} />
+          <Row label="CCI(20)" value={fmt(s.cci20, 1)} valueStyle={{ color: s.cci20 > 100 ? 'var(--ios-red)' : s.cci20 < -100 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
+          <Row label="MFI(14)" value={fmt(s.mfi14, 1)} valueStyle={{ color: s.mfi14 > 80 ? 'var(--ios-red)' : s.mfi14 < 20 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
           <Row label="動能分數" value={fmt(s.momentum_score, 0)} />
           <Row label="相對強度5日" value={pct(s.relative_strength_5d != null ? s.relative_strength_5d * 100 : null)} valueStyle={{ color: colorNum(s.relative_strength_5d) }} />
         </Section>
+
+        {/* 技術訊號旗標 */}
+        {(() => {
+          const bullish = [
+            { key: 'macd_golden_cross',    label: 'MACD金叉' },
+            { key: 'hist_turn_positive',   label: 'MACD柱轉正' },
+            { key: 'kd_golden_cross',      label: 'KD金叉' },
+            { key: 'above_ema60',          label: '站上EMA60' },
+            { key: 'ema60_gt_ema120',      label: 'EMA60>120' },
+            { key: 'rsi_strong',           label: 'RSI強勢' },
+            { key: 'adx_trending',         label: 'ADX趨勢' },
+            { key: 'volume_break',         label: '放量' },
+            { key: 'breakout_20d',         label: '突破20日高' },
+            { key: 'stronger_than_market', label: '強於大盤' },
+            { key: 'obv_uptrend',          label: 'OBV上升' },
+            { key: 'above_ichimoku_cloud', label: '站上雲' },
+            { key: 'bb_squeeze_breakout',  label: 'BB壓縮突破' },
+            { key: 'breakout_volume_confirm', label: '量確認突破' },
+            { key: 'williams_r_recovery',  label: 'WR回升' },
+            { key: 'cci_momentum',         label: 'CCI動能' },
+            { key: 'mfi_strong',           label: 'MFI強勢' },
+            { key: 'foreign_buy_3d',       label: '外資3日買' },
+            { key: 'invest_trust_buy_2d',  label: '投信2日買' },
+            { key: 'dealer_buy_3d',        label: '自營3日買' },
+            { key: 'ma5_above_ma10',       label: 'MA5>MA10' },
+          ]
+          const bearish = [
+            { key: 'macd_death_cross',     label: 'MACD死叉' },
+            { key: 'close_below_ema20',    label: '跌破EMA20' },
+            { key: 'long_upper_shadow',    label: '長上影線' },
+            { key: 'open_high_close_low',  label: '開高走低' },
+          ]
+          const activeB = bullish.filter(sig => s[sig.key])
+          const activeR = bearish.filter(sig => s[sig.key])
+          if (!activeB.length && !activeR.length) return null
+          return (
+            <Section title="技術訊號">
+              {activeB.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: activeR.length ? 10 : 0 }}>
+                  {activeB.map(sig => (
+                    <span key={sig.key} style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(48,209,88,0.12)', color: 'var(--ios-green)', border: '0.5px solid rgba(48,209,88,0.4)', borderRadius: 6, fontWeight: 600, letterSpacing: 0.2 }}>
+                      ✓ {sig.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {activeR.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {activeR.map(sig => (
+                    <span key={sig.key} style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(255,69,58,0.12)', color: 'var(--ios-red)', border: '0.5px solid rgba(255,69,58,0.4)', borderRadius: 6, fontWeight: 600, letterSpacing: 0.2 }}>
+                      ✗ {sig.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </Section>
+          )
+        })()}
 
         {/* 進場就位度 */}
         {((s.gap_to_20d_high_pct != null && s.gap_to_20d_high_pct !== 0) || s.breakout_proximity_score > 0 || (s.obv_strength != null && s.obv_strength !== 0) || s.ma5_above_ma10 != null) && (
