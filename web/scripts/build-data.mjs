@@ -270,21 +270,7 @@ function processScanData() {
   const scans = {}
   const stockHistory = {}
 
-  // If the deploy ran on a date newer than the latest FinMind data, inject a virtual
-  // entry for that date so the date selector shows today's scan even when FinMind
-  // hasn't yet published the same-day institutional data (typically updated next morning).
-  const buildScanDate = (process.env.BUILD_SCAN_DATE || '').slice(0, 10)
-  const latestDataDate = dates[0] || ''
-  const dateDateOverride = {}   // scannedDate -> actual FinMind data date (when they differ)
-  let virtualDate = null
-  if (/^\d{4}-\d{2}-\d{2}$/.test(buildScanDate) && buildScanDate > latestDataDate && latestDataDate) {
-    virtualDate = buildScanDate
-    dateDateOverride[virtualDate] = latestDataDate
-    console.log(`  掃描日 ${virtualDate} 注入（FinMind 資料來自 ${latestDataDate}）`)
-  }
-
   // Collect OHLCV price history per stock across all available dates (chronological)
-  // NOTE: virtual date is injected AFTER this loop to avoid duplicate price points.
   const priceHistoryMap = {}
   for (const date of [...dates].reverse()) {
     const seen = new Set()
@@ -304,13 +290,6 @@ function processScanData() {
         volume: toNum(row.volume),
       })
     }
-  }
-
-  // Inject virtual scan date now (price history already built, no duplicate points)
-  if (virtualDate) {
-    dateMap[virtualDate] = dateMap[latestDataDate]
-    dates.unshift(virtualDate)
-    if (dates.length > MAX_DATES) dates.pop()
   }
 
   for (const date of dates) {
@@ -395,7 +374,7 @@ function processScanData() {
       .filter(r => toNum(r.limit_down_streak) >= 3)
       .sort((a, b) => toNum(b.limit_down_streak) - toNum(a.limit_down_streak))
       .map(r => mapStock(r))
-    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, limit_down_alerts: limitDownAlerts, is_partial: allStocks.length < 500, data_date: dateDateOverride[date] || date }
+    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, limit_down_alerts: limitDownAlerts, is_partial: allStocks.length < 500 }
     // Write static CSV download files (top50 + all) to public/downloads/
     try {
       writeDownloadCSVs(date, allStocks, join(PUBLIC_DIR, 'downloads'))
