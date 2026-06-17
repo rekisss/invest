@@ -321,9 +321,12 @@ function processScanData() {
 
   for (const date of dates) {
     const stockMap = {}
+    let maxDataDate = ''
     for (const row of dateMap[date]) {
       const sid = row.stock_id, score = toNum(row.entry_score)
       if (!stockMap[sid] || score > toNum(stockMap[sid].entry_score)) stockMap[sid] = row
+      const rd = (row.date || '').slice(0, 10)
+      if (rd > maxDataDate) maxDataDate = rd
     }
     const allStocks = Object.values(stockMap).sort((a, b) => toNum(b.entry_score) - toNum(a.entry_score))
     const isLatest = date === dates[0]
@@ -401,7 +404,7 @@ function processScanData() {
       .filter(r => toNum(r.limit_down_streak) >= 3)
       .sort((a, b) => toNum(b.limit_down_streak) - toNum(a.limit_down_streak))
       .map(r => mapStock(r))
-    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, limit_down_alerts: limitDownAlerts, is_partial: allStocks.length < 500 }
+    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, limit_down_alerts: limitDownAlerts, is_partial: allStocks.length < 500, data_date: maxDataDate || date }
     // Write static CSV download files (top50 + all) to public/downloads/
     try {
       writeDownloadCSVs(date, allStocks, join(PUBLIC_DIR, 'downloads'))
