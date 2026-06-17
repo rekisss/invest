@@ -680,6 +680,15 @@ async function fetchKLineData(stockIds, primaryToken, fallbackToken) {
   return klineMap
 }
 
+// ── Last scan execution date (from _attempted_ filenames) ────────────────────
+function getLastScanExecDate() {
+  if (!existsSync(SCAN_DIR)) return null
+  const dates = readdirSync(SCAN_DIR)
+    .map(f => { const m = f.match(/^_attempted_(\d{4}-\d{2}-\d{2})/) ; return m ? m[1] : null })
+    .filter(Boolean).sort()
+  return dates.length ? dates[dates.length - 1] : null
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 const { dates, scans, priceHistoryMap, dateMap } = processScanData()
 console.log(`Scan data: ${dates.length} dates, latest=${dates[0]}, stocks=${scans[dates[0]]?.total_scanned ?? 0}`)
@@ -872,5 +881,7 @@ if ((!latestScan || latestScan.total_scanned < MIN_VALID_STOCKS) && notionFullSt
 }
 
 mkdirSync(PUBLIC_DIR, { recursive: true })
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest, outcomeStats }), 'utf-8')
+const lastScanExecDate = getLastScanExecDate()
+console.log(`Last scan execution date: ${lastScanExecDate ?? 'unknown'}`)
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest, outcomeStats }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
