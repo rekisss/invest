@@ -808,6 +808,7 @@ if (aggregateLatest) {
       margin_stats: aggregateLatest.margin_stats || {},
       ai_picks_text: aggregateLatest.ai_picks_text || '',
       calendar_risk: aggregateLatest.calendar_risk || '',
+      data_date: aggDate,
       from_aggregate_json: true,
     }
     if (!dates.includes(aggExecDate)) dates.unshift(aggExecDate)
