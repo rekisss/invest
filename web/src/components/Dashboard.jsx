@@ -714,6 +714,205 @@ function DailyActionPanel({ scan, prevScan, persistent }) {
   )
 }
 
+/* ── Institutional money-flow leaderboard ────────────────────────── */
+function InstitutionalLeaderboard({ stocks, onSelect }) {
+  const ranked = useMemo(() => {
+    return (stocks || [])
+      .map(s => {
+        const f = Math.max(0, s.foreign_buy_streak || 0)
+        const t = Math.max(0, s.invest_trust_streak || 0)
+        const d = Math.max(0, s.dealer_buy_streak || 0)
+        // Taiwan convention: 投信 (trust) tends to lead short-term momentum,
+        // 外資 (foreign) confirms trend, 自營 (dealer) is noisiest.
+        let flow = f * 1.0 + t * 1.4 + d * 0.6
+        if (s.foreign_buy_accel) flow += 2
+        if (s.invest_trust_accel) flow += 2.5
+        return { ...s, _flow: flow, _f: f, _t: t, _d: d }
+      })
+      .filter(s => s._flow > 0)
+      .sort((a, b) => b._flow - a._flow)
+      .slice(0, 8)
+  }, [stocks])
+  if (ranked.length === 0) return null
+
+  const Chip = ({ n, label, color, accel }) => n <= 0 ? null : (
+    <span style={{ fontSize: 10, fontWeight: 700, color, background: `${color}1A`, borderRadius: 5, padding: '1px 5px', whiteSpace: 'nowrap' }}>
+      {label}{n}{accel ? '↑' : ''}
+    </span>
+  )
+
+  return (
+    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '14px 16px', boxShadow: 'var(--shadow-card)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
+        🏦 法人籌碼集中排行（連買強度）
+      </div>
+      {ranked.map((s, i) => (
+        <div key={s.stock_id} onClick={() => onSelect?.(s)} style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0',
+          borderBottom: i < ranked.length - 1 ? '0.5px solid var(--ios-sep)' : 'none', cursor: 'pointer',
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: i < 3 ? 'var(--ios-yellow)' : 'var(--ios-label3)', width: 16, textAlign: 'center', flexShrink: 0 }}>{i + 1}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ios-label)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {s.stock_id} <span style={{ color: 'var(--ios-label2)', fontWeight: 400 }}>{s.name}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 4, marginTop: 3, flexWrap: 'wrap' }}>
+              <Chip n={s._f} label="外" color="var(--ios-red)" accel={s.foreign_buy_accel} />
+              <Chip n={s._t} label="投" color="var(--ios-orange)" accel={s.invest_trust_accel} />
+              <Chip n={s._d} label="自" color="var(--ios-blue)" />
+            </div>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-teal)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>{s._flow.toFixed(1)}</span>
+        </div>
+      ))}
+      <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 8, lineHeight: 1.5 }}>
+        強度＝外資連買×1.0＋投信×1.4＋自營×0.6，加速另計。數字越高代表法人買盤越集中、越持續。
+      </div>
+    </div>
+  )
+}
+
+/* ── Sector rotation tracker (cross-date) ────────────────────────── */
+function SectorRotationTracker({ scans, dates }) {
+  const data = useMemo(() => {
+    const recent = (dates || []).slice(0, 5)           // desc: [today, ..., 4d ago]
+    if (recent.length < 2) return null
+    // count per sector per date among that date's top stocks
+    const perDate = recent.map(d => {
+      const counts = {}
+      for (const s of (scans?.[d]?.top_stocks || [])) {
+        const sec = s.industry_category || '其他'
+        counts[sec] = (counts[sec] || 0) + 1
+      }
+      return counts
+    })
+    const today = perDate[0], prev = perDate[1]
+    const allSecs = new Set()
+    perDate.forEach(c => Object.keys(c).forEach(k => allSecs.add(k)))
+    const rows = [...allSecs].map(sec => {
+      const series = perDate.map(c => c[sec] || 0).reverse()  // ascending in time
+      return { sec, today: today[sec] || 0, delta: (today[sec] || 0) - (prev[sec] || 0), series }
+    })
+    .filter(r => r.today > 0)
+    .sort((a, b) => b.today - a.today || b.delta - a.delta)
+    .slice(0, 8)
+    const maxCount = Math.max(...rows.map(r => Math.max(...r.series)), 1)
+    return { rows, maxCount, span: recent.length }
+  }, [scans, dates])
+  if (!data) return null
+
+  return (
+    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '14px 16px', boxShadow: 'var(--shadow-card)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
+        🔄 產業輪動追蹤（近 {data.span} 個交易日入榜家數）
+      </div>
+      {data.rows.map((r, i) => {
+        const arrow = r.delta > 0 ? '▲' : r.delta < 0 ? '▼' : '—'
+        const aColor = r.delta > 0 ? 'var(--ios-green)' : r.delta < 0 ? 'var(--ios-red)' : 'var(--ios-label3)'
+        return (
+          <div key={r.sec} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: i < data.rows.length - 1 ? '0.5px solid var(--ios-sep)' : 'none' }}>
+            <span style={{ fontSize: 12, color: 'var(--ios-label2)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.sec}</span>
+            {/* mini bar trend */}
+            <span style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 18, flexShrink: 0 }}>
+              {r.series.map((v, j) => (
+                <span key={j} style={{
+                  width: 4, height: `${Math.max(2, (v / data.maxCount) * 18)}px`,
+                  background: j === r.series.length - 1 ? 'var(--ios-teal)' : 'var(--ios-fill3)', borderRadius: 1,
+                }} />
+              ))}
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-label)', fontFamily: 'var(--font-mono)', width: 22, textAlign: 'right', flexShrink: 0 }}>{r.today}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: aColor, width: 30, textAlign: 'right', flexShrink: 0 }}>
+              {arrow}{r.delta !== 0 ? Math.abs(r.delta) : ''}
+            </span>
+          </div>
+        )
+      })}
+      <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 8, lineHeight: 1.5 }}>
+        家數＝該產業有幾支進入當日強勢榜。▲ 表示比前一日增加（資金流入升溫），▼ 表示退燒。
+      </div>
+    </div>
+  )
+}
+
+/* ── Simple strategy backtest simulator (interactive) ────────────── */
+function BacktestSimulator({ accuracy }) {
+  const [bucket, setBucket] = useState('top10')
+  const [horizon, setHorizon] = useState(5)
+  if (!accuracy) return null
+  const horizons = accuracy.horizons || [1, 5, 10]
+  if (!(accuracy.top10?.d5?.total >= 20)) return null
+
+  const buckets = [
+    { key: 'top10', label: '高分前10%' },
+    { key: 'top25', label: '高分前25%' },
+    { key: 'baseline', label: '全市場' },
+  ]
+  const cur = accuracy[bucket]?.[`d${horizon}`] || {}
+  const base = accuracy.baseline?.[`d${horizon}`] || {}
+  const avg = cur.avg_return_pct
+  const wr = cur.win_rate
+  const total = cur.total || 0
+  const edge = (avg != null && base.avg_return_pct != null) ? avg - base.avg_return_pct : null
+  // illustrative compounding over 20 independent trades
+  const compounded = avg != null ? ((Math.pow(1 + avg / 100, 20) - 1) * 100) : null
+
+  const btn = (active) => ({
+    flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 700, borderRadius: 8, cursor: 'pointer',
+    border: '0.5px solid ' + (active ? 'var(--ios-blue)' : 'transparent'),
+    background: active ? 'rgba(10,132,255,0.15)' : 'var(--ios-fill4)',
+    color: active ? 'var(--ios-blue)' : 'var(--ios-label3)', transition: 'all 0.15s',
+  })
+
+  return (
+    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '14px 16px', boxShadow: 'var(--shadow-card)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
+        🧪 策略回測試算
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        {buckets.map(b => (
+          <button key={b.key} style={btn(bucket === b.key)} onClick={() => setBucket(b.key)}>{b.label}</button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        {horizons.map(h => (
+          <button key={h} style={btn(horizon === h)} onClick={() => setHorizon(h)}>持有{h}日</button>
+        ))}
+      </div>
+      {total < 10 ? (
+        <div style={{ fontSize: 12, color: 'var(--ios-label3)', textAlign: 'center', padding: '8px 0' }}>此組合樣本不足</div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '10px 6px', textAlign: 'center' }}>
+              <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 4 }}>平均報酬</div>
+              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-mono)', color: avg >= 0 ? 'var(--ios-green)' : 'var(--ios-red)', lineHeight: 1 }}>
+                {avg >= 0 ? '+' : ''}{avg}%
+              </div>
+            </div>
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '10px 6px', textAlign: 'center' }}>
+              <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 4 }}>勝率</div>
+              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-mono)', color: wr >= 55 ? 'var(--ios-green)' : wr >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)', lineHeight: 1 }}>{wr}%</div>
+            </div>
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '10px 6px', textAlign: 'center' }}>
+              <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 4 }}>超額報酬</div>
+              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-mono)', color: edge == null ? 'var(--ios-label3)' : edge >= 0 ? 'var(--ios-green)' : 'var(--ios-red)', lineHeight: 1 }}>
+                {edge == null ? '—' : `${edge >= 0 ? '+' : ''}${edge.toFixed(2)}%`}
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--ios-label2)', marginTop: 10, lineHeight: 1.6 }}>
+            每次買進<b style={{ color: 'var(--ios-label)' }}>{buckets.find(b => b.key === bucket).label}</b>並持有 <b style={{ color: 'var(--ios-label)' }}>{horizon}</b> 個交易日，
+            單筆平均 <b style={{ color: avg >= 0 ? 'var(--ios-green)' : 'var(--ios-red)' }}>{avg >= 0 ? '+' : ''}{avg}%</b>
+            {compounded != null && <>；若連續操作 20 次（複利示意）約 <b style={{ color: compounded >= 0 ? 'var(--ios-green)' : 'var(--ios-red)' }}>{compounded >= 0 ? '+' : ''}{compounded.toFixed(0)}%</b></>}。
+            <span style={{ color: 'var(--ios-label3)' }}>　樣本 {total} 筆，未計手續費／滑價，僅供參考。</span>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 /* ── Main Component ──────────────────────────────────────────────── */
 export default function Dashboard({ data, error }) {
   const sortedDates = useMemo(
@@ -1088,6 +1287,9 @@ export default function Dashboard({ data, error }) {
         {/* Outcome stats + daily action panels */}
         <OutcomeStatsPanel outcomeStats={outcomeStats} />
         <StrategyAccuracyPanel accuracy={data.strategyAccuracy} />
+        <BacktestSimulator accuracy={data.strategyAccuracy} />
+        <InstitutionalLeaderboard stocks={stocks} onSelect={setSelectedStock} />
+        <SectorRotationTracker scans={data.scans} dates={sortedDates} />
         <DailyActionPanel scan={scan} prevScan={prevScan} persistent={persistent} />
 
         {/* Margin chip stats */}
