@@ -1063,7 +1063,8 @@ let klineMap = {}
 if (existsSync(KLINE_FILE)) {
   klineMap = JSON.parse(readFileSync(KLINE_FILE, 'utf-8'))
   const firstKey = Object.keys(klineMap)[0]
-  const sampleDays = firstKey ? (klineMap[firstKey].length ?? 0) : 0
+  const firstEntry = firstKey ? klineMap[firstKey] : null
+  const sampleDays = Array.isArray(firstEntry) ? firstEntry.length : (firstEntry?.['1d']?.length ?? 0)
   console.log(`K-line: loaded cache (${Object.keys(klineMap).length} stocks, ~${sampleDays} days each)`)
 } else {
   console.log('K-line: no cache found — falling back to live fetch')

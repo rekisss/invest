@@ -1,0 +1,56 @@
+name: K線全量補跑（手動觸發）
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: '輸入 yes 確認清除 kline_cache 並重抓 2 年歷史'
+        required: true
+        default: 'no'
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'yes'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: 清除 kline_cache（強制全量重抓）
+        run: |
+          rm -f output/kline_cache.json
+          echo "kline_cache.json 已清除，將對所有股票重抓 2 年歷史"
+
+      - name: K線全量抓取（約 1548 支 × 2 年）
+        env:
+          NOTION_TOKEN:       ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        run: python kline_fetch.py
+
+      - name: Commit kline cache + Excel
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cp output/kline_cache.json /tmp/kline_cache.json
+          cp output/kline_export.xlsx /tmp/kline_export.xlsx 2>/dev/null || true
+          git stash --include-untracked
+          git pull --rebase origin main
+          git stash drop 2>/dev/null || true
+          cp /tmp/kline_cache.json output/kline_cache.json
+          cp /tmp/kline_export.xlsx output/kline_export.xlsx 2>/dev/null || true
+          git add output/kline_cache.json output/kline_export.xlsx 2>/dev/null || git add output/kline_cache.json
+          git diff --staged --quiet && echo "No changes to commit" || \
+            git commit -m "chore: kline 全量重抓 2年歷史 [skip ci]"
+          git push -u origin main
