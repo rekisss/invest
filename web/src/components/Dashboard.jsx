@@ -14,6 +14,17 @@ const SORT_OPTIONS = [
   { value: 'close',             label: '收盤價' },
 ]
 
+const SIGNAL_FILTERS = [
+  { key: 'macd_golden_cross',    label: 'MACD金叉' },
+  { key: 'kd_golden_cross',      label: 'KD金叉' },
+  { key: 'foreign_buy_3d',       label: '外資連買' },
+  { key: 'invest_trust_buy_2d',  label: '投信買超' },
+  { key: 'above_ichimoku_cloud', label: '站上雲' },
+  { key: 'bb_squeeze_breakout',  label: 'BB突破' },
+  { key: 'adx_trending',         label: 'ADX趨勢' },
+  { key: 'rsi_strong',           label: 'RSI強勢' },
+]
+
 const GRADE_STYLE = {
   A: { color: '#FFD60A', bg: 'rgba(255,214,10,0.15)',  border: 'rgba(255,214,10,0.35)' },
   B: { color: '#30D158', bg: 'rgba(48,209,88,0.13)',   border: 'rgba(48,209,88,0.32)' },
@@ -94,7 +105,7 @@ function ScoreCell({ score, entry_signal }) {
   )
 }
 
-function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
+function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {} }) {
   if (!stocks || stocks.length === 0) {
     return (
       <div style={{ padding: '40px 20px', textAlign: 'center' }}>
@@ -160,6 +171,18 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
                   ? <span style={{ fontSize: 10, fontWeight: 700, color: '#30D158', background: 'rgba(48,209,88,0.14)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>進場</span>
                   : <span style={{ fontSize: 10, fontWeight: 600, color: '#0A84FF', background: 'rgba(10,132,255,0.12)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>觀察</span>
                 }
+                <button
+                  onClick={e => { e.stopPropagation(); toggleWatchlist && toggleWatchlist(s.stock_id) }}
+                  style={{
+                    background: 'none', border: 'none', padding: '0 2px',
+                    cursor: 'pointer', flexShrink: 0, lineHeight: 1,
+                    color: watchlist.has(s.stock_id) ? '#FFD60A' : 'var(--ios-label4)',
+                    fontSize: 15, transition: 'color 0.15s',
+                  }}
+                  title={watchlist.has(s.stock_id) ? '移出自選股' : '加入自選股'}
+                >
+                  {watchlist.has(s.stock_id) ? '★' : '☆'}
+                </button>
               </div>
 
               {/* Row 2: Score bar + score + price */}
@@ -210,6 +233,11 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore }) {
                 )}
                 {isSectorLeader && (
                   <span style={{ fontSize: 11, color: '#FFD60A', whiteSpace: 'nowrap' }}>⭐旗手</span>
+                )}
+                {(persistentMap[s.stock_id] || 0) >= 2 && (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ios-green)', background: 'rgba(48,209,88,0.13)', borderRadius: 5, padding: '1px 5px', whiteSpace: 'nowrap', flexShrink: 0 }} title="近14天入榜次數">
+                    📅{persistentMap[s.stock_id]}次
+                  </span>
                 )}
               </div>
             </div>
@@ -478,6 +506,31 @@ export default function Dashboard({ data, error }) {
   const [page, setPage] = useState(0)
   const notionMap = data?.notionMap || {}
 
+  const [watchlist, setWatchlist] = useState(() => {
+    try {
+      const saved = localStorage.getItem('stock_watchlist')
+      return new Set(saved ? JSON.parse(saved) : [])
+    } catch { return new Set() }
+  })
+  const toggleWatchlist = (stock_id) => {
+    setWatchlist(prev => {
+      const next = new Set(prev)
+      if (next.has(stock_id)) next.delete(stock_id)
+      else next.add(stock_id)
+      try { localStorage.setItem('stock_watchlist', JSON.stringify([...next])) } catch {}
+      return next
+    })
+  }
+  const [activeSignals, setActiveSignals] = useState(new Set())
+  const toggleSignal = (key) => {
+    setActiveSignals(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
   if (error || !data || !data.dates || data.dates.length === 0) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, padding: 24, textAlign: 'center' }}>
@@ -506,10 +559,17 @@ export default function Dashboard({ data, error }) {
     ? (data.scans[sortedDates[prevDateIdx + 1]] || null)
     : null
 
-  // Reset page whenever filters or tab/date change
-  useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate])
+  const watchlistStocks = useMemo(() => stocks.filter(s => watchlist.has(s.stock_id)), [stocks, watchlist])
+  const persistentMap = useMemo(() => {
+    const m = {}
+    ;(persistent || []).forEach(p => { m[p.stock_id] = p.days_in_top })
+    return m
+  }, [persistent])
 
-  const baseStocks = viewTab === 'entry' ? entryStocks : viewTab === 'limitdown' ? limitDownAlerts : stocks
+  // Reset page whenever filters or tab/date change
+  useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals])
+
+  const baseStocks = viewTab === 'entry' ? entryStocks : viewTab === 'limitdown' ? limitDownAlerts : viewTab === 'watchlist' ? watchlistStocks : stocks
 
   const filteredAndSorted = useMemo(() => {
     let list = baseStocks
@@ -520,19 +580,23 @@ export default function Dashboard({ data, error }) {
         (s.name || '').toLowerCase().includes(q)
       )
     }
+    if (activeSignals.size > 0 && viewTab !== 'limitdown') {
+      list = list.filter(s => [...activeSignals].every(key => !!s[key]))
+    }
     return [...list].sort((a, b) => {
       const va = a[sortField] ?? -Infinity
       const vb = b[sortField] ?? -Infinity
       return sortDir === 'desc' ? vb - va : va - vb
     })
-  }, [baseStocks, searchQuery, sortField, sortDir])
+  }, [baseStocks, searchQuery, sortField, sortDir, activeSignals])
 
   const totalPages = Math.ceil(filteredAndSorted.length / PAGE_SIZE)
   const pagedStocks = filteredAndSorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   const viewOptions = [
     { id: 'all',       label: `全部` },
-    { id: 'entry',     label: `進場 ${entryStocks.length > 0 ? `·${entryStocks.length}` : ''}` },
+    { id: 'entry',     label: `進場${entryStocks.length > 0 ? ` ·${entryStocks.length}` : ''}` },
+    { id: 'watchlist', label: `⭐${watchlist.size > 0 ? ` ·${watchlist.size}` : ''}` },
     { id: 'limitdown', label: `🔴 跌停` },
   ]
 
@@ -642,6 +706,41 @@ export default function Dashboard({ data, error }) {
             ))}
           </div>
         </div>
+
+        {/* Signal filter chips */}
+        {viewTab !== 'limitdown' && (
+          <div style={{ marginTop: 8, display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
+            {SIGNAL_FILTERS.map(f => {
+              const isActive = activeSignals.has(f.key)
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => toggleSignal(f.key)}
+                  style={{
+                    flexShrink: 0, fontSize: 11, fontWeight: 600,
+                    padding: '4px 10px', borderRadius: 9999, cursor: 'pointer',
+                    border: isActive ? '1px solid var(--ios-green)' : '1px solid rgba(255,255,255,0.1)',
+                    background: isActive ? 'rgba(48,209,88,0.15)' : 'var(--ios-bg3)',
+                    color: isActive ? 'var(--ios-green)' : 'var(--ios-label3)',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {isActive ? '✓ ' : ''}{f.label}
+                </button>
+              )
+            })}
+            {activeSignals.size > 0 && (
+              <button
+                onClick={() => setActiveSignals(new Set())}
+                style={{
+                  flexShrink: 0, fontSize: 11, padding: '4px 10px', borderRadius: 9999,
+                  border: '1px solid rgba(255,69,58,0.3)', background: 'rgba(255,69,58,0.08)',
+                  color: 'var(--ios-red)', cursor: 'pointer', fontWeight: 600,
+                }}
+              >✕ 清除</button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Scrollable Content ───────────────────────────────────── */}
@@ -760,12 +859,23 @@ export default function Dashboard({ data, error }) {
               </span>
             )}
           </div>
-          <WatchlistView
-            stocks={pagedStocks}
-            globalMaxScore={globalMaxScore}
-            onSelect={setSelectedStock}
-            notionMap={notionMap}
-          />
+          {viewTab === 'watchlist' && watchlistStocks.length === 0 ? (
+            <div style={{ padding: '48px 20px', textAlign: 'center' }}>
+              <div style={{ fontSize: 40, marginBottom: 10 }}>☆</div>
+              <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ios-label)', marginBottom: 6 }}>尚無自選股</div>
+              <div style={{ fontSize: 13, color: 'var(--ios-label3)' }}>點選股票列右側的 ☆ 即可加入</div>
+            </div>
+          ) : (
+            <WatchlistView
+              stocks={pagedStocks}
+              globalMaxScore={globalMaxScore}
+              onSelect={setSelectedStock}
+              notionMap={notionMap}
+              watchlist={watchlist}
+              toggleWatchlist={toggleWatchlist}
+              persistentMap={persistentMap}
+            />
+          )}
           {/* Pagination */}
           {totalPages > 1 && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '12px 20px 4px' }}>
