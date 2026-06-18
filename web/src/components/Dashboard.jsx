@@ -969,18 +969,30 @@ export default function Dashboard({ data, error }) {
       return next
     })
   }
-  // Collapse the secondary controls (freshness hint / search / signal chips)
-  // when the list is scrolled down, so more rows are visible. Scrolling up
-  // (or back to top) restores them. Date selector + view tabs stay visible.
+  // Collapse the secondary controls on downward scroll; restore on upward scroll.
+  // Velocity-aware: fast swipe collapses/expands immediately, slow drag uses
+  // a distance threshold so accidental micro-movements don't flicker.
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const lastScrollY = useRef(0)
+  const lastScrollTime = useRef(Date.now())
+  const collapseRef = useRef(null)
   const handleListScroll = (e) => {
     const y = e.currentTarget.scrollTop
-    const prev = lastScrollY.current
-    if (y <= 8) setHeaderCollapsed(false)            // back at top → always expand
-    else if (y > prev + 6 && y > 48) setHeaderCollapsed(true)   // scrolling down
-    else if (y < prev - 6) setHeaderCollapsed(false)            // scrolling up
+    const now = Date.now()
+    const dt = Math.max(1, now - lastScrollTime.current)
+    const dy = y - lastScrollY.current
+    const velocity = dy / dt  // px/ms — positive = scrolling down
     lastScrollY.current = y
+    lastScrollTime.current = now
+    if (y <= 10) {
+      setHeaderCollapsed(false)
+    } else if (velocity > 0.8 || (velocity > 0.15 && dy > 12)) {
+      // Fast swipe or sustained downward drag → collapse
+      setHeaderCollapsed(true)
+    } else if (velocity < -0.6 || (velocity < -0.1 && dy < -8)) {
+      // Fast swipe up or sustained upward drag → expand
+      setHeaderCollapsed(false)
+    }
   }
   const [activeSignals, setActiveSignals] = useState(new Set())
   const toggleSignal = (key) => {
@@ -1119,14 +1131,17 @@ export default function Dashboard({ data, error }) {
           >↓ 全部</a>
         </div>
 
-        {/* Collapsible secondary controls — shrink when list is scrolled down */}
-        <div style={{
-          maxHeight: headerCollapsed ? 0 : 400,
-          opacity: headerCollapsed ? 0 : 1,
-          overflow: 'hidden',
-          transition: 'max-height 0.28s ease, opacity 0.2s ease',
-          pointerEvents: headerCollapsed ? 'none' : 'auto',
-        }}>
+        {/* Collapsible secondary controls — height-based animation for proportional speed */}
+        <div
+          ref={collapseRef}
+          style={{
+            height: headerCollapsed ? 0 : (collapseRef.current?.scrollHeight ?? 'auto'),
+            opacity: headerCollapsed ? 0 : 1,
+            overflow: 'hidden',
+            transition: 'height 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.22s ease',
+            pointerEvents: headerCollapsed ? 'none' : 'auto',
+          }}
+        >
         {/* Scan execution date hint + data quality badge */}
         {(data.last_scan_exec_date || data.generated_at || data.dataQuality) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingRight: 2, marginBottom: 4, flexWrap: 'wrap' }}>
