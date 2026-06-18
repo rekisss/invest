@@ -611,6 +611,15 @@ function DataQualityPanel({ dq }) {
         : '無 TOP 股票資料',
     },
     {
+      label: '法人資料',
+      ok: dq.institutional_ok !== false,
+      detail: dq.institutional_ok === false
+        ? `三大法人尚未公布（僅 ${dq.institutional_ratio ?? 0}% 有資料）· 排名暫以技術面為主`
+        : dq.institutional_ratio != null
+          ? `外資／投信資料完整（${dq.institutional_ratio}%）`
+          : '無法人資料',
+    },
+    {
       label: '建置時間',
       ok: true,
       detail: dq.build_time
@@ -1406,6 +1415,13 @@ export default function Dashboard({ data, error }) {
         {scan.from_notion_fallback && (
           <div style={{ margin: '8px 16px 0', padding: '8px 12px', background: 'rgba(10,132,255,0.07)', borderRadius: 10, borderLeft: '3px solid var(--ios-blue)' }}>
             <span style={{ fontSize: 12, color: 'var(--ios-blue)' }}>ℹ 顯示最近 Notion 完整掃描（今日尚未完成）</span>
+          </div>
+        )}
+        {data.dataQuality?.institutional_ok === false && !scan.is_partial && (
+          <div style={{ margin: '8px 16px 0', padding: '8px 12px', background: 'rgba(255,159,10,0.08)', borderRadius: 10, borderLeft: '3px solid var(--ios-orange)' }}>
+            <span style={{ fontSize: 12.5, color: 'var(--ios-orange)' }}>
+              ⚠ 三大法人資料尚未公布（盤後約 15:00 後更新），目前排名暫以技術面為主，外資／投信加分未計入，分數與名次會在法人資料更新後重排
+            </span>
           </div>
         )}
 
