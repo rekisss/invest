@@ -422,10 +422,19 @@ function processScanData() {
       above_ichimoku_cloud: toBool(row.above_ichimoku_cloud),
       macd_death_cross: toBool(row.macd_death_cross),
       close_below_ema20: toBool(row.close_below_ema20),
+      close_below_swing_low: toBool(row.close_below_swing_low),
       long_upper_shadow: toBool(row.long_upper_shadow),
       open_high_close_low: toBool(row.open_high_close_low),
+      // exit signals
+      base_exit_signal: toBool(row.base_exit_signal),
+      base_exit_reason: row.base_exit_reason || '',
+      // insider / buyback
+      insider_net_30d: r2(row.insider_net_30d),
+      has_buyback: toBool(row.has_buyback),
       // extra numeric fields not previously exported
       volume_ma20: r2(row.volume_ma20),
+      sma5: r2(row.sma5),
+      sma10: r2(row.sma10),
       // attach price history only for latest date (to keep JSON lean)
       price_history: isLatest ? (priceHistoryMap[row.stock_id] || []) : undefined,
       ...extra,
