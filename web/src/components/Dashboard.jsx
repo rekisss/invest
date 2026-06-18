@@ -501,6 +501,66 @@ function OutcomeStatsPanel({ outcomeStats }) {
   )
 }
 
+/* ── Strategy Accuracy Panel: score-rank buckets vs baseline ──────── */
+function StrategyAccuracyPanel({ accuracy }) {
+  if (!accuracy) return null
+  const horizons = accuracy.horizons || [1, 5, 10]
+  // Require a meaningful sample at the 5-day horizon for the top bucket
+  if (!(accuracy.top10?.d5?.total >= 20)) return null
+
+  const rows = [
+    { key: 'top10', label: '高分前10%', color: 'var(--ios-blue)' },
+    { key: 'top25', label: '高分前25%', color: 'var(--ios-teal)' },
+    { key: 'baseline', label: '全市場均值', color: 'var(--ios-label3)' },
+  ]
+  const fmtPct = v => (v == null ? '—' : `${v}%`)
+  const cell = (v) => {
+    if (v?.win_rate == null) return { wr: '—', ret: null, color: 'var(--ios-label3)' }
+    const c = v.win_rate >= 55 ? 'var(--ios-green)' : v.win_rate >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)'
+    return { wr: `${v.win_rate}%`, ret: v.avg_return_pct, color: c }
+  }
+
+  return (
+    <div style={{
+      margin: '10px 16px 0',
+      background: 'var(--ios-bg2)',
+      borderRadius: 16, padding: '14px 16px',
+      boxShadow: 'var(--shadow-card)',
+      border: '0.5px solid rgba(255,255,255,0.06)',
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
+        🎯 評分預測力驗證（高分股 vs 全市場）
+      </div>
+      {/* header row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr repeat(3, 1fr)', gap: 6, fontSize: 10, color: 'var(--ios-label3)', marginBottom: 6 }}>
+        <div />
+        {horizons.map(h => <div key={h} style={{ textAlign: 'center', fontWeight: 700 }}>{h}日後</div>)}
+      </div>
+      {rows.map(r => (
+        <div key={r.key} style={{ display: 'grid', gridTemplateColumns: '1.2fr repeat(3, 1fr)', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: r.color }}>{r.label}</div>
+          {horizons.map(h => {
+            const c = cell(accuracy[r.key]?.[`d${h}`])
+            return (
+              <div key={h} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 9, padding: '6px 4px', textAlign: 'center' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: c.color, fontFamily: 'var(--font-mono)', lineHeight: 1 }}>{c.wr}</div>
+                {c.ret != null && (
+                  <div style={{ fontSize: 9, color: c.ret >= 0 ? 'var(--ios-green)' : 'var(--ios-red)', marginTop: 2 }}>
+                    {c.ret >= 0 ? '+' : ''}{c.ret}%
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ))}
+      <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 6, lineHeight: 1.5 }}>
+        勝率＝N日後收盤上漲比例；下方為平均報酬。若高分股勝率與報酬持續高於全市場均值，代表評分有預測力。樣本取自近期歷史掃描，期間有限僅供參考。
+      </div>
+    </div>
+  )
+}
+
 /* ── Daily Action Panel ──────────────────────────────────────────── */
 function DataQualityPanel({ dq }) {
   const [open, setOpen] = useState(false)
@@ -1005,6 +1065,7 @@ export default function Dashboard({ data, error }) {
 
         {/* Outcome stats + daily action panels */}
         <OutcomeStatsPanel outcomeStats={outcomeStats} />
+        <StrategyAccuracyPanel accuracy={data.strategyAccuracy} />
         <DailyActionPanel scan={scan} prevScan={prevScan} persistent={persistent} />
 
         {/* Margin chip stats */}

@@ -516,6 +516,74 @@ function computeOutcomeStats(dates, dateMap, priceHistoryMap) {
   }
 }
 
+// ── Strategy accuracy: score-ranked buckets vs baseline (1/5/10-day) ──────────
+// computeOutcomeStats groups by `grade` (a column only present in aggregate-
+// enriched data, so it's empty for historical batch CSVs), and entry_signal=True
+// is far too rare to measure (≈2 in 7000). This instead ranks each day's scanned
+// universe by entry_score and asks: do top-decile / top-quartile picks beat the
+// whole-universe baseline on forward return? Validates the dashboard's ranking.
+function computeStrategyAccuracy(dates, dateMap, priceHistoryMap) {
+  const HORIZONS = [1, 5, 10]
+  const maxH = Math.max(...HORIZONS)
+  const mk = () => Object.fromEntries(HORIZONS.map(h => [h, { wins: 0, total: 0, sumRet: 0 }]))
+  const groups = { top10: mk(), top25: mk(), baseline: mk() }
+
+  if (dates.length < maxH + 1) return finalize()
+
+  // dates sorted desc; skip the maxH most recent (no forward outcome yet)
+  for (let i = maxH; i < dates.length; i++) {
+    const entryDate = dates[i]
+    const rows = dateMap[entryDate]
+    if (!rows) continue
+
+    // dedupe per stock (keep best score), then rank by entry_score for this day
+    const best = {}
+    for (const row of rows) {
+      const sid = row.stock_id
+      const sc = parseFloat(row.entry_score)
+      if (isNaN(sc)) continue
+      if (!best[sid] || sc > best[sid].score) best[sid] = { sid, score: sc }
+    }
+    const ranked = Object.values(best).sort((a, b) => b.score - a.score)
+    const n = ranked.length
+    if (n < 10) continue
+    const top10Cut = Math.ceil(n * 0.10)
+    const top25Cut = Math.ceil(n * 0.25)
+
+    ranked.forEach((item, rank) => {
+      const history = priceHistoryMap[item.sid]
+      if (!history) return
+      const entryIdx = history.findIndex(h => h.time === entryDate)
+      if (entryIdx < 0) return
+      const entryPrice = history[entryIdx].close
+      if (entryPrice <= 0) return
+      for (const h of HORIZONS) {
+        if (entryIdx + h >= history.length) continue
+        const exitPrice = history[entryIdx + h].close
+        if (exitPrice <= 0) continue
+        const ret = (exitPrice - entryPrice) / entryPrice
+        const tally = g => { g[h].total++; g[h].sumRet += ret; if (ret > 0) g[h].wins++ }
+        tally(groups.baseline)
+        if (rank < top10Cut) tally(groups.top10)
+        if (rank < top25Cut) tally(groups.top25)
+      }
+    })
+  }
+  return finalize()
+
+  function finalize() {
+    const fmt = g => Object.fromEntries(HORIZONS.map(h => {
+      const v = g[h]
+      return [`d${h}`, {
+        total: v.total,
+        win_rate: v.total >= 10 ? Math.round(v.wins / v.total * 1000) / 10 : null,
+        avg_return_pct: v.total >= 10 ? Math.round(v.sumRet / v.total * 10000) / 100 : null,
+      }]
+    }))
+    return { top10: fmt(groups.top10), top25: fmt(groups.top25), baseline: fmt(groups.baseline), horizons: HORIZONS }
+  }
+}
+
 // ── Notion stocks ────────────────────────────────────────────────────────────
 async function fetchNotionStocks() {
   const token = (process.env.NOTION_TOKEN || '').trim()
@@ -758,6 +826,10 @@ console.log('Computing grade outcome stats...')
 const outcomeStats = computeOutcomeStats(dates, dateMap, priceHistoryMap)
 console.log(`Outcome stats: A=${outcomeStats.A?.total ?? 0} B=${outcomeStats.B?.total ?? 0} C=${outcomeStats.C?.total ?? 0} D=${outcomeStats.D?.total ?? 0} records`)
 
+console.log('Computing strategy accuracy (entry_signal vs baseline)...')
+const strategyAccuracy = computeStrategyAccuracy(dates, dateMap, priceHistoryMap)
+console.log(`Strategy accuracy: top10 5d win=${strategyAccuracy.top10?.d5?.win_rate ?? 'n/a'}% (${strategyAccuracy.top10?.d5?.total ?? 0}), baseline 5d win=${strategyAccuracy.baseline?.d5?.win_rate ?? 'n/a'}%`)
+
 // Merge aggregate_latest.json: if its date is newer or not in CSV dates, inject it
 console.log('Reading aggregate_latest.json...')
 const aggregateLatest = readAggregateLatest()
@@ -864,7 +936,13 @@ if (aggregateLatest) {
       data_date: aggDate,
       from_aggregate_json: true,
     }
-    if (!dates.includes(aggExecDate)) dates.unshift(aggExecDate)
+    // Insert in chronological position (descending) — never blindly to front.
+    // A stale aggregate_latest.json (older than the newest CSV scan) must NOT
+    // become dates[0], or the dashboard reports it as the latest data.
+    if (!dates.includes(aggExecDate)) {
+      dates.push(aggExecDate)
+      dates.sort((a, b) => b.localeCompare(a))
+    }
     console.log(`  Injected aggregate date ${aggDate}→${aggExecDate}: ${aggregateLatest.total_scanned} stocks, ai=${!!aggregateLatest.ai_picks_text}`)
   }
 }
@@ -1015,5 +1093,5 @@ const dataQuality = {
 }
 console.log(`Data quality: fresh=${dataQuality.is_fresh}, days_behind=${daysBehind}, valid_ratio=${dataQuality.top_valid_ratio}%`)
 
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest, outcomeStats, dataQuality }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
