@@ -205,7 +205,7 @@ async function loadLiveNews() {
       if (!b._ts) return -1
       return b._ts - a._ts
     })
-    .slice(0, 80)
+    .slice(0, 300)
 }
 
 function buildTrending(news) {
@@ -631,7 +631,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
           // Merge: keep live items at top, append old items not in new set
           const seen = new Set(items.map(i => i.title.slice(0, 30)))
           const kept = prev.filter(i => !seen.has(i.title.slice(0, 30)))
-          return [...items, ...kept].slice(0, 80)
+          return [...items, ...kept].slice(0, 300)
         })
         setLastUpdated(new Date())
       }
@@ -660,7 +660,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
     setRawNews(prev => {
       const seen = new Set(prev.map(i => i.title.slice(0, 30)))
       const fresh = staticNews.filter(i => !seen.has(i.title.slice(0, 30)))
-      return fresh.length ? [...prev, ...fresh].slice(0, 80) : prev
+      return fresh.length ? [...prev, ...fresh].slice(0, 300) : prev
     })
   }, [staticNews])
 
@@ -715,13 +715,19 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
           })}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 12px 7px' }}>
-          <div style={{ fontSize: 10, color: 'var(--ios-label3)' }}>
-            {lastUpdated ? (() => {
-              const diffMin = Math.round((nowTs - lastUpdated.getTime()) / 60_000)
-              const label = diffMin <= 0 ? '剛剛' : diffMin < 60 ? `${diffMin} 分前` : `${Math.round(diffMin / 60)} 小時前`
-              return `即時新聞 · ${label}更新`
-            })() : '即時新聞'}
-            {refreshing && <span style={{ marginLeft: 6 }}>· 更新中…</span>}
+          <div style={{ fontSize: 10, color: 'var(--ios-label3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>
+              {lastUpdated ? (() => {
+                const diffMin = Math.round((nowTs - lastUpdated.getTime()) / 60_000)
+                const label = diffMin <= 0 ? '剛剛' : diffMin < 60 ? `${diffMin} 分前` : `${Math.round(diffMin / 60)} 小時前`
+                return `即時新聞 · ${label}更新`
+              })() : '即時新聞'}
+              {refreshing && <span style={{ marginLeft: 4 }}>· 更新中…</span>}
+            </span>
+            <span style={{
+              background: 'var(--ios-fill3)', borderRadius: 8,
+              padding: '1px 6px', fontWeight: 600, color: 'var(--ios-label3)',
+            }}>{news.length} 則</span>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button
@@ -762,9 +768,11 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
 
       {/* News list */}
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <div style={{ padding: '8px 16px 4px', fontSize: 11, color: 'var(--ios-label3)' }}>
-          {filtered.length} 則新聞
-        </div>
+        {filter !== 'all' && (
+          <div style={{ padding: '6px 16px 2px', fontSize: 11, color: 'var(--ios-label3)' }}>
+            篩選中 · {filtered.length} 則
+          </div>
+        )}
         {filtered.length === 0 && !loading && (
           <div style={{ textAlign: 'center', padding: '40px 24px', color: 'var(--ios-label2)' }}>
             <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
