@@ -185,7 +185,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 </button>
               </div>
 
-              {/* Row 2: Score bar + score + price */}
+              {/* Row 2: Score bar + score + sparkline + price */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <div style={{ flex: 1, height: 4, background: 'var(--ios-fill2)', borderRadius: 9999, overflow: 'hidden' }}>
                   <div style={{
@@ -196,9 +196,10 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   }} />
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 700, color: scoreColor, fontFamily: 'var(--font-mono)', minWidth: 24, textAlign: 'right' }}>{normScore}</span>
+                <Sparkline data={s.price_history} />
                 {s.close != null && (
                   <span style={{ fontSize: 12, color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)' }}>
-                    {s.close.toFixed(1)}
+                    {s.close > 100 ? s.close.toFixed(0) : s.close.toFixed(1)}
                   </span>
                 )}
               </div>
@@ -239,6 +240,91 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     📅{persistentMap[s.stock_id]}次
                   </span>
                 )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* ── Feature 1: Sparkline ────────────────────────────────────────── */
+function Sparkline({ data, width = 56, height = 20 }) {
+  if (!data || data.length < 2) return null
+  const closes = data.map(p => p.close).filter(v => v != null)
+  if (closes.length < 2) return null
+  const min = Math.min(...closes), max = Math.max(...closes)
+  const range = max - min || 1
+  const pts = closes.map((c, i) => {
+    const x = (i / (closes.length - 1)) * width
+    const y = height - ((c - min) / range) * (height - 3) - 1.5
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+  const isUp = closes[closes.length - 1] >= closes[0]
+  const color = isUp ? '#30D158' : '#FF453A'
+  return (
+    <svg width={width} height={height} style={{ flexShrink: 0, opacity: 0.85 }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={closes.map((_, i) => (i / (closes.length - 1)) * width).pop().toFixed(1)} cy={(height - ((closes[closes.length - 1] - min) / range) * (height - 3) - 1.5).toFixed(1)} r="2" fill={color} />
+    </svg>
+  )
+}
+
+/* ── Feature 3: Sector Heatmap ───────────────────────────────────── */
+function SectorHeatmap({ stocks }) {
+  const sectors = useMemo(() => {
+    const map = {}
+    for (const s of stocks) {
+      const sec = s.industry_category || '其他'
+      if (!map[sec]) map[sec] = { count: 0, entries: 0, totalScore: 0 }
+      map[sec].count++
+      if (s.entry_signal) map[sec].entries++
+      map[sec].totalScore += s.entry_score || 0
+    }
+    return Object.entries(map)
+      .map(([name, d]) => ({ name, ...d, entryRate: Math.round(d.entries / d.count * 100) }))
+      .sort((a, b) => b.entries - a.entries || b.entryRate - a.entryRate)
+      .slice(0, 30)
+  }, [stocks])
+
+  if (sectors.length === 0) return null
+  const maxEntries = Math.max(...sectors.map(s => s.entries), 1)
+
+  return (
+    <div style={{ padding: '12px 16px 8px' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 10 }}>
+        🌡 族群輪動熱圖
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {sectors.map(sec => {
+          const intensity = sec.entries / maxEntries
+          const r = Math.round(48 + intensity * (48 - 48))
+          const g = Math.round(209 * intensity)
+          const b = Math.round(88 * intensity)
+          const bg = sec.entries > 0
+            ? `rgba(${48 + Math.round(intensity * 20)},${Math.round(209 * intensity)},${Math.round(88 * intensity)},${0.10 + intensity * 0.25})`
+            : 'rgba(148,163,184,0.07)'
+          const textColor = sec.entries > 0
+            ? (intensity > 0.5 ? '#30D158' : '#A8D8B9')
+            : 'var(--ios-label3)'
+          const borderColor = sec.entries > 0
+            ? `rgba(48,209,88,${0.15 + intensity * 0.4})`
+            : 'var(--ios-sep)'
+          return (
+            <div key={sec.name} style={{
+              padding: '6px 10px', borderRadius: 10,
+              background: bg, border: `0.5px solid ${borderColor}`,
+              display: 'flex', flexDirection: 'column', gap: 2, minWidth: 80,
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: textColor, lineHeight: 1.3, letterSpacing: '-0.1px' }}>
+                {sec.name.length > 6 ? sec.name.slice(0, 6) + '…' : sec.name}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                {sec.entries > 0 && (
+                  <span style={{ fontSize: 10, color: '#30D158', fontWeight: 700 }}>↑{sec.entries}</span>
+                )}
+                <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>{sec.count}支</span>
               </div>
             </div>
           )
@@ -569,7 +655,7 @@ export default function Dashboard({ data, error }) {
   // Reset page whenever filters or tab/date change
   useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals])
 
-  const baseStocks = viewTab === 'entry' ? entryStocks : viewTab === 'limitdown' ? limitDownAlerts : viewTab === 'watchlist' ? watchlistStocks : stocks
+  const baseStocks = viewTab === 'entry' ? entryStocks : viewTab === 'limitdown' ? limitDownAlerts : viewTab === 'watchlist' ? watchlistStocks : viewTab === 'heatmap' ? [] : stocks
 
   const filteredAndSorted = useMemo(() => {
     let list = baseStocks
@@ -598,6 +684,7 @@ export default function Dashboard({ data, error }) {
     { id: 'entry',     label: `進場${entryStocks.length > 0 ? ` ·${entryStocks.length}` : ''}` },
     { id: 'watchlist', label: `⭐${watchlist.size > 0 ? ` ·${watchlist.size}` : ''}` },
     { id: 'limitdown', label: `🔴 跌停` },
+    { id: 'heatmap',   label: `🌡 族群` },
   ]
 
   return (
@@ -859,7 +946,9 @@ export default function Dashboard({ data, error }) {
               </span>
             )}
           </div>
-          {viewTab === 'watchlist' && watchlistStocks.length === 0 ? (
+          {viewTab === 'heatmap' ? (
+            <SectorHeatmap stocks={stocks} />
+          ) : viewTab === 'watchlist' && watchlistStocks.length === 0 ? (
             <div style={{ padding: '48px 20px', textAlign: 'center' }}>
               <div style={{ fontSize: 40, marginBottom: 10 }}>☆</div>
               <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ios-label)', marginBottom: 6 }}>尚無自選股</div>
@@ -930,6 +1019,7 @@ export default function Dashboard({ data, error }) {
         stock={selectedStock}
         notionInfo={selectedStock ? notionMap[selectedStock.stock_id] : null}
         onClose={() => setSelectedStock(null)}
+        allScans={data?.scans}
       />
     </div>
   )

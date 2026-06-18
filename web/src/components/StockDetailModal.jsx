@@ -717,7 +717,7 @@ function Section({ title, children }) {
 
 // ── Main modal ───────────────────────────────────────────────────────────────
 
-export default function StockDetailModal({ stock, notionInfo, onClose }) {
+export default function StockDetailModal({ stock, notionInfo, onClose, allScans }) {
   if (!stock) return null
   const s = stock
   const n = notionInfo || null
@@ -768,6 +768,51 @@ export default function StockDetailModal({ stock, notionInfo, onClose }) {
             }}
           >✕</button>
         </div>
+
+        {/* Feature 4: Score trend across dates */}
+        {allScans && (() => {
+          const history = Object.entries(allScans)
+            .filter(([, sc]) => sc.top_stocks?.some(t => String(t.stock_id) === String(s.stock_id)))
+            .map(([date, sc]) => {
+              const t = sc.top_stocks.find(t => String(t.stock_id) === String(s.stock_id))
+              return { date, score: t?.entry_score || 0, signal: !!t?.entry_signal }
+            })
+            .sort((a, b) => a.date.localeCompare(b.date))
+          if (history.length < 2) return null
+          const maxScore = Math.max(...history.map(h => h.score), 1)
+          const w = 260, h2 = 44
+          const pts = history.map((h, i) => {
+            const x = (i / (history.length - 1)) * w
+            const y = h2 - (h.score / maxScore) * (h2 - 6) - 3
+            return `${x.toFixed(1)},${y.toFixed(1)}`
+          }).join(' ')
+          return (
+            <Section title={`📊 評分歷程（近 ${history.length} 個交易日）`}>
+              <div style={{ padding: '4px 0 8px' }}>
+                <svg width="100%" viewBox={`0 0 ${w} ${h2}`} style={{ display: 'block', overflow: 'visible' }}>
+                  <polyline points={pts} fill="none" stroke="var(--ios-blue)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                  {history.map((h, i) => {
+                    const x = (i / (history.length - 1)) * w
+                    const y = h2 - (h.score / maxScore) * (h2 - 6) - 3
+                    return (
+                      <g key={h.date}>
+                        <circle cx={x} cy={y} r={h.signal ? 4 : 2.5} fill={h.signal ? '#30D158' : 'var(--ios-blue)'} />
+                        {i === history.length - 1 && (
+                          <text x={x} y={y - 7} textAnchor="middle" fontSize="9" fill="var(--ios-label2)">{h.score}</text>
+                        )}
+                      </g>
+                    )
+                  })}
+                </svg>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ios-label4)', marginTop: 2 }}>
+                  <span>{history[0].date.slice(5)}</span>
+                  <span style={{ color: 'var(--ios-label3)' }}>● 進場訊號</span>
+                  <span>{history[history.length - 1].date.slice(5)}</span>
+                </div>
+              </div>
+            </Section>
+          )
+        })()}
 
         {/* K 線圖 + 指標子圖 */}
         <Section title="K 線圖 &amp; 技術指標">
