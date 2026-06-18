@@ -305,14 +305,14 @@ function RiskFactors({ factors }) {
 /* ── Feature 2: Watchlist Alerts ────────────────────────────────── */
 function WatchlistAlerts({ stocks }) {
   const watchlistRaw = (() => {
-    try { return JSON.parse(localStorage.getItem('watchlist') || '[]') } catch { return [] }
+    try { return JSON.parse(localStorage.getItem('stock_watchlist') || '[]') } catch { return [] }
   })()
   const watchSet = new Set(watchlistRaw)
   if (watchSet.size === 0) return null
   const alerts = stocks.filter(s => watchSet.has(s.stock_id))
   if (alerts.length === 0) return null
   const entries = alerts.filter(s => s.entry_signal)
-  const risky = alerts.filter(s => !s.entry_signal && (s.day_return || 0) < -3)
+  const risky = alerts.filter(s => !s.entry_signal && (s.day_return || 0) < -0.03)
   if (entries.length === 0 && risky.length === 0) return null
 
   return (
@@ -333,7 +333,7 @@ function WatchlistAlerts({ stocks }) {
           <span style={{ fontSize: 11, background: 'rgba(255,69,58,0.15)', color: '#FF453A', borderRadius: 6, padding: '2px 7px', fontWeight: 700, flexShrink: 0 }}>跌幅</span>
           <span style={{ fontFamily: 'monospace', color: '#0A84FF', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{s.stock_id}</span>
           <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', flex: 1 }}>{s.name}</span>
-          <span style={{ fontSize: 12, color: '#FF453A', fontFamily: 'monospace' }}>{(s.day_return || 0).toFixed(2)}%</span>
+          <span style={{ fontSize: 12, color: '#FF453A', fontFamily: 'monospace' }}>{((s.day_return || 0) * 100).toFixed(2)}%</span>
         </div>
       ))}
     </div>
