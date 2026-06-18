@@ -416,6 +416,88 @@ function OutcomeStatsPanel({ outcomeStats }) {
 }
 
 /* ── Daily Action Panel ──────────────────────────────────────────── */
+function DataQualityPanel({ dq }) {
+  const [open, setOpen] = useState(false)
+  if (!dq) return null
+  const fresh = dq.is_fresh
+  const statusColor = fresh ? 'var(--ios-green)' : 'var(--ios-orange)'
+  const statusBg = fresh ? 'rgba(48,209,88,0.10)' : 'rgba(255,159,10,0.10)'
+  const statusBorder = fresh ? 'rgba(48,209,88,0.28)' : 'rgba(255,159,10,0.3)'
+  const checks = [
+    {
+      label: '資料新鮮度',
+      ok: fresh,
+      detail: fresh
+        ? `最新資料 ${dq.latest_data_date}（T+${dq.days_behind ?? 0}，正常延遲）`
+        : `資料落後 ${dq.days_behind} 個交易日（${dq.latest_data_date}）`,
+    },
+    {
+      label: '股票數量',
+      ok: (dq.total_stocks || 0) >= 1000,
+      detail: `掃描 ${(dq.total_stocks || 0).toLocaleString()} 支`,
+    },
+    {
+      label: '欄位完整性',
+      ok: dq.fields_ok !== false,
+      detail: dq.top_valid_ratio != null
+        ? `指標欄位有效率 ${dq.top_valid_ratio}%`
+        : '無 TOP 股票資料',
+    },
+    {
+      label: '建置時間',
+      ok: true,
+      detail: dq.build_time
+        ? new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(dq.build_time)) + ' CST'
+        : '未知',
+    },
+  ]
+  const allOk = checks.every(c => c.ok !== false)
+
+  return (
+    <div style={{ margin: '10px 16px 0' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', background: statusBg, border: `0.5px solid ${statusBorder}`,
+          borderRadius: 12, padding: '9px 14px', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 700, color: statusColor }}>
+          {allOk ? '✓' : '⚠'} 資料驗證
+        </span>
+        <span style={{ fontSize: 12, color: statusColor, flex: 1, textAlign: 'left' }}>
+          {fresh ? `正常 · 最新 ${dq.latest_data_date}` : `延遲 T+${dq.days_behind} · ${dq.latest_data_date}`}
+        </span>
+        <span style={{ fontSize: 12, color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)' }}>
+          {(dq.total_stocks || 0).toLocaleString()} 支
+        </span>
+        <span style={{ fontSize: 11, color: 'var(--ios-label3)' }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{
+          marginTop: 4, background: 'var(--ios-bg2)', borderRadius: 12,
+          border: '0.5px solid var(--ios-sep)', overflow: 'hidden',
+        }}>
+          {checks.map((c, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '9px 14px',
+              borderBottom: i < checks.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
+            }}>
+              <span style={{ fontSize: 13, color: c.ok !== false ? 'var(--ios-green)' : 'var(--ios-orange)', flexShrink: 0 }}>
+                {c.ok !== false ? '✓' : '⚠'}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ios-label)', minWidth: 72 }}>{c.label}</span>
+              <span style={{ fontSize: 12, color: 'var(--ios-label2)', flex: 1 }}>{c.detail}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DailyActionPanel({ scan, prevScan, persistent }) {
   if (!scan) return null
   const stocks = scan.top_stocks || []
@@ -645,16 +727,33 @@ export default function Dashboard({ data, error }) {
           >↓ 全部</a>
         </div>
 
-        {/* Scan execution date hint */}
-        {(data.last_scan_exec_date || data.generated_at) && (
-          <div style={{ fontSize: 12, color: 'var(--ios-label3)', textAlign: 'right', paddingRight: 2, marginBottom: 4 }}>
-            {data.last_scan_exec_date && `掃描執行日 ${data.last_scan_exec_date}`}
-            {(() => {
-              const dd = scan.data_date
-              if (dd && dd !== selectedDate) return ` · 資料日 ${dd.slice(5)}`
-              return null
+        {/* Scan execution date hint + data quality badge */}
+        {(data.last_scan_exec_date || data.generated_at || data.dataQuality) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingRight: 2, marginBottom: 4, flexWrap: 'wrap' }}>
+            {data.dataQuality && (() => {
+              const dq = data.dataQuality
+              const fresh = dq.is_fresh
+              return (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 9999,
+                  background: fresh ? 'rgba(48,209,88,0.12)' : 'rgba(255,159,10,0.12)',
+                  color: fresh ? 'var(--ios-green)' : 'var(--ios-orange)',
+                  border: `0.5px solid ${fresh ? 'rgba(48,209,88,0.3)' : 'rgba(255,159,10,0.35)'}`,
+                  flexShrink: 0,
+                }}>
+                  {fresh ? '✓ 資料正常' : `⚠ 資料T+${dq.days_behind}`}
+                </span>
+              )
             })()}
-            {data.generated_at && ` · 建置 ${new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(data.generated_at))} CST`}
+            <div style={{ fontSize: 11, color: 'var(--ios-label3)', flex: 1, textAlign: 'right' }}>
+              {data.last_scan_exec_date && `掃描 ${data.last_scan_exec_date}`}
+              {(() => {
+                const dd = scan.data_date
+                if (dd && dd !== selectedDate) return ` · 資料日 ${dd.slice(5)}`
+                return null
+              })()}
+              {data.generated_at && ` · 建置 ${new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(data.generated_at))} CST`}
+            </div>
           </div>
         )}
 
@@ -813,6 +912,9 @@ export default function Dashboard({ data, error }) {
             <pre style={{ fontSize: 13, color: 'var(--ios-label)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, fontFamily: 'inherit', lineHeight: 1.65 }}>{aiText}</pre>
           </div>
         )}
+
+        {/* Data quality verification panel */}
+        <DataQualityPanel dq={data.dataQuality} />
 
         {/* Outcome stats + daily action panels */}
         <OutcomeStatsPanel outcomeStats={outcomeStats} />

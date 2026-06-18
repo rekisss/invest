@@ -977,5 +977,43 @@ if ((!latestScan || latestScan.total_scanned < MIN_VALID_STOCKS) && notionFullSt
 mkdirSync(PUBLIC_DIR, { recursive: true })
 const lastScanExecDate = getLastScanExecDate()
 console.log(`Last scan execution date: ${lastScanExecDate ?? 'unknown'}`)
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest, outcomeStats }), 'utf-8')
+
+// ── Data quality verification ─────────────────────────────────────────────────
+const todayTW = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
+const latestExecDate = dates[0] || ''
+const latestScanObj = latestExecDate ? (scans[latestExecDate] || {}) : {}
+// Use actual FinMind market data date (data_date) when available; fall back to exec date
+const latestDataDate = latestScanObj.data_date || latestExecDate
+const topStocks = latestScanObj.top_stocks || []
+// Count stocks with valid technical data (RSI > 0, ADX > 0)
+const validCount = topStocks.filter(s => (s.rsi14 || 0) > 0 && (s.adx14 || 0) > 0).length
+const totalTop = topStocks.length
+// Detect trading day gap between actual market data date and today
+function tradingDaysBehind(latest, today) {
+  if (!latest || !today) return null
+  const d1 = new Date(latest), d2 = new Date(today)
+  let diff = 0, cur = new Date(d1)
+  cur.setDate(cur.getDate() + 1)
+  while (cur <= d2) {
+    const dow = cur.getDay()
+    if (dow !== 0 && dow !== 6) diff++
+    cur.setDate(cur.getDate() + 1)
+  }
+  return diff
+}
+const daysBehind = tradingDaysBehind(latestDataDate, todayTW)
+const isFresh = daysBehind !== null && daysBehind <= 1  // 0=same day, 1=T+1 normal
+const dataQuality = {
+  latest_data_date: latestDataDate,
+  today_tw: todayTW,
+  days_behind: daysBehind,
+  is_fresh: isFresh,
+  total_stocks: latestScanObj.total_scanned || 0,
+  top_valid_ratio: totalTop > 0 ? Math.round(validCount / totalTop * 100) : null,
+  fields_ok: totalTop === 0 ? null : validCount >= Math.floor(totalTop * 0.9),
+  build_time: new Date().toISOString(),
+}
+console.log(`Data quality: fresh=${dataQuality.is_fresh}, days_behind=${daysBehind}, valid_ratio=${dataQuality.top_valid_ratio}%`)
+
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest, outcomeStats, dataQuality }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
