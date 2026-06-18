@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
 
 const PAGE_SIZE = 50
@@ -749,6 +749,19 @@ export default function Dashboard({ data, error }) {
       return next
     })
   }
+  // Collapse the secondary controls (freshness hint / search / signal chips)
+  // when the list is scrolled down, so more rows are visible. Scrolling up
+  // (or back to top) restores them. Date selector + view tabs stay visible.
+  const [headerCollapsed, setHeaderCollapsed] = useState(false)
+  const lastScrollY = useRef(0)
+  const handleListScroll = (e) => {
+    const y = e.currentTarget.scrollTop
+    const prev = lastScrollY.current
+    if (y <= 8) setHeaderCollapsed(false)            // back at top → always expand
+    else if (y > prev + 6 && y > 48) setHeaderCollapsed(true)   // scrolling down
+    else if (y < prev - 6) setHeaderCollapsed(false)            // scrolling up
+    lastScrollY.current = y
+  }
   const [activeSignals, setActiveSignals] = useState(new Set())
   const toggleSignal = (key) => {
     setActiveSignals(prev => {
@@ -874,6 +887,14 @@ export default function Dashboard({ data, error }) {
           >↓ 全部</a>
         </div>
 
+        {/* Collapsible secondary controls — shrink when list is scrolled down */}
+        <div style={{
+          maxHeight: headerCollapsed ? 0 : 400,
+          opacity: headerCollapsed ? 0 : 1,
+          overflow: 'hidden',
+          transition: 'max-height 0.28s ease, opacity 0.2s ease',
+          pointerEvents: headerCollapsed ? 'none' : 'auto',
+        }}>
         {/* Scan execution date hint + data quality badge */}
         {(data.last_scan_exec_date || data.generated_at || data.dataQuality) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingRight: 2, marginBottom: 4, flexWrap: 'wrap' }}>
@@ -987,10 +1008,11 @@ export default function Dashboard({ data, error }) {
             )}
           </div>
         )}
+        </div>{/* /collapsible secondary controls */}
       </div>
 
       {/* ── Scrollable Content ───────────────────────────────────── */}
-      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <div onScroll={handleListScroll} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
 
         {/* Market summary banner */}
         {pred && (() => {
