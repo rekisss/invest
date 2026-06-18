@@ -8,3 +8,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>,
 )
+
+// PWA: register service worker for offline support + home-screen install
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/invest/sw.js').catch(() => {})
+  })
+}
