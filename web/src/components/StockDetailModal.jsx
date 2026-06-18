@@ -174,6 +174,32 @@ function williamsRCalc(bars, n = 14) {
   })
 }
 
+function cciCalc(bars, n = 20) {
+  const tp = bars.map(b => (b.high + b.low + b.close) / 3)
+  return bars.map((_, i) => {
+    if (i < n - 1) return null
+    const slice = tp.slice(i - n + 1, i + 1)
+    const mean = slice.reduce((a, b) => a + b, 0) / n
+    const md = slice.reduce((a, b) => a + Math.abs(b - mean), 0) / n
+    return md === 0 ? 0 : (tp[i] - mean) / (0.015 * md)
+  })
+}
+
+function mfiCalc(bars, n = 14) {
+  const tp = bars.map(b => (b.high + b.low + b.close) / 3)
+  const result = new Array(bars.length).fill(null)
+  for (let i = n; i < bars.length; i++) {
+    let posFlow = 0, negFlow = 0
+    for (let j = i - n + 1; j <= i; j++) {
+      const rmf = tp[j] * (bars[j].volume || 0)
+      if (tp[j] > tp[j - 1]) posFlow += rmf
+      else if (tp[j] < tp[j - 1]) negFlow += rmf
+    }
+    result[i] = negFlow === 0 ? 100 : 100 - 100 / (1 + posFlow / negFlow)
+  }
+  return result
+}
+
 // Build a polyline points string, splitting at nulls into segments
 function toPolySegs(values, toXFn, toYFn) {
   const segments = []
@@ -534,6 +560,8 @@ function ChartValueStrip({ bars, indicators, active, hoveredIdx }) {
   const pdi   = indicators.adx?.plusDI[i]
   const ndi   = indicators.adx?.minusDI[i]
   const wr    = indicators.wr?.[i]
+  const cci   = indicators.cci?.[i]
+  const mfi   = indicators.mfi?.[i]
   const vn = (val, dec = 1) => val != null ? Number(val).toFixed(dec) : '—'
 
   return (
@@ -574,6 +602,16 @@ function ChartValueStrip({ bars, indicators, active, hoveredIdx }) {
           W%R <b style={{ color: wr > -20 ? '#FF453A' : wr < -80 ? '#30D158' : '#FF6B35' }}>{vn(wr)}</b>
         </span>
       )}
+      {active.cci && cci != null && (
+        <span style={{ color: 'var(--ios-label3)' }}>
+          CCI <b style={{ color: cci > 100 ? '#FF453A' : cci < -100 ? '#30D158' : '#5E5CE6' }}>{vn(cci, 0)}</b>
+        </span>
+      )}
+      {active.mfi && mfi != null && (
+        <span style={{ color: 'var(--ios-label3)' }}>
+          MFI <b style={{ color: mfi > 80 ? '#FF453A' : mfi < 20 ? '#30D158' : '#FFD60A' }}>{vn(mfi)}</b>
+        </span>
+      )}
     </div>
   )
 }
@@ -588,14 +626,14 @@ const MA_LINES_DEF = [
 ]
 
 const STRATEGY_PRESETS = [
-  { id: 'momentum',   label: '動能', color: '#FF9F0A',
-    state: { ma: true,  bb: false, macd: true,  rsi: true,  kd: false, obv: false, adx: false, wr: false } },
-  { id: 'oscillator', label: '震盪', color: '#30D158',
-    state: { ma: false, bb: true,  macd: false, rsi: false, kd: true,  obv: false, adx: false, wr: true  } },
-  { id: 'trend',      label: '趨勢', color: '#0A84FF',
-    state: { ma: true,  bb: true,  macd: false, rsi: false, kd: false, obv: false, adx: true,  wr: false } },
-  { id: 'chips',      label: '籌碼', color: '#64D2FF',
-    state: { ma: true,  bb: false, macd: false, rsi: false, kd: false, obv: true,  adx: false, wr: false } },
+  { id: 'momentum',   label: '動能', color: '#FF9F0A', desc: 'MACD 翻紅 + RSI 站上 50 才進場，追強勢續攻',
+    state: { ma: true,  bb: false, macd: true,  rsi: true,  kd: false, obv: false, adx: false, wr: false, cci: false, mfi: false } },
+  { id: 'oscillator', label: '震盪', color: '#30D158', desc: 'KD 低檔金叉 + W%R/CCI 超賣回升，抓區間反彈',
+    state: { ma: false, bb: true,  macd: false, rsi: false, kd: true,  obv: false, adx: false, wr: true,  cci: true,  mfi: false } },
+  { id: 'trend',      label: '趨勢', color: '#0A84FF', desc: 'ADX>25 且 +DI>-DI 站上均線，順勢波段',
+    state: { ma: true,  bb: true,  macd: false, rsi: false, kd: false, obv: false, adx: true,  wr: false, cci: false, mfi: false } },
+  { id: 'chips',      label: '籌碼', color: '#64D2FF', desc: 'OBV 突破均量 + MFI 資金流入，跟量能',
+    state: { ma: true,  bb: false, macd: false, rsi: false, kd: false, obv: true,  adx: false, wr: false, cci: false, mfi: true  } },
 ]
 
 const TOGGLE_DEFS = [
@@ -607,7 +645,116 @@ const TOGGLE_DEFS = [
   { key: 'obv',  label: 'OBV',  color: '#64D2FF' },
   { key: 'adx',  label: 'ADX',  color: '#FF453A' },
   { key: 'wr',   label: 'W%R',  color: '#FF6B35' },
+  { key: 'cci',  label: 'CCI',  color: '#5E5CE6' },
+  { key: 'mfi',  label: 'MFI',  color: '#FFD60A' },
 ]
+
+// ── Strategy win-rate backtest (per-stock, on its own price history) ─────────
+function computeStrategyBacktest(bars, horizon) {
+  if (!bars || bars.length < 40) return null
+  const closes = bars.map(b => b.close)
+  const macd = macdCalc(closes)
+  const rsi  = rsiCalc(closes)
+  const kd   = kdCalc(bars)
+  const adx  = adxCalc(bars)
+  const obv  = obvCalc(bars)
+  const obvMa = smaCalc(obv, 20)
+  const ma5  = smaCalc(closes, 5)
+  const ma20 = smaCalc(closes, 20)
+
+  const fwd = i => {
+    const j = i + horizon
+    if (j >= bars.length || closes[i] <= 0) return null
+    return (closes[j] - closes[i]) / closes[i]
+  }
+  const trendOn = i =>
+    adx.adxLine[i] != null && adx.adxLine[i] > 25 &&
+    adx.plusDI[i] > adx.minusDI[i] && ma20[i] != null && closes[i] > ma20[i]
+
+  const strategies = [
+    { id: 'momentum', label: '動能', color: '#FF9F0A',
+      fire: i => i > 0 && macd.hist[i] != null && macd.hist[i - 1] != null &&
+        macd.hist[i] > 0 && macd.hist[i - 1] <= 0 && rsi[i] != null && rsi[i] > 50 },
+    { id: 'oscillator', label: '震盪', color: '#30D158',
+      fire: i => i > 0 && kd.kArr[i] != null && kd.kArr[i - 1] != null &&
+        kd.kArr[i] > kd.dArr[i] && kd.kArr[i - 1] <= kd.dArr[i - 1] && kd.kArr[i] < 35 },
+    { id: 'trend', label: '趨勢', color: '#0A84FF',
+      fire: i => i > 0 && trendOn(i) && !trendOn(i - 1) },
+    { id: 'chips', label: '籌碼', color: '#64D2FF',
+      fire: i => i > 0 && obvMa[i] != null && obvMa[i - 1] != null &&
+        obv[i] > obvMa[i] && obv[i - 1] <= obvMa[i - 1] && ma5[i] != null && closes[i] > ma5[i] },
+  ]
+
+  const rows = strategies.map(s => {
+    let signals = 0, wins = 0, sumRet = 0
+    for (let i = 0; i < bars.length; i++) {
+      if (!s.fire(i)) continue
+      const r = fwd(i)
+      if (r == null) continue
+      signals++
+      if (r > 0) wins++
+      sumRet += r
+    }
+    return {
+      id: s.id, label: s.label, color: s.color, signals,
+      winRate: signals > 0 ? wins / signals : null,
+      avgRet:  signals > 0 ? sumRet / signals : null,
+    }
+  })
+  const ranked = rows.filter(r => r.signals >= 3 && r.winRate != null)
+    .sort((a, b) => b.winRate - a.winRate || b.avgRet - a.avgRet)
+  return { rows, best: ranked.length ? ranked[0].id : null }
+}
+
+function StrategyBacktestPanel({ bars, onPick, activeId }) {
+  const [horizon, setHorizon] = useState(5)
+  const bt = useMemo(() => computeStrategyBacktest(bars, horizon), [bars, horizon])
+  if (!bt) return null
+  return (
+    <div style={{ marginTop: 10, background: 'var(--ios-bg2)', borderRadius: 12, padding: '10px 12px', boxShadow: 'var(--shadow-card)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ color: 'var(--ios-blue)', fontSize: 11, fontWeight: 700, letterSpacing: 0.6 }}>📊 策略勝率回測</span>
+        <div style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--ios-fill4)', borderRadius: 7 }}>
+          {[5, 10, 20].map(h => (
+            <button key={h} onClick={() => setHorizon(h)} style={{
+              background: horizon === h ? 'var(--ios-bg3)' : 'transparent', border: 'none',
+              color: horizon === h ? 'var(--ios-label)' : 'var(--ios-label3)', borderRadius: 5,
+              padding: '2px 9px', fontSize: 10, cursor: 'pointer', fontWeight: horizon === h ? 700 : 400,
+            }}>{h}日</button>
+          ))}
+        </div>
+      </div>
+      {bt.rows.map(r => {
+        const enough = r.signals >= 3
+        const isBest = r.id === bt.best
+        return (
+          <div key={r.id} onClick={() => onPick?.(r.id)} style={{ cursor: 'pointer', padding: '6px 0', borderBottom: '0.5px solid var(--ios-sep)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: activeId === r.id ? r.color : 'var(--ios-label)' }}>
+                {isBest && '🏆 '}{r.label}
+                <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 400, marginLeft: 6 }}>{r.signals} 次訊號</span>
+              </span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: !enough ? 'var(--ios-label3)' : r.winRate >= 0.5 ? 'var(--ios-red)' : 'var(--ios-green)' }}>
+                {enough ? `勝率 ${(r.winRate * 100).toFixed(0)}%` : '樣本不足'}
+                {enough && r.avgRet != null && (
+                  <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 400, marginLeft: 6 }}>
+                    均 {r.avgRet > 0 ? '+' : ''}{(r.avgRet * 100).toFixed(1)}%
+                  </span>
+                )}
+              </span>
+            </div>
+            <div style={{ height: 5, background: 'var(--ios-fill4)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: `${enough ? r.winRate * 100 : 0}%`, height: '100%', background: r.color, opacity: isBest ? 1 : 0.55, borderRadius: 3, transition: 'width 0.3s' }} />
+            </div>
+          </div>
+        )
+      })}
+      <div style={{ fontSize: 9.5, color: 'var(--ios-label3)', marginTop: 7, lineHeight: 1.5 }}>
+        以本股近 {bars.length} 根 K 棒回測：各策略訊號出現後、持有 {horizon} 日的上漲比例（勝率）與平均報酬。🏆 為目前最高勝率，點一下可直接套用該策略指標。樣本 &lt;3 次僅供參考。
+      </div>
+    </div>
+  )
+}
 
 function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const cnyesUrl = `https://www.cnyes.com/twstock/${stockId}`
@@ -621,7 +768,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [chartInterval, setChartInterval] = useState(
     () => INTERVAL_LABELS.find(t => dataMap[t.id].length >= 2)?.id || '1d'
   )
-  const [active, setActive] = useState({ ma: true, bb: false, macd: true, rsi: true, kd: false, obv: false, adx: false, wr: false })
+  const [active, setActive] = useState({ ma: true, bb: false, macd: true, rsi: true, kd: false, obv: false, adx: false, wr: false, cci: false, mfi: false })
   const [preset, setPreset] = useState('momentum')
   const [hoveredIdx, setHoveredIdx] = useState(null)
 
@@ -647,6 +794,8 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
       obv: (() => { const v = obvCalc(bars); return { values: v, ma: smaCalc(v, 20) } })(),
       adx: adxCalc(bars),
       wr: williamsRCalc(bars),
+      cci: cciCalc(bars),
+      mfi: mfiCalc(bars),
     }
   }, [bars])
 
@@ -667,6 +816,14 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
           }}>{p.label}</button>
         ))}
       </div>
+      {preset && (() => {
+        const p = STRATEGY_PRESETS.find(x => x.id === preset)
+        return p ? (
+          <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 7, paddingLeft: 2, lineHeight: 1.4 }}>
+            <b style={{ color: p.color }}>{p.label}策略</b>：{p.desc}
+          </div>
+        ) : null
+      })()}
 
       {/* Top controls row */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -827,6 +984,46 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
           yFixed={[-100, 0]}
         />
       )}
+
+      {/* CCI sub-chart */}
+      {active.cci && indicators && bars.length >= 21 && (
+        <SubChartSVG
+          bars={bars}
+          label="CCI(20)"
+          lines={[{ color: '#5E5CE6', label: 'CCI', values: indicators.cci, width: 1.2 }]}
+          hBands={[
+            { value: 100,  color: '#FF453A', label: '+100' },
+            { value: 0,    color: '#48484A', label: '0' },
+            { value: -100, color: '#30D158', label: '-100' },
+          ]}
+          hoveredIdx={hoveredIdx}
+          onHoverIdx={setHoveredIdx}
+        />
+      )}
+
+      {/* MFI sub-chart */}
+      {active.mfi && indicators && bars.length >= 15 && (
+        <SubChartSVG
+          bars={bars}
+          label="MFI(14) 資金流"
+          lines={[{ color: '#FFD60A', label: 'MFI', values: indicators.mfi, width: 1.2 }]}
+          hBands={[
+            { value: 80, color: '#FF453A', label: '80' },
+            { value: 50, color: '#48484A', label: '50' },
+            { value: 20, color: '#30D158', label: '20' },
+          ]}
+          hoveredIdx={hoveredIdx}
+          onHoverIdx={setHoveredIdx}
+          yFixed={[0, 100]}
+        />
+      )}
+
+      {/* Strategy win-rate backtest */}
+      <StrategyBacktestPanel
+        bars={daily}
+        activeId={preset}
+        onPick={(id) => { const p = STRATEGY_PRESETS.find(x => x.id === id); if (p) applyPreset(p) }}
+      />
 
       {/* Footer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, flexWrap: 'wrap', gap: 6 }}>
