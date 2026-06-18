@@ -189,7 +189,89 @@ function readPredictionHistory() {
   } catch { return [] }
 }
 
-// ── CSV download helpers ──────────────────────────────────────────────────────
+// ── Prediction enrichment (fills gaps left null by the Python pipeline) ───────
+// Strip leading 【…即時新聞】timestamps and the trailing " - 來源" Google News suffix.
+function cleanHeadline(t) {
+  return String(t || '')
+    .replace(/^【[^】]*】\s*/, '')
+    .replace(/\s*[-–—]\s*[^-–—]+$/, '')
+    .trim()
+}
+
+// Rule-based news sentiment, mirroring NewsFeed.jsx getSentiment().
+// Only used to backfill when the pipeline left counts at zero.
+function computeNewsSentiment(articles) {
+  const bullRe = /買超|利多|看好|創高|突破|拿下|接單|升值|降息|解盲.*過關|FDA.*核准|漲停|大漲|上漲|攀升|勁揚|走強|看俏|樂觀|回升/
+  const bearRe = /賣超|利空|看壞|跌停|重挫|暴跌|崩跌|空單增|賣壓|放空|大跌|下跌|走低|下修|承壓|走弱|示警|疑慮/
+  let bull = 0, bear = 0
+  const bullHeads = [], bearHeads = []
+  for (const a of articles) {
+    const t = (a.title || '') + ' ' + (a.summary || '')
+    const isBull = bullRe.test(t) && !bearRe.test(t)
+    const isBear = bearRe.test(t) && !bullRe.test(t)
+    if (isBull) { bull++; if (bullHeads.length < 6) bullHeads.push(cleanHeadline(a.title)) }
+    else if (isBear) { bear++; if (bearHeads.length < 3) bearHeads.push(cleanHeadline(a.title)) }
+  }
+  const total = bull + bear
+  const impact = total > 0 ? Math.round(((bull - bear) / total) * 100) / 100 : 0
+  // key events: lead with bullish headlines, then a couple bearish for balance
+  const key_events = [...bullHeads.slice(0, 4), ...bearHeads.slice(0, 1)].filter(Boolean)
+  return { bullish_count: bull, bearish_count: bear, market_impact: impact, key_events }
+}
+
+// Fetch latest daily % change (and last close) for a symbol from Yahoo Finance.
+async function fetchYahooQuote(symbol) {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d`
+    const txt = await fetchUrl(url, 8000)
+    const j = JSON.parse(txt)
+    const res = j?.chart?.result?.[0]
+    const closes = (res?.indicators?.quote?.[0]?.close || []).filter(v => v != null)
+    if (closes.length < 2) return null
+    const last = closes[closes.length - 1], prev = closes[closes.length - 2]
+    if (!(prev > 0)) return null
+    return { ret: (last - prev) / prev, last }
+  } catch (e) {
+    console.warn(`  Yahoo ${symbol} failed: ${e.message}`)
+    return null
+  }
+}
+
+// Backfill US overnight market fields that the pipeline left null.
+async function enrichUsMarketData(md) {
+  const out = { ...(md || {}) }
+  const r4 = v => Math.round(v * 10000) / 10000
+  if (out.nasdaq_ret == null)  { const r = await fetchYahooQuote('^IXIC'); if (r) out.nasdaq_ret = r4(r.ret) }
+  if (out.sox_ret == null)     { const r = await fetchYahooQuote('^SOX');  if (r) out.sox_ret = r4(r.ret) }
+  if (out.tsm_adr_ret == null) { const r = await fetchYahooQuote('TSM');   if (r) out.tsm_adr_ret = r4(r.ret) }
+  if (out.vix == null)         { const r = await fetchYahooQuote('^VIX');  if (r) out.vix = Math.round(r.last * 10) / 10 }
+  return out
+}
+
+// Enrich a prediction object in-place-ish (returns a new object). Safe no-op on null.
+async function enrichPrediction(prediction, articles) {
+  if (!prediction) return prediction
+  const out = { ...prediction }
+  // 1) News sentiment — backfill only when the pipeline produced nothing.
+  const ns = out.news_sentiment || {}
+  const noCounts = !(ns.bullish_count > 0) && !(ns.bearish_count > 0)
+  if (noCounts && Array.isArray(articles) && articles.length > 0) {
+    const computed = computeNewsSentiment(articles)
+    if (computed.bullish_count + computed.bearish_count > 0) {
+      out.news_sentiment = { ...ns, ...computed }
+      console.log(`  Enriched news sentiment: 利多${computed.bullish_count}/利空${computed.bearish_count} 影響${computed.market_impact}`)
+    }
+  }
+  // 2) US overnight market data — backfill null fields from Yahoo.
+  const md = out.market_data || {}
+  if (md.nasdaq_ret == null || md.sox_ret == null || md.tsm_adr_ret == null || md.vix == null) {
+    out.market_data = await enrichUsMarketData(md)
+    console.log(`  Enriched US market: 那指${out.market_data.nasdaq_ret ?? 'n/a'} 費半${out.market_data.sox_ret ?? 'n/a'} TSM${out.market_data.tsm_adr_ret ?? 'n/a'} VIX${out.market_data.vix ?? 'n/a'}`)
+  }
+  return out
+}
+
+
 const TOP50_COLS = ['rank','stock_id','name','industry_category',
   'entry_score','entry_signal','close','open','high','low','volume','volume_ratio',
   'rsi14','adx14','atr14','macd','macd_hist','bb_pct_b','stoch_k','stoch_d',
@@ -1007,7 +1089,7 @@ for (const d of recentDates) {
 }
 console.log(`K-line: injected into stocks across ${recentDates.length} dates`)
 
-const prediction = readPrediction()
+let prediction = readPrediction()
 const predictionHistory = readPredictionHistory()
 console.log(`Prediction: ${prediction ? prediction.date : 'none'}, history: ${predictionHistory.length} entries`)
 
@@ -1018,6 +1100,13 @@ if (news.length === 0) {
   news = await fetchNews()
 }
 console.log(`News: ${news.length} total items`)
+
+// Backfill prediction gaps (US market data + news sentiment) the pipeline left empty.
+try {
+  prediction = await enrichPrediction(prediction, news)
+} catch (e) {
+  console.warn('  Prediction enrichment skipped:', e.message)
+}
 
 console.log('Fetching FinMind quota...')
 const quota = await fetchFinMindQuota()
