@@ -626,6 +626,8 @@ const MA_LINES_DEF = [
 ]
 
 const STRATEGY_PRESETS = [
+  { id: 'all',        label: '全部', color: '#FFFFFF', desc: '同時顯示全部 10 項指標，一覽無遺',
+    state: { ma: true,  bb: true,  macd: true,  rsi: true,  kd: true,  obv: true,  adx: true,  wr: true,  cci: true,  mfi: true  } },
   { id: 'momentum',   label: '動能', color: '#FF9F0A', desc: 'MACD 翻紅 + RSI 站上 50 才進場，追強勢續攻',
     state: { ma: true,  bb: false, macd: true,  rsi: true,  kd: false, obv: false, adx: false, wr: false, cci: false, mfi: false } },
   { id: 'oscillator', label: '震盪', color: '#30D158', desc: 'KD 低檔金叉 + W%R/CCI 超賣回升，抓區間反彈',
