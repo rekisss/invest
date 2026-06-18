@@ -415,6 +415,23 @@ function processScanData() {
     }
     const dominantDataDate = Object.entries(ddCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || date
     const allStocks = Object.values(stockMap).sort((a, b) => toNum(b.entry_score) - toNum(a.entry_score))
+
+    // Compute fallback grade + score_pct when the CSV doesn't have them yet.
+    // Writes back to the raw row objects so computeOutcomeStats also benefits.
+    if (!allStocks.some(r => r.grade)) {
+      const sortedScores = allStocks.map(r => toNum(r.entry_score)).sort((a, b) => a - b)
+      const n = sortedScores.length
+      allStocks.forEach(row => {
+        const sc = toNum(row.entry_score), ld = toNum(row.limit_down_streak)
+        // Binary search: count of values ≤ sc (O(log n))
+        let lo = 0, hi = n
+        while (lo < hi) { const m = (lo + hi) >>> 1; if (sortedScores[m] <= sc) lo = m + 1; else hi = m }
+        const pct = n > 0 ? lo / n * 100 : 50
+        row.grade = ld >= 1 ? 'X' : pct >= 98 ? 'A' : pct >= 90 ? 'B' : pct >= 75 ? 'C' : 'D'
+        row.score_pct = String(Math.round(pct * 10) / 10)
+      })
+    }
+
     const isLatest = date === dates[0]
     const mapStock = (row, extra = {}) => ({
       stock_id: row.stock_id, name: row.name || '',

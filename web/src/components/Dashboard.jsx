@@ -33,6 +33,8 @@ const GRADE_STYLE = {
   X: { color: '#FF453A', bg: 'rgba(255,69,58,0.13)',   border: 'rgba(255,69,58,0.32)' },
 }
 
+const GRADE_FILTERS = ['A', 'B', 'C', 'D']
+
 function GradeBadge({ grade }) {
   if (!grade) return null
   const g = GRADE_STYLE[grade] || GRADE_STYLE.D
@@ -132,6 +134,9 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const isSectorLeader = !!s.is_sector_leader
           const marketRsRank = s.market_rs_rank || 0
           const scorePct = s.score_pct || 0
+          const entryReason = s.entry_reason || ''
+          const rs5d = s.relative_strength_5d || 0
+          const marginChg = s.margin_change_5d || 0
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -240,7 +245,23 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     📅{persistentMap[s.stock_id]}次
                   </span>
                 )}
+                {rs5d > 0.01 && (
+                  <span style={{ fontSize: 11, color: rs5d > 0.05 ? '#30D158' : '#94A3B8', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                    RS <strong>+{(rs5d * 100).toFixed(1)}%</strong>
+                  </span>
+                )}
+                {Math.abs(marginChg) >= 1 && (
+                  <span style={{ fontSize: 11, color: marginChg < -1 ? '#30D158' : '#FF453A', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                    融{marginChg > 0 ? '↑' : '↓'}{Math.abs(marginChg).toFixed(1)}%
+                  </span>
+                )}
               </div>
+              {/* Entry reason (4th row — only when non-empty) */}
+              {entryReason && (
+                <div style={{ marginTop: 4, fontSize: 10, color: 'var(--ios-label3)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  💡 {entryReason.split(';').slice(0, 2).join(' · ')}
+                </div>
+              )}
             </div>
           )
         })}
@@ -948,18 +969,30 @@ export default function Dashboard({ data, error }) {
       return next
     })
   }
-  // Collapse the secondary controls (freshness hint / search / signal chips)
-  // when the list is scrolled down, so more rows are visible. Scrolling up
-  // (or back to top) restores them. Date selector + view tabs stay visible.
+  // Collapse the secondary controls on downward scroll; restore on upward scroll.
+  // Velocity-aware: fast swipe collapses/expands immediately, slow drag uses
+  // a distance threshold so accidental micro-movements don't flicker.
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const lastScrollY = useRef(0)
+  const lastScrollTime = useRef(Date.now())
+  const collapseRef = useRef(null)
   const handleListScroll = (e) => {
     const y = e.currentTarget.scrollTop
-    const prev = lastScrollY.current
-    if (y <= 8) setHeaderCollapsed(false)            // back at top → always expand
-    else if (y > prev + 6 && y > 48) setHeaderCollapsed(true)   // scrolling down
-    else if (y < prev - 6) setHeaderCollapsed(false)            // scrolling up
+    const now = Date.now()
+    const dt = Math.max(1, now - lastScrollTime.current)
+    const dy = y - lastScrollY.current
+    const velocity = dy / dt  // px/ms — positive = scrolling down
     lastScrollY.current = y
+    lastScrollTime.current = now
+    if (y <= 10) {
+      setHeaderCollapsed(false)
+    } else if (velocity > 0.8 || (velocity > 0.15 && dy > 12)) {
+      // Fast swipe or sustained downward drag → collapse
+      setHeaderCollapsed(true)
+    } else if (velocity < -0.6 || (velocity < -0.1 && dy < -8)) {
+      // Fast swipe up or sustained upward drag → expand
+      setHeaderCollapsed(false)
+    }
   }
   const [activeSignals, setActiveSignals] = useState(new Set())
   const toggleSignal = (key) => {
@@ -967,6 +1000,15 @@ export default function Dashboard({ data, error }) {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
+      return next
+    })
+  }
+  const [activeGrades, setActiveGrades] = useState(new Set())
+  const toggleGrade = (g) => {
+    setActiveGrades(prev => {
+      const next = new Set(prev)
+      if (next.has(g)) next.delete(g)
+      else next.add(g)
       return next
     })
   }
@@ -1007,7 +1049,7 @@ export default function Dashboard({ data, error }) {
   }, [persistent])
 
   // Reset page whenever filters or tab/date change
-  useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals])
+  useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals, activeGrades])
 
   const baseStocks = viewTab === 'entry' ? entryStocks : viewTab === 'limitdown' ? limitDownAlerts : viewTab === 'watchlist' ? watchlistStocks : viewTab === 'heatmap' ? [] : stocks
 
@@ -1022,6 +1064,9 @@ export default function Dashboard({ data, error }) {
     }
     if (activeSignals.size > 0 && viewTab !== 'limitdown') {
       list = list.filter(s => [...activeSignals].every(key => !!s[key]))
+    }
+    if (activeGrades.size > 0 && viewTab !== 'limitdown') {
+      list = list.filter(s => activeGrades.has(s.grade || 'D'))
     }
     return [...list].sort((a, b) => {
       const va = a[sortField] ?? -Infinity
@@ -1086,14 +1131,17 @@ export default function Dashboard({ data, error }) {
           >↓ 全部</a>
         </div>
 
-        {/* Collapsible secondary controls — shrink when list is scrolled down */}
-        <div style={{
-          maxHeight: headerCollapsed ? 0 : 400,
-          opacity: headerCollapsed ? 0 : 1,
-          overflow: 'hidden',
-          transition: 'max-height 0.28s ease, opacity 0.2s ease',
-          pointerEvents: headerCollapsed ? 'none' : 'auto',
-        }}>
+        {/* Collapsible secondary controls — height-based animation for proportional speed */}
+        <div
+          ref={collapseRef}
+          style={{
+            height: headerCollapsed ? 0 : (collapseRef.current?.scrollHeight ?? 'auto'),
+            opacity: headerCollapsed ? 0 : 1,
+            overflow: 'hidden',
+            transition: 'height 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.22s ease',
+            pointerEvents: headerCollapsed ? 'none' : 'auto',
+          }}
+        >
         {/* Scan execution date hint + data quality badge */}
         {(data.last_scan_exec_date || data.generated_at || data.dataQuality) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingRight: 2, marginBottom: 4, flexWrap: 'wrap' }}>
@@ -1173,9 +1221,37 @@ export default function Dashboard({ data, error }) {
           </div>
         </div>
 
+        {/* Grade filter chips */}
+        {viewTab !== 'limitdown' && (
+          <div style={{ marginTop: 8, display: 'flex', gap: 5, alignItems: 'center' }}>
+            <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>評級</span>
+            {GRADE_FILTERS.map(g => {
+              const isActive = activeGrades.has(g)
+              const gs = GRADE_STYLE[g]
+              return (
+                <button key={g} onClick={() => toggleGrade(g)} style={{
+                  flexShrink: 0, fontSize: 11, fontWeight: 800,
+                  padding: '3px 9px', borderRadius: 9999, cursor: 'pointer',
+                  border: `1px solid ${isActive ? gs.border : 'rgba(255,255,255,0.08)'}`,
+                  background: isActive ? gs.bg : 'var(--ios-bg3)',
+                  color: isActive ? gs.color : 'var(--ios-label3)',
+                  transition: 'all 0.15s',
+                }}>{g}</button>
+              )
+            })}
+            {activeGrades.size > 0 && (
+              <button onClick={() => setActiveGrades(new Set())} style={{
+                flexShrink: 0, fontSize: 10, padding: '3px 8px', borderRadius: 9999,
+                border: '1px solid rgba(255,69,58,0.3)', background: 'rgba(255,69,58,0.08)',
+                color: 'var(--ios-red)', cursor: 'pointer', fontWeight: 600,
+              }}>✕</button>
+            )}
+          </div>
+        )}
+
         {/* Signal filter chips */}
         {viewTab !== 'limitdown' && (
-          <div style={{ marginTop: 8, display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
+          <div style={{ marginTop: 6, display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
             {SIGNAL_FILTERS.map(f => {
               const isActive = activeSignals.has(f.key)
               return (

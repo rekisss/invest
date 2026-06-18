@@ -299,6 +299,15 @@ function getSentiment(title, hint) {
   return 'neutral'
 }
 
+// Returns the specific keywords that triggered bull/bear classification
+function getSentimentReason(title, summary = '') {
+  const text = (title || '') + ' ' + (summary || '')
+  const bullKw = ['買超','外資買','外資連買','利多','看好','創高','突破','拿下','接單','升值','降息','解盲','FDA核准','漲停','大漲','上漲','攀升','勁揚','走強','看俏','樂觀','回升']
+  const bearKw = ['賣超','外資賣','外資空','利空','看壞','跌停','重挫','暴跌','崩跌','空單增','賣壓','放空','大跌','下跌','走低','下修','承壓','走弱','示警','疑慮']
+  const matched = { bull: bullKw.filter(k => text.includes(k)), bear: bearKw.filter(k => text.includes(k)) }
+  return matched
+}
+
 function getImportance(title, summary, tags) {
   let s = 1
   if (/台積電|TSMC|Fed|聯準會|FOMC/.test(title)) s += 2
@@ -543,6 +552,30 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
               {stockCodes.map(c => <StockChip key={c} code={c} />)}
             </div>
           )}
+          {/* Sentiment reason — show matched keywords */}
+          {sentiment !== 'neutral' && (() => {
+            const { bull, bear } = getSentimentReason(item.title, item.summary)
+            const keys = sentiment === 'bull' ? bull : bear
+            if (!keys.length) return null
+            const col = sentiment === 'bull' ? '#22C55E' : '#EF4444'
+            const bg = sentiment === 'bull' ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)'
+            const border = sentiment === 'bull' ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'
+            const icon = sentiment === 'bull' ? '📈 利多依據' : '📉 利空依據'
+            return (
+              <div style={{ marginBottom: 10, padding: '8px 11px', background: bg, borderRadius: 10, border: `0.5px solid ${border}` }}>
+                <div style={{ fontSize: 10, color: col, fontWeight: 700, marginBottom: 6, letterSpacing: 0.3 }}>{icon}</div>
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                  {keys.map((k, i) => (
+                    <span key={i} style={{
+                      fontSize: 11, fontWeight: 700, color: col,
+                      background: sentiment === 'bull' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                      borderRadius: 6, padding: '2px 8px',
+                    }}>{k}</span>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
           {/* 大綱 outline */}
           {(() => {
             const outline = generateOutline(item.title, item.summary)
@@ -610,6 +643,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [openIdx, setOpenIdx] = useState(null)
   const [filter, setFilter] = useState('all')
+  const [sentimentFilter, setSentimentFilter] = useState('all') // 'all' | 'bull' | 'bear'
   const [customRules, setCustomRules] = useState(loadCustomRules)
   const [showCustomPanel, setShowCustomPanel] = useState(false)
   const [nowTs, setNowTs] = useState(Date.now())
@@ -671,7 +705,21 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
   )
 
   const tabs = buildDynamicTabs(news, customRules)
-  const filtered = filter === 'all' ? news : news.filter(n => (n.tags || []).includes(filter))
+  const tagFiltered = filter === 'all' ? news : news.filter(n => (n.tags || []).includes(filter))
+  const filtered = sentimentFilter === 'all' ? tagFiltered : tagFiltered.filter(n => {
+    const hint = generateHint(n.title, n.tags || [])
+    return getSentiment(n.title, hint) === sentimentFilter
+  })
+
+  // Counts for sentiment badges
+  const bullCount = tagFiltered.filter(n => {
+    const hint = generateHint(n.title, n.tags || [])
+    return getSentiment(n.title, hint) === 'bull'
+  }).length
+  const bearCount = tagFiltered.filter(n => {
+    const hint = generateHint(n.title, n.tags || [])
+    return getSentiment(n.title, hint) === 'bear'
+  }).length
 
   if (loading && news.length === 0) {
     return (
@@ -714,7 +762,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
             )
           })}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 12px 7px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 12px 5px' }}>
           <div style={{ fontSize: 10, color: 'var(--ios-label3)', display: 'flex', alignItems: 'center', gap: 6 }}>
             <span>
               {lastUpdated ? (() => {
@@ -754,6 +802,32 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
               {refreshing ? '更新中…' : '↻ 重新整理'}
             </button>
           </div>
+        </div>
+
+        {/* Sentiment filter row */}
+        <div style={{ display: 'flex', gap: 6, padding: '0 12px 8px', alignItems: 'center' }}>
+          {[
+            { key: 'all',  label: '全部',  color: 'var(--ios-label2)',  bg: 'var(--ios-fill4)',               count: tagFiltered.length },
+            { key: 'bull', label: '利多',  color: '#22C55E', bg: 'rgba(34,197,94,0.13)',  count: bullCount },
+            { key: 'bear', label: '利空',  color: '#EF4444', bg: 'rgba(239,68,68,0.13)',  count: bearCount },
+          ].map(({ key, label, color, bg, count }) => {
+            const isActive = sentimentFilter === key
+            return (
+              <button key={key} onClick={() => { setSentimentFilter(key); setOpenIdx(null) }} style={{
+                flex: key === 'all' ? 0 : 1, padding: '6px 10px', fontSize: 12, fontWeight: isActive ? 700 : 500,
+                borderRadius: 10, cursor: 'pointer',
+                border: `1px solid ${isActive ? color : 'var(--ios-sep)'}`,
+                background: isActive ? bg : 'var(--ios-bg3)',
+                color: isActive ? color : 'var(--ios-label3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                transition: 'all 0.15s',
+              }}>
+                {key === 'bull' ? '📈' : key === 'bear' ? '📉' : null}
+                {label}
+                <span style={{ fontSize: 11, opacity: isActive ? 1 : 0.6, fontWeight: 600, fontFamily: 'monospace' }}>{count}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
