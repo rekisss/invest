@@ -644,6 +644,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
   const [openIdx, setOpenIdx] = useState(null)
   const [filter, setFilter] = useState('all')
   const [sentimentFilter, setSentimentFilter] = useState('all') // 'all' | 'bull' | 'bear'
+  const [tagsExpanded, setTagsExpanded] = useState(false)
   const [customRules, setCustomRules] = useState(loadCustomRules)
   const [showCustomPanel, setShowCustomPanel] = useState(false)
   const [nowTs, setNowTs] = useState(Date.now())
@@ -738,10 +739,13 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
         <TrendingBar news={news} onFilter={tag => { setFilter(tag); setOpenIdx(null) }} />
       )}
 
-      {/* Dynamic tab bar */}
+      {/* Dynamic tab bar — top 4 always visible, rest collapsible */}
       <div className="ios-category-bar">
-        <div style={{ display: 'flex', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          {tabs.map(cat => {
+        {(() => {
+          const ALWAYS_VISIBLE = 4 // 全部 + top 3
+          const visibleTabs = tagsExpanded ? tabs : tabs.slice(0, ALWAYS_VISIBLE)
+          const hiddenCount = tabs.length - ALWAYS_VISIBLE
+          const TabBtn = (cat) => {
             const isActive = filter === cat.key
             const count = cat.key === 'all' ? news.length : news.filter(n => (n.tags || []).includes(cat.key)).length
             return (
@@ -749,19 +753,40 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
                 key={cat.key}
                 onClick={() => { setFilter(cat.key); setOpenIdx(null) }}
                 style={{
-                  padding: '10px 12px', fontSize: 12, fontWeight: isActive ? 600 : 400, border: 'none',
+                  padding: '8px 11px', fontSize: 12, fontWeight: isActive ? 700 : 400, border: 'none',
                   borderBottom: `2px solid ${isActive ? (cat.color || 'var(--ios-blue)') : 'transparent'}`,
                   background: 'transparent',
                   color: isActive ? (cat.color || 'var(--ios-blue)') : 'var(--ios-label2)',
-                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, letterSpacing: '-0.1px',
+                  transition: 'color 0.15s, border-color 0.15s',
                 }}
               >
                 {cat.icon} {cat.label}
-                <span style={{ marginLeft: 3, fontSize: 10, opacity: 0.6 }}>({count})</span>
+                <span style={{ marginLeft: 3, fontSize: 10, opacity: 0.55 }}>{count}</span>
               </button>
             )
-          })}
-        </div>
+          }
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', overflowX: 'hidden' }}>
+              {visibleTabs.map(cat => TabBtn(cat))}
+              {hiddenCount > 0 && (
+                <button
+                  onClick={() => setTagsExpanded(x => !x)}
+                  style={{
+                    flexShrink: 0, padding: '6px 10px', fontSize: 11, fontWeight: 600,
+                    border: '1px solid var(--ios-sep)', borderRadius: 9999,
+                    background: tagsExpanded ? 'rgba(10,132,255,0.12)' : 'var(--ios-fill4)',
+                    color: tagsExpanded ? 'var(--ios-blue)' : 'var(--ios-label3)',
+                    cursor: 'pointer', margin: '0 4px',
+                    transition: 'background 0.15s, color 0.15s',
+                  }}
+                >
+                  {tagsExpanded ? '收起 ▲' : `⋯ ${hiddenCount}個 ▼`}
+                </button>
+              )}
+            </div>
+          )
+        })()}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 12px 5px' }}>
           <div style={{ fontSize: 10, color: 'var(--ios-label3)', display: 'flex', alignItems: 'center', gap: 6 }}>
             <span>
