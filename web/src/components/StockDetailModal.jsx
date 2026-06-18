@@ -85,6 +85,19 @@ function macdCalc(arr, fast = 12, slow = 26, sig = 9) {
   return { macdLine, signalLine, hist }
 }
 
+function obvCalc(bars) {
+  const result = new Array(bars.length).fill(0)
+  let obv = 0
+  for (let i = 0; i < bars.length; i++) {
+    if (i > 0) {
+      if (bars[i].close > bars[i - 1].close) obv += bars[i].volume
+      else if (bars[i].close < bars[i - 1].close) obv -= bars[i].volume
+    }
+    result[i] = obv
+  }
+  return result
+}
+
 function rsiCalc(arr, n = 14) {
   const result = new Array(arr.length).fill(null)
   if (arr.length < n + 1) return result
@@ -524,6 +537,7 @@ const TOGGLE_DEFS = [
   { key: 'macd', label: 'MACD', color: '#FF9F0A' },
   { key: 'rsi',  label: 'RSI',  color: '#BF5AF2' },
   { key: 'kd',   label: 'KD',   color: '#30D158' },
+  { key: 'obv',  label: 'OBV',  color: '#64D2FF' },
 ]
 
 function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
@@ -538,7 +552,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [chartInterval, setChartInterval] = useState(
     () => INTERVAL_LABELS.find(t => dataMap[t.id].length >= 2)?.id || '1d'
   )
-  const [active, setActive] = useState({ ma: true, bb: false, macd: true, rsi: true, kd: false })
+  const [active, setActive] = useState({ ma: true, bb: false, macd: true, rsi: true, kd: false, obv: false })
   const [hoveredIdx, setHoveredIdx] = useState(null)
 
   const toggle = key => setActive(prev => ({ ...prev, [key]: !prev[key] }))
@@ -559,6 +573,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
       macd: macdCalc(closes),
       rsi: rsiCalc(closes),
       kd: kdCalc(bars),
+      obv: (() => { const v = obvCalc(bars); return { values: v, ma: smaCalc(v, 20) } })(),
     }
   }, [bars])
 
@@ -674,6 +689,21 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
           hoveredIdx={hoveredIdx}
           onHoverIdx={setHoveredIdx}
           yFixed={[0, 100]}
+        />
+      )}
+
+      {/* OBV sub-chart */}
+      {active.obv && indicators && bars.length >= 5 && (
+        <SubChartSVG
+          bars={bars}
+          label="OBV"
+          lines={[
+            { color: '#64D2FF', label: 'OBV', values: indicators.obv.values, width: 1 },
+            { color: '#FF9F0A', label: 'MA20', values: indicators.obv.ma, width: 1, opacity: 0.7 },
+          ]}
+          hBands={[{ value: 0, color: '#48484A', label: '' }]}
+          hoveredIdx={hoveredIdx}
+          onHoverIdx={setHoveredIdx}
         />
       )}
 
@@ -873,6 +903,11 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
           )}
           {s.entry_reason && <Row label="入場理由" value={s.entry_reason} valueStyle={{ color: 'var(--ios-green)', fontSize: 11 }} />}
           {s.skip_reason && <Row label="跳過原因" value={s.skip_reason} valueStyle={{ color: 'var(--ios-red)', fontSize: 11 }} />}
+          {s.base_exit_signal && (
+            <div style={{ margin: '6px 0 2px', padding: '6px 10px', background: 'rgba(255,69,58,0.10)', border: '0.5px solid var(--ios-red)', borderRadius: 8, fontSize: 11, color: 'var(--ios-red)' }}>
+              🚪 出場訊號觸發{s.base_exit_reason ? `：${s.base_exit_reason}` : ''}
+            </div>
+          )}
         </Section>
 
         {/* 橫截面信號 */}
@@ -911,6 +946,8 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
             const lots = Math.round(s.volume_ma20 / 1000)
             return <Row label="20日均量" value={lots >= 10000 ? `${(lots / 1000).toFixed(0)}K張` : `${lots.toLocaleString()}張`} valueStyle={{ color: 'var(--ios-label2)' }} />
           })()}
+          {s.sma5 > 0 && <Row label="SMA5" value={`${fmt(s.sma5, 1)} 元`} valueStyle={{ color: s.close > s.sma5 ? 'var(--ios-red)' : 'var(--ios-green)' }} />}
+          {s.sma10 > 0 && <Row label="SMA10" value={`${fmt(s.sma10, 1)} 元`} valueStyle={{ color: s.close > s.sma10 ? 'var(--ios-red)' : 'var(--ios-green)' }} />}
           <Row label="EMA20" value={fmt(s.ema20, 1)} />
           <Row label="EMA60" value={fmt(s.ema60, 1)} />
           <Row label="布林帶位置" value={fmt(s.bb_pct_b, 2)} />
@@ -954,10 +991,11 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
             { key: 'ma5_above_ma10',       label: 'MA5>MA10' },
           ]
           const bearish = [
-            { key: 'macd_death_cross',     label: 'MACD死叉' },
-            { key: 'close_below_ema20',    label: '跌破EMA20' },
-            { key: 'long_upper_shadow',    label: '長上影線' },
-            { key: 'open_high_close_low',  label: '開高走低' },
+            { key: 'macd_death_cross',        label: 'MACD死叉' },
+            { key: 'close_below_ema20',       label: '跌破EMA20' },
+            { key: 'close_below_swing_low',   label: '跌破波段低' },
+            { key: 'long_upper_shadow',       label: '長上影線' },
+            { key: 'open_high_close_low',     label: '開高走低' },
           ]
           const activeB = bullish.filter(sig => s[sig.key])
           const activeR = bearish.filter(sig => s[sig.key])
@@ -1074,6 +1112,12 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
           )}
           {s.revenue_3m_yoy != null && s.revenue_3m_yoy !== 0 && (
             <Row label="近3月累計 YoY" value={pct(s.revenue_3m_yoy * 100)} valueStyle={{ color: s.revenue_3m_yoy > 0.1 ? 'var(--ios-red)' : s.revenue_3m_yoy < 0 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
+          )}
+          {s.has_buyback && (
+            <Row label="庫藏股回購" value="✅ 進行中" valueStyle={{ color: 'var(--ios-orange)' }} />
+          )}
+          {s.insider_net_30d != null && s.insider_net_30d !== 0 && (
+            <Row label="內部人30日淨買" value={`${s.insider_net_30d > 0 ? '+' : ''}${fmt(s.insider_net_30d, 0)} 張`} valueStyle={{ color: s.insider_net_30d > 0 ? 'var(--ios-red)' : 'var(--ios-green)' }} />
           )}
         </Section>
         {!s.data_quality_ok && s.data_quality_ok != null && (
