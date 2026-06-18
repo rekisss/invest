@@ -134,6 +134,46 @@ function kdCalc(bars, n = 9, m = 3) {
   return { kArr, dArr }
 }
 
+function adxCalc(bars, n = 14) {
+  const len = bars.length
+  const plusDI  = new Array(len).fill(null)
+  const minusDI = new Array(len).fill(null)
+  const adxLine = new Array(len).fill(null)
+  if (len < n + 1) return { plusDI, minusDI, adxLine }
+  const trArr = [], pdmArr = [], ndmArr = []
+  for (let i = 1; i < len; i++) {
+    const hd = bars[i].high - bars[i - 1].high
+    const ld = bars[i - 1].low - bars[i].low
+    trArr[i]  = Math.max(bars[i].high - bars[i].low, Math.abs(bars[i].high - bars[i - 1].close), Math.abs(bars[i].low - bars[i - 1].close))
+    pdmArr[i] = (hd > ld && hd > 0) ? hd : 0
+    ndmArr[i] = (ld > hd && ld > 0) ? ld : 0
+  }
+  let sTR = 0, sPDM = 0, sNDM = 0
+  for (let i = 1; i <= n; i++) { sTR += trArr[i] || 0; sPDM += pdmArr[i] || 0; sNDM += ndmArr[i] || 0 }
+  let dxSum = 0, dxCnt = 0
+  for (let i = n; i < len; i++) {
+    if (i > n) { sTR = sTR - sTR / n + (trArr[i] || 0); sPDM = sPDM - sPDM / n + (pdmArr[i] || 0); sNDM = sNDM - sNDM / n + (ndmArr[i] || 0) }
+    const pdi = sTR > 0 ? 100 * sPDM / sTR : 0
+    const ndi = sTR > 0 ? 100 * sNDM / sTR : 0
+    plusDI[i] = pdi; minusDI[i] = ndi
+    const dx = (pdi + ndi) > 0 ? 100 * Math.abs(pdi - ndi) / (pdi + ndi) : 0
+    dxSum += dx; dxCnt++
+    if (dxCnt === n) { adxLine[i] = dxSum / n }
+    else if (dxCnt > n) { adxLine[i] = (adxLine[i - 1] * (n - 1) + dx) / n }
+  }
+  return { plusDI, minusDI, adxLine }
+}
+
+function williamsRCalc(bars, n = 14) {
+  return bars.map((_, i) => {
+    if (i < n - 1) return null
+    const slice = bars.slice(i - n + 1, i + 1)
+    const hh = Math.max(...slice.map(b => b.high))
+    const ll = Math.min(...slice.map(b => b.low))
+    return hh === ll ? -50 : (hh - bars[i].close) / (hh - ll) * -100
+  })
+}
+
 // Build a polyline points string, splitting at nulls into segments
 function toPolySegs(values, toXFn, toYFn) {
   const segments = []
@@ -485,11 +525,15 @@ function ChartValueStrip({ bars, indicators, active, hoveredIdx }) {
   const bar = bars[i]
   if (!bar || !indicators) return null
 
-  const rsi  = indicators.rsi[i]
+  const rsi   = indicators.rsi[i]
   const macdL = indicators.macd.macdLine[i]
   const macdH = indicators.macd.hist[i]
-  const k = indicators.kd.kArr[i]
-  const d = indicators.kd.dArr[i]
+  const k     = indicators.kd.kArr[i]
+  const d     = indicators.kd.dArr[i]
+  const adx   = indicators.adx?.adxLine[i]
+  const pdi   = indicators.adx?.plusDI[i]
+  const ndi   = indicators.adx?.minusDI[i]
+  const wr    = indicators.wr?.[i]
   const vn = (val, dec = 1) => val != null ? Number(val).toFixed(dec) : '—'
 
   return (
@@ -518,6 +562,18 @@ function ChartValueStrip({ bars, indicators, active, hoveredIdx }) {
           D <b style={{ color: '#0A84FF' }}>{vn(d)}</b>
         </span>
       )}
+      {active.adx && adx != null && (
+        <span style={{ color: 'var(--ios-label3)' }}>
+          ADX <b style={{ color: adx > 25 ? '#FF453A' : '#FF453A88' }}>{vn(adx)}</b>
+          {pdi != null && <> +DI<b style={{ color: '#30D158' }}>{vn(pdi)}</b></>}
+          {ndi != null && <> -DI<b style={{ color: '#FF6B35' }}>{vn(ndi)}</b></>}
+        </span>
+      )}
+      {active.wr && wr != null && (
+        <span style={{ color: 'var(--ios-label3)' }}>
+          W%R <b style={{ color: wr > -20 ? '#FF453A' : wr < -80 ? '#30D158' : '#FF6B35' }}>{vn(wr)}</b>
+        </span>
+      )}
     </div>
   )
 }
@@ -531,6 +587,17 @@ const MA_LINES_DEF = [
   { label: 'EMA60', color: '#FFD60A', fn: c => emaCalc(c, 60), },
 ]
 
+const STRATEGY_PRESETS = [
+  { id: 'momentum',   label: '動能', color: '#FF9F0A',
+    state: { ma: true,  bb: false, macd: true,  rsi: true,  kd: false, obv: false, adx: false, wr: false } },
+  { id: 'oscillator', label: '震盪', color: '#30D158',
+    state: { ma: false, bb: true,  macd: false, rsi: false, kd: true,  obv: false, adx: false, wr: true  } },
+  { id: 'trend',      label: '趨勢', color: '#0A84FF',
+    state: { ma: true,  bb: true,  macd: false, rsi: false, kd: false, obv: false, adx: true,  wr: false } },
+  { id: 'chips',      label: '籌碼', color: '#64D2FF',
+    state: { ma: true,  bb: false, macd: false, rsi: false, kd: false, obv: true,  adx: false, wr: false } },
+]
+
 const TOGGLE_DEFS = [
   { key: 'ma',   label: 'MA',   color: '#5AC8FA' },
   { key: 'bb',   label: 'BB',   color: '#0A84FF' },
@@ -538,6 +605,8 @@ const TOGGLE_DEFS = [
   { key: 'rsi',  label: 'RSI',  color: '#BF5AF2' },
   { key: 'kd',   label: 'KD',   color: '#30D158' },
   { key: 'obv',  label: 'OBV',  color: '#64D2FF' },
+  { key: 'adx',  label: 'ADX',  color: '#FF453A' },
+  { key: 'wr',   label: 'W%R',  color: '#FF6B35' },
 ]
 
 function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
@@ -552,10 +621,12 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [chartInterval, setChartInterval] = useState(
     () => INTERVAL_LABELS.find(t => dataMap[t.id].length >= 2)?.id || '1d'
   )
-  const [active, setActive] = useState({ ma: true, bb: false, macd: true, rsi: true, kd: false, obv: false })
+  const [active, setActive] = useState({ ma: true, bb: false, macd: true, rsi: true, kd: false, obv: false, adx: false, wr: false })
+  const [preset, setPreset] = useState('momentum')
   const [hoveredIdx, setHoveredIdx] = useState(null)
 
-  const toggle = key => setActive(prev => ({ ...prev, [key]: !prev[key] }))
+  const toggle = key => { setActive(prev => ({ ...prev, [key]: !prev[key] })); setPreset(null) }
+  const applyPreset = p => { setActive(p.state); setPreset(p.id) }
 
   const bars = (dataMap[chartInterval] || []).slice(-60)
 
@@ -574,6 +645,8 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
       rsi: rsiCalc(closes),
       kd: kdCalc(bars),
       obv: (() => { const v = obvCalc(bars); return { values: v, ma: smaCalc(v, 20) } })(),
+      adx: adxCalc(bars),
+      wr: williamsRCalc(bars),
     }
   }, [bars])
 
@@ -581,6 +654,20 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
 
   return (
     <div>
+      {/* Strategy preset row */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6, alignItems: 'center' }}>
+        <span style={{ fontSize: 10, color: 'var(--ios-label3)', marginRight: 2, flexShrink: 0 }}>策略</span>
+        {STRATEGY_PRESETS.map(p => (
+          <button key={p.id} onClick={() => applyPreset(p)} style={{
+            background: preset === p.id ? `${p.color}20` : 'var(--ios-fill4)',
+            color: preset === p.id ? p.color : 'var(--ios-label3)',
+            border: `0.5px solid ${preset === p.id ? p.color : 'transparent'}`,
+            borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer',
+            fontWeight: preset === p.id ? 700 : 400, transition: 'all 0.15s',
+          }}>{p.label}</button>
+        ))}
+      </div>
+
       {/* Top controls row */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         {/* Interval */}
@@ -704,6 +791,40 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
           hBands={[{ value: 0, color: '#48484A', label: '' }]}
           hoveredIdx={hoveredIdx}
           onHoverIdx={setHoveredIdx}
+        />
+      )}
+
+      {/* ADX / DMI sub-chart */}
+      {active.adx && indicators && bars.length >= 28 && (
+        <SubChartSVG
+          bars={bars}
+          label="ADX(14) / DMI"
+          lines={[
+            { color: '#FF453A', label: 'ADX',  values: indicators.adx.adxLine,  width: 1.5 },
+            { color: '#30D158', label: '+DI',  values: indicators.adx.plusDI,   width: 1,   opacity: 0.85 },
+            { color: '#FF6B35', label: '-DI',  values: indicators.adx.minusDI,  width: 1,   opacity: 0.85 },
+          ]}
+          hBands={[{ value: 25, color: '#FFD60A', label: '25' }]}
+          hoveredIdx={hoveredIdx}
+          onHoverIdx={setHoveredIdx}
+          yFixed={[0, 60]}
+        />
+      )}
+
+      {/* Williams %R sub-chart */}
+      {active.wr && indicators && bars.length >= 14 && (
+        <SubChartSVG
+          bars={bars}
+          label="Williams %R(14)"
+          lines={[{ color: '#FF6B35', label: 'W%R', values: indicators.wr, width: 1.2 }]}
+          hBands={[
+            { value: -20, color: '#FF453A', label: '-20' },
+            { value: -50, color: '#48484A', label: '-50' },
+            { value: -80, color: '#30D158', label: '-80' },
+          ]}
+          hoveredIdx={hoveredIdx}
+          onHoverIdx={setHoveredIdx}
+          yFixed={[-100, 0]}
         />
       )}
 
