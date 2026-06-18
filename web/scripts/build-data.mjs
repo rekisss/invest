@@ -1182,6 +1182,17 @@ const topStocks = latestScanObj.top_stocks || []
 // Count stocks with valid technical data (RSI > 0, ADX > 0)
 const validCount = topStocks.filter(s => (s.rsi14 || 0) > 0 && (s.adx14 || 0) > 0).length
 const totalTop = topStocks.length
+// Count stocks carrying any institutional signal. Taiwan 三大法人 data is published
+// after market close (~15-17:00 CST); a morning scan returns all-zero institutional
+// fields, which strips the foreign/invest/dealer soft-signal bonuses and reshuffles
+// the TOP ranking. Detect that degenerate state so the UI can warn instead of
+// silently showing a technical-only ranking.
+const instCount = topStocks.filter(s =>
+  (s.foreign_net || 0) !== 0 || (s.foreign_buy_streak || 0) !== 0 ||
+  (s.invest_trust_net || 0) !== 0 || (s.invest_trust_streak || 0) !== 0
+).length
+const instRatio = totalTop > 0 ? Math.round(instCount / totalTop * 100) : null
+const institutionalOk = totalTop === 0 ? null : instCount >= Math.max(5, Math.floor(totalTop * 0.15))
 // Detect trading day gap between actual market data date and today
 function tradingDaysBehind(latest, today) {
   if (!latest || !today) return null
@@ -1205,9 +1216,11 @@ const dataQuality = {
   total_stocks: latestScanObj.total_scanned || 0,
   top_valid_ratio: totalTop > 0 ? Math.round(validCount / totalTop * 100) : null,
   fields_ok: totalTop === 0 ? null : validCount >= Math.floor(totalTop * 0.9),
+  institutional_ok: institutionalOk,
+  institutional_ratio: instRatio,
   build_time: new Date().toISOString(),
 }
-console.log(`Data quality: fresh=${dataQuality.is_fresh}, days_behind=${daysBehind}, valid_ratio=${dataQuality.top_valid_ratio}%`)
+console.log(`Data quality: fresh=${dataQuality.is_fresh}, days_behind=${daysBehind}, valid_ratio=${dataQuality.top_valid_ratio}%, inst_ratio=${instRatio}%`)
 
 writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
