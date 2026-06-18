@@ -5,6 +5,13 @@ name: 全市場彙整 TOP 20 (20:00 CST 週二~週六)
 # 3. 清除批次 CSV（保留 XLSX 供歸檔）
 
 on:
+  # 全盤掃描2 完成後自動觸發（主要觸發方式）
+  workflow_run:
+    workflows: ["全盤掃描2（橫截面信號 + F-Score 補抓）"]
+    types: [completed]
+  # 排程保底：週二~週六 20:15 CST（UTC+8）= 12:15 UTC，確保掃描已完成
+  schedule:
+    - cron: '15 12 * * 2-6'
   workflow_dispatch:
 
 env:
@@ -12,6 +19,10 @@ env:
 
 jobs:
   aggregate:
+    # workflow_run 觸發時只在 scan2 成功後才執行；schedule/dispatch 無條件執行
+    if: >
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -47,17 +58,24 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: 顯示掃描進度
+      - name: 顯示掃描進度並驗證當日 CSV 存在
         id: detect
         run: |
+          TODAY=$(TZ=Asia/Taipei date +%Y-%m-%d)
           BATCH_COUNT=$(ls output/full_scan/batch_*.csv 2>/dev/null | wc -l)
+          TODAY_BATCH=$(ls output/full_scan/batch_*_${TODAY}.csv 2>/dev/null | wc -l)
           TOTAL_ROWS=0
           for f in output/full_scan/batch_*.csv; do
             [ -f "$f" ] && TOTAL_ROWS=$(( TOTAL_ROWS + $(tail -n +2 "$f" | wc -l) ))
           done
-          echo "批次數：$BATCH_COUNT，已掃股票：$TOTAL_ROWS 支"
+          echo "批次數：$BATCH_COUNT（當日 ${TODAY}：${TODAY_BATCH} 個），已掃股票：$TOTAL_ROWS 支"
           echo "batch_count=$BATCH_COUNT" >> "$GITHUB_OUTPUT"
+          echo "today_batch=$TODAY_BATCH" >> "$GITHUB_OUTPUT"
           echo "total_rows=$TOTAL_ROWS" >> "$GITHUB_OUTPUT"
+          if [ "$TODAY_BATCH" -lt 1 ] && [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            echo "⚠️ 當日（$TODAY）無批次 CSV，排程觸發跳過彙整"
+            exit 1
+          fi
 
       - name: Aggregate and notify
         env:
