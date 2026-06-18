@@ -1,7 +1,7 @@
 {
-  "date": "2026-06-17",
-  "generated_at": "09:53",
-  "xgb_prob_up": 0.697,
+  "date": "2026-06-18",
+  "generated_at": "08:04",
+  "xgb_prob_up": 0.709,
   "xgb_label": "看多",
   "market_data": {
     "vix": null,
@@ -9,25 +9,25 @@
     "nasdaq_ret": null,
     "sox_ret": null,
     "tsm_adr_ret": null,
-    "futures_net": -69847.0,
-    "night_change": -815.0,
+    "futures_net": -67394.0,
+    "night_change": -62.0,
     "pcr": null,
-    "taiex_rsi": 63.44087258230388,
-    "macd_hist": -339.4927257066811,
-    "dist_ma20": 4.092201698589482,
-    "dist_ma60": 16.058173825852794,
-    "taiex_ret_5d": 2.6450767640437745,
-    "taiex_ret_20d": 14.245258788771608,
+    "taiex_rsi": 63.80666339208863,
+    "macd_hist": -212.4764106212133,
+    "dist_ma20": 3.6161744265545748,
+    "dist_ma60": 15.702491519021011,
+    "taiex_ret_5d": 6.384150411479084,
+    "taiex_ret_20d": 14.936318548114148,
     "buyback_count": 0,
-    "disposition_count": 41,
+    "disposition_count": 63,
     "jpy_ret": null,
     "arkk_ret": null,
     "hyg_ret": null,
     "night_trend": "↓ 走弱",
-    "market_revenue_yoy": 0.1044,
-    "market_foreign_holding_chg": -0.2159
+    "market_revenue_yoy": 0.0937,
+    "market_foreign_holding_chg": 0.9763
   },
-  "ai_insight": "# 今日操盤要點\n\n・夜盤走弱跌815點且外資期貨大幅淨賣近7萬口，短線賣壓沉重，上午開盤留意2,800點整數關卡支撑，宜控制風險並觀察外資現貨是否跟進。\n\n・處置股41支創風險警示，加權RSI達63進入超買區域，MACD直方翻負，獲利了結賣壓可能加劇，應避免追高並留意個股爆雷風險。\n\n・月營收年增10.4%基本面仍佳但未能止跌，AI題材股仍具70%上漲機率，建",
+  "ai_insight": "# 今日操盤要點\n\n・ 夜盤走弱跌62點、外資期貨淨空頭67,394口，加上處置股達63支風險警示，短線承壓，宜留意技術面破底訊號並控制風險部位。\n\n・ AI題材上漲機率71%，可作為反彈時的輪動標的，但外資現貨淨賣22%顯示大戶獲利了結，宜搭高出場而非追高。\n\n・ 加權指數距MA20僅+3.6%、RSI 64處於高檔，雖月營收YoY+9.4%基本面穩健，但缺乏技術面",
   "regime": {
     "label": "double_whipsaw",
     "label_zh": "🔄 多空雙巴日",
@@ -37,37 +37,25 @@
     "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
     "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
     "danger_signals": [
-      "外資空單極重（-69,847口），軋空風險高",
-      "夜盤缺口 -815pt 過大，易反轉"
+      "外資空單極重（-67,394口），軋空風險高"
     ],
     "forbidden_actions": [
-      "禁止追空缺口超過200pt",
       "禁止反彈高點追多（軋空陷阱）"
     ]
   },
   "risk": {
-    "level": "high",
-    "score": 0.5,
+    "level": "medium",
+    "score": 0.25,
     "factors": [
       {
         "name": "外資空單極重",
-        "description": "-69,847口，軋空/崩潰雙向風險",
+        "description": "-67,394口，軋空/崩潰雙向風險",
         "action": "避免重押方向"
-      },
-      {
-        "name": "夜盤大缺口",
-        "description": "夜盤 -815pt，開盤後可能快速反轉",
-        "action": "禁止追缺口超過200pt"
-      },
-      {
-        "name": "結算日",
-        "description": "2026-06-17 台指期結算日，波動加大",
-        "action": "降低槓桿"
       }
     ]
   },
   "news_sentiment": {
-    "market_impact": 0.63,
+    "market_impact": 0.31,
     "key_events": [],
     "bullish_count": 0,
     "bearish_count": 0
