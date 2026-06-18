@@ -33,6 +33,8 @@ const GRADE_STYLE = {
   X: { color: '#FF453A', bg: 'rgba(255,69,58,0.13)',   border: 'rgba(255,69,58,0.32)' },
 }
 
+const GRADE_FILTERS = ['A', 'B', 'C', 'D']
+
 function GradeBadge({ grade }) {
   if (!grade) return null
   const g = GRADE_STYLE[grade] || GRADE_STYLE.D
@@ -132,6 +134,9 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const isSectorLeader = !!s.is_sector_leader
           const marketRsRank = s.market_rs_rank || 0
           const scorePct = s.score_pct || 0
+          const entryReason = s.entry_reason || ''
+          const rs5d = s.relative_strength_5d || 0
+          const marginChg = s.margin_change_5d || 0
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -240,7 +245,23 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     📅{persistentMap[s.stock_id]}次
                   </span>
                 )}
+                {rs5d > 0.01 && (
+                  <span style={{ fontSize: 11, color: rs5d > 0.05 ? '#30D158' : '#94A3B8', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                    RS <strong>+{(rs5d * 100).toFixed(1)}%</strong>
+                  </span>
+                )}
+                {Math.abs(marginChg) >= 1 && (
+                  <span style={{ fontSize: 11, color: marginChg < -1 ? '#30D158' : '#FF453A', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                    融{marginChg > 0 ? '↑' : '↓'}{Math.abs(marginChg).toFixed(1)}%
+                  </span>
+                )}
               </div>
+              {/* Entry reason (4th row — only when non-empty) */}
+              {entryReason && (
+                <div style={{ marginTop: 4, fontSize: 10, color: 'var(--ios-label3)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  💡 {entryReason.split(';').slice(0, 2).join(' · ')}
+                </div>
+              )}
             </div>
           )
         })}
@@ -970,6 +991,15 @@ export default function Dashboard({ data, error }) {
       return next
     })
   }
+  const [activeGrades, setActiveGrades] = useState(new Set())
+  const toggleGrade = (g) => {
+    setActiveGrades(prev => {
+      const next = new Set(prev)
+      if (next.has(g)) next.delete(g)
+      else next.add(g)
+      return next
+    })
+  }
 
   if (error || !data || !data.dates || data.dates.length === 0) {
     return (
@@ -1007,7 +1037,7 @@ export default function Dashboard({ data, error }) {
   }, [persistent])
 
   // Reset page whenever filters or tab/date change
-  useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals])
+  useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals, activeGrades])
 
   const baseStocks = viewTab === 'entry' ? entryStocks : viewTab === 'limitdown' ? limitDownAlerts : viewTab === 'watchlist' ? watchlistStocks : viewTab === 'heatmap' ? [] : stocks
 
@@ -1022,6 +1052,9 @@ export default function Dashboard({ data, error }) {
     }
     if (activeSignals.size > 0 && viewTab !== 'limitdown') {
       list = list.filter(s => [...activeSignals].every(key => !!s[key]))
+    }
+    if (activeGrades.size > 0 && viewTab !== 'limitdown') {
+      list = list.filter(s => activeGrades.has(s.grade || 'D'))
     }
     return [...list].sort((a, b) => {
       const va = a[sortField] ?? -Infinity
@@ -1173,9 +1206,37 @@ export default function Dashboard({ data, error }) {
           </div>
         </div>
 
+        {/* Grade filter chips */}
+        {viewTab !== 'limitdown' && (
+          <div style={{ marginTop: 8, display: 'flex', gap: 5, alignItems: 'center' }}>
+            <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>評級</span>
+            {GRADE_FILTERS.map(g => {
+              const isActive = activeGrades.has(g)
+              const gs = GRADE_STYLE[g]
+              return (
+                <button key={g} onClick={() => toggleGrade(g)} style={{
+                  flexShrink: 0, fontSize: 11, fontWeight: 800,
+                  padding: '3px 9px', borderRadius: 9999, cursor: 'pointer',
+                  border: `1px solid ${isActive ? gs.border : 'rgba(255,255,255,0.08)'}`,
+                  background: isActive ? gs.bg : 'var(--ios-bg3)',
+                  color: isActive ? gs.color : 'var(--ios-label3)',
+                  transition: 'all 0.15s',
+                }}>{g}</button>
+              )
+            })}
+            {activeGrades.size > 0 && (
+              <button onClick={() => setActiveGrades(new Set())} style={{
+                flexShrink: 0, fontSize: 10, padding: '3px 8px', borderRadius: 9999,
+                border: '1px solid rgba(255,69,58,0.3)', background: 'rgba(255,69,58,0.08)',
+                color: 'var(--ios-red)', cursor: 'pointer', fontWeight: 600,
+              }}>✕</button>
+            )}
+          </div>
+        )}
+
         {/* Signal filter chips */}
         {viewTab !== 'limitdown' && (
-          <div style={{ marginTop: 8, display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
+          <div style={{ marginTop: 6, display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
             {SIGNAL_FILTERS.map(f => {
               const isActive = activeSignals.has(f.key)
               return (
