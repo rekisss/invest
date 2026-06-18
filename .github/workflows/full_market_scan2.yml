@@ -62,7 +62,7 @@ jobs:
           DATE="${{ github.event.inputs.date }}"
           if [ -z "$DATE" ]; then
             DATE=$(ls output/full_scan/batch_seq*_*.csv 2>/dev/null \
-                   | grep -oP '\d{4}-\d{2}-\d{2}' | sort | tail -1)
+                   | grep -oP '\d{4}-\d{2}-\d{2}' | sort | uniq -c | sort -rn | awk '{print $2}' | head -1)
           fi
           if [ -z "$DATE" ]; then
             echo "❌ 找不到任何 batch_seq CSV，請先執行全盤掃描" >&2
