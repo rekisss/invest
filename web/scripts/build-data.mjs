@@ -980,13 +980,15 @@ console.log(`Last scan execution date: ${lastScanExecDate ?? 'unknown'}`)
 
 // ── Data quality verification ─────────────────────────────────────────────────
 const todayTW = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
-const latestDataDate = dates[0] || ''
-const latestScanObj = latestDataDate ? (scans[latestDataDate] || {}) : {}
+const latestExecDate = dates[0] || ''
+const latestScanObj = latestExecDate ? (scans[latestExecDate] || {}) : {}
+// Use actual FinMind market data date (data_date) when available; fall back to exec date
+const latestDataDate = latestScanObj.data_date || latestExecDate
 const topStocks = latestScanObj.top_stocks || []
 // Count stocks with valid technical data (RSI > 0, ADX > 0)
 const validCount = topStocks.filter(s => (s.rsi14 || 0) > 0 && (s.adx14 || 0) > 0).length
 const totalTop = topStocks.length
-// Detect day gap between today and latest data
+// Detect trading day gap between actual market data date and today
 function tradingDaysBehind(latest, today) {
   if (!latest || !today) return null
   const d1 = new Date(latest), d2 = new Date(today)
