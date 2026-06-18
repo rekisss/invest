@@ -22,6 +22,51 @@ function ProbBar({ prob }) {
   )
 }
 
+// Probability trend sparkline across recent prediction history
+function ProbTrend({ history }) {
+  const pts = useMemo(() => {
+    return [...(history || [])]
+      .filter(h => h.xgb_prob_up != null && h.date)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-20)
+      .map(h => ({ date: h.date, p: h.xgb_prob_up }))
+  }, [history])
+  if (pts.length < 3) return null
+
+  const w = 300, h = 52, padY = 6
+  const ps = pts.map(d => d.p)
+  const lo = Math.min(...ps, 0.45), hi = Math.max(...ps, 0.55)
+  const range = (hi - lo) || 1
+  const xs = i => (i / (pts.length - 1)) * w
+  const ys = p => padY + (1 - (p - lo) / range) * (h - padY * 2)
+  const line = pts.map((d, i) => `${xs(i).toFixed(1)},${ys(d.p).toFixed(1)}`).join(' ')
+  const last = pts[pts.length - 1]
+  const lastPct = Math.round(last.p * 100)
+  const lastColor = lastPct >= 60 ? 'var(--ios-green)' : lastPct <= 40 ? 'var(--ios-red)' : 'var(--ios-yellow)'
+  const y50 = (lo <= 0.5 && hi >= 0.5) ? ys(0.5) : null
+
+  return (
+    <Card title="預測機率走勢">
+      <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', overflow: 'visible' }}>
+        {y50 != null && (
+          <line x1={0} y1={y50} x2={w} y2={y50} stroke="var(--ios-label3)" strokeWidth="0.5" strokeDasharray="3,3" opacity="0.6" />
+        )}
+        <polyline points={line} fill="none" stroke={lastColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+        {pts.map((d, i) => (
+          <circle key={d.date} cx={xs(i)} cy={ys(d.p)} r={i === pts.length - 1 ? 3.5 : 1.8}
+            fill={i === pts.length - 1 ? lastColor : 'var(--ios-label3)'} />
+        ))}
+        <text x={xs(pts.length - 1)} y={ys(last.p) - 7} textAnchor="end" fontSize="10" fill={lastColor} fontWeight="700">{lastPct}%</text>
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ios-label3)', marginTop: 2 }}>
+        <span>{pts[0].date.slice(5)}</span>
+        <span>{y50 != null ? '虛線 = 50% 中性' : `近 ${pts.length} 日`}</span>
+        <span>{last.date.slice(5)}</span>
+      </div>
+    </Card>
+  )
+}
+
 function Card({ title, accent, children }) {
   return (
     <div style={{
@@ -184,6 +229,9 @@ export default function PredictionPanel({ prediction, history = [] }) {
           )}
         </Card>
 
+        {/* Probability trend across recent days */}
+        <ProbTrend history={history} />
+
         {/* AI Insight */}
         {ai_insight && (
           <Card title="🤖 AI 操盤要點" accent="var(--ios-purple)">
@@ -270,6 +318,25 @@ export default function PredictionPanel({ prediction, history = [] }) {
                 </div>
               ))}
             </div>
+            {/* Bull/bear ratio bar */}
+            {(news_sentiment.bullish_count > 0 || news_sentiment.bearish_count > 0) && (() => {
+              const b = news_sentiment.bullish_count || 0
+              const r = news_sentiment.bearish_count || 0
+              const total = b + r
+              const bp = total > 0 ? (b / total) * 100 : 50
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: 'flex', height: 8, borderRadius: 9999, overflow: 'hidden', background: 'var(--ios-bg3)' }}>
+                    <div style={{ width: `${bp}%`, background: 'var(--ios-green)' }} />
+                    <div style={{ width: `${100 - bp}%`, background: 'var(--ios-red)' }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ios-label3)', marginTop: 4 }}>
+                    <span style={{ color: 'var(--ios-green)' }}>偏多 {Math.round(bp)}%</span>
+                    <span style={{ color: 'var(--ios-red)' }}>偏空 {Math.round(100 - bp)}%</span>
+                  </div>
+                </div>
+              )
+            })()}
             {news_sentiment.key_events?.length > 0 && (
               <div>
                 {news_sentiment.key_events.slice(0, 5).map((e, i) => (
