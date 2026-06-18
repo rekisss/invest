@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
 
 const PAGE_SIZE = 50
@@ -969,30 +969,50 @@ export default function Dashboard({ data, error }) {
       return next
     })
   }
-  // Collapse the secondary controls on downward scroll; restore on upward scroll.
-  // Velocity-aware: fast swipe collapses/expands immediately, slow drag uses
-  // a distance threshold so accidental micro-movements don't flicker.
-  const [headerCollapsed, setHeaderCollapsed] = useState(false)
-  const lastScrollY = useRef(0)
-  const lastScrollTime = useRef(Date.now())
-  const collapseRef = useRef(null)
+  // Proportional scroll collapse: scroll position directly maps to collapse progress.
+  // Uses requestAnimationFrame + direct DOM style mutation — no React state re-render.
+  const headerInnerRef = useRef(null)
+  const maxCollapseHeightRef = useRef(null)
+  const scrollRafRef = useRef(null)
+  const COLLAPSE_RANGE = 90 // px of scroll → fully collapsed
+
+  // Measure once on mount and whenever content-affecting filters change
+  useLayoutEffect(() => {
+    const el = headerInnerRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    const h = el.scrollHeight
+    maxCollapseHeightRef.current = h
+    el.style.height = h + 'px'
+  }, [viewTab]) // re-measure when tab changes (grade row shows/hides)
+
+  // RAF cleanup
+  useEffect(() => () => { if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current) }, [])
+
   const handleListScroll = (e) => {
-    const y = e.currentTarget.scrollTop
-    const now = Date.now()
-    const dt = Math.max(1, now - lastScrollTime.current)
-    const dy = y - lastScrollY.current
-    const velocity = dy / dt  // px/ms — positive = scrolling down
-    lastScrollY.current = y
-    lastScrollTime.current = now
-    if (y <= 10) {
-      setHeaderCollapsed(false)
-    } else if (velocity > 0.8 || (velocity > 0.15 && dy > 12)) {
-      // Fast swipe or sustained downward drag → collapse
-      setHeaderCollapsed(true)
-    } else if (velocity < -0.6 || (velocity < -0.1 && dy < -8)) {
-      // Fast swipe up or sustained upward drag → expand
-      setHeaderCollapsed(false)
-    }
+    const scrollTop = e.currentTarget.scrollTop
+    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current)
+    scrollRafRef.current = requestAnimationFrame(() => {
+      const el = headerInnerRef.current
+      if (!el) return
+      if (scrollTop <= 2) {
+        // Back at top — re-measure in case content changed
+        el.style.height = 'auto'
+        const h = el.scrollHeight
+        maxCollapseHeightRef.current = h
+        el.style.height = h + 'px'
+        el.style.opacity = '1'
+        el.style.pointerEvents = 'auto'
+        return
+      }
+      if (maxCollapseHeightRef.current == null) {
+        maxCollapseHeightRef.current = el.scrollHeight
+      }
+      const progress = Math.min(1, scrollTop / COLLAPSE_RANGE)
+      el.style.height = `${maxCollapseHeightRef.current * (1 - progress)}px`
+      el.style.opacity = `${Math.max(0, 1 - progress * 1.5)}`
+      el.style.pointerEvents = progress > 0.9 ? 'none' : 'auto'
+    })
   }
   const [activeSignals, setActiveSignals] = useState(new Set())
   const toggleSignal = (key) => {
@@ -1073,7 +1093,7 @@ export default function Dashboard({ data, error }) {
       const vb = b[sortField] ?? -Infinity
       return sortDir === 'desc' ? vb - va : va - vb
     })
-  }, [baseStocks, searchQuery, sortField, sortDir, activeSignals])
+  }, [baseStocks, searchQuery, sortField, sortDir, activeSignals, activeGrades])
 
   const totalPages = Math.ceil(filteredAndSorted.length / PAGE_SIZE)
   const pagedStocks = filteredAndSorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -1131,16 +1151,10 @@ export default function Dashboard({ data, error }) {
           >↓ 全部</a>
         </div>
 
-        {/* Collapsible secondary controls — height-based animation for proportional speed */}
+        {/* Collapsible secondary controls — height tied directly to scroll progress via JS */}
         <div
-          ref={collapseRef}
-          style={{
-            height: headerCollapsed ? 0 : (collapseRef.current?.scrollHeight ?? 'auto'),
-            opacity: headerCollapsed ? 0 : 1,
-            overflow: 'hidden',
-            transition: 'height 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.22s ease',
-            pointerEvents: headerCollapsed ? 'none' : 'auto',
-          }}
+          ref={headerInnerRef}
+          style={{ overflow: 'hidden', willChange: 'height, opacity' }}
         >
         {/* Scan execution date hint + data quality badge */}
         {(data.last_scan_exec_date || data.generated_at || data.dataQuality) && (

@@ -23,17 +23,25 @@ function ProbBar({ prob }) {
 }
 
 // Probability trend sparkline across recent prediction history
+// Overlays actual market direction (next entry's night_change as proxy).
 function ProbTrend({ history }) {
   const pts = useMemo(() => {
-    return [...(history || [])]
+    const sorted = [...(history || [])]
       .filter(h => h.xgb_prob_up != null && h.date)
       .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-20)
-      .map(h => ({ date: h.date, p: h.xgb_prob_up }))
+    const recent = sorted.slice(-20)
+    return recent.map((h, i) => {
+      // actual direction proxy: next entry's night_change reflects what happened
+      // after the trading day this prediction was made for (futures overnight session)
+      const nextH = sorted[sorted.length - recent.length + i + 1]
+      const nc = nextH?.market_data?.night_change
+      const actual = nc != null ? (nc > 20 ? 1 : nc < -20 ? -1 : 0) : null
+      return { date: h.date, p: h.xgb_prob_up, actual }
+    })
   }, [history])
   if (pts.length < 3) return null
 
-  const w = 300, h = 52, padY = 6
+  const w = 300, h = 60, padY = 8
   const ps = pts.map(d => d.p)
   const lo = Math.min(...ps, 0.45), hi = Math.max(...ps, 0.55)
   const range = (hi - lo) || 1
@@ -44,25 +52,43 @@ function ProbTrend({ history }) {
   const lastPct = Math.round(last.p * 100)
   const lastColor = lastPct >= 60 ? 'var(--ios-green)' : lastPct <= 40 ? 'var(--ios-red)' : 'var(--ios-yellow)'
   const y50 = (lo <= 0.5 && hi >= 0.5) ? ys(0.5) : null
+  const hasActual = pts.some(d => d.actual !== null)
 
   return (
-    <Card title="預測機率走勢">
+    <Card title="預測機率走勢 vs 實際走向">
       <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', overflow: 'visible' }}>
         {y50 != null && (
-          <line x1={0} y1={y50} x2={w} y2={y50} stroke="var(--ios-label3)" strokeWidth="0.5" strokeDasharray="3,3" opacity="0.6" />
+          <line x1={0} y1={y50} x2={w} y2={y50} stroke="var(--ios-label3)" strokeWidth="0.5" strokeDasharray="3,3" opacity="0.5" />
         )}
         <polyline points={line} fill="none" stroke={lastColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
-        {pts.map((d, i) => (
-          <circle key={d.date} cx={xs(i)} cy={ys(d.p)} r={i === pts.length - 1 ? 3.5 : 1.8}
-            fill={i === pts.length - 1 ? lastColor : 'var(--ios-label3)'} />
-        ))}
+        {pts.map((d, i) => {
+          const isLast = i === pts.length - 1
+          // Dot color: actual=1→green, actual=-1→red, actual=0→gray, null→default
+          const dotFill = d.actual === 1 ? '#30D158'
+            : d.actual === -1 ? '#FF453A'
+            : isLast ? lastColor : 'var(--ios-label3)'
+          const dotR = isLast ? 3.5 : d.actual !== null ? 3 : 1.8
+          return (
+            <circle key={d.date} cx={xs(i).toFixed(1)} cy={ys(d.p).toFixed(1)} r={dotR}
+              fill={dotFill}
+              stroke={d.actual !== null && !isLast ? 'rgba(0,0,0,0.4)' : 'none'}
+              strokeWidth={1} />
+          )
+        })}
         <text x={xs(pts.length - 1)} y={ys(last.p) - 7} textAnchor="end" fontSize="10" fill={lastColor} fontWeight="700">{lastPct}%</text>
       </svg>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ios-label3)', marginTop: 2 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ios-label3)', marginTop: 4 }}>
         <span>{pts[0].date.slice(5)}</span>
-        <span>{y50 != null ? '虛線 = 50% 中性' : `近 ${pts.length} 日`}</span>
+        {y50 != null && <span>虛線 = 50%</span>}
         <span>{last.date.slice(5)}</span>
       </div>
+      {hasActual && (
+        <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 10, color: 'var(--ios-label3)', flexWrap: 'wrap' }}>
+          <span style={{ color: '#30D158', fontWeight: 700 }}>● 實際上漲</span>
+          <span style={{ color: '#FF453A', fontWeight: 700 }}>● 實際下跌</span>
+          <span style={{ color: 'var(--ios-label4)' }}>（隔日夜盤 ±20點估算）</span>
+        </div>
+      )}
     </Card>
   )
 }
