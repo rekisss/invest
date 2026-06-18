@@ -773,11 +773,12 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [active, setActive] = useState({ ma: true, bb: false, macd: true, rsi: true, kd: false, obv: false, adx: false, wr: false, cci: false, mfi: false })
   const [preset, setPreset] = useState('momentum')
   const [hoveredIdx, setHoveredIdx] = useState(null)
+  const [barCount, setBarCount] = useState(250)
 
   const toggle = key => { setActive(prev => ({ ...prev, [key]: !prev[key] })); setPreset(null) }
   const applyPreset = p => { setActive(p.state); setPreset(p.id) }
 
-  const bars = (dataMap[chartInterval] || []).slice(-60)
+  const bars = (dataMap[chartInterval] || []).slice(-barCount)
 
   const indicators = useMemo(() => {
     if (bars.length < 2) return null
@@ -842,6 +843,28 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
                 cursor: avail ? 'pointer' : 'default', fontWeight: isActive ? 600 : 400,
                 boxShadow: isActive ? '0 1px 4px rgba(0,0,0,0.3)' : 'none', transition: 'all 0.15s',
               }}>{t.label}</button>
+            )
+          })}
+        </div>
+        {/* Bar count selector */}
+        <div style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--ios-fill4)', borderRadius: 8 }}>
+          {[
+            { n: 60,  label: '60' },
+            { n: 120, label: '120' },
+            { n: 250, label: '250' },
+            { n: 9999, label: '全' },
+          ].map(({ n, label }) => {
+            const total = (dataMap[chartInterval] || []).length
+            const isActive = barCount === n
+            const avail = n === 9999 ? total >= 2 : total >= n
+            return (
+              <button key={n} onClick={() => avail && setBarCount(n)} title={`顯示最近 ${n === 9999 ? '全部' : n} 根 K 線`} style={{
+                background: isActive ? 'var(--ios-bg3)' : 'transparent',
+                border: 'none', color: isActive ? 'var(--ios-label)' : avail ? 'var(--ios-label3)' : 'var(--ios-fill2)',
+                borderRadius: 6, padding: '4px 10px', fontSize: 11,
+                cursor: avail ? 'pointer' : 'default', fontWeight: isActive ? 600 : 400,
+                boxShadow: isActive ? '0 1px 4px rgba(0,0,0,0.3)' : 'none', transition: 'all 0.15s',
+              }}>{label}</button>
             )
           })}
         </div>
