@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
 const pct = (v) => (v == null || isNaN(v) ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
@@ -222,12 +222,14 @@ function toPolySegs(values, toXFn, toYFn) {
 const CHART_W = 460
 const CHART_PL = 42
 const CHART_PR = 6
+const BAR_W = 5  // fixed pixels per candle for scrollable chart
 
-function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHoverIdx, yFixed }) {
+function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHoverIdx, yFixed, chartW: propChartW }) {
   const subTouchRef = useRef(null)
   const H = 72, PT = 6
   const n = bars.length
-  const slotW = (CHART_W - CHART_PL - CHART_PR) / n
+  const W = propChartW || Math.max(CHART_W, n * BAR_W + CHART_PL + CHART_PR)
+  const slotW = (W - CHART_PL - CHART_PR) / n
   const toX = i => CHART_PL + (i + 0.5) * slotW
 
   const allVals = [
@@ -247,7 +249,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
   const handleMove = (clientX, svgEl) => {
     if (!onHoverIdx) return
     const rect = svgEl.getBoundingClientRect()
-    const svgX = (clientX - rect.left) / rect.width * CHART_W
+    const svgX = (clientX - rect.left) / rect.width * W
     const idx = Math.floor((svgX - CHART_PL) / slotW)
     onHoverIdx(idx >= 0 && idx < n ? idx : null)
   }
@@ -270,8 +272,8 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
 
   return (
     <svg
-      viewBox={`0 0 ${CHART_W} ${H + PT + 4}`}
-      style={{ width: '100%', display: 'block', background: 'rgba(20,20,22,0.85)', borderTop: '0.5px solid #2C2C2E', marginTop: 2, touchAction: 'pan-y' }}
+      viewBox={`0 0 ${W} ${H + PT + 4}`}
+      style={{ width: W, display: 'block', background: 'rgba(20,20,22,0.85)', borderTop: '0.5px solid #2C2C2E', marginTop: 2, touchAction: 'pan-y' }}
       onMouseMove={e => handleMove(e.clientX, e.currentTarget)}
       onMouseLeave={() => onHoverIdx?.(null)}
       onTouchStart={handleTouchStart}
@@ -281,9 +283,9 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
       {/* Zero line or reference lines */}
       {(hBands || []).map((b, i) => (
         <g key={i}>
-          <line x1={CHART_PL} y1={toY(b.value)} x2={CHART_W - CHART_PR} y2={toY(b.value)}
+          <line x1={CHART_PL} y1={toY(b.value)} x2={W - CHART_PR} y2={toY(b.value)}
             stroke={b.color || '#48484A'} strokeWidth={0.5} strokeDasharray="4,3" opacity={0.65} />
-          <text x={CHART_W - CHART_PR + 3} y={toY(b.value) + 3.5} fontSize={7} fill={b.color || '#48484A'} opacity={0.85}>{b.label ?? b.value}</text>
+          <text x={W - CHART_PR + 3} y={toY(b.value) + 3.5} fontSize={7} fill={b.color || '#48484A'} opacity={0.85}>{b.label ?? b.value}</text>
         </g>
       ))}
 
@@ -339,20 +341,21 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
 
 // ── Candlestick chart ────────────────────────────────────────────────────────
 
-function CandleSVG({ data, maLines, bbBands, onHoverIdx }) {
+function CandleSVG({ data, maLines, bbBands, onHoverIdx, chartW: propChartW }) {
   const [hovered, setHovered] = useState(null)
   const touchRef = useRef(null)
 
   const chart = useMemo(() => {
     if (!data || data.length < 2) return null
-    const bars = data.slice(-60)
-    const W = CHART_W, CH = 200, VH = 45, GAP = 6, H = CH + GAP + VH
+    const bars = data
+    const n = bars.length
+    const W = propChartW || Math.max(CHART_W, n * BAR_W + CHART_PL + CHART_PR)
+    const CH = 200, VH = 45, GAP = 6, H = CH + GAP + VH
     const PL = CHART_PL, PR = CHART_PR, PT = 8
     const maxP = Math.max(...bars.map(d => d.high), ...(bbBands?.upper?.filter(Boolean) || []))
     const minP = Math.min(...bars.map(d => d.low),  ...(bbBands?.lower?.filter(Boolean) || []))
     const pRange = maxP - minP || 1
     const maxVol = Math.max(...bars.map(d => d.volume), 1)
-    const n = bars.length
     const slotW = (W - PL - PR) / n
     const bW = Math.max(slotW * 0.65, 1.5)
     const toY = p => PT + (1 - (p - minP) / pRange) * CH
@@ -363,7 +366,7 @@ function CandleSVG({ data, maLines, bbBands, onHoverIdx }) {
     const xStep = Math.max(1, Math.floor(n / 5))
     const xLabels = bars.map((d, i) => ({ i, label: d.time.slice(5) })).filter((_, i) => i % xStep === 0 || i === n - 1)
     return { bars, W, CH, VH, GAP, H, PL, PR, PT, maxVol, n, slotW, bW, toY, toX, gridLevels, xLabels }
-  }, [data, bbBands])
+  }, [data, bbBands, propChartW])
 
   if (!chart) return (
     <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
@@ -428,7 +431,7 @@ function CandleSVG({ data, maLines, bbBands, onHoverIdx }) {
   return (
     <svg
       viewBox={`0 0 ${W} ${H + PT + 18}`}
-      style={{ width: '100%', display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
+      style={{ width: W, display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
@@ -774,11 +777,20 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [preset, setPreset] = useState('momentum')
   const [hoveredIdx, setHoveredIdx] = useState(null)
   const [barCount, setBarCount] = useState(250)
+  const scrollRef = useRef(null)
 
   const toggle = key => { setActive(prev => ({ ...prev, [key]: !prev[key] })); setPreset(null) }
   const applyPreset = p => { setActive(p.state); setPreset(p.id) }
 
   const bars = (dataMap[chartInterval] || []).slice(-barCount)
+
+  const totalChartW = Math.max(CHART_W, bars.length * BAR_W + CHART_PL + CHART_PR)
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth
+    }
+  }, [bars.length, chartInterval, barCount])
 
   const indicators = useMemo(() => {
     if (bars.length < 2) return null
@@ -890,157 +902,169 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         </div>
       )}
 
-      {/* Main candlestick chart */}
-      {bars.length >= 2 ? (
-        <CandleSVG
-          data={bars}
-          maLines={active.ma && indicators ? indicators.maLines : []}
-          bbBands={active.bb && indicators ? indicators.bbBands : null}
-          onHoverIdx={setHoveredIdx}
-        />
-      ) : (
-        <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
-          暫無歷史 K 線資料
-        </div>
-      )}
+      {/* Scrollable chart area — all SVG charts share one horizontal scroll container */}
+      <div ref={scrollRef} style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', borderRadius: 10, marginBottom: 2 }}>
+        {/* Main candlestick chart */}
+        {bars.length >= 2 ? (
+          <CandleSVG
+            data={bars}
+            maLines={active.ma && indicators ? indicators.maLines : []}
+            bbBands={active.bb && indicators ? indicators.bbBands : null}
+            onHoverIdx={setHoveredIdx}
+            chartW={totalChartW}
+          />
+        ) : (
+          <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
+            暫無歷史 K 線資料
+          </div>
+        )}
+
+        {/* MACD sub-chart */}
+        {active.macd && indicators && bars.length >= 26 && (
+          <SubChartSVG
+            bars={bars}
+            label="MACD(12,26,9)"
+            histSeries={{ values: indicators.macd.hist }}
+            lines={[
+              { color: '#0A84FF', label: 'MACD', values: indicators.macd.macdLine, width: 1 },
+              { color: '#FF453A', label: 'Signal', values: indicators.macd.signalLine, width: 1 },
+            ]}
+            hBands={[{ value: 0, color: '#48484A', label: '' }]}
+            hoveredIdx={hoveredIdx}
+            onHoverIdx={setHoveredIdx}
+            chartW={totalChartW}
+          />
+        )}
+
+        {/* RSI sub-chart */}
+        {active.rsi && indicators && bars.length >= 15 && (
+          <SubChartSVG
+            bars={bars}
+            label="RSI(14)"
+            lines={[{ color: '#BF5AF2', label: 'RSI', values: indicators.rsi, width: 1.2 }]}
+            hBands={[
+              { value: 70, color: '#FF453A', label: '70' },
+              { value: 50, color: '#48484A', label: '50' },
+              { value: 30, color: '#30D158', label: '30' },
+            ]}
+            hoveredIdx={hoveredIdx}
+            onHoverIdx={setHoveredIdx}
+            yFixed={[0, 100]}
+            chartW={totalChartW}
+          />
+        )}
+
+        {/* KD sub-chart */}
+        {active.kd && indicators && bars.length >= 9 && (
+          <SubChartSVG
+            bars={bars}
+            label="KD(9,3)"
+            lines={[
+              { color: '#FF9F0A', label: 'K', values: indicators.kd.kArr, width: 1 },
+              { color: '#0A84FF', label: 'D', values: indicators.kd.dArr, width: 1 },
+            ]}
+            hBands={[
+              { value: 80, color: '#FF453A', label: '80' },
+              { value: 20, color: '#30D158', label: '20' },
+            ]}
+            hoveredIdx={hoveredIdx}
+            onHoverIdx={setHoveredIdx}
+            yFixed={[0, 100]}
+            chartW={totalChartW}
+          />
+        )}
+
+        {/* OBV sub-chart */}
+        {active.obv && indicators && bars.length >= 5 && (
+          <SubChartSVG
+            bars={bars}
+            label="OBV"
+            lines={[
+              { color: '#64D2FF', label: 'OBV', values: indicators.obv.values, width: 1 },
+              { color: '#FF9F0A', label: 'MA20', values: indicators.obv.ma, width: 1, opacity: 0.7 },
+            ]}
+            hBands={[{ value: 0, color: '#48484A', label: '' }]}
+            hoveredIdx={hoveredIdx}
+            onHoverIdx={setHoveredIdx}
+            chartW={totalChartW}
+          />
+        )}
+
+        {/* ADX / DMI sub-chart */}
+        {active.adx && indicators && bars.length >= 28 && (
+          <SubChartSVG
+            bars={bars}
+            label="ADX(14) / DMI"
+            lines={[
+              { color: '#FF453A', label: 'ADX',  values: indicators.adx.adxLine,  width: 1.5 },
+              { color: '#30D158', label: '+DI',  values: indicators.adx.plusDI,   width: 1,   opacity: 0.85 },
+              { color: '#FF6B35', label: '-DI',  values: indicators.adx.minusDI,  width: 1,   opacity: 0.85 },
+            ]}
+            hBands={[{ value: 25, color: '#FFD60A', label: '25' }]}
+            hoveredIdx={hoveredIdx}
+            onHoverIdx={setHoveredIdx}
+            yFixed={[0, 60]}
+            chartW={totalChartW}
+          />
+        )}
+
+        {/* Williams %R sub-chart */}
+        {active.wr && indicators && bars.length >= 14 && (
+          <SubChartSVG
+            bars={bars}
+            label="Williams %R(14)"
+            lines={[{ color: '#FF6B35', label: 'W%R', values: indicators.wr, width: 1.2 }]}
+            hBands={[
+              { value: -20, color: '#FF453A', label: '-20' },
+              { value: -50, color: '#48484A', label: '-50' },
+              { value: -80, color: '#30D158', label: '-80' },
+            ]}
+            hoveredIdx={hoveredIdx}
+            onHoverIdx={setHoveredIdx}
+            yFixed={[-100, 0]}
+            chartW={totalChartW}
+          />
+        )}
+
+        {/* CCI sub-chart */}
+        {active.cci && indicators && bars.length >= 21 && (
+          <SubChartSVG
+            bars={bars}
+            label="CCI(20)"
+            lines={[{ color: '#5E5CE6', label: 'CCI', values: indicators.cci, width: 1.2 }]}
+            hBands={[
+              { value: 100,  color: '#FF453A', label: '+100' },
+              { value: 0,    color: '#48484A', label: '0' },
+              { value: -100, color: '#30D158', label: '-100' },
+            ]}
+            hoveredIdx={hoveredIdx}
+            onHoverIdx={setHoveredIdx}
+            chartW={totalChartW}
+          />
+        )}
+
+        {/* MFI sub-chart */}
+        {active.mfi && indicators && bars.length >= 15 && (
+          <SubChartSVG
+            bars={bars}
+            label="MFI(14) 資金流"
+            lines={[{ color: '#FFD60A', label: 'MFI', values: indicators.mfi, width: 1.2 }]}
+            hBands={[
+              { value: 80, color: '#FF453A', label: '80' },
+              { value: 50, color: '#48484A', label: '50' },
+              { value: 20, color: '#30D158', label: '20' },
+            ]}
+            hoveredIdx={hoveredIdx}
+            onHoverIdx={setHoveredIdx}
+            yFixed={[0, 100]}
+            chartW={totalChartW}
+          />
+        )}
+      </div>
 
       {/* Dynamic indicator value strip — updates with crosshair */}
       {bars.length >= 2 && indicators && (
         <ChartValueStrip bars={bars} indicators={indicators} active={active} hoveredIdx={hoveredIdx} />
-      )}
-
-      {/* MACD sub-chart */}
-      {active.macd && indicators && bars.length >= 26 && (
-        <SubChartSVG
-          bars={bars}
-          label="MACD(12,26,9)"
-          histSeries={{ values: indicators.macd.hist }}
-          lines={[
-            { color: '#0A84FF', label: 'MACD', values: indicators.macd.macdLine, width: 1 },
-            { color: '#FF453A', label: 'Signal', values: indicators.macd.signalLine, width: 1 },
-          ]}
-          hBands={[{ value: 0, color: '#48484A', label: '' }]}
-          hoveredIdx={hoveredIdx}
-          onHoverIdx={setHoveredIdx}
-        />
-      )}
-
-      {/* RSI sub-chart */}
-      {active.rsi && indicators && bars.length >= 15 && (
-        <SubChartSVG
-          bars={bars}
-          label="RSI(14)"
-          lines={[{ color: '#BF5AF2', label: 'RSI', values: indicators.rsi, width: 1.2 }]}
-          hBands={[
-            { value: 70, color: '#FF453A', label: '70' },
-            { value: 50, color: '#48484A', label: '50' },
-            { value: 30, color: '#30D158', label: '30' },
-          ]}
-          hoveredIdx={hoveredIdx}
-          onHoverIdx={setHoveredIdx}
-          yFixed={[0, 100]}
-        />
-      )}
-
-      {/* KD sub-chart */}
-      {active.kd && indicators && bars.length >= 9 && (
-        <SubChartSVG
-          bars={bars}
-          label="KD(9,3)"
-          lines={[
-            { color: '#FF9F0A', label: 'K', values: indicators.kd.kArr, width: 1 },
-            { color: '#0A84FF', label: 'D', values: indicators.kd.dArr, width: 1 },
-          ]}
-          hBands={[
-            { value: 80, color: '#FF453A', label: '80' },
-            { value: 20, color: '#30D158', label: '20' },
-          ]}
-          hoveredIdx={hoveredIdx}
-          onHoverIdx={setHoveredIdx}
-          yFixed={[0, 100]}
-        />
-      )}
-
-      {/* OBV sub-chart */}
-      {active.obv && indicators && bars.length >= 5 && (
-        <SubChartSVG
-          bars={bars}
-          label="OBV"
-          lines={[
-            { color: '#64D2FF', label: 'OBV', values: indicators.obv.values, width: 1 },
-            { color: '#FF9F0A', label: 'MA20', values: indicators.obv.ma, width: 1, opacity: 0.7 },
-          ]}
-          hBands={[{ value: 0, color: '#48484A', label: '' }]}
-          hoveredIdx={hoveredIdx}
-          onHoverIdx={setHoveredIdx}
-        />
-      )}
-
-      {/* ADX / DMI sub-chart */}
-      {active.adx && indicators && bars.length >= 28 && (
-        <SubChartSVG
-          bars={bars}
-          label="ADX(14) / DMI"
-          lines={[
-            { color: '#FF453A', label: 'ADX',  values: indicators.adx.adxLine,  width: 1.5 },
-            { color: '#30D158', label: '+DI',  values: indicators.adx.plusDI,   width: 1,   opacity: 0.85 },
-            { color: '#FF6B35', label: '-DI',  values: indicators.adx.minusDI,  width: 1,   opacity: 0.85 },
-          ]}
-          hBands={[{ value: 25, color: '#FFD60A', label: '25' }]}
-          hoveredIdx={hoveredIdx}
-          onHoverIdx={setHoveredIdx}
-          yFixed={[0, 60]}
-        />
-      )}
-
-      {/* Williams %R sub-chart */}
-      {active.wr && indicators && bars.length >= 14 && (
-        <SubChartSVG
-          bars={bars}
-          label="Williams %R(14)"
-          lines={[{ color: '#FF6B35', label: 'W%R', values: indicators.wr, width: 1.2 }]}
-          hBands={[
-            { value: -20, color: '#FF453A', label: '-20' },
-            { value: -50, color: '#48484A', label: '-50' },
-            { value: -80, color: '#30D158', label: '-80' },
-          ]}
-          hoveredIdx={hoveredIdx}
-          onHoverIdx={setHoveredIdx}
-          yFixed={[-100, 0]}
-        />
-      )}
-
-      {/* CCI sub-chart */}
-      {active.cci && indicators && bars.length >= 21 && (
-        <SubChartSVG
-          bars={bars}
-          label="CCI(20)"
-          lines={[{ color: '#5E5CE6', label: 'CCI', values: indicators.cci, width: 1.2 }]}
-          hBands={[
-            { value: 100,  color: '#FF453A', label: '+100' },
-            { value: 0,    color: '#48484A', label: '0' },
-            { value: -100, color: '#30D158', label: '-100' },
-          ]}
-          hoveredIdx={hoveredIdx}
-          onHoverIdx={setHoveredIdx}
-        />
-      )}
-
-      {/* MFI sub-chart */}
-      {active.mfi && indicators && bars.length >= 15 && (
-        <SubChartSVG
-          bars={bars}
-          label="MFI(14) 資金流"
-          lines={[{ color: '#FFD60A', label: 'MFI', values: indicators.mfi, width: 1.2 }]}
-          hBands={[
-            { value: 80, color: '#FF453A', label: '80' },
-            { value: 50, color: '#48484A', label: '50' },
-            { value: 20, color: '#30D158', label: '20' },
-          ]}
-          hoveredIdx={hoveredIdx}
-          onHoverIdx={setHoveredIdx}
-          yFixed={[0, 100]}
-        />
       )}
 
       {/* Strategy win-rate backtest */}
