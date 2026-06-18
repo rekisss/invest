@@ -235,8 +235,8 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   <span style={{ fontSize: 11, color: '#FFD60A', whiteSpace: 'nowrap' }}>⭐旗手</span>
                 )}
                 {(persistentMap[s.stock_id] || 0) >= 2 && (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ios-green)', background: 'rgba(48,209,88,0.13)', borderRadius: 5, padding: '1px 5px', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                    📅{persistentMap[s.stock_id]}天
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ios-green)', background: 'rgba(48,209,88,0.13)', borderRadius: 5, padding: '1px 5px', whiteSpace: 'nowrap', flexShrink: 0 }} title="近14天入榜次數">
+                    📅{persistentMap[s.stock_id]}次
                   </span>
                 )}
               </div>
@@ -580,7 +580,7 @@ export default function Dashboard({ data, error }) {
         (s.name || '').toLowerCase().includes(q)
       )
     }
-    if (activeSignals.size > 0) {
+    if (activeSignals.size > 0 && viewTab !== 'limitdown') {
       list = list.filter(s => [...activeSignals].every(key => !!s[key]))
     }
     return [...list].sort((a, b) => {
