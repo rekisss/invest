@@ -302,6 +302,61 @@ function RiskFactors({ factors }) {
   )
 }
 
+/* ── Feature 2: Watchlist Alerts ────────────────────────────────── */
+function WatchlistAlerts({ stocks }) {
+  const watchlistRaw = (() => {
+    try { return JSON.parse(localStorage.getItem('stock_watchlist') || '[]') } catch { return [] }
+  })()
+  const watchSet = new Set(watchlistRaw)
+  if (watchSet.size === 0) return null
+  const alerts = stocks.filter(s => watchSet.has(s.stock_id))
+  if (alerts.length === 0) return null
+  const entries = alerts.filter(s => s.entry_signal)
+  const risky = alerts.filter(s => !s.entry_signal && (s.day_return || 0) < -0.03)
+  if (entries.length === 0 && risky.length === 0) return null
+
+  return (
+    <div className="glass-panel" style={{ overflow: 'hidden' }}>
+      <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid #1E293B' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#FFD60A' }}>⭐ 自選股警示</span>
+      </div>
+      {entries.map(s => (
+        <div key={s.stock_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '0.5px solid #1E293B' }}>
+          <span style={{ fontSize: 11, background: 'rgba(48,209,88,0.15)', color: '#30D158', borderRadius: 6, padding: '2px 7px', fontWeight: 700, flexShrink: 0 }}>進場</span>
+          <span style={{ fontFamily: 'monospace', color: '#0A84FF', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{s.stock_id}</span>
+          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', flex: 1 }}>{s.name}</span>
+          <span style={{ fontSize: 12, color: '#30D158', fontFamily: 'monospace' }}>{s.entry_score}</span>
+        </div>
+      ))}
+      {risky.map(s => (
+        <div key={s.stock_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '0.5px solid #1E293B' }}>
+          <span style={{ fontSize: 11, background: 'rgba(255,69,58,0.15)', color: '#FF453A', borderRadius: 6, padding: '2px 7px', fontWeight: 700, flexShrink: 0 }}>跌幅</span>
+          <span style={{ fontFamily: 'monospace', color: '#0A84FF', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{s.stock_id}</span>
+          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', flex: 1 }}>{s.name}</span>
+          <span style={{ fontSize: 12, color: '#FF453A', fontFamily: 'monospace' }}>{((s.day_return || 0) * 100).toFixed(2)}%</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ── Feature 5: AI Daily Briefing ───────────────────────────────── */
+function AIBriefing({ scan, entryCount, totalStocks }) {
+  const aiText = scan?.ai_picks_text || ''
+  if (!aiText) return null
+  return (
+    <div className="glass-panel" style={{ overflow: 'hidden' }}>
+      <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid #1E293B', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#BF5AF2' }}>🤖 今日 AI 分析</span>
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>進場 {entryCount} / {totalStocks} 支</span>
+      </div>
+      <div style={{ padding: '10px 14px 12px', fontSize: 13, color: 'rgba(255,255,255,0.70)', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
+        {aiText.slice(0, 500)}{aiText.length > 500 ? '…' : ''}
+      </div>
+    </div>
+  )
+}
+
 /* ── Main Export ─────────────────────────────────────────────────── */
 export default function Overview({ data, error }) {
   const pred = data?.prediction || null
@@ -338,6 +393,7 @@ export default function Overview({ data, error }) {
   const winRate = pred?.regime?.win_rate || null
   const aiInsight = pred?.ai_insight || ''
   const calendarRisk = data?.aggregateLatest?.calendar_risk || scan?.calendar_risk || ''
+  const entryStocks = stocks.filter(s => s.entry_signal)
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: '#070B14' }}>
@@ -377,6 +433,12 @@ export default function Overview({ data, error }) {
             </div>
           </div>
         )}
+
+        {/* Feature 2: Watchlist alerts — entry signals or big drops */}
+        <WatchlistAlerts stocks={stocks} />
+
+        {/* Feature 5: AI daily briefing from scan ai_picks_text */}
+        <AIBriefing scan={scan} entryCount={entryStocks.length} totalStocks={stocks.length} />
 
         {/* Row 5: AI Advice */}
         <AIAdviceBlock
