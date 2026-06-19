@@ -5,6 +5,7 @@ const PAGE_SIZE = 50
 
 const FILTER_PRESETS = [
   { label: '外資主攻', filters: ['foreign_buy_3d', 'invest_trust_buy_2d'], color: '#30D158' },
+  { label: '三法人齊攻', filters: ['foreign_buy_3d', 'invest_trust_buy_2d', 'dealer_buy_3d'], color: '#FF6B35' },
   { label: '突破帶量', filters: ['breakout_20d', 'volume_break', 'adx_trending'], color: '#FF9F0A' },
   { label: '基本面強', filters: ['f_score_high', 'margin_shrinking'], color: '#5AC8FA' },
   { label: '技術共振', filters: ['macd_golden_cross', 'kd_golden_cross', 'rsi_strong'], color: '#BF5AF2' },
@@ -38,6 +39,8 @@ const SIGNAL_FILTERS = [
   { key: 'f_score_high',         label: 'F-Score 7+' },
   { key: 'margin_shrinking',     label: '融資縮減' },
   { key: 'volume_surge_3x',      label: '爆量3x+' },
+  { key: 'dealer_buy_3d',        label: '自營連買' },
+  { key: 'is_sector_leader',     label: '旗手股' },
 ]
 
 const REASON_LABEL = {
@@ -2181,7 +2184,7 @@ export default function Dashboard({ data, error }) {
         <BacktestSimulator accuracy={data.strategyAccuracy} />
         <DateComparisonPanel scan={scan} prevScan={prevScan} />
         <MarketBreadthBar stocks={allScanStocks} />
-        <InstitutionalLeaderboard stocks={stocks} onSelect={setSelectedStock} />
+        <InstitutionalLeaderboard stocks={allScanStocks} onSelect={setSelectedStock} />
         <SectorRotationTracker scans={data.scans} dates={sortedDates} />
         <DailyActionPanel scan={scan} prevScan={prevScan} persistent={persistent} />
 
