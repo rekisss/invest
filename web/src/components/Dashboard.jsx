@@ -23,6 +23,8 @@ const SIGNAL_FILTERS = [
   { key: 'bb_squeeze_breakout',  label: 'BB突破' },
   { key: 'adx_trending',         label: 'ADX趨勢' },
   { key: 'rsi_strong',           label: 'RSI強勢' },
+  { key: 'f_score_high',         label: 'F-Score 7+' },
+  { key: 'margin_shrinking',     label: '融資縮減' },
 ]
 
 const GRADE_STYLE = {
@@ -139,6 +141,11 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const marginChg = s.margin_change_5d || 0
           const shortRatio = s.short_ratio || 0
           const hasMarginWarning = marginChg > 5 || shortRatio > 15
+          const fScore = s.f_score || 0
+          const dealerStreak = s.dealer_buy_streak || 0
+          const revenueYoy = s.revenue_yoy || 0
+          const skipReason = s.skip_reason || ''
+          const expectedHoldDays = s.expected_hold_days || 0
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -183,6 +190,13 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     title={marginChg > 5 ? `融資5日暴增 +${marginChg.toFixed(1)}%` : `融券比率 ${shortRatio.toFixed(1)}%`}
                     style={{ fontSize: 10, fontWeight: 700, color: '#FF9F0A', background: 'rgba(255,159,10,0.12)', border: '1px solid rgba(255,159,10,0.3)', borderRadius: 9999, padding: '2px 6px', flexShrink: 0 }}
                   >⚠</span>
+                )}
+                {fScore >= 7 && (
+                  <span title={`Piotroski F-Score ${fScore}/9 — 基本面優質`} style={{
+                    fontSize: 9, fontWeight: 800, color: '#5AC8FA',
+                    background: 'rgba(90,200,250,0.12)', border: '1px solid rgba(90,200,250,0.3)',
+                    borderRadius: 5, padding: '1px 5px', flexShrink: 0,
+                  }}>F{fScore}</span>
                 )}
                 <button
                   onClick={e => { e.stopPropagation(); toggleWatchlist && toggleWatchlist(s.stock_id) }}
@@ -240,6 +254,11 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     投+<strong>{investStreak}</strong>天{s.invest_trust_accel ? <span style={{ fontSize: 9, color: 'var(--ios-orange)', fontWeight: 700 }}>↑</span> : null}
                   </span>
                 )}
+                {dealerStreak > 0 && (
+                  <span style={{ fontSize: 11, color: '#0A84FF', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                    自+<strong>{dealerStreak}</strong>天
+                  </span>
+                )}
                 {marketRsRank > 0 && (
                   <span style={{ fontSize: 11, color: marketRsRank >= 90 ? '#FFD60A' : '#64748B', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     RS<strong>{Math.round(marketRsRank)}</strong>
@@ -263,11 +282,35 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     融{marginChg > 0 ? '↑' : '↓'}{Math.abs(marginChg).toFixed(1)}%
                   </span>
                 )}
+                {revenueYoy >= 0.05 && (
+                  <span style={{ fontSize: 11, color: '#30D158', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
+                    營收+{(revenueYoy * 100).toFixed(0)}%
+                  </span>
+                )}
+                {revenueYoy <= -0.10 && (
+                  <span style={{ fontSize: 11, color: '#FF453A', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
+                    營收{(revenueYoy * 100).toFixed(0)}%
+                  </span>
+                )}
+                {isEntry && expectedHoldDays > 0 && (
+                  <span style={{ fontSize: 11, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="預期持股天數">
+                    持{expectedHoldDays}天
+                  </span>
+                )}
               </div>
-              {/* Entry reason (4th row — only when non-empty) */}
-              {entryReason && (
-                <div style={{ marginTop: 4, fontSize: 10, color: 'var(--ios-label3)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  💡 {entryReason.split(';').slice(0, 2).join(' · ')}
+              {/* Row 4: entry reason + skip warnings */}
+              {(entryReason || skipReason) && (
+                <div style={{ marginTop: 4, lineHeight: 1.5 }}>
+                  {entryReason && (
+                    <div style={{ fontSize: 10, color: 'var(--ios-label3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      💡 {entryReason.split(';').slice(0, 2).join(' · ')}
+                    </div>
+                  )}
+                  {skipReason && (
+                    <div style={{ fontSize: 10, color: 'var(--ios-red)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      ⚠ {skipReason}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -469,7 +512,7 @@ function PersistentSection({ items, onSelect }) {
     { key: 'score',       label: '最新分', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{s.latest_score?.toLocaleString()}</span> },
     { key: 'trend',       label: '分數趨勢', render: s => (
       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: s.score_trend > 0 ? 'var(--ios-green)' : s.score_trend < 0 ? 'var(--ios-red)' : 'var(--ios-label2)' }}>
-        {s.score_trend > 0 ? '+' : ''}{s.score_trend}
+        {s.score_trend > 0 ? '+' : ''}{Math.round(s.score_trend)}
       </span>
     )},
   ]
@@ -1098,6 +1141,12 @@ export default function Dashboard({ data, error }) {
       .map(([sec, count]) => ({ sec, count }))
   }, [stocks])
 
+  const gradeDistribution = useMemo(() => {
+    const counts = { A: 0, B: 0, C: 0, D: 0, X: 0 }
+    for (const s of stocks) { if (s.grade && counts[s.grade] !== undefined) counts[s.grade]++ }
+    return counts
+  }, [stocks])
+
   // Reset page whenever filters or tab/date change
   useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals, activeGrades, activeSector])
 
@@ -1219,8 +1268,42 @@ export default function Dashboard({ data, error }) {
           </div>
         )}
 
+        {/* Grade distribution summary */}
+        {stocks.length > 0 && (() => {
+          const hasAnyFilter = activeGrades.size > 0 || activeSignals.size > 0 || activeSector || searchQuery.trim()
+          const clearAll = () => { setActiveGrades(new Set()); setActiveSignals(new Set()); setActiveSector(null); setSearchQuery('') }
+          return (
+            <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>分佈</span>
+              {Object.entries(gradeDistribution).filter(([, n]) => n > 0).map(([g, n]) => {
+                const gs = GRADE_STYLE[g] || GRADE_STYLE.D
+                const isActive = activeGrades.has(g)
+                return (
+                  <button key={g} onClick={() => g !== 'X' && toggleGrade(g)} style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 9999,
+                    background: isActive ? gs.bg : 'rgba(255,255,255,0.04)',
+                    color: gs.color, border: `0.5px solid ${isActive ? gs.border : 'rgba(255,255,255,0.08)'}`,
+                    cursor: g !== 'X' ? 'pointer' : 'default', flexShrink: 0,
+                    transition: 'all 0.15s',
+                  }}>{g} {n}</button>
+                )
+              })}
+              {hasAnyFilter && (
+                <button onClick={clearAll} style={{
+                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 9999,
+                  border: '0.5px solid rgba(255,69,58,0.35)', background: 'rgba(255,69,58,0.10)',
+                  color: 'var(--ios-red)', cursor: 'pointer', flexShrink: 0,
+                }}>✕ 清除</button>
+              )}
+              {hasAnyFilter && (
+                <span style={{ fontSize: 10, color: 'var(--ios-label3)', marginLeft: 2 }}>篩選 {filteredAndSorted.length}</span>
+              )}
+            </div>
+          )
+        })()}
+
         {/* Search + Sort row */}
-        <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
           <input
             type="search"
             value={searchQuery}
