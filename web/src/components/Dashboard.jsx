@@ -157,6 +157,8 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const gapTo20dHigh = s.gap_to_20d_high_pct ?? null
           const nearBreakout = gapTo20dHigh !== null && gapTo20dHigh >= 0 && gapTo20dHigh < 2
           const volumeBreak = s.volume_break || false
+          const conditionCount = s.condition_count || 0
+          const bbPctB = s.bb_pct_b ?? null
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -237,7 +239,10 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   }} />
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 700, color: scoreColor, fontFamily: 'var(--font-mono)', minWidth: 24, textAlign: 'right' }}>{normScore}</span>
-                <Sparkline data={s.price_history} />
+                <div style={{ flexShrink: 0 }}>
+                  <Sparkline data={s.price_history} stockId={s.stock_id} />
+                  <BBPositionBar bbPctB={s.bb_pct_b} width={56} />
+                </div>
                 {s.close != null && (
                   <span style={{ fontSize: 12, color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)' }}>
                     {s.close > 100 ? s.close.toFixed(0) : s.close.toFixed(1)}
@@ -253,6 +258,11 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 <span style={{ fontSize: 11, color: adxColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                   ADX <strong>{adx.toFixed(0)}</strong>
                 </span>
+                {conditionCount > 0 && (
+                  <span title={`${conditionCount} 個技術條件達成`} style={{ fontSize: 11, color: conditionCount >= 9 ? '#30D158' : conditionCount >= 6 ? '#0A84FF' : '#94A3B8', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                    ✓<strong>{conditionCount}</strong>
+                  </span>
+                )}
                 {vol > 0 && (
                   vol >= 3 ? (
                     <span title="爆量（量比≥3x）" style={{ fontSize: 11, color: '#FF6B35', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', fontWeight: 700 }}>
@@ -356,24 +366,57 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
 }
 
 /* ── Feature 1: Sparkline ────────────────────────────────────────── */
-function Sparkline({ data, width = 56, height = 20 }) {
+function Sparkline({ data, stockId, width = 56, height = 20, days = 60 }) {
   if (!data || data.length < 2) return null
-  const closes = data.map(p => p.close).filter(v => v != null)
+  const slice = data.slice(-days)
+  const closes = slice.map(p => p.close).filter(v => v != null)
   if (closes.length < 2) return null
   const min = Math.min(...closes), max = Math.max(...closes)
   const range = max - min || 1
+  const n = closes.length
   const pts = closes.map((c, i) => {
-    const x = (i / (closes.length - 1)) * width
+    const x = (i / (n - 1)) * width
     const y = height - ((c - min) / range) * (height - 3) - 1.5
-    return `${x.toFixed(1)},${y.toFixed(1)}`
-  }).join(' ')
-  const isUp = closes[closes.length - 1] >= closes[0]
+    return [x.toFixed(1), y.toFixed(1)]
+  })
+  const isUp = closes[n - 1] >= closes[0]
   const color = isUp ? '#30D158' : '#FF453A'
+  const linePoints = pts.map(([x, y]) => `${x},${y}`).join(' ')
+  const areaPoints = `0,${height} ${linePoints} ${width},${height}`
+  const gradId = `spk-${stockId || 'x'}`
+  const [lastX, lastY] = pts[pts.length - 1]
   return (
-    <svg width={width} height={height} style={{ flexShrink: 0, opacity: 0.85 }}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={closes.map((_, i) => (i / (closes.length - 1)) * width).pop().toFixed(1)} cy={(height - ((closes[closes.length - 1] - min) / range) * (height - 3) - 1.5).toFixed(1)} r="2" fill={color} />
+    <svg width={width} height={height} style={{ flexShrink: 0, opacity: 0.9 }}>
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.28"/>
+          <stop offset="100%" stopColor={color} stopOpacity="0.02"/>
+        </linearGradient>
+      </defs>
+      <polygon points={areaPoints} fill={`url(#${gradId})`}/>
+      <polyline points={linePoints} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lastX} cy={lastY} r="2" fill={color} />
     </svg>
+  )
+}
+
+/* ── BB Position Bar ─────────────────────────────────────────────── */
+function BBPositionBar({ bbPctB, width = 56 }) {
+  if (bbPctB == null) return null
+  // bb_pct_b: 0=lower band, 0.5=mid, 1=upper band, >1=above upper (breakout)
+  const clamped = Math.max(-0.2, Math.min(1.5, bbPctB))
+  const pct = Math.min(((clamped + 0.2) / 1.7) * 100, 100)
+  let color
+  if (bbPctB > 1.1) color = '#30D158'
+  else if (bbPctB > 0.8) color = '#34C759'
+  else if (bbPctB > 0.5) color = '#0A84FF'
+  else if (bbPctB > 0.2) color = '#FF9F0A'
+  else color = '#FF453A'
+  const label = bbPctB > 1.1 ? '突破上軌' : bbPctB > 0.8 ? '強勢上半' : bbPctB > 0.5 ? '中上' : bbPctB > 0.2 ? '中下' : '近下軌'
+  return (
+    <div title={`BB%B ${bbPctB.toFixed(2)} — ${label}`} style={{ width, height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
+      <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 9999 }}/>
+    </div>
   )
 }
 
