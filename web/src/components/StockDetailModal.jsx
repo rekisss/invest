@@ -530,6 +530,7 @@ const INTERVAL_LABELS = [
 
 function resampleBars(dailyBars, unit) {
   if (!dailyBars || dailyBars.length < 2) return []
+  if (!dailyBars[0]?.time) return []  // slim close-only bars — no dates to resample on
   const buckets = {}
   for (const bar of dailyBars) {
     let key
