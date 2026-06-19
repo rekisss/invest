@@ -1200,18 +1200,46 @@ for (const d of recentDates) {
 }
 console.log(`K-line: injected into stocks across ${recentDates.length} dates`)
 
-// Write slim stock_histories.json — last 60 close prices for ALL stocks (for Dashboard lazy load)
-// Format: { generated_at, stocks: { stock_id: [close1, close2, ...] } }
-// ~200KB gzipped; loaded lazily so it doesn't block the initial render
+// Write stock_histories.json — last ~120 OHLCV bars for ALL stocks (for Dashboard lazy load).
+// Carries full open/high/low/close/volume + dates so the detail modal can draw real candles
+// and compute KD / ADX / OBV-based indicators + strategy backtest for every scanned stock
+// (not just the rich top_stocks). Loaded lazily so it doesn't block the initial render.
+//
+// Compact shared-dates layout (Taiwan stocks share one trading calendar):
+//   { generated_at, dates: ["YYYY-MM-DD", ...], stocks: { id: { o, h, l, c, v } } }
+// Each per-stock array is aligned to `dates`; missing bars are null.
 const HISTORIES_FILE = join(PUBLIC_DIR, 'stock_histories.json')
-const historiesStocks = {}
+const OHLC_BARS = 120
+const round2 = v => (v == null || !isFinite(v)) ? null : Math.round(v * 100) / 100
+const perStockRecent = {}
+const dateSet = new Set()
 for (const [stockId, entry] of Object.entries(klineMap)) {
   const bars = getKlineBars(entry, '1d')
   if (!bars || bars.length < 2) continue
-  historiesStocks[stockId] = bars.slice(-60).map(b => b.close)
+  const recent = bars.slice(-OHLC_BARS)
+  perStockRecent[stockId] = recent
+  for (const b of recent) if (b.time) dateSet.add(b.time)
 }
-writeFileSync(HISTORIES_FILE, JSON.stringify({ generated_at: new Date().toISOString(), stocks: historiesStocks }), 'utf-8')
-console.log(`stock_histories.json written (${Object.keys(historiesStocks).length} stocks, ${(readFileSync(HISTORIES_FILE).length / 1024).toFixed(0)} KB)`)
+const historiesDates = [...dateSet].sort().slice(-OHLC_BARS)
+const dateIndex = new Map(historiesDates.map((d, i) => [d, i]))
+const historiesStocks = {}
+for (const [stockId, recent] of Object.entries(perStockRecent)) {
+  const N = historiesDates.length
+  const o = new Array(N).fill(null), h = new Array(N).fill(null)
+  const l = new Array(N).fill(null), c = new Array(N).fill(null), v = new Array(N).fill(null)
+  let filled = 0
+  for (const b of recent) {
+    const idx = b.time != null ? dateIndex.get(b.time) : undefined
+    if (idx == null) continue
+    o[idx] = round2(b.open); h[idx] = round2(b.high); l[idx] = round2(b.low)
+    c[idx] = round2(b.close); v[idx] = (b.volume == null || !isFinite(b.volume)) ? null : Math.round(b.volume)
+    filled++
+  }
+  if (filled < 2) continue
+  historiesStocks[stockId] = { o, h, l, c, v }
+}
+writeFileSync(HISTORIES_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates: historiesDates, stocks: historiesStocks }), 'utf-8')
+console.log(`stock_histories.json written (${Object.keys(historiesStocks).length} stocks, ${historiesDates.length} bars, ${(readFileSync(HISTORIES_FILE).length / 1024).toFixed(0)} KB)`)
 
 let prediction = readPrediction()
 const predictionHistory = readPredictionHistory()
