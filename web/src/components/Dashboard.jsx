@@ -137,6 +137,8 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const entryReason = s.entry_reason || ''
           const rs5d = s.relative_strength_5d || 0
           const marginChg = s.margin_change_5d || 0
+          const shortRatio = s.short_ratio || 0
+          const hasMarginWarning = marginChg > 5 || shortRatio > 15
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -176,6 +178,12 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   ? <span style={{ fontSize: 10, fontWeight: 700, color: '#30D158', background: 'rgba(48,209,88,0.14)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>進場</span>
                   : <span style={{ fontSize: 10, fontWeight: 600, color: '#0A84FF', background: 'rgba(10,132,255,0.12)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>觀察</span>
                 }
+                {hasMarginWarning && (
+                  <span
+                    title={marginChg > 5 ? `融資5日暴增 +${marginChg.toFixed(1)}%` : `融券比率 ${shortRatio.toFixed(1)}%`}
+                    style={{ fontSize: 10, fontWeight: 700, color: '#FF9F0A', background: 'rgba(255,159,10,0.12)', border: '1px solid rgba(255,159,10,0.3)', borderRadius: 9999, padding: '2px 6px', flexShrink: 0 }}
+                  >⚠</span>
+                )}
                 <button
                   onClick={e => { e.stopPropagation(); toggleWatchlist && toggleWatchlist(s.stock_id) }}
                   style={{
@@ -1041,6 +1049,7 @@ export default function Dashboard({ data, error }) {
       return next
     })
   }
+  const [activeSector, setActiveSector] = useState(null)
 
   if (error || !data || !data.dates || data.dates.length === 0) {
     return (
@@ -1077,8 +1086,20 @@ export default function Dashboard({ data, error }) {
     return m
   }, [persistent])
 
+  const availableSectors = useMemo(() => {
+    const counts = {}
+    for (const s of stocks) {
+      const sec = s.industry_category || '其他'
+      counts[sec] = (counts[sec] || 0) + 1
+    }
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 16)
+      .map(([sec, count]) => ({ sec, count }))
+  }, [stocks])
+
   // Reset page whenever filters or tab/date change
-  useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals, activeGrades])
+  useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals, activeGrades, activeSector])
 
   const baseStocks = viewTab === 'entry' ? entryStocks : viewTab === 'limitdown' ? limitDownAlerts : viewTab === 'watchlist' ? watchlistStocks : viewTab === 'heatmap' ? [] : stocks
 
@@ -1097,12 +1118,15 @@ export default function Dashboard({ data, error }) {
     if (activeGrades.size > 0 && viewTab !== 'limitdown') {
       list = list.filter(s => activeGrades.has(s.grade || 'D'))
     }
+    if (activeSector && viewTab !== 'limitdown') {
+      list = list.filter(s => (s.industry_category || '其他') === activeSector)
+    }
     return [...list].sort((a, b) => {
       const va = a[sortField] ?? -Infinity
       const vb = b[sortField] ?? -Infinity
       return sortDir === 'desc' ? vb - va : va - vb
     })
-  }, [baseStocks, searchQuery, sortField, sortDir, activeSignals, activeGrades])
+  }, [baseStocks, searchQuery, sortField, sortDir, activeSignals, activeGrades, activeSector])
 
   const totalPages = Math.ceil(filteredAndSorted.length / PAGE_SIZE)
   const pagedStocks = filteredAndSorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -1304,6 +1328,29 @@ export default function Dashboard({ data, error }) {
                 }}
               >✕ 清除</button>
             )}
+          </div>
+        )}
+
+        {/* Sector filter chips */}
+        {viewTab !== 'limitdown' && availableSectors.length > 0 && (
+          <div style={{ marginTop: 6, display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none', alignItems: 'center' }}>
+            <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>類股</span>
+            {availableSectors.map(({ sec, count }) => {
+              const isActive = activeSector === sec
+              return (
+                <button key={sec} onClick={() => setActiveSector(isActive ? null : sec)} style={{
+                  flexShrink: 0, fontSize: 10, fontWeight: 600,
+                  padding: '3px 8px', borderRadius: 9999, cursor: 'pointer',
+                  border: isActive ? '1px solid rgba(10,132,255,0.6)' : '1px solid rgba(255,255,255,0.08)',
+                  background: isActive ? 'rgba(10,132,255,0.18)' : 'var(--ios-bg3)',
+                  color: isActive ? 'var(--ios-blue)' : 'var(--ios-label3)',
+                  transition: 'all 0.15s',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {sec} <span style={{ opacity: 0.6 }}>{count}</span>
+                </button>
+              )
+            })}
           </div>
         )}
         </div>{/* /collapsible secondary controls */}
