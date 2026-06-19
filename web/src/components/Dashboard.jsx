@@ -1573,12 +1573,19 @@ export default function Dashboard({ data, error }) {
   // RAF cleanup
   useEffect(() => () => { if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current) }, [])
 
-  // Lazy-load slim price histories for ALL scanned stocks (sparklines on full universe)
+  // Lazy-load OHLCV price histories for ALL scanned stocks. Powers both the list
+  // sparklines and the detail modal's candles / KD / ADX / OBV indicators + backtest.
+  // New format: { dates: [...], stocks: { id: { o, h, l, c, v } } } aligned to dates.
+  // Falls back gracefully to the legacy close-only format ({ stocks: { id: [closes] } }).
   const [slimHistories, setSlimHistories] = useState(null)
+  const [historyDates, setHistoryDates] = useState(null)
   useEffect(() => {
     fetch(`${BASE}stock_histories.json`)
       .then(r => r.ok ? r.json() : null)
-      .then(h => { if (h?.stocks) setSlimHistories(h.stocks) })
+      .then(h => {
+        if (h?.stocks) setSlimHistories(h.stocks)
+        if (Array.isArray(h?.dates)) setHistoryDates(h.dates)
+      })
       .catch(() => {})
   }, [])
 
@@ -1657,11 +1664,28 @@ export default function Dashboard({ data, error }) {
     if (!slimHistories) return base
     return base.map(s => {
       if (s.price_history) return s  // already has rich history (top_stocks)
-      const closes = slimHistories[s.stock_id]
-      if (!closes || closes.length < 2) return s
-      return { ...s, price_history: closes.map(c => ({ close: c })) }
+      const rec = slimHistories[s.stock_id]
+      if (!rec) return s
+      // Legacy close-only format: array of closes
+      if (Array.isArray(rec)) {
+        if (rec.length < 2) return s
+        return { ...s, price_history: rec.map(c => ({ close: c })) }
+      }
+      // OHLCV format aligned to historyDates
+      if (!historyDates || !rec.c) return s
+      const bars = []
+      for (let i = 0; i < historyDates.length; i++) {
+        if (rec.c[i] == null) continue
+        bars.push({
+          time: historyDates[i],
+          open: rec.o?.[i], high: rec.h?.[i], low: rec.l?.[i],
+          close: rec.c[i], volume: rec.v?.[i],
+        })
+      }
+      if (bars.length < 2) return s
+      return { ...s, price_history: bars }
     })
-  }, [scan.filter_stocks, stocks, slimHistories])
+  }, [scan.filter_stocks, stocks, slimHistories, historyDates])
 
   const entryStocks = allScanStocks.filter(s => s.entry_signal)
   const globalMaxScore = Math.max(...stocks.map(s => s.entry_score || 0), 1)
