@@ -540,6 +540,7 @@ function processScanData() {
       // derived boolean flags for UI signal-chip filters
       f_score_high: toNum(row.f_score) >= 7,
       margin_shrinking: r2(row.margin_change_5d) < -1,
+      volume_surge_3x: r2(row.volume_ratio) >= 3,
       // extra numeric fields not previously exported
       volume_ma20: r2(row.volume_ma20),
       sma5: r2(row.sma5),
@@ -963,6 +964,16 @@ if (aggregateLatest) {
   const isMissing = !scans[aggExecDate]
   const aggSufficient = (aggregateLatest.total_scanned || 0) >= MIN_VALID_STOCKS
   if ((isNewer || isMissing) && aggSufficient) {
+    // Build grade lookup from the CSV-based scan (scan_enrich.py assigns C/D/X using
+    // absolute criteria).  The aggregate uses relative percentile → all top-20 become
+    // A even when no entry signal exists, which misleads users.  Prefer scan_enrich
+    // grades over aggregate percentile grades when available.
+    const csvGradeMap = {}
+    for (const s of (scans[aggExecDate]?.top_stocks || [])) {
+      if (s.stock_id && s.grade) csvGradeMap[s.stock_id] = s.grade
+    }
+    const hasCSVGrades = Object.keys(csvGradeMap).length > 0
+
     // Build scan entry from aggregate JSON (matches processScanData output format)
     const aggTopStocks = (aggregateLatest.top_stocks || []).map((r, i) => ({
       rank: i + 1,
@@ -992,8 +1003,21 @@ if (aggregateLatest) {
       momentum_score: r.momentum_score || 0, relative_strength_5d: r.relative_strength_5d || 0,
       return_5d: r.return_5d || 0, day_return: r.day_return || 0,
       skip_reason: r.skip_reason || '',
+      revenue_yoy: r.revenue_yoy || 0,
+      revenue_mom: r.revenue_mom || 0,
+      expected_hold_days: r.expected_hold_days || 0,
+      base_exit_signal: !!r.base_exit_signal,
+      base_exit_reason: r.base_exit_reason || '',
+      gap_to_20d_high_pct: r.gap_to_20d_high_pct ?? null,
+      // derived boolean flags (must mirror mapStock)
+      f_score_high: (r.f_score || 0) >= 7,
+      margin_shrinking: (r.margin_change_5d || 0) < -1,
+      volume_surge_3x: (r.volume_ratio || 0) >= 3,
       // cross-sectional signals
-      grade: r.grade || '',
+      // Prefer scan_enrich.py grade (absolute criteria) over aggregate percentile grade.
+      // Aggregate scores all top-20 as A (they're all in top 2% of 1412) which is
+      // misleading when no entry signals are present — scan_enrich gives C/D/X instead.
+      grade: (hasCSVGrades ? (csvGradeMap[String(r.stock_id || '')] || '') : '') || r.grade || '',
       score_pct: r.score_pct || 0,
       regime_label: r.regime_label || '',
       market_rs_rank: r.market_rs_rank || 0,
@@ -1061,7 +1085,8 @@ if (aggregateLatest) {
       dates.push(aggExecDate)
       dates.sort((a, b) => b.localeCompare(a))
     }
-    console.log(`  Injected aggregate date ${aggDate}→${aggExecDate}: ${aggregateLatest.total_scanned} stocks, ai=${!!aggregateLatest.ai_picks_text}`)
+    const csvOverrideCount = aggTopStocks.filter(s => csvGradeMap[s.stock_id]).length
+    console.log(`  Injected aggregate date ${aggDate}→${aggExecDate}: ${aggregateLatest.total_scanned} stocks, ai=${!!aggregateLatest.ai_picks_text}, csv_grades_used=${csvOverrideCount}/${aggTopStocks.length}`)
   }
 }
 
