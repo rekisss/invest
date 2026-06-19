@@ -251,9 +251,16 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   <BBPositionBar bbPctB={s.bb_pct_b} width={56} />
                 </div>
                 {s.close != null && (
-                  <span style={{ fontSize: 12, color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)' }}>
-                    {s.close > 100 ? s.close.toFixed(0) : s.close.toFixed(1)}
-                  </span>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)' }}>
+                      {s.close > 100 ? s.close.toFixed(0) : s.close.toFixed(1)}
+                    </div>
+                    {s.day_return != null && s.day_return !== 0 && (
+                      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, color: s.day_return > 0 ? '#FF453A' : '#30D158' }}>
+                        {s.day_return > 0 ? '+' : ''}{(s.day_return * 100).toFixed(1)}%
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
