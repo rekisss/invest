@@ -1630,7 +1630,18 @@ export default function Dashboard({ data, error }) {
   const stocks = scan.top_stocks || []
   const persistent = scan.persistent || []
   const limitDownAlerts = scan.limit_down_alerts || []
-  const entryStocks = stocks.filter(s => s.entry_signal)
+
+  // Merge filter_stocks (ALL scanned, slim) with top_stocks (top N, rich).
+  // For stocks that appear in both, prefer the rich top_stocks version.
+  const allScanStocks = useMemo(() => {
+    const slim = scan.filter_stocks
+    if (!slim || slim.length === 0) return stocks
+    const richMap = {}
+    for (const s of stocks) richMap[s.stock_id] = s
+    return slim.map(s => richMap[s.stock_id] || s)
+  }, [scan.filter_stocks, stocks])
+
+  const entryStocks = allScanStocks.filter(s => s.entry_signal)
   const globalMaxScore = Math.max(...stocks.map(s => s.entry_score || 0), 1)
   const pred = data.prediction || null
   const aiText = scan.ai_picks_text || ''
@@ -1643,7 +1654,7 @@ export default function Dashboard({ data, error }) {
     ? (data.scans[sortedDates[prevDateIdx + 1]] || null)
     : null
 
-  const watchlistStocks = useMemo(() => stocks.filter(s => watchlist.has(s.stock_id)), [stocks, watchlist])
+  const watchlistStocks = useMemo(() => allScanStocks.filter(s => watchlist.has(s.stock_id)), [allScanStocks, watchlist])
 
   // Score delta map: stock_id → (today_score - prev_score), only when prevScan has the same stock
   const scoreDeltaMap = useMemo(() => {
@@ -1683,26 +1694,32 @@ export default function Dashboard({ data, error }) {
 
   const availableSectors = useMemo(() => {
     const counts = {}
-    for (const s of stocks) {
+    for (const s of allScanStocks) {
       const sec = s.industry_category || '其他'
       counts[sec] = (counts[sec] || 0) + 1
     }
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 16)
+      .slice(0, 20)
       .map(([sec, count]) => ({ sec, count }))
-  }, [stocks])
+  }, [allScanStocks])
 
   const gradeDistribution = useMemo(() => {
     const counts = { A: 0, B: 0, C: 0, D: 0, X: 0 }
-    for (const s of stocks) { if (s.grade && counts[s.grade] !== undefined) counts[s.grade]++ }
+    for (const s of allScanStocks) { if (s.grade && counts[s.grade] !== undefined) counts[s.grade]++ }
     return counts
-  }, [stocks])
+  }, [allScanStocks])
 
   // Reset page whenever filters or tab/date change
   useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals, activeGrades, activeSector])
 
-  const baseStocks = viewTab === 'entry' ? entryStocks : viewTab === 'limitdown' ? limitDownAlerts : viewTab === 'watchlist' ? watchlistStocks : viewTab === 'heatmap' ? [] : stocks
+  const hasActiveFilter = activeSignals.size > 0 || activeGrades.size > 0 || !!activeSector || !!searchQuery.trim()
+  const baseStocks = viewTab === 'entry' ? entryStocks
+    : viewTab === 'limitdown' ? limitDownAlerts
+    : viewTab === 'watchlist' ? watchlistStocks
+    : viewTab === 'heatmap' ? []
+    : hasActiveFilter ? allScanStocks   // full universe when filtering
+    : stocks                            // top N (rich) when browsing unfiltered
 
   const filteredAndSorted = useMemo(() => {
     let list = baseStocks
@@ -1871,7 +1888,7 @@ export default function Dashboard({ data, error }) {
         })()}
 
         {/* Grade distribution summary */}
-        {stocks.length > 0 && (() => {
+        {allScanStocks.length > 0 && (() => {
           const hasAnyFilter = activeGrades.size > 0 || activeSignals.size > 0 || activeSector || searchQuery.trim()
           const clearAll = () => { setActiveGrades(new Set()); setActiveSignals(new Set()); setActiveSector(null); setSearchQuery('') }
           return (
@@ -1905,8 +1922,8 @@ export default function Dashboard({ data, error }) {
         })()}
 
         {/* Quick stats bar */}
-        {stocks.length > 0 && (
-          <QuickStatsBar stocks={stocks} onActivateFilter={key => {
+        {allScanStocks.length > 0 && (
+          <QuickStatsBar stocks={allScanStocks} onActivateFilter={key => {
             setActiveSignals(prev => {
               const next = new Set(prev)
               if (next.has(key)) next.delete(key)
@@ -2163,7 +2180,7 @@ export default function Dashboard({ data, error }) {
         <StrategyAccuracyPanel accuracy={data.strategyAccuracy} />
         <BacktestSimulator accuracy={data.strategyAccuracy} />
         <DateComparisonPanel scan={scan} prevScan={prevScan} />
-        <MarketBreadthBar stocks={stocks} />
+        <MarketBreadthBar stocks={allScanStocks} />
         <InstitutionalLeaderboard stocks={stocks} onSelect={setSelectedStock} />
         <SectorRotationTracker scans={data.scans} dates={sortedDates} />
         <DailyActionPanel scan={scan} prevScan={prevScan} persistent={persistent} />
