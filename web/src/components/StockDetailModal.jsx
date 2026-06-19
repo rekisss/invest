@@ -1159,6 +1159,119 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   )
 }
 
+// ── Rule-based multi-analyst engine (zero API) ───────────────────────────────
+
+function _techAnalysis(s, ci) {
+  const out = []
+  const close = s.close
+  const ema60 = s.ema60 ?? ci?.ema60
+  const ema20 = s.ema20 ?? ci?.ema20
+  const ema120 = s.ema120 ?? ci?.ema120
+  if (close && ema60 && ema120) {
+    if (close > ema60 && ema60 > ema120)
+      out.push({ t: 'bull', v: `多頭排列（收盤${close}>EMA60>${ema120?.toFixed(1)}），趨勢明確` })
+    else if (close < ema20)
+      out.push({ t: 'bear', v: `跌破EMA20（${ema20?.toFixed(1)}），短線轉弱` })
+    else if (close < ema60)
+      out.push({ t: 'warn', v: `EMA60（${ema60?.toFixed(1)}）壓制中，回補才能轉強` })
+  }
+  const macdH = s.macd_hist ?? ci?.macd_hist
+  const macd = s.macd ?? ci?.macd
+  const macdSig = s.macd_signal ?? ci?.macd_signal
+  if (macdH != null) {
+    if (macdH > 0 && macd > macdSig) out.push({ t: 'bull', v: `MACD柱正值且擴張（${macdH.toFixed(2)}），動能加速` })
+    else if (macdH > 0) out.push({ t: 'neutral', v: `MACD柱轉正（${macdH.toFixed(2)}），初步翻多` })
+    else out.push({ t: 'bear', v: `MACD柱負值（${macdH.toFixed(2)}），多頭動能不足` })
+  }
+  const k = s.stoch_k ?? ci?.stoch_k; const d = s.stoch_d ?? ci?.stoch_d
+  if (k != null && d != null) {
+    if (k > d && k > 50 && k < 80) out.push({ t: 'bull', v: `KD金叉未超買（K=${k.toFixed(0)}/D=${d.toFixed(0)}），進場窗口` })
+    else if (k > 80) out.push({ t: 'warn', v: `KD超買（K=${k.toFixed(0)}），短線追高風險` })
+    else if (k < 20) out.push({ t: 'neutral', v: `KD超賣（K=${k.toFixed(0)}），留意反彈機會` })
+  }
+  const adx = s.adx14 ?? ci?.adx14
+  if (adx != null) {
+    if (adx > 30) out.push({ t: 'bull', v: `ADX ${adx.toFixed(0)} 強趨勢，順勢操作優先` })
+    else if (adx < 18) out.push({ t: 'neutral', v: `ADX ${adx.toFixed(0)} 無趨勢，盤整中` })
+  }
+  const bbBw = s.bb_bandwidth ?? ci?.bb_bandwidth
+  const bbPct = s.bb_pct_b ?? ci?.bb_pct_b
+  if (bbBw != null && bbBw < 0.04) out.push({ t: 'neutral', v: `布林帶極度收縮（帶寬${(bbBw*100).toFixed(1)}%），方向突破在即` })
+  else if (bbPct != null && bbPct > 0.95) out.push({ t: 'warn', v: '觸碰布林上軌，短線壓力位' })
+  else if (bbPct != null && bbPct < 0.05) out.push({ t: 'neutral', v: '觸碰布林下軌，支撐反彈機會' })
+  if (ci?.cdp && close) {
+    const { ah, nh, nl, al, cdp } = ci.cdp
+    if (close > ah) out.push({ t: 'bull', v: `突破CDP強力壓力 ${ah}，強勢格局` })
+    else if (close >= nh) out.push({ t: 'bull', v: `站上CDP一般壓力 ${nh}，多方有力` })
+    else if (close <= al) out.push({ t: 'bear', v: `跌破CDP強力支撐 ${al}，弱勢` })
+    else if (close <= nl) out.push({ t: 'warn', v: `CDP支撐 ${nl} 附近，觀察能否守住` })
+    else out.push({ t: 'neutral', v: `CDP中樞 ${cdp} 為今日分水嶺，觀察站上方向` })
+  }
+  if (!out.length) out.push({ t: 'neutral', v: '技術資料尚不完整' })
+  return out.slice(0, 4)
+}
+
+function _momAnalysis(s) {
+  const out = []
+  const vr = s.volume_ratio
+  if (vr != null) {
+    if (vr > 3) out.push({ t: 'warn', v: `爆量 ${vr.toFixed(1)}x，確認方向再進場（高量可能是出貨）` })
+    else if (vr > 1.5) out.push({ t: 'bull', v: `放量 ${vr.toFixed(1)}x，量能配合，訊號可信度提升` })
+    else if (vr < 0.5) out.push({ t: 'neutral', v: `縮量（${vr.toFixed(1)}x），市場觀望，方向待定` })
+  }
+  const rs5 = s.relative_strength_5d
+  if (rs5 != null) {
+    const pct = (rs5 * 100).toFixed(1)
+    if (rs5 > 0.03) out.push({ t: 'bull', v: `5日相對大盤強度 +${pct}%，選股效果優良` })
+    else if (rs5 < -0.03) out.push({ t: 'bear', v: `5日相對大盤 ${pct}%，相對弱勢` })
+  }
+  const fs = s.foreign_buy_streak; const ts = s.invest_trust_streak; const ds = s.dealer_buy_streak
+  if (fs > 3) out.push({ t: 'bull', v: `外資連買 ${fs} 日，法人護盤力度強` })
+  else if (fs < -3) out.push({ t: 'bear', v: `外資連賣 ${Math.abs(fs)} 日，法人撤退` })
+  if (ts > 2) out.push({ t: 'bull', v: `投信連買 ${ts} 日，機構認可該標的` })
+  if (ds > 3) out.push({ t: 'bull', v: `自營商連買 ${ds} 日，短線護盤` })
+  const mc = s.margin_change_5d
+  if (mc != null) {
+    if (mc < -3) out.push({ t: 'bull', v: `融資5日縮 ${Math.abs(mc).toFixed(1)}%，籌碼轉乾淨（外資買+融資縮=強訊號）` })
+    else if (mc > 5) out.push({ t: 'warn', v: `融資5日暴增 +${mc.toFixed(1)}%，散戶追漲，後續風險提高` })
+  }
+  const fScore = s.f_score
+  if (fScore != null && fScore >= 0) {
+    if (fScore >= 7) out.push({ t: 'bull', v: `Piotroski F-Score ${fScore}/9，財務體質強健` })
+    else if (fScore <= 3) out.push({ t: 'bear', v: `Piotroski F-Score ${fScore}/9，基本面疲弱` })
+  }
+  if (!out.length) out.push({ t: 'neutral', v: '動能資料不足（本標的可能為非掃描範圍）' })
+  return out.slice(0, 4)
+}
+
+function _riskAnalysis(s, ci) {
+  const out = []
+  const close = s.close
+  const atr = s.atr14 ?? ci?.atr14
+  if (s.limit_down_streak > 0) out.push({ t: 'bear', v: `⛔ 有跌停紀錄，極高風險，建議迴避` })
+  if (atr && close) {
+    const sl = (close - 2 * atr).toFixed(2)
+    const pct = (2 * atr / close * 100).toFixed(1)
+    out.push({ t: 'neutral', v: `建議停損：${sl}（收盤−2ATR），最大虧損約 ${pct}%` })
+  }
+  const rsi = s.rsi14 ?? ci?.rsi14
+  if (rsi != null && rsi > 70) out.push({ t: 'warn', v: `RSI ${rsi.toFixed(0)} 超買，此位追多勝率下降` })
+  const ret5 = s.return_5d
+  if (ret5 != null && ret5 * 100 > 8) out.push({ t: 'warn', v: `5日已漲 ${(ret5*100).toFixed(1)}%，短線追高需注意高點套牢` })
+  const bearFlags = [
+    ['macd_death_cross', 'MACD死叉'], ['close_below_ema20', '跌破EMA20'],
+    ['close_below_swing_low', '跌破波段低'], ['long_upper_shadow', '長上影線'], ['open_high_close_low', '開高走低'],
+  ]
+  const active = bearFlags.filter(([k]) => s[k]).map(([, l]) => l)
+  if (active.length >= 2) out.push({ t: 'bear', v: `負面訊號 ${active.length} 項：${active.join('、')}` })
+  else if (active.length === 1) out.push({ t: 'warn', v: `注意：${active[0]}` })
+  if (s.entry_signal) out.push({ t: 'bull', v: `系統進場訊號成立（9項硬性條件全通過），可追蹤` })
+  if (s.entry_score > 1000) out.push({ t: 'bull', v: `綜合評分 ${s.entry_score.toFixed(0)}，訊號強度優良` })
+  else if (s.entry_score != null && s.entry_score < 400) out.push({ t: 'warn', v: `綜合評分 ${s.entry_score.toFixed(0)}，強度偏低，等待更好時機` })
+  if (!out.length) out.push({ t: 'neutral', v: '無明顯風險訊號，依常規停損紀律操作' })
+  return out.slice(0, 4)
+}
+
 // ── Shared layout components ─────────────────────────────────────────────────
 
 function Row({ label, value, valueStyle }) {
@@ -1460,6 +1573,33 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
               <Row label="CDP 中樞" value={fmt(cdp, 2)} valueStyle={{ color: 'var(--ios-yellow)', fontWeight: 600 }} />
               <Row label="NL 一般支撐" value={fmt(nl, 2)} valueStyle={{ color: close != null && close <= nl ? 'var(--ios-green)' : 'var(--ios-label3)' }} />
               <Row label="AL 強力支撐" value={fmt(al, 2)} valueStyle={{ color: 'rgba(48,209,88,0.9)', fontWeight: 700 }} />
+            </Section>
+          )
+        })()}
+
+        {/* 多角度分析（零 API 規則引擎）*/}
+        {(() => {
+          const tech = _techAnalysis(s, ci)
+          const mom  = _momAnalysis(s)
+          const risk = _riskAnalysis(s, ci)
+          const typeColor = t => t === 'bull' ? 'var(--ios-green)' : t === 'bear' ? 'var(--ios-red)' : t === 'warn' ? 'var(--ios-yellow)' : 'var(--ios-label3)'
+          const typeIcon  = t => t === 'bull' ? '▲' : t === 'bear' ? '▼' : t === 'warn' ? '⚠' : '●'
+          const AgentCard = ({ title, icon, signals }) => (
+            <div style={{ background: 'var(--ios-bg)', borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}>
+              <div style={{ fontSize: 11, color: 'var(--ios-blue)', fontWeight: 700, marginBottom: 7, letterSpacing: 0.4 }}>{icon} {title}</div>
+              {signals.map((sig, i) => (
+                <div key={i} style={{ display: 'flex', gap: 7, marginBottom: 5, alignItems: 'flex-start' }}>
+                  <span style={{ color: typeColor(sig.t), fontSize: 10, marginTop: 2.5, flexShrink: 0, fontWeight: 700 }}>{typeIcon(sig.t)}</span>
+                  <span style={{ fontSize: 12.5, color: 'var(--ios-label)', lineHeight: 1.5 }}>{sig.v}</span>
+                </div>
+              ))}
+            </div>
+          )
+          return (
+            <Section title="分析師觀點（不消耗 API）">
+              <AgentCard title="技術分析師" icon="📐" signals={tech} />
+              <AgentCard title="動能研究員" icon="⚡" signals={mom} />
+              <AgentCard title="風險管理師" icon="🛡️" signals={risk} />
             </Section>
           )
         })()}
