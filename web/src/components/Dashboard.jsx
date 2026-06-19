@@ -1580,7 +1580,7 @@ export default function Dashboard({ data, error }) {
   const [slimHistories, setSlimHistories] = useState(null)
   const [historyDates, setHistoryDates] = useState(null)
   useEffect(() => {
-    fetch(`${BASE}stock_histories.json`)
+    fetch(`${BASE}stock_histories.json`, { cache: 'no-cache' })
       .then(r => r.ok ? r.json() : null)
       .then(h => {
         if (h?.stocks) setSlimHistories(h.stocks)

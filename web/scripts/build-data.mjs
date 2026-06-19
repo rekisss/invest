@@ -1209,7 +1209,7 @@ console.log(`K-line: injected into stocks across ${recentDates.length} dates`)
 //   { generated_at, dates: ["YYYY-MM-DD", ...], stocks: { id: { o, h, l, c, v } } }
 // Each per-stock array is aligned to `dates`; missing bars are null.
 const HISTORIES_FILE = join(PUBLIC_DIR, 'stock_histories.json')
-const OHLC_BARS = 120
+const OHLC_BARS = 200
 const round2 = v => (v == null || !isFinite(v)) ? null : Math.round(v * 100) / 100
 const perStockRecent = {}
 const dateSet = new Set()
