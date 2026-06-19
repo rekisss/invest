@@ -558,7 +558,46 @@ function processScanData() {
       .filter(r => toNum(r.limit_down_streak) >= 3)
       .sort((a, b) => toNum(b.limit_down_streak) - toNum(a.limit_down_streak))
       .map(r => mapStock(r))
-    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, limit_down_alerts: limitDownAlerts, is_partial: allStocks.length < 500, data_date: dominantDataDate }
+
+    // Slim profile for ALL scanned stocks — included on every date so grade/signal
+    // filters in the Dashboard work against the full scan universe, not just top N.
+    // Fields kept minimal to control data.json growth.
+    const filterStocks = allStocks.map(row => ({
+      stock_id: row.stock_id,
+      name: row.name || '',
+      industry_category: row.industry_category || '',
+      grade: row.grade || '',
+      score_pct: toNum(row.score_pct),
+      entry_signal: toBool(row.entry_signal),
+      entry_score: Math.round(toNum(row.entry_score)),
+      close: r2(row.close),
+      volume_ratio: r2(row.volume_ratio),
+      rsi14: r2(row.rsi14),
+      adx14: r2(row.adx14),
+      foreign_buy_streak: toNum(row.foreign_buy_streak),
+      invest_trust_streak: toNum(row.invest_trust_streak),
+      f_score: toNum(row.f_score),
+      revenue_yoy: r2(row.revenue_yoy),
+      day_return: r2(row.day_return),
+      limit_down_streak: toNum(row.limit_down_streak),
+      // boolean signal flags (used by signal-chip filters and preset combos)
+      macd_golden_cross: toBool(row.macd_golden_cross),
+      kd_golden_cross: toBool(row.kd_golden_cross),
+      foreign_buy_3d: toBool(row.foreign_buy_3d),
+      invest_trust_buy_2d: toBool(row.invest_trust_buy_2d),
+      above_ichimoku_cloud: toBool(row.above_ichimoku_cloud),
+      bb_squeeze_breakout: toBool(row.bb_squeeze_breakout),
+      breakout_20d: toBool(row.breakout_20d),
+      volume_break: toBool(row.volume_break),
+      adx_trending: toBool(row.adx_trending),
+      rsi_strong: toBool(row.rsi_strong),
+      above_ema60: toBool(row.above_ema60),
+      f_score_high: toNum(row.f_score) >= 7,
+      margin_shrinking: r2(row.margin_change_5d) < -1,
+      volume_surge_3x: r2(row.volume_ratio) >= 3,
+    }))
+
+    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, filter_stocks: filterStocks, limit_down_alerts: limitDownAlerts, is_partial: allStocks.length < 500, data_date: dominantDataDate }
     // Write static CSV download files (top50 + all) to public/downloads/
     try {
       writeDownloadCSVs(date, allStocks, join(PUBLIC_DIR, 'downloads'))
