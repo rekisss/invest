@@ -30,6 +30,7 @@ const SIGNAL_FILTERS = [
   { key: 'rsi_strong',           label: 'RSI強勢' },
   { key: 'f_score_high',         label: 'F-Score 7+' },
   { key: 'margin_shrinking',     label: '融資縮減' },
+  { key: 'volume_surge_3x',      label: '爆量3x+' },
 ]
 
 const GRADE_STYLE = {
@@ -1048,7 +1049,7 @@ function QuickStatsBar({ stocks, onActivateFilter }) {
     { label: '投信2天+', value: stats.trustBuy2, filter: 'invest_trust_buy_2d', color: '#BF5AF2' },
     { label: 'F≥7', value: stats.fHigh, filter: 'f_score_high', color: '#5AC8FA' },
     { label: '近突破', value: stats.nearBreak, filter: null, color: '#FF9F0A' },
-    { label: '爆量', value: stats.volumeSurge, filter: 'volume_break', color: '#FF6B35' },
+    { label: '爆量3x+', value: stats.volumeSurge, filter: 'volume_surge_3x', color: '#FF6B35' },
     ...(stats.exitSignals > 0 ? [{ label: '出場警示', value: stats.exitSignals, filter: null, color: '#FF453A' }] : []),
   ].filter(item => item.value > 0)
 
