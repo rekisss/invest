@@ -200,7 +200,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const conditionCount = s.condition_count || 0
           const bbPctB = s.bb_pct_b ?? null
           const momentumScore = s.momentum_score || 0
-          const revenueYoyValVal = s.revenue_yoy || 0
+          const revenueYoyVal = s.revenue_yoy || 0
           const revenueMom = s.revenue_mom || 0
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
@@ -748,6 +748,36 @@ function NearBreakoutSection({ stocks, onSelect }) {
     { key: 'rsi',      label: 'RSI', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: (s.rsi14 || 0) > 60 ? '#30D158' : 'var(--ios-label3)' }}>{s.rsi14?.toFixed(0)}</span> },
   ]
   return <AlertTable title="📐 近突破雷達（距20日高點 ≤2%，尚未入場）" accentColor="#FF9F0A" stocks={candidates} columns={cols} onSelect={onSelect} />
+}
+
+function VolumeSurgeSection({ stocks, onSelect }) {
+  const candidates = useMemo(() => {
+    return (stocks || [])
+      .filter(s => {
+        const vol = s.volume_ratio || 0
+        return vol >= 2.5 && !s.entry_signal && (s.rsi14 || 0) > 35 && (s.rsi14 || 0) < 80
+      })
+      .sort((a, b) => (b.volume_ratio || 0) - (a.volume_ratio || 0))
+      .slice(0, 10)
+  }, [stocks])
+
+  if (candidates.length === 0) return null
+
+  const cols = [
+    { key: 'stock_id', label: '股號', render: s => <span style={{ color: '#FF6B35', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{s.stock_id}</span> },
+    { key: 'name',     label: '名稱', render: s => <span style={{ fontSize: 13 }}>{s.name}</span> },
+    { key: 'close',    label: '收盤', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{s.close?.toFixed(s.close >= 100 ? 0 : 1)}</span> },
+    { key: 'vol',      label: '量比', render: s => (
+      <span style={{
+        background: (s.volume_ratio || 0) >= 5 ? 'rgba(255,69,58,0.2)' : 'rgba(255,107,53,0.14)',
+        color: (s.volume_ratio || 0) >= 5 ? '#FF453A' : '#FF6B35',
+        borderRadius: 6, padding: '2px 8px', fontWeight: 700, fontSize: 12,
+      }}>{(s.volume_ratio || 0).toFixed(1)}x</span>
+    )},
+    { key: 'rsi', label: 'RSI', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: (s.rsi14 || 0) > 60 ? '#30D158' : 'var(--ios-label3)' }}>{s.rsi14?.toFixed(0)}</span> },
+    { key: 'score', label: '分數', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ios-label2)' }}>{Math.round(s.entry_score)}</span> },
+  ]
+  return <AlertTable title="🔥 放量異動（量比≥2.5x，尚未入場）" accentColor="#FF6B35" stocks={candidates} columns={cols} onSelect={onSelect} />
 }
 
 function LimitDownSection({ items, onSelect }) {
@@ -2060,6 +2090,7 @@ export default function Dashboard({ data, error }) {
         )}
 
         <NearBreakoutSection stocks={stocks} onSelect={setSelectedStock} />
+        <VolumeSurgeSection stocks={stocks} onSelect={setSelectedStock} />
 
         {limitDownAlerts.length > 0 && (
           <LimitDownSection items={limitDownAlerts} onSelect={setSelectedStock} />
