@@ -1123,6 +1123,7 @@ if (aggregateLatest) {
       total_scanned: aggregateLatest.total_scanned || aggTopStocks.length,
       entry_count: aggregateLatest.entry_count || 0,
       top_stocks: aggTopStocks,
+      filter_stocks: scans[aggExecDate]?.filter_stocks,  // preserve slim full-universe list from CSV scan if present
       limit_down_alerts: aggLimitDown,
       persistent: (aggregateLatest.persistent_strong || []).map(p => ({
         stock_id: p.stock_id, name: p.name, industry_category: p.industry_category,
