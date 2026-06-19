@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from 'react'
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
 const pct = (v) => (v == null || isNaN(v) ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
@@ -1344,18 +1344,62 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
     }
   }, [ph])
 
+  const [swipeX, setSwipeX]   = useState(0)
+  const [closing, setClosing] = useState(false)
+  const [copied, setCopied]   = useState(false)
+  const swipeRef = useRef(null)
+  useEffect(() => { setSwipeX(0); setClosing(false) }, [stock?.stock_id])
+
   if (!stock) return null
   const s = stock
   const n = notionInfo || null
   const scoreColor = s.entry_score >= 1000 ? 'var(--ios-yellow)' : s.entry_score >= 700 ? 'var(--ios-orange)' : 'var(--ios-label)'
 
+  const doClose = () => { setClosing(true); setTimeout(onClose, 260) }
+
+  const handleDragStart = e => {
+    swipeRef.current = { x0: e.touches[0].clientX, t0: Date.now() }
+  }
+  const handleDragMove = e => {
+    if (!swipeRef.current) return
+    const dx = e.touches[0].clientX - swipeRef.current.x0
+    if (dx > 0) { e.preventDefault(); setSwipeX(Math.round(dx)) }
+  }
+  const handleDragEnd = () => {
+    if (!swipeRef.current) return
+    const vel = swipeX / Math.max(Date.now() - swipeRef.current.t0, 1)
+    if (swipeX > 80 || vel > 0.4) doClose(); else setSwipeX(0)
+    swipeRef.current = null
+  }
+
+  const copyStock = () => {
+    const rsi = s.rsi14 ?? ci.rsi14; const adx = s.adx14 ?? ci.adx14
+    const text = [
+      `${s.stock_id} ${s.name}${s.grade ? ` [${s.grade}]` : ''}`,
+      `評分 ${s.entry_score != null ? Math.round(s.entry_score) : '—'} | RSI ${fmt(rsi,1)} | ADX ${fmt(adx,1)}`,
+      s.foreign_buy_streak > 0 ? `外資連買 ${s.foreign_buy_streak} 日` : s.foreign_buy_streak < 0 ? `外資連賣 ${Math.abs(s.foreign_buy_streak)} 日` : '',
+      s.entry_signal ? '✅ 進場訊號成立' : '',
+      s.entry_reason || '',
+    ].filter(Boolean).join('\n')
+    navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+  }
+
   return (
+    <>
+    <style>{`
+      @keyframes sheetIn  { from { transform:translateX(100%); opacity:0 } to { transform:translateX(0); opacity:1 } }
+      @keyframes sheetOut { from { transform:translateX(0);    opacity:1 } to { transform:translateX(100%); opacity:0 } }
+    `}</style>
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex' }}
-      onClick={onClose}
+      onClick={doClose}
     >
       {/* Backdrop */}
-      <div style={{ flex: 1, background: 'rgba(0,0,0,0.55)' }} />
+      <div style={{
+        flex: 1,
+        background: `rgba(0,0,0,${(0.55 * Math.max(0, 1 - swipeX / 280)).toFixed(3)})`,
+        transition: swipeX === 0 ? 'background 0.26s' : 'none',
+      }} />
 
       {/* Panel */}
       <div
@@ -1366,7 +1410,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
           background: 'var(--ios-bg)',
           overflowY: 'auto',
           overflowX: 'hidden',
-          padding: '20px 14px 48px',
+          padding: '4px 14px 48px',
           borderLeft: '0.5px solid var(--ios-sep)',
           borderRadius: '16px 0 0 16px',
           display: 'flex',
@@ -1374,8 +1418,22 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
           gap: 0,
           boxShadow: '-8px 0 32px rgba(0,0,0,0.5)',
           WebkitOverflowScrolling: 'touch',
+          transform: `translateX(${swipeX}px)`,
+          transition: swipeX === 0 && !swipeRef.current ? 'transform 0.32s cubic-bezier(0.22,1,0.36,1)' : 'none',
+          animation: closing ? 'sheetOut 0.26s ease-in both' : 'sheetIn 0.32s cubic-bezier(0.22,1,0.36,1) both',
+          willChange: 'transform',
         }}
       >
+        {/* iOS drag handle */}
+        <div
+          style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 8px', cursor: 'grab', flexShrink: 0, touchAction: 'none' }}
+          onTouchStart={handleDragStart}
+          onTouchMove={handleDragMove}
+          onTouchEnd={handleDragEnd}
+        >
+          <div style={{ width: 36, height: 4, background: 'var(--ios-fill2)', borderRadius: 2, opacity: 0.7 }} />
+        </div>
+
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div>
@@ -1384,15 +1442,26 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
             </div>
             <div style={{ fontSize: 12, color: 'var(--ios-label3)', marginTop: 3 }}>{s.industry_category}</div>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'var(--ios-fill3)', border: 'none',
-              color: 'var(--ios-label2)', borderRadius: 9999, width: 28, height: 28,
-              cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >✕</button>
+          <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexShrink: 0 }}>
+            <button
+              onClick={copyStock}
+              title="複製摘要"
+              style={{
+                background: copied ? 'rgba(48,209,88,0.18)' : 'var(--ios-fill3)', border: 'none',
+                color: copied ? 'var(--ios-green)' : 'var(--ios-label2)', borderRadius: 9999, width: 28, height: 28,
+                cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.2s',
+              }}
+            >{copied ? '✓' : '⎘'}</button>
+            <button
+              onClick={doClose}
+              style={{
+                background: 'var(--ios-fill3)', border: 'none',
+                color: 'var(--ios-label2)', borderRadius: 9999, width: 28, height: 28,
+                cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >✕</button>
+          </div>
         </div>
 
         {/* Feature 4: Score trend across dates */}
@@ -1767,5 +1836,6 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
         )}
       </div>
     </div>
+    </>
   )
 }
