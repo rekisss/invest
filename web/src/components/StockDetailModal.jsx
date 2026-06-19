@@ -849,6 +849,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const applyPreset = p => { setActive(p.state); setPreset(p.id) }
 
   const bars = (dataMap[chartInterval] || []).slice(-barCount)
+  const cdpLevels = useMemo(() => cdpCalc(daily), [daily])
 
   const totalChartW = Math.max(CHART_W, bars.length * BAR_W + CHART_PL + CHART_PR)
 
@@ -976,7 +977,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
             data={bars}
             maLines={active.ma && indicators ? indicators.maLines : []}
             bbBands={active.bb && indicators ? indicators.bbBands : null}
-            cdpLevels={ci.cdp}
+            cdpLevels={cdpLevels}
             onHoverIdx={setHoveredIdx}
             chartW={totalChartW}
           />
