@@ -4,14 +4,17 @@ import StockDetailModal from './StockDetailModal'
 const PAGE_SIZE = 50
 
 const SORT_OPTIONS = [
-  { value: 'entry_score',       label: '分數' },
-  { value: 'market_rs_rank',    label: '市場RS' },
-  { value: 'sector_rs_rank',    label: '類股RS' },
-  { value: 'rsi14',             label: 'RSI' },
-  { value: 'adx14',             label: 'ADX' },
-  { value: 'volume_ratio',      label: '量比' },
-  { value: 'foreign_buy_streak',label: '外資連買' },
-  { value: 'close',             label: '收盤價' },
+  { value: 'entry_score',           label: '分數' },
+  { value: 'market_rs_rank',        label: '市場RS' },
+  { value: 'sector_rs_rank',        label: '類股RS' },
+  { value: 'rsi14',                 label: 'RSI' },
+  { value: 'adx14',                 label: 'ADX' },
+  { value: 'volume_ratio',          label: '量比' },
+  { value: 'foreign_buy_streak',    label: '外資連買' },
+  { value: 'f_score',               label: 'F評分' },
+  { value: 'revenue_yoy',           label: '營收成長' },
+  { value: 'gap_to_20d_high_pct_asc', label: '近突破' },
+  { value: 'close',                 label: '收盤價' },
 ]
 
 const SIGNAL_FILTERS = [
@@ -21,6 +24,8 @@ const SIGNAL_FILTERS = [
   { key: 'invest_trust_buy_2d',  label: '投信買超' },
   { key: 'above_ichimoku_cloud', label: '站上雲' },
   { key: 'bb_squeeze_breakout',  label: 'BB突破' },
+  { key: 'breakout_20d',         label: '突破20高' },
+  { key: 'volume_break',         label: '放量突破' },
   { key: 'adx_trending',         label: 'ADX趨勢' },
   { key: 'rsi_strong',           label: 'RSI強勢' },
   { key: 'f_score_high',         label: 'F-Score 7+' },
@@ -146,6 +151,11 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const revenueYoy = s.revenue_yoy || 0
           const skipReason = s.skip_reason || ''
           const expectedHoldDays = s.expected_hold_days || 0
+          const baseExitSignal = s.base_exit_signal || false
+          const baseExitReason = s.base_exit_reason || ''
+          const gapTo20dHigh = s.gap_to_20d_high_pct ?? null
+          const nearBreakout = gapTo20dHigh !== null && gapTo20dHigh >= 0 && gapTo20dHigh < 2
+          const volumeBreak = s.volume_break || false
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -185,6 +195,9 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   ? <span style={{ fontSize: 10, fontWeight: 700, color: '#30D158', background: 'rgba(48,209,88,0.14)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>進場</span>
                   : <span style={{ fontSize: 10, fontWeight: 600, color: '#0A84FF', background: 'rgba(10,132,255,0.12)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>觀察</span>
                 }
+                {baseExitSignal && (
+                  <span title={baseExitReason || '出場訊號'} style={{ fontSize: 10, fontWeight: 700, color: '#FF453A', background: 'rgba(255,69,58,0.12)', border: '1px solid rgba(255,69,58,0.38)', borderRadius: 9999, padding: '2px 7px', flexShrink: 0 }}>⚡出場</span>
+                )}
                 {hasMarginWarning && (
                   <span
                     title={marginChg > 5 ? `融資5日暴增 +${marginChg.toFixed(1)}%` : `融券比率 ${shortRatio.toFixed(1)}%`}
@@ -240,9 +253,19 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   ADX <strong>{adx.toFixed(0)}</strong>
                 </span>
                 {vol > 0 && (
-                  <span style={{ fontSize: 11, color: volColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                    量 <strong>{vol.toFixed(1)}x</strong>
-                  </span>
+                  vol >= 3 ? (
+                    <span title="爆量（量比≥3x）" style={{ fontSize: 11, color: '#FF6B35', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', fontWeight: 700 }}>
+                      爆量<strong>{vol.toFixed(1)}x</strong>
+                    </span>
+                  ) : vol >= 2 && volumeBreak ? (
+                    <span title="放量突破（量比≥2x且突破）" style={{ fontSize: 11, color: '#FF9F0A', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', fontWeight: 700 }}>
+                      突量<strong>{vol.toFixed(1)}x</strong>
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: volColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                      量 <strong>{vol.toFixed(1)}x</strong>
+                    </span>
+                  )
                 )}
                 {foreignStreak > 0 && (
                   <span style={{ fontSize: 11, color: '#30D158', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
@@ -297,9 +320,14 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     持{expectedHoldDays}天
                   </span>
                 )}
+                {nearBreakout && (
+                  <span title={`距20日高點僅 ${gapTo20dHigh.toFixed(1)}%，接近突破`} style={{ fontSize: 11, color: '#FF9F0A', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', fontWeight: 700 }}>
+                    近突破{gapTo20dHigh.toFixed(1)}%
+                  </span>
+                )}
               </div>
-              {/* Row 4: entry reason + skip warnings */}
-              {(entryReason || skipReason) && (
+              {/* Row 4: entry reason + skip/exit warnings */}
+              {(entryReason || skipReason || baseExitSignal) && (
                 <div style={{ marginTop: 4, lineHeight: 1.5 }}>
                   {entryReason && (
                     <div style={{ fontSize: 10, color: 'var(--ios-label3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -309,6 +337,11 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   {skipReason && (
                     <div style={{ fontSize: 10, color: 'var(--ios-red)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       ⚠ {skipReason}
+                    </div>
+                  )}
+                  {baseExitSignal && baseExitReason && (
+                    <div style={{ fontSize: 10, color: '#FF453A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                      🚨 {baseExitReason}
                     </div>
                   )}
                 </div>
@@ -994,6 +1027,50 @@ function BacktestSimulator({ accuracy }) {
   )
 }
 
+/* ── Quick Stats Bar ─────────────────────────────────────────────── */
+function QuickStatsBar({ stocks, onActivateFilter }) {
+  const stats = useMemo(() => {
+    let foreignBuy3 = 0, trustBuy2 = 0, fHigh = 0, exitSignals = 0, nearBreak = 0, volumeSurge = 0
+    for (const s of stocks) {
+      if (s.foreign_buy_streak >= 3) foreignBuy3++
+      if (s.invest_trust_streak >= 2) trustBuy2++
+      if ((s.f_score || 0) >= 7) fHigh++
+      if (s.base_exit_signal) exitSignals++
+      const g = s.gap_to_20d_high_pct
+      if (g != null && g >= 0 && g < 2) nearBreak++
+      if ((s.volume_ratio || 0) >= 3) volumeSurge++
+    }
+    return { foreignBuy3, trustBuy2, fHigh, exitSignals, nearBreak, volumeSurge }
+  }, [stocks])
+
+  const items = [
+    { label: '外買3天+', value: stats.foreignBuy3, filter: 'foreign_buy_3d', color: '#30D158' },
+    { label: '投信2天+', value: stats.trustBuy2, filter: 'invest_trust_buy_2d', color: '#BF5AF2' },
+    { label: 'F≥7', value: stats.fHigh, filter: 'f_score_high', color: '#5AC8FA' },
+    { label: '近突破', value: stats.nearBreak, filter: null, color: '#FF9F0A' },
+    { label: '爆量', value: stats.volumeSurge, filter: 'volume_break', color: '#FF6B35' },
+    ...(stats.exitSignals > 0 ? [{ label: '出場警示', value: stats.exitSignals, filter: null, color: '#FF453A' }] : []),
+  ].filter(item => item.value > 0)
+
+  if (items.length === 0) return null
+  return (
+    <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+      <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>今日</span>
+      {items.map(item => (
+        <button key={item.label} onClick={() => item.filter && onActivateFilter(item.filter)} style={{
+          fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 9999,
+          background: `${item.color}1A`, color: item.color,
+          border: `0.5px solid ${item.color}44`,
+          cursor: item.filter ? 'pointer' : 'default', flexShrink: 0,
+          transition: 'opacity 0.15s',
+        }} title={item.filter ? `篩選：${item.label}` : undefined}>
+          {item.label} {item.value}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /* ── Main Component ──────────────────────────────────────────────── */
 export default function Dashboard({ data, error }) {
   const sortedDates = useMemo(
@@ -1171,6 +1248,17 @@ export default function Dashboard({ data, error }) {
       list = list.filter(s => (s.industry_category || '其他') === activeSector)
     }
     return [...list].sort((a, b) => {
+      // Special case: gap_to_20d_high_pct_asc sorts ascending by gap (smallest gap = nearest breakout)
+      if (sortField === 'gap_to_20d_high_pct_asc') {
+        const va = a.gap_to_20d_high_pct ?? Infinity
+        const vb = b.gap_to_20d_high_pct ?? Infinity
+        // only consider stocks within striking distance (gap 0–15%)
+        const aValid = va >= 0 && va <= 15
+        const bValid = vb >= 0 && vb <= 15
+        if (aValid && !bValid) return -1
+        if (!aValid && bValid) return 1
+        return va - vb
+      }
       const va = a[sortField] ?? -Infinity
       const vb = b[sortField] ?? -Infinity
       return sortDir === 'desc' ? vb - va : va - vb
@@ -1301,6 +1389,18 @@ export default function Dashboard({ data, error }) {
             </div>
           )
         })()}
+
+        {/* Quick stats bar */}
+        {stocks.length > 0 && (
+          <QuickStatsBar stocks={stocks} onActivateFilter={key => {
+            setActiveSignals(prev => {
+              const next = new Set(prev)
+              if (next.has(key)) next.delete(key)
+              else next.add(key)
+              return next
+            })
+          }} />
+        )}
 
         {/* Search + Sort row */}
         <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
