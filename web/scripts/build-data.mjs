@@ -595,6 +595,15 @@ function processScanData() {
       f_score_high: toNum(row.f_score) >= 7,
       margin_shrinking: r2(row.margin_change_5d) < -1,
       volume_surge_3x: r2(row.volume_ratio) >= 3,
+      // extra fields for full-universe sort, leaderboard, and additional presets
+      market_rs_rank: toNum(row.market_rs_rank),
+      sector_rs_rank: toNum(row.sector_rs_rank),
+      gap_to_20d_high_pct: r2(row.gap_to_20d_high_pct),
+      dealer_buy_streak: toNum(row.dealer_buy_streak),
+      dealer_buy_3d: toBool(row.dealer_buy_3d),
+      foreign_buy_accel: toBool(row.foreign_buy_accel),
+      invest_trust_accel: toBool(row.invest_trust_accel),
+      is_sector_leader: toBool(row.is_sector_leader),
     }))
 
     scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, filter_stocks: filterStocks, limit_down_alerts: limitDownAlerts, is_partial: allStocks.length < 500, data_date: dominantDataDate }
