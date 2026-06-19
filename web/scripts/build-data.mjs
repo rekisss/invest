@@ -963,6 +963,16 @@ if (aggregateLatest) {
   const isMissing = !scans[aggExecDate]
   const aggSufficient = (aggregateLatest.total_scanned || 0) >= MIN_VALID_STOCKS
   if ((isNewer || isMissing) && aggSufficient) {
+    // Build grade lookup from the CSV-based scan (scan_enrich.py assigns C/D/X using
+    // absolute criteria).  The aggregate uses relative percentile → all top-20 become
+    // A even when no entry signal exists, which misleads users.  Prefer scan_enrich
+    // grades over aggregate percentile grades when available.
+    const csvGradeMap = {}
+    for (const s of (scans[aggExecDate]?.top_stocks || [])) {
+      if (s.stock_id && s.grade) csvGradeMap[s.stock_id] = s.grade
+    }
+    const hasCSVGrades = Object.keys(csvGradeMap).length > 0
+
     // Build scan entry from aggregate JSON (matches processScanData output format)
     const aggTopStocks = (aggregateLatest.top_stocks || []).map((r, i) => ({
       rank: i + 1,
@@ -993,7 +1003,10 @@ if (aggregateLatest) {
       return_5d: r.return_5d || 0, day_return: r.day_return || 0,
       skip_reason: r.skip_reason || '',
       // cross-sectional signals
-      grade: r.grade || '',
+      // Prefer scan_enrich.py grade (absolute criteria) over aggregate percentile grade.
+      // Aggregate scores all top-20 as A (they're all in top 2% of 1412) which is
+      // misleading when no entry signals are present — scan_enrich gives C/D/X instead.
+      grade: (hasCSVGrades ? (csvGradeMap[String(r.stock_id || '')] || '') : '') || r.grade || '',
       score_pct: r.score_pct || 0,
       regime_label: r.regime_label || '',
       market_rs_rank: r.market_rs_rank || 0,
@@ -1061,7 +1074,8 @@ if (aggregateLatest) {
       dates.push(aggExecDate)
       dates.sort((a, b) => b.localeCompare(a))
     }
-    console.log(`  Injected aggregate date ${aggDate}→${aggExecDate}: ${aggregateLatest.total_scanned} stocks, ai=${!!aggregateLatest.ai_picks_text}`)
+    const csvOverrideCount = aggTopStocks.filter(s => csvGradeMap[s.stock_id]).length
+    console.log(`  Injected aggregate date ${aggDate}→${aggExecDate}: ${aggregateLatest.total_scanned} stocks, ai=${!!aggregateLatest.ai_picks_text}, csv_grades_used=${csvOverrideCount}/${aggTopStocks.length}`)
   }
 }
 
