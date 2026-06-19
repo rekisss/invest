@@ -352,19 +352,19 @@ function CandleSVG({ data, maLines, bbBands, onHoverIdx, chartW: propChartW }) {
     const W = propChartW || Math.max(CHART_W, n * BAR_W + CHART_PL + CHART_PR)
     const CH = 200, VH = 45, GAP = 6, H = CH + GAP + VH
     const PL = CHART_PL, PR = CHART_PR, PT = 8
-    const maxP = Math.max(...bars.map(d => d.high), ...(bbBands?.upper?.filter(Boolean) || []))
-    const minP = Math.min(...bars.map(d => d.low),  ...(bbBands?.lower?.filter(Boolean) || []))
-    const pRange = maxP - minP || 1
-    const maxVol = Math.max(...bars.map(d => d.volume), 1)
+    const maxP = Math.max(...bars.map(d => d.high ?? d.close ?? 0), ...(bbBands?.upper?.filter(Boolean) || []))
+    const minP = Math.min(...bars.map(d => d.low  ?? d.close ?? 0), ...(bbBands?.lower?.filter(Boolean) || []))
+    const pRange = (isNaN(maxP) || isNaN(minP) || maxP === minP) ? 1 : maxP - minP
+    const maxVol = Math.max(...bars.map(d => d.volume ?? 0), 1)
     const slotW = (W - PL - PR) / n
     const bW = Math.max(slotW * 0.65, 1.5)
-    const toY = p => PT + (1 - (p - minP) / pRange) * CH
+    const toY = p => PT + (1 - (p - (isNaN(minP) ? 0 : minP)) / pRange) * CH
     const toX = i => PL + (i + 0.5) * slotW
-    const gridLevels = [0, 1/3, 2/3, 1].map(t => ({
+    const gridLevels = isNaN(minP) ? [] : [0, 1/3, 2/3, 1].map(t => ({
       price: minP + t * pRange, y: PT + (1 - t) * CH,
     }))
     const xStep = Math.max(1, Math.floor(n / 5))
-    const xLabels = bars.map((d, i) => ({ i, label: d.time.slice(5) })).filter((_, i) => i % xStep === 0 || i === n - 1)
+    const xLabels = bars.map((d, i) => ({ i, label: d.time ? d.time.slice(5) : '' })).filter((_, i) => i % xStep === 0 || i === n - 1)
     return { bars, W, CH, VH, GAP, H, PL, PR, PT, maxVol, n, slotW, bW, toY, toX, gridLevels, xLabels }
   }, [data, bbBands, propChartW])
 
@@ -457,15 +457,15 @@ function CandleSVG({ data, maLines, bbBands, onHoverIdx, chartW: propChartW }) {
 
       {/* Candles + volume */}
       {bars.map((d, i) => {
-        const x = toX(i), color = candleColor(d.open, d.close)
-        const bodyTop = toY(Math.max(d.open, d.close))
-        const bodyBot = toY(Math.min(d.open, d.close))
+        const x = toX(i), color = candleColor(d.open ?? d.close, d.close)
+        const bodyTop = toY(Math.max(d.open ?? d.close, d.close))
+        const bodyBot = toY(Math.min(d.open ?? d.close, d.close))
         const bodyH = Math.max(bodyBot - bodyTop, 1)
-        const volH = (d.volume / maxVol) * VH
+        const volH = ((d.volume ?? 0) / maxVol) * VH
         const isHovered = hovered?.idx === i
         return (
           <g key={i} opacity={hovered && !isHovered ? 0.45 : 1}>
-            <line x1={x} y1={toY(d.high)} x2={x} y2={toY(d.low)} stroke={color} strokeWidth={isHovered ? 1.4 : 0.8} />
+            <line x1={x} y1={toY(d.high ?? d.close)} x2={x} y2={toY(d.low ?? d.close)} stroke={color} strokeWidth={isHovered ? 1.4 : 0.8} />
             <rect x={x - bW / 2} y={bodyTop} width={bW} height={bodyH} fill={color} stroke={isHovered ? '#fff' : 'none'} strokeWidth={0.5} />
             <rect x={x - bW / 2} y={CH + GAP + PT + VH - volH} width={bW} height={volH} fill={color} opacity={isHovered ? 0.75 : 0.45} />
           </g>
@@ -488,23 +488,31 @@ function CandleSVG({ data, maLines, bbBands, onHoverIdx, chartW: propChartW }) {
       {hovered && (() => {
         const b = hovered.bar
         const closeColor = candleColor(b.open, b.close)
-        const vol = b.volume >= 1000000 ? `${(b.volume / 1000000).toFixed(1)}M` : `${(b.volume / 1000).toFixed(0)}K`
+        const slimOnly = b.open == null  // slim stock — only close is available
+        const fmtP = v => v != null ? v.toFixed(v >= 100 ? 1 : 2) : '—'
+        const vol = b.volume != null
+          ? (b.volume >= 1000000 ? `${(b.volume / 1000000).toFixed(1)}M` : `${(b.volume / 1000).toFixed(0)}K`)
+          : '—'
         return (
           <g>
             <line x1={hovered.x} y1={PT} x2={hovered.x} y2={H + PT} stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.7} />
             <line x1={PL} y1={toY(b.close)} x2={W - PR} y2={toY(b.close)} stroke="#0A84FF" strokeWidth={0.4} strokeDasharray="2,3" opacity={0.5} />
             <rect x={0} y={toY(b.close) - 7} width={PL - 2} height={13} fill="#1C1C1E" rx={2} />
             <text x={PL - 5} y={toY(b.close) + 4} fontSize={8} fill={closeColor} textAnchor="end" fontWeight="bold">
-              {b.close >= 100 ? b.close.toFixed(1) : b.close.toFixed(2)}
+              {fmtP(b.close)}
             </text>
-            <rect x={tipX} y={tipY} width={tipW} height={tipH} fill="#1C1C1E" rx={6} stroke="#3A3A3C" strokeWidth={0.8} />
-            <text x={tipX + 7} y={tipY + 13} fontSize={9} fill="#8E8E93" fontWeight="bold">{b.time}</text>
+            <rect x={tipX} y={tipY} width={tipW} height={slimOnly ? 42 : tipH} fill="#1C1C1E" rx={6} stroke="#3A3A3C" strokeWidth={0.8} />
+            <text x={tipX + 7} y={tipY + 13} fontSize={9} fill="#8E8E93" fontWeight="bold">{b.time || ''}</text>
             <line x1={tipX + 4} y1={tipY + 17} x2={tipX + tipW - 4} y2={tipY + 17} stroke="#2C2C2E" strokeWidth={0.5} />
-            <text x={tipX + 7} y={tipY + 30} fontSize={8.5} fill="#636366">開 <tspan fill="#EBEBF5">{b.open.toFixed(b.open >= 100 ? 1 : 2)}</tspan></text>
-            <text x={tipX + 7} y={tipY + 43} fontSize={8.5} fill="#636366">高 <tspan fill="#FF453A">{b.high.toFixed(b.high >= 100 ? 1 : 2)}</tspan></text>
-            <text x={tipX + 7} y={tipY + 56} fontSize={8.5} fill="#636366">低 <tspan fill="#30D158">{b.low.toFixed(b.low >= 100 ? 1 : 2)}</tspan></text>
-            <text x={tipX + 7} y={tipY + 69} fontSize={8.5} fill="#636366">收 <tspan fill={closeColor} fontWeight="bold">{b.close.toFixed(b.close >= 100 ? 1 : 2)}</tspan></text>
-            <text x={tipX + 7} y={tipY + 82} fontSize={8.5} fill="#636366">量 <tspan fill="#8E8E93">{vol}</tspan></text>
+            {slimOnly ? (
+              <text x={tipX + 7} y={tipY + 32} fontSize={8.5} fill="#636366">收 <tspan fill={closeColor} fontWeight="bold">{fmtP(b.close)}</tspan></text>
+            ) : <>
+              <text x={tipX + 7} y={tipY + 30} fontSize={8.5} fill="#636366">開 <tspan fill="#EBEBF5">{fmtP(b.open)}</tspan></text>
+              <text x={tipX + 7} y={tipY + 43} fontSize={8.5} fill="#636366">高 <tspan fill="#FF453A">{fmtP(b.high)}</tspan></text>
+              <text x={tipX + 7} y={tipY + 56} fontSize={8.5} fill="#636366">低 <tspan fill="#30D158">{fmtP(b.low)}</tspan></text>
+              <text x={tipX + 7} y={tipY + 69} fontSize={8.5} fill="#636366">收 <tspan fill={closeColor} fontWeight="bold">{fmtP(b.close)}</tspan></text>
+              <text x={tipX + 7} y={tipY + 82} fontSize={8.5} fill="#636366">量 <tspan fill="#8E8E93">{vol}</tspan></text>
+            </>}
           </g>
         )
       })()}

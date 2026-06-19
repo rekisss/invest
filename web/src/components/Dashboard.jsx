@@ -1974,7 +1974,7 @@ export default function Dashboard({ data, error }) {
             placeholder="🔍 搜尋股號/名稱…"
             style={{
               flex: 1, background: 'var(--ios-bg3)', border: 'none', color: 'var(--ios-label)',
-              borderRadius: 10, padding: '7px 12px', fontSize: 13, outline: 'none',
+              borderRadius: 10, padding: '7px 12px', fontSize: 16, outline: 'none',
               WebkitAppearance: 'none',
             }}
           />
