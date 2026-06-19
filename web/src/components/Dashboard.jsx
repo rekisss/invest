@@ -77,6 +77,29 @@ const BASE = import.meta.env.BASE_URL
 
 /* ── Utility micro-components ────────────────────────────────────── */
 
+function CopyListButton({ stocks }) {
+  const [copied, setCopied] = useState(false)
+  if (!stocks || stocks.length === 0) return null
+  const copy = () => {
+    const text = stocks.map(s => s.stock_id).join(',')
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  return (
+    <button onClick={copy} style={{
+      background: copied ? 'rgba(48,209,88,0.15)' : 'var(--ios-bg3)',
+      color: copied ? 'var(--ios-green)' : 'var(--ios-label3)',
+      border: 'none', borderRadius: 10, padding: '8px 10px',
+      fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+      transition: 'all 0.2s',
+    }} title="複製進場股號清單">
+      {copied ? '✓ 已複製' : '📋'}
+    </button>
+  )
+}
+
 function StatCard({ label, value, sub, color }) {
   const accents = {
     'var(--ios-green)':  { from: 'rgba(48,209,88,0.16)',  border: 'rgba(48,209,88,0.55)' },
@@ -646,6 +669,87 @@ function ConsecutiveDropSection({ stocks, onSelect }) {
   return <AlertTable title="📉 連跌警示" accentColor="var(--ios-orange)" stocks={droppers} columns={cols} onSelect={onSelect} />
 }
 
+function SignalChangeSection({ newEntry, dropped, onSelect }) {
+  if (!newEntry.length && !dropped.length) return null
+  return (
+    <div style={{ margin: '0 16px 16px' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.7, textTransform: 'uppercase', padding: '0 4px 8px' }}>
+        📡 今日訊號變化（vs 前一日）
+      </div>
+      <div className="glass-panel" style={{ overflow: 'hidden', padding: '10px 14px' }}>
+        {newEntry.length > 0 && (
+          <div style={{ marginBottom: dropped.length ? 10 : 0 }}>
+            <div style={{ fontSize: 10, color: 'var(--ios-green)', fontWeight: 700, marginBottom: 5 }}>
+              ↑ 新進場訊號 {newEntry.length} 支
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {newEntry.map(s => (
+                <button key={s.stock_id} onClick={() => onSelect && onSelect(s)} style={{
+                  background: 'rgba(48,209,88,0.12)', border: '0.5px solid rgba(48,209,88,0.35)',
+                  borderRadius: 8, padding: '3px 8px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#30D158', fontFamily: 'var(--font-mono)' }}>{s.stock_id}</span>
+                  <span style={{ fontSize: 11, color: 'var(--ios-label2)' }}>{s.name}</span>
+                  <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)' }}>{Math.round(s.entry_score)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {dropped.length > 0 && (
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, marginBottom: 5 }}>
+              ↓ 退出入場訊號 {dropped.length} 支
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {dropped.map(s => (
+                <span key={s.stock_id} style={{
+                  background: 'rgba(148,163,184,0.08)', border: '0.5px solid rgba(148,163,184,0.2)',
+                  borderRadius: 8, padding: '3px 8px', fontSize: 11, color: 'var(--ios-label3)',
+                }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{s.stock_id}</span> {s.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function NearBreakoutSection({ stocks, onSelect }) {
+  const candidates = useMemo(() => {
+    return (stocks || [])
+      .filter(s => {
+        const g = s.gap_to_20d_high_pct
+        // within 2% below 20-day high; exclude already broken out (negative gap) and already in entry
+        return g != null && g >= 0 && g <= 2 && !s.entry_signal
+      })
+      .sort((a, b) => a.gap_to_20d_high_pct - b.gap_to_20d_high_pct)
+      .slice(0, 10)
+  }, [stocks])
+
+  if (candidates.length === 0) return null
+
+  const cols = [
+    { key: 'stock_id', label: '股號', render: s => <span style={{ color: '#FF9F0A', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{s.stock_id}</span> },
+    { key: 'name',     label: '名稱', render: s => <span style={{ fontSize: 13 }}>{s.name}</span> },
+    { key: 'close',    label: '收盤', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{s.close?.toFixed(s.close >= 100 ? 0 : 1)}</span> },
+    { key: 'gap',      label: '距高點', render: s => (
+      <span style={{
+        background: s.gap_to_20d_high_pct < 0.5 ? 'rgba(255,214,10,0.2)' : 'rgba(255,159,10,0.14)',
+        color: s.gap_to_20d_high_pct < 0.5 ? '#FFD60A' : '#FF9F0A',
+        borderRadius: 6, padding: '2px 8px', fontWeight: 700, fontSize: 12,
+      }}>{s.gap_to_20d_high_pct.toFixed(1)}%</span>
+    )},
+    { key: 'score',    label: '分數', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ios-label2)' }}>{Math.round(s.entry_score)}</span> },
+    { key: 'rsi',      label: 'RSI', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: (s.rsi14 || 0) > 60 ? '#30D158' : 'var(--ios-label3)' }}>{s.rsi14?.toFixed(0)}</span> },
+  ]
+  return <AlertTable title="📐 近突破雷達（距20日高點 ≤2%，尚未入場）" accentColor="#FF9F0A" stocks={candidates} columns={cols} onSelect={onSelect} />
+}
+
 function LimitDownSection({ items, onSelect }) {
   const cols = [
     { key: 'stock_id', label: '股號', render: s => <span style={{ color: 'var(--ios-red)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{s.stock_id}</span> },
@@ -1156,7 +1260,7 @@ function BacktestSimulator({ accuracy }) {
 }
 
 /* ── Quick Stats Bar ─────────────────────────────────────────────── */
-function QuickStatsBar({ stocks, onActivateFilter }) {
+function QuickStatsBar({ stocks, onActivateFilter, onSort }) {
   const stats = useMemo(() => {
     let foreignBuy3 = 0, trustBuy2 = 0, fHigh = 0, exitSignals = 0, nearBreak = 0, volumeSurge = 0
     for (const s of stocks) {
@@ -1175,7 +1279,7 @@ function QuickStatsBar({ stocks, onActivateFilter }) {
     { label: '外買3天+', value: stats.foreignBuy3, filter: 'foreign_buy_3d', color: '#30D158' },
     { label: '投信2天+', value: stats.trustBuy2, filter: 'invest_trust_buy_2d', color: '#BF5AF2' },
     { label: 'F≥7', value: stats.fHigh, filter: 'f_score_high', color: '#5AC8FA' },
-    { label: '近突破', value: stats.nearBreak, filter: null, color: '#FF9F0A' },
+    { label: '近突破', value: stats.nearBreak, filter: null, sort: 'gap_to_20d_high_pct_asc', color: '#FF9F0A' },
     { label: '爆量3x+', value: stats.volumeSurge, filter: 'volume_surge_3x', color: '#FF6B35' },
     ...(stats.exitSignals > 0 ? [{ label: '出場警示', value: stats.exitSignals, filter: null, color: '#FF453A' }] : []),
   ].filter(item => item.value > 0)
@@ -1184,17 +1288,23 @@ function QuickStatsBar({ stocks, onActivateFilter }) {
   return (
     <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
       <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>今日</span>
-      {items.map(item => (
-        <button key={item.label} onClick={() => item.filter && onActivateFilter(item.filter)} style={{
-          fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 9999,
-          background: `${item.color}1A`, color: item.color,
-          border: `0.5px solid ${item.color}44`,
-          cursor: item.filter ? 'pointer' : 'default', flexShrink: 0,
-          transition: 'opacity 0.15s',
-        }} title={item.filter ? `篩選：${item.label}` : undefined}>
-          {item.label} {item.value}
-        </button>
-      ))}
+      {items.map(item => {
+        const isClickable = !!(item.filter || item.sort)
+        return (
+          <button key={item.label} onClick={() => {
+            if (item.filter) onActivateFilter(item.filter)
+            else if (item.sort && onSort) onSort(item.sort)
+          }} style={{
+            fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 9999,
+            background: `${item.color}1A`, color: item.color,
+            border: `0.5px solid ${item.color}44`,
+            cursor: isClickable ? 'pointer' : 'default', flexShrink: 0,
+            transition: 'opacity 0.15s',
+          }} title={item.filter ? `篩選：${item.label}` : item.sort ? `排序：${item.label}` : undefined}>
+            {item.label} {item.value}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -1328,6 +1438,17 @@ export default function Dashboard({ data, error }) {
     : null
 
   const watchlistStocks = useMemo(() => stocks.filter(s => watchlist.has(s.stock_id)), [stocks, watchlist])
+
+  // Signal change: stocks that newly entered or dropped out of entry_signal vs previous date
+  const signalChanges = useMemo(() => {
+    if (!prevScan?.top_stocks) return { newEntry: [], dropped: [] }
+    const prevEntryIds = new Set(prevScan.top_stocks.filter(s => s.entry_signal).map(s => String(s.stock_id)))
+    const todayEntryIds = new Set(entryStocks.map(s => String(s.stock_id)))
+    const newEntry = entryStocks.filter(s => !prevEntryIds.has(String(s.stock_id)))
+    const dropped = (prevScan.top_stocks || []).filter(s => s.entry_signal && !todayEntryIds.has(String(s.stock_id)))
+    return { newEntry, dropped }
+  }, [entryStocks, prevScan])
+
   const persistentMap = useMemo(() => {
     const m = {}
     ;(persistent || []).forEach(p => { m[p.stock_id] = { days: p.days_in_top, trend: p.score_trend ?? 0 } })
@@ -1447,6 +1568,7 @@ export default function Dashboard({ data, error }) {
               padding: '8px 12px', fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap', fontWeight: 600,
             }}
           >↓ 全部</a>
+          <CopyListButton stocks={entryStocks} />
         </div>
 
         {/* Collapsible secondary controls — height tied directly to scroll progress via JS */}
@@ -1565,7 +1687,7 @@ export default function Dashboard({ data, error }) {
               else next.add(key)
               return next
             })
-          }} />
+          }} onSort={field => { setSortField(field); setSortDir('asc'); setPage(0) }} />
         )}
 
         {/* Search + Sort row */}
@@ -1921,6 +2043,12 @@ export default function Dashboard({ data, error }) {
         </div>
 
         {/* Secondary sections */}
+        <SignalChangeSection
+          newEntry={signalChanges.newEntry}
+          dropped={signalChanges.dropped}
+          onSelect={setSelectedStock}
+        />
+
         {persistent.length > 0 && (
           <PersistentSection
             items={persistent}
@@ -1930,6 +2058,8 @@ export default function Dashboard({ data, error }) {
             }}
           />
         )}
+
+        <NearBreakoutSection stocks={stocks} onSelect={setSelectedStock} />
 
         {limitDownAlerts.length > 0 && (
           <LimitDownSection items={limitDownAlerts} onSelect={setSelectedStock} />
