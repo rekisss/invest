@@ -142,6 +142,8 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const fScore = s.f_score || 0
           const dealerStreak = s.dealer_buy_streak || 0
           const revenueYoy = s.revenue_yoy || 0
+          const skipReason = s.skip_reason || ''
+          const expectedHoldDays = s.expected_hold_days || 0
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -288,11 +290,25 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     營收{(revenueYoy * 100).toFixed(0)}%
                   </span>
                 )}
+                {isEntry && expectedHoldDays > 0 && (
+                  <span style={{ fontSize: 11, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="預期持股天數">
+                    持{expectedHoldDays}天
+                  </span>
+                )}
               </div>
-              {/* Entry reason (4th row — only when non-empty) */}
-              {entryReason && (
-                <div style={{ marginTop: 4, fontSize: 10, color: 'var(--ios-label3)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  💡 {entryReason.split(';').slice(0, 2).join(' · ')}
+              {/* Row 4: entry reason + skip warnings */}
+              {(entryReason || skipReason) && (
+                <div style={{ marginTop: 4, lineHeight: 1.5 }}>
+                  {entryReason && (
+                    <div style={{ fontSize: 10, color: 'var(--ios-label3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      💡 {entryReason.split(';').slice(0, 2).join(' · ')}
+                    </div>
+                  )}
+                  {skipReason && (
+                    <div style={{ fontSize: 10, color: 'var(--ios-red)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      ⚠ {skipReason}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
