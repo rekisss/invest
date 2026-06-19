@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useMemo } from 'react'
 
 const STORAGE_KEY = 'tw_portfolio_positions'
 
@@ -15,89 +15,105 @@ function getCurrentPrice(stockId, data) {
   const m = all.find(s => String(s.stock_id) === String(stockId))
   return m?.close ?? null
 }
+function getScanInfo(stockId, data) {
+  if (!data) return null
+  const all = [...(data.top_stocks || []), ...(data.scan_results || [])]
+  return all.find(s => String(s.stock_id) === String(stockId)) ?? null
+}
 
 function fmt(v, d = 2) { return v == null || isNaN(v) ? '—' : Number(v).toFixed(d) }
 function fmtNum(v) { return v == null ? '—' : Number(v).toLocaleString('zh-TW', { maximumFractionDigits: 0 }) }
-function getApiKey() { return sessionStorage.getItem('anthropic_key') || '' }
 
 const EMPTY_FORM = { stock_id: '', name: '', buyPrice: '', qty: '', buyDate: '', note: '' }
+const PALETTE = ['#0a84ff','#30d158','#ff9f0a','#ff453a','#bf5af2','#64d2ff','#ffd60a','#ff6961','#34c759','#5e5ce6']
 const inputStyle = {
   width: '100%', background: 'var(--ios-fill3)', border: '0.5px solid var(--ios-sep)',
   borderRadius: 8, padding: '8px 10px', color: 'var(--ios-label)', fontSize: 13,
   boxSizing: 'border-box', outline: 'none', WebkitAppearance: 'none',
 }
 
-async function fileToBase64(file) {
-  return new Promise(resolve => {
-    const r = new FileReader()
-    r.onload = e => resolve(e.target.result.split(',')[1])
-    r.readAsDataURL(file)
-  })
-}
-
-async function callClaude(key, body) {
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify(body),
-  })
-  if (!resp.ok) throw new Error(`API ${resp.status}`)
-  return resp.json()
-}
-
-// ── Import confirmation modal ─────────────────────────────────────────────────
-function ImportConfirm({ positions, onConfirm, onCancel }) {
-  const [selected, setSelected] = useState(() => new Set(positions.map((_, i) => i)))
-  const toggle = i => setSelected(prev => {
-    const next = new Set(prev)
-    next.has(i) ? next.delete(i) : next.add(i)
-    return next
+// ── Donut chart ───────────────────────────────────────────────────────────────
+function DonutChart({ slices }) {
+  const total = slices.reduce((s, x) => s + x.value, 0)
+  if (total === 0 || slices.length < 2) return null
+  const R = 52, cx = 64, cy = 64, stroke = 22
+  let angle = -Math.PI / 2
+  const paths = slices.map((s, i) => {
+    const pct = s.value / total
+    const span = pct * 2 * Math.PI
+    const x1 = cx + R * Math.cos(angle)
+    const y1 = cy + R * Math.sin(angle)
+    angle += span
+    const x2 = cx + R * Math.cos(angle)
+    const y2 = cy + R * Math.sin(angle)
+    const large = span > Math.PI ? 1 : 0
+    return { d: `M ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2}`, color: s.color, pct, label: s.label }
   })
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 999,
-      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-    }} onClick={onCancel}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background: 'var(--ios-bg)', borderRadius: '18px 18px 0 0', padding: '20px 18px 40px',
-        width: '100%', maxHeight: '75vh', overflowY: 'auto',
-        animation: 'sheetIn 0.28s cubic-bezier(0.22,1,0.36,1) both',
-      }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)', marginBottom: 4, letterSpacing: 0.5, textTransform: 'uppercase' }}>📸 偵測到持倉</div>
-        <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginBottom: 14 }}>勾選要匯入的持倉，可手動修改後再確認</div>
-        {positions.map((pos, i) => (
-          <label key={i} style={{
-            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-            background: selected.has(i) ? 'rgba(10,132,255,0.08)' : 'var(--ios-fill4)',
-            borderRadius: 10, marginBottom: 6, cursor: 'pointer',
-            border: `1px solid ${selected.has(i) ? 'rgba(10,132,255,0.3)' : 'transparent'}`,
-            transition: 'all 0.15s',
-          }}>
-            <input type="checkbox" checked={selected.has(i)} onChange={() => toggle(i)} style={{ width: 16, height: 16, accentColor: 'var(--ios-blue)', flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ios-label)' }}>
-                {pos.stock_id} <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--ios-label2)' }}>{pos.name}</span>
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <span>成本 <b style={{ color: 'var(--ios-label)' }}>{pos.buyPrice ?? '—'}</b></span>
-                <span>股數 <b style={{ color: 'var(--ios-label)' }}>{fmtNum(pos.qty)}</b></span>
-                {pos.currentPrice && <span>現價 <b style={{ color: 'var(--ios-blue)' }}>{pos.currentPrice}</b></span>}
-              </div>
-            </div>
-          </label>
-        ))}
-        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-          <button onClick={onCancel} style={{ flex: 1, background: 'var(--ios-fill4)', border: 'none', borderRadius: 10, padding: 12, color: 'var(--ios-label2)', fontSize: 13, cursor: 'pointer' }}>取消</button>
-          <button onClick={() => onConfirm(positions.filter((_, i) => selected.has(i)))} style={{ flex: 2, background: 'var(--ios-blue)', border: 'none', borderRadius: 10, padding: 12, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-            匯入 {selected.size} 筆
-          </button>
+    <svg width={128} height={128} viewBox="0 0 128 128" style={{ flexShrink: 0 }}>
+      {paths.map((p, i) => (
+        <path key={i} d={p.d} fill="none" stroke={p.color} strokeWidth={stroke}
+          strokeLinecap="butt" style={{ opacity: 0.9 }} />
+      ))}
+      <circle cx={cx} cy={cy} r={R - stroke / 2 - 1} fill="var(--ios-bg2)" />
+    </svg>
+  )
+}
+
+// ── Scan signal badge ─────────────────────────────────────────────────────────
+function ScanBadge({ scan }) {
+  if (!scan) return null
+  const score = scan.entry_score != null ? Math.round(scan.entry_score) : null
+  const signal = scan.entry_signal
+  const grade = scan.grade
+  if (signal) {
+    return (
+      <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(48,209,88,0.15)', color: '#30d158', padding: '2px 7px', borderRadius: 5 }}>
+        ✅ 掃描入榜{score ? ` ${score}分` : ''}{grade ? ` [${grade}]` : ''}
+      </span>
+    )
+  }
+  if (score != null) {
+    const weak = score < 500
+    return (
+      <span style={{ fontSize: 10, fontWeight: 700, background: weak ? 'rgba(255,69,58,0.12)' : 'rgba(255,159,10,0.12)', color: weak ? 'var(--ios-red)' : 'var(--ios-yellow)', padding: '2px 7px', borderRadius: 5 }}>
+        {weak ? '⚠️ 訊號轉弱' : '📊 觀察中'}{score ? ` ${score}分` : ''}
+      </span>
+    )
+  }
+  return null
+}
+
+// ── Cost averaging calculator ─────────────────────────────────────────────────
+function CostAvgCalc({ buyPrice, qty }) {
+  const [avgQty, setAvgQty] = useState('')
+  const [avgPrice, setAvgPrice] = useState('')
+  const bp = Number(buyPrice), q = Number(qty), aq = Number(avgQty), ap = Number(avgPrice)
+  const newAvg = (bp > 0 && q > 0 && aq > 0 && ap > 0)
+    ? (bp * q + ap * aq) / (q + aq) : null
+  return (
+    <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--ios-fill4)', borderRadius: 10 }}>
+      <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, marginBottom: 8, letterSpacing: 0.5 }}>成本攤平試算</div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 3 }}>再買股數</div>
+          <input type="number" value={avgQty} placeholder="1000" inputMode="decimal"
+            onChange={e => setAvgQty(e.target.value)}
+            style={{ ...inputStyle, fontSize: 12, padding: '6px 8px' }} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 3 }}>攤平價格</div>
+          <input type="number" value={avgPrice} placeholder="價格" inputMode="decimal"
+            onChange={e => setAvgPrice(e.target.value)}
+            style={{ ...inputStyle, fontSize: 12, padding: '6px 8px' }} />
         </div>
       </div>
+      {newAvg != null && (
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--ios-label2)', display: 'flex', gap: 12 }}>
+          <span>攤平後成本 <b style={{ color: 'var(--ios-blue)', fontSize: 14 }}>{fmt(newAvg)} 元</b></span>
+          <span style={{ color: 'var(--ios-label3)' }}>{fmtNum(q + aq)} 股</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -109,10 +125,7 @@ export default function Portfolio({ data }) {
   const [editId, setEditId]       = useState(null)
   const [form, setForm]           = useState(EMPTY_FORM)
   const [sortBy, setSortBy]       = useState('pnlPct')
-  const [aiStatus, setAiStatus]   = useState(null) // null | 'photo' | 'ai' | 'error' | 'nokey' | 'none'
-  const [aiText, setAiText]       = useState('')
-  const [importPreview, setImportPreview] = useState(null)
-  const fileRef = useRef(null)
+  const [showChart, setShowChart] = useState(true)
 
   const update = p => { setPositions(p); savePositions(p) }
   const openAdd = () => { setForm(EMPTY_FORM); setEditId(null); setShowForm(true) }
@@ -132,157 +145,72 @@ export default function Portfolio({ data }) {
     const next = { ...positions }; delete next[id]; update(next)
   }
 
-  // ── Entries with computed metrics ──────────────────────────────────────────
-  const entries = Object.entries(positions).map(([id, p]) => {
+  // ── Computed entries ──────────────────────────────────────────────────────
+  const entries = useMemo(() => Object.entries(positions).map(([id, p], i) => {
     const curPrice  = getCurrentPrice(id, data)
+    const scan      = getScanInfo(id, data)
     const pnlPct    = curPrice ? (curPrice - p.buyPrice) / p.buyPrice * 100 : null
     const pnlAmt    = curPrice ? (curPrice - p.buyPrice) * p.qty : null
     const cost      = p.buyPrice * p.qty
     const curVal    = (curPrice ?? p.buyPrice) * p.qty
     const buyDate   = p.buyDate ? new Date(p.buyDate) : null
     const daysHeld  = buyDate ? Math.max(0, Math.floor((Date.now() - buyDate) / 86400000)) : null
-    const annReturn = (pnlPct != null && daysHeld != null && daysHeld >= 7)
-      ? pnlPct / daysHeld * 365 : null
-    const stopLoss  = p.buyPrice * 0.92  // –8% stop
-    const takePrft  = p.buyPrice * 1.15  // +15% target
-    return { id, p, curPrice, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft }
-  })
+    const annReturn = (pnlPct != null && daysHeld != null && daysHeld >= 7) ? pnlPct / daysHeld * 365 : null
+    const stopLoss  = p.buyPrice * 0.92
+    const takePrft  = p.buyPrice * 1.15
+    return { id, p, curPrice, scan, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft, color: PALETTE[i % PALETTE.length] }
+  }), [positions, data])
 
-  const sorted = [...entries].sort((a, b) => {
+  const sorted = useMemo(() => [...entries].sort((a, b) => {
     if (sortBy === 'pnlPct') return (b.pnlPct ?? -Infinity) - (a.pnlPct ?? -Infinity)
     if (sortBy === 'daysHeld') return (b.daysHeld ?? -1) - (a.daysHeld ?? -1)
     return b.cost - a.cost
-  })
+  }), [entries, sortBy])
 
   const totalCost  = entries.reduce((s, e) => s + e.cost, 0)
   const totalValue = entries.reduce((s, e) => s + e.curVal, 0)
   const totalPnL   = totalValue - totalCost
   const totalPct   = totalCost > 0 ? totalPnL / totalCost * 100 : 0
   const priceCount = entries.filter(e => e.curPrice != null).length
+  const alertCount = entries.filter(e => e.scan && !e.scan.entry_signal && e.scan.entry_score != null && e.scan.entry_score < 500).length
 
-  // ── Photo import ───────────────────────────────────────────────────────────
-  const handlePhoto = async e => {
-    const file = e.target.files[0]; e.target.value = ''
-    if (!file) return
-    const key = getApiKey()
-    if (!key) { setAiStatus('nokey'); return }
-    setAiStatus('photo'); setAiText('')
-    try {
-      const base64 = await fileToBase64(file)
-      const result = await callClaude(key, {
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 } },
-            { type: 'text', text: `請分析這張台股持倉截圖，提取所有持倉。
-以JSON陣列回傳，格式：[{"stock_id":"4位代號","name":"名稱","qty":股數整數,"buyPrice":買入均價,"currentPrice":現價或null}]
-只回傳JSON陣列，不要任何說明文字或markdown。看不到持倉則回傳[]。` }
-          ]
-        }]
-      })
-      const text = result.content?.[0]?.text?.trim() || '[]'
-      let parsed = []
-      try { parsed = JSON.parse(text) } catch {
-        const m = text.match(/\[[\s\S]*\]/)
-        if (m) parsed = JSON.parse(m[0])
-      }
-      if (parsed.length > 0) { setImportPreview(parsed); setAiStatus(null) }
-      else { setAiStatus('none'); setTimeout(() => setAiStatus(null), 3000) }
-    } catch (err) {
-      setAiStatus('error'); setAiText(err.message)
-      setTimeout(() => { setAiStatus(null); setAiText('') }, 4000)
-    }
-  }
+  const donutSlices = entries.map(e => ({ label: e.id, value: e.curVal, color: e.color }))
 
-  const confirmImport = selected => {
-    const next = { ...positions }
-    for (const pos of selected) {
-      if (!pos.stock_id) continue
-      next[String(pos.stock_id)] = {
-        name: pos.name || '', buyPrice: Number(pos.buyPrice) || 0,
-        qty: Number(pos.qty) || 0,
-        buyDate: new Date().toISOString().slice(0, 10),
-        note: '📸 照片匯入',
-      }
-    }
-    update(next); setImportPreview(null)
-  }
-
-  // ── AI analysis of existing portfolio ─────────────────────────────────────
-  const analyzePortfolio = async () => {
-    const key = getApiKey()
-    if (!key) { setAiStatus('nokey'); return }
-    if (entries.length === 0) return
-    setAiStatus('ai'); setAiText('')
-    const txt = entries.map(({ id, p, curPrice, pnlPct, daysHeld }) =>
-      `${id} ${p.name}：持 ${(p.qty / 1000).toFixed(p.qty % 1000 === 0 ? 0 : 2)} 張，成本 ${p.buyPrice}，` +
-      `現價 ${curPrice ?? '未知'}，損益 ${pnlPct != null ? (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(1) + '%' : '未知'}，` +
-      `持 ${daysHeld ?? '?'} 天`
-    ).join('\n')
-    try {
-      const result = await callClaude(key, {
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 600,
-        system: '你是台股投資顧問，用繁體中文給出簡潔有用的建議，條列式，每條不超過30字。',
-        messages: [{ role: 'user', content: `請分析持倉並給出：①整體風險等級 ②各股持有/減碼/停損建議 ③最重要的一個注意事項\n\n${txt}` }]
-      })
-      setAiText(result.content?.[0]?.text?.trim() || '分析失敗')
-      setAiStatus('ai_done')
-    } catch (err) {
-      setAiStatus('error'); setAiText(err.message)
-    }
-  }
-
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: '0 14px 80px', overflowY: 'auto', height: '100%', WebkitOverflowScrolling: 'touch' }}>
       <style>{`
         @keyframes rowIn   { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
         @keyframes sheetIn { from { opacity:0; transform:translateY(16px) } to { opacity:1; transform:translateY(0) } }
-        @keyframes fadeIn  { from { opacity:0 } to { opacity:1 } }
       `}</style>
 
-      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhoto} />
-      {importPreview && <ImportConfirm positions={importPreview} onConfirm={confirmImport} onCancel={() => setImportPreview(null)} />}
-
-      {/* ── Status banner ──────────────────────────────── */}
-      {aiStatus && (
-        <div style={{
-          background: aiStatus === 'error' ? 'rgba(255,59,48,0.12)' : aiStatus === 'nokey' ? 'rgba(255,159,10,0.12)' : 'rgba(10,132,255,0.10)',
-          border: `0.5px solid ${aiStatus === 'error' ? 'rgba(255,59,48,0.3)' : aiStatus === 'nokey' ? 'rgba(255,159,10,0.3)' : 'rgba(10,132,255,0.25)'}`,
-          borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 12,
-          color: aiStatus === 'error' ? 'var(--ios-red)' : aiStatus === 'nokey' ? 'var(--ios-yellow)' : 'var(--ios-blue)',
-          animation: 'fadeIn 0.2s both',
-        }}>
-          {aiStatus === 'photo'    && '🔍 正在分析截圖中⋯'}
-          {aiStatus === 'ai'       && '🤖 AI 分析持倉中⋯'}
-          {aiStatus === 'none'     && '📭 截圖中未偵測到持倉'}
-          {aiStatus === 'nokey'    && '⚠️ 請先前往「AI」頁面輸入 Anthropic API Key'}
-          {aiStatus === 'error'    && `❌ 錯誤：${aiText}`}
-        </div>
-      )}
-
-      {/* ── AI analysis result ─────────────────────────── */}
-      {aiStatus === 'ai_done' && aiText && (
-        <div style={{
-          background: 'rgba(10,132,255,0.07)', border: '0.5px solid rgba(10,132,255,0.2)',
-          borderRadius: 12, padding: '12px 14px', marginBottom: 10,
-          animation: 'sheetIn 0.3s cubic-bezier(0.22,1,0.36,1) both',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-blue)', letterSpacing: 0.5 }}>🤖 AI 持倉分析</div>
-            <button onClick={() => { setAiStatus(null); setAiText('') }} style={{ background: 'none', border: 'none', color: 'var(--ios-label3)', fontSize: 14, cursor: 'pointer', padding: '0 4px' }}>✕</button>
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--ios-label)', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{aiText}</div>
-        </div>
-      )}
-
-      {/* ── Summary card ───────────────────────────────── */}
+      {/* ── Summary card ─────────────────────────────── */}
       {entries.length > 0 && (
         <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '14px 16px', marginBottom: 12, boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, letterSpacing: 0.8, marginBottom: 8, textTransform: 'uppercase' }}>持倉總覽</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase' }}>持倉總覽</div>
+            <button onClick={() => setShowChart(c => !c)} style={{ fontSize: 10, color: 'var(--ios-blue)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>
+              {showChart ? '隱藏圖表' : '顯示圖表'}
+            </button>
+          </div>
+
+          {showChart && entries.length >= 2 && (
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+              <DonutChart slices={donutSlices} />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {entries.map(e => (
+                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: e.color, flexShrink: 0 }} />
+                    <span style={{ color: 'var(--ios-label2)', flex: 1 }}>{e.id} {e.p.name}</span>
+                    <span style={{ color: 'var(--ios-label3)', fontWeight: 600 }}>
+                      {totalValue > 0 ? (e.curVal / totalValue * 100).toFixed(1) : '—'}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8 }}>
             <div>
               <div style={{ fontSize: 28, fontWeight: 700, color: totalPnL >= 0 ? 'var(--ios-red)' : 'var(--ios-green)', letterSpacing: '-0.5px', lineHeight: 1.1 }}>
@@ -297,9 +225,10 @@ export default function Portfolio({ data }) {
               <div style={{ fontSize: 22, fontWeight: 700, color: totalPct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)' }}>
                 {totalPct >= 0 ? '+' : ''}{fmt(totalPct)}%
               </div>
-              <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginTop: 2 }}>{entries.length} 檔 · {priceCount} 有報價</div>
+              <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginTop: 2 }}>{entries.length} 檔</div>
             </div>
           </div>
+
           <div style={{ height: 4, background: 'var(--ios-fill4)', borderRadius: 2, overflow: 'hidden' }}>
             <div style={{
               height: '100%', borderRadius: 2,
@@ -308,18 +237,16 @@ export default function Portfolio({ data }) {
               transition: 'width 0.5s cubic-bezier(0.34,1.56,0.64,1)',
             }} />
           </div>
-          {/* AI analysis button */}
-          <button onClick={analyzePortfolio} disabled={aiStatus === 'ai'} style={{
-            marginTop: 10, width: '100%', background: 'rgba(10,132,255,0.1)', border: '0.5px solid rgba(10,132,255,0.25)',
-            borderRadius: 8, padding: '8px', color: 'var(--ios-blue)', fontSize: 12, fontWeight: 600,
-            cursor: aiStatus === 'ai' ? 'default' : 'pointer', opacity: aiStatus === 'ai' ? 0.6 : 1,
-          }}>
-            {aiStatus === 'ai' ? '🤖 分析中⋯' : '🤖 AI 分析整體持倉'}
-          </button>
+
+          {alertCount > 0 && (
+            <div style={{ marginTop: 10, fontSize: 11, color: 'var(--ios-red)', background: 'rgba(255,69,58,0.1)', borderRadius: 7, padding: '6px 10px', fontWeight: 600 }}>
+              ⚠️ {alertCount} 檔持股訊號轉弱，請向下查看
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── Sort bar ───────────────────────────────────── */}
+      {/* ── Sort bar ─────────────────────────────────── */}
       {entries.length > 1 && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
           {[['pnlPct', '報酬率'], ['daysHeld', '持有天數'], ['cost', '成本']].map(([key, label]) => (
@@ -333,36 +260,32 @@ export default function Portfolio({ data }) {
         </div>
       )}
 
-      {/* ── Empty state ────────────────────────────────── */}
+      {/* ── Empty state ──────────────────────────────── */}
       {entries.length === 0 && !showForm && (
-        <div style={{ textAlign: 'center', padding: '50px 20px 20px', color: 'var(--ios-label3)' }}>
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ios-label3)' }}>
           <div style={{ fontSize: 48, marginBottom: 14 }}>📋</div>
           <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--ios-label2)', marginBottom: 6 }}>尚無持倉紀錄</div>
-          <div style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}>手動輸入或上傳券商截圖自動匯入</div>
-          <button onClick={() => fileRef.current?.click()} style={{
-            background: 'rgba(10,132,255,0.1)', border: '0.5px solid rgba(10,132,255,0.3)',
-            borderRadius: 12, padding: '12px 28px', color: 'var(--ios-blue)', fontSize: 14, fontWeight: 600,
-            cursor: 'pointer', display: 'inline-block',
-          }}>📸 上傳持倉截圖</button>
+          <div style={{ fontSize: 13, lineHeight: 1.6 }}>點「＋ 新增持倉」開始追蹤損益</div>
         </div>
       )}
 
-      {/* ── Position cards ─────────────────────────────── */}
-      {sorted.map(({ id, p, curPrice, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft }, idx) => {
-        const color = pnlPct == null ? 'var(--ios-label)' : pnlPct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)'
-        const nearStop   = curPrice != null && curPrice <= stopLoss * 1.02  // within 2% of stop
-        const nearTarget = curPrice != null && curPrice >= takePrft * 0.98  // within 2% of target
+      {/* ── Position cards ───────────────────────────── */}
+      {sorted.map(({ id, p, curPrice, scan, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft, color }, idx) => {
+        const pnlColor   = pnlPct == null ? 'var(--ios-label)' : pnlPct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)'
+        const nearStop   = curPrice != null && curPrice <= stopLoss * 1.02
+        const nearTarget = curPrice != null && curPrice >= takePrft * 0.98
+        const scanWeak   = scan && !scan.entry_signal && scan.entry_score != null && scan.entry_score < 500
+        const borderColor = nearStop ? 'rgba(255,69,58,0.55)' : scanWeak ? 'rgba(255,69,58,0.3)' : nearTarget ? 'rgba(255,149,0,0.5)' : 'transparent'
         return (
           <div key={id} style={{
             background: 'var(--ios-bg2)', borderRadius: 14, padding: '12px 14px', marginBottom: 8,
-            boxShadow: nearStop ? '0 0 0 1.5px rgba(255,59,48,0.5)' : nearTarget ? '0 0 0 1.5px rgba(255,149,0,0.5)' : 'var(--shadow-card)',
+            boxShadow: (nearStop || nearTarget || scanWeak) ? `0 0 0 1.5px ${borderColor}` : 'var(--shadow-card)',
             animation: `rowIn 0.3s ${idx * 40}ms cubic-bezier(0.22,1,0.36,1) both`,
           }}>
             {/* Alert banner */}
             {(nearStop || nearTarget) && (
-              <div style={{
-                fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 6, marginBottom: 8,
-                background: nearStop ? 'rgba(255,59,48,0.12)' : 'rgba(255,149,0,0.12)',
+              <div style={{ fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 6, marginBottom: 8,
+                background: nearStop ? 'rgba(255,69,58,0.12)' : 'rgba(255,149,0,0.12)',
                 color: nearStop ? 'var(--ios-red)' : 'var(--ios-yellow)',
               }}>
                 {nearStop ? `⚠️ 接近停損線 ${fmt(stopLoss)} 元` : `🎯 接近止盈目標 ${fmt(takePrft)} 元`}
@@ -371,15 +294,16 @@ export default function Portfolio({ data }) {
 
             {/* Title row */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-              <div style={{ flex: 1 }}>
-                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--ios-label)', marginRight: 8 }}>{id}</span>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }} />
+                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--ios-label)' }}>{id}</span>
                 <span style={{ fontSize: 13, color: 'var(--ios-label2)' }}>{p.name}</span>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 {pnlPct != null ? (
                   <>
-                    <div style={{ fontSize: 17, fontWeight: 700, color }}>{pnlPct >= 0 ? '+' : ''}{fmt(pnlPct)}%</div>
-                    <div style={{ fontSize: 11, color }}>{pnlAmt >= 0 ? '+' : ''}{fmtNum(Math.round(pnlAmt))} 元</div>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: pnlColor }}>{pnlPct >= 0 ? '+' : ''}{fmt(pnlPct)}%</div>
+                    <div style={{ fontSize: 11, color: pnlColor }}>{pnlAmt >= 0 ? '+' : ''}{fmtNum(Math.round(pnlAmt))} 元</div>
                   </>
                 ) : (
                   <div style={{ fontSize: 11, color: 'var(--ios-label4)' }}>無即時報價</div>
@@ -387,36 +311,46 @@ export default function Portfolio({ data }) {
               </div>
             </div>
 
+            {/* Scan badge */}
+            <div style={{ marginBottom: 6 }}>
+              <ScanBadge scan={scan} />
+            </div>
+
             {/* Stats grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px 8px', fontSize: 11, color: 'var(--ios-label3)', marginBottom: 6 }}>
               <div>買入 <b style={{ color: 'var(--ios-label)' }}>{p.buyPrice}</b></div>
-              <div>現價 <b style={{ color: curPrice ? color : 'var(--ios-label3)' }}>{curPrice ?? '—'}</b></div>
+              <div>現價 <b style={{ color: curPrice ? pnlColor : 'var(--ios-label3)' }}>{curPrice ?? '—'}</b></div>
               <div>持有 <b style={{ color: 'var(--ios-label)' }}>{daysHeld ?? '—'}</b> 天</div>
               <div>張數 <b style={{ color: 'var(--ios-label)' }}>{(p.qty / 1000).toFixed(p.qty % 1000 === 0 ? 0 : 2)}</b></div>
               <div>成本 <b style={{ color: 'var(--ios-label)' }}>{fmtNum(Math.round(cost))}</b></div>
               <div>市值 <b style={{ color: 'var(--ios-label)' }}>{fmtNum(Math.round(curVal))}</b></div>
             </div>
 
-            {/* Annualized return + stop/target hints */}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 10, marginBottom: 6 }}>
+            {/* Tags */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', fontSize: 10, marginBottom: 6 }}>
               {annReturn != null && (
                 <span style={{ background: annReturn >= 0 ? 'rgba(255,59,48,0.1)' : 'rgba(48,209,88,0.1)', color: annReturn >= 0 ? 'var(--ios-red)' : 'var(--ios-green)', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
                   年化 {annReturn >= 0 ? '+' : ''}{fmt(annReturn, 1)}%
                 </span>
               )}
-              <span style={{ background: 'rgba(255,59,48,0.08)', color: 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5 }}>
+              <span style={{ background: 'rgba(255,59,48,0.07)', color: 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5 }}>
                 停損 {fmt(stopLoss)}
               </span>
-              <span style={{ background: 'rgba(255,149,0,0.08)', color: 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5 }}>
+              <span style={{ background: 'rgba(255,149,0,0.07)', color: 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5 }}>
                 目標 {fmt(takePrft)}
               </span>
+              {totalValue > 0 && (
+                <span style={{ background: `${color}18`, color, padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
+                  占比 {(curVal / totalValue * 100).toFixed(1)}%
+                </span>
+              )}
             </div>
 
             {/* P&L bar */}
             {pnlPct != null && (
               <div style={{ height: 3, background: 'var(--ios-fill4)', borderRadius: 2, marginBottom: 8, overflow: 'hidden' }}>
                 <div style={{
-                  height: '100%', borderRadius: 2, background: color,
+                  height: '100%', borderRadius: 2, background: pnlColor,
                   width: `${Math.min(100, Math.abs(pnlPct) * 4)}%`,
                   transition: 'width 0.5s cubic-bezier(0.34,1.56,0.64,1)',
                 }} />
@@ -435,7 +369,7 @@ export default function Portfolio({ data }) {
         )
       })}
 
-      {/* ── Add/Edit form ──────────────────────────────── */}
+      {/* ── Add/Edit form ────────────────────────────── */}
       {showForm && (
         <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '14px 16px', marginBottom: 12, boxShadow: 'var(--shadow-card)', animation: 'sheetIn 0.25s cubic-bezier(0.22,1,0.36,1) both' }}>
           <div style={{ fontSize: 11, color: 'var(--ios-blue)', fontWeight: 700, marginBottom: 12, letterSpacing: 0.8, textTransform: 'uppercase' }}>
@@ -459,29 +393,26 @@ export default function Portfolio({ data }) {
               />
             </div>
           ))}
-          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+
+          {/* Cost averaging calculator — shown when editing or when buyPrice+qty are filled */}
+          {(form.buyPrice && form.qty) && (
+            <CostAvgCalc buyPrice={form.buyPrice} qty={form.qty} />
+          )}
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button onClick={() => { setShowForm(false); setEditId(null) }} style={{ flex: 1, background: 'var(--ios-fill4)', border: 'none', borderRadius: 10, padding: '11px', color: 'var(--ios-label2)', fontSize: 13, cursor: 'pointer' }}>取消</button>
             <button onClick={handleSave} style={{ flex: 2, background: 'var(--ios-blue)', border: 'none', borderRadius: 10, padding: '11px', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>儲存</button>
           </div>
         </div>
       )}
 
-      {/* ── Bottom action bar ──────────────────────────── */}
+      {/* ── Add button ───────────────────────────────── */}
       {!showForm && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-          <button onClick={openAdd} style={{
-            flex: 3, background: 'var(--ios-fill4)', border: '0.5px solid var(--ios-sep)',
-            borderRadius: 12, padding: '13px', color: 'var(--ios-blue)', fontSize: 14, fontWeight: 600,
-            cursor: 'pointer', letterSpacing: 0.2,
-          }}>＋ 新增持倉</button>
-          <button onClick={() => fileRef.current?.click()} disabled={aiStatus === 'photo'} style={{
-            flex: 2, background: 'var(--ios-fill4)', border: '0.5px solid var(--ios-sep)',
-            borderRadius: 12, padding: '13px', color: aiStatus === 'photo' ? 'var(--ios-label3)' : 'var(--ios-label)',
-            fontSize: 13, fontWeight: 600, cursor: aiStatus === 'photo' ? 'default' : 'pointer',
-          }}>
-            {aiStatus === 'photo' ? '分析中⋯' : '📸 截圖匯入'}
-          </button>
-        </div>
+        <button onClick={openAdd} style={{
+          width: '100%', background: 'var(--ios-fill4)', border: '0.5px solid var(--ios-sep)',
+          borderRadius: 12, padding: '13px', color: 'var(--ios-blue)', fontSize: 15, fontWeight: 600,
+          cursor: 'pointer', marginTop: 6, letterSpacing: 0.2,
+        }}>＋ 新增持倉</button>
       )}
     </div>
   )
