@@ -40,6 +40,16 @@ const SIGNAL_FILTERS = [
   { key: 'volume_surge_3x',      label: '爆量3x+' },
 ]
 
+const REASON_LABEL = {
+  macd_golden_cross: 'MACD金叉', kd_golden_cross: 'KD金叉', hist_turn_positive: 'MACD翻正',
+  above_ema60: 'EMA60上', ema60_gt_ema120: '均線多頭', volume_break: '放量突破',
+  rsi_strong: 'RSI強', adx_trending: 'ADX趨勢', breakout_20d: '突破20高',
+  foreign_buy_3d: '外資連買', invest_trust_buy_2d: '投信買', dealer_buy_3d: '自營買',
+  obv_uptrend: 'OBV↑', bb_squeeze_breakout: 'BB突破', above_ichimoku_cloud: '雲上',
+  cci_momentum: 'CCI強', mfi_strong: 'MFI強', williams_r_recovery: 'W%R回升',
+  stronger_than_market: 'RS強', market_above_ma60: '大盤MA60上',
+}
+
 const GRADE_STYLE = {
   A: { color: '#FFD60A', bg: 'rgba(255,214,10,0.15)',  border: 'rgba(255,214,10,0.35)' },
   B: { color: '#30D158', bg: 'rgba(48,209,88,0.13)',   border: 'rgba(48,209,88,0.32)' },
@@ -260,6 +270,11 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                         {s.day_return > 0 ? '+' : ''}{(s.day_return * 100).toFixed(1)}%
                       </div>
                     )}
+                    {s.return_5d != null && Math.abs(s.return_5d) >= 0.05 && (
+                      <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: s.return_5d > 0 ? '#FF9F0A' : '#30D158', opacity: 0.8 }} title="5日報酬">
+                        5d{s.return_5d > 0 ? '+' : ''}{(s.return_5d * 100).toFixed(0)}%
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -351,14 +366,21 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   </span>
                 )}
               </div>
-              {/* Row 4: entry reason + skip/exit warnings */}
+              {/* Row 4: entry reason chips + skip/exit warnings */}
               {(entryReason || skipReason || baseExitSignal) && (
                 <div style={{ marginTop: 4, lineHeight: 1.5 }}>
-                  {entryReason && (
-                    <div style={{ fontSize: 10, color: 'var(--ios-label3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      💡 {entryReason.split(';').slice(0, 2).join(' · ')}
-                    </div>
-                  )}
+                  {entryReason && (() => {
+                    const keys = entryReason.split(/[,;]/).map(s => s.trim()).filter(Boolean)
+                    const labels = keys.map(k => REASON_LABEL[k] || null).filter(Boolean).slice(0, 6)
+                    if (labels.length === 0) return null
+                    return (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 2 }}>
+                        {labels.map(l => (
+                          <span key={l} style={{ fontSize: 9, color: 'var(--ios-label3)', background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>{l}</span>
+                        ))}
+                      </div>
+                    )
+                  })()}
                   {skipReason && (
                     <div style={{ fontSize: 10, color: 'var(--ios-red)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       ⚠ {skipReason}
