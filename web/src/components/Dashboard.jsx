@@ -1573,6 +1573,15 @@ export default function Dashboard({ data, error }) {
   // RAF cleanup
   useEffect(() => () => { if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current) }, [])
 
+  // Lazy-load slim price histories for ALL scanned stocks (sparklines on full universe)
+  const [slimHistories, setSlimHistories] = useState(null)
+  useEffect(() => {
+    fetch(`${BASE}stock_histories.json`)
+      .then(r => r.ok ? r.json() : null)
+      .then(h => { if (h?.stocks) setSlimHistories(h.stocks) })
+      .catch(() => {})
+  }, [])
+
   const handleListScroll = (e) => {
     const scrollTop = e.currentTarget.scrollTop
     if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current)
@@ -1636,13 +1645,23 @@ export default function Dashboard({ data, error }) {
 
   // Merge filter_stocks (ALL scanned, slim) with top_stocks (top N, rich).
   // For stocks that appear in both, prefer the rich top_stocks version.
+  // Also attach slim price_history from lazy-loaded stock_histories.json.
   const allScanStocks = useMemo(() => {
     const slim = scan.filter_stocks
-    if (!slim || slim.length === 0) return stocks
-    const richMap = {}
-    for (const s of stocks) richMap[s.stock_id] = s
-    return slim.map(s => richMap[s.stock_id] || s)
-  }, [scan.filter_stocks, stocks])
+    const base = (() => {
+      if (!slim || slim.length === 0) return stocks
+      const richMap = {}
+      for (const s of stocks) richMap[s.stock_id] = s
+      return slim.map(s => richMap[s.stock_id] || s)
+    })()
+    if (!slimHistories) return base
+    return base.map(s => {
+      if (s.price_history) return s  // already has rich history (top_stocks)
+      const closes = slimHistories[s.stock_id]
+      if (!closes || closes.length < 2) return s
+      return { ...s, price_history: closes.map(c => ({ close: c })) }
+    })
+  }, [scan.filter_stocks, stocks, slimHistories])
 
   const entryStocks = allScanStocks.filter(s => s.entry_signal)
   const globalMaxScore = Math.max(...stocks.map(s => s.entry_score || 0), 1)
