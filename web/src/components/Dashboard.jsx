@@ -156,7 +156,7 @@ function ScoreCell({ score, entry_signal }) {
   )
 }
 
-function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {} }) {
+function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {} }) {
   if (!stocks || stocks.length === 0) {
     return (
       <div style={{ padding: '40px 20px', textAlign: 'center' }}>
@@ -200,8 +200,9 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const conditionCount = s.condition_count || 0
           const bbPctB = s.bb_pct_b ?? null
           const momentumScore = s.momentum_score || 0
-          const revenueYoyValVal = s.revenue_yoy || 0
+          const revenueYoyVal = s.revenue_yoy || 0
           const revenueMom = s.revenue_mom || 0
+          const scoreDelta = scoreDeltaMap[String(s.stock_id)]
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -282,6 +283,15 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   }} />
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 700, color: scoreColor, fontFamily: 'var(--font-mono)', minWidth: 24, textAlign: 'right' }}>{normScore}</span>
+                {scoreDelta != null && Math.abs(scoreDelta) >= 30 && (
+                  <span title={`分數較前日${scoreDelta > 0 ? '上升' : '下滑'} ${Math.abs(Math.round(scoreDelta))}`} style={{
+                    fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                    color: scoreDelta > 0 ? '#30D158' : '#FF453A',
+                    flexShrink: 0, whiteSpace: 'nowrap',
+                  }}>
+                    {scoreDelta > 0 ? '▲' : '▼'}{Math.abs(Math.round(scoreDelta))}
+                  </span>
+                )}
                 <div style={{ flexShrink: 0 }}>
                   <Sparkline data={s.price_history} stockId={s.stock_id} />
                   <BBPositionBar bbPctB={s.bb_pct_b} width={56} />
@@ -674,7 +684,7 @@ function SignalChangeSection({ newEntry, dropped, onSelect }) {
   return (
     <div style={{ margin: '0 16px 16px' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.7, textTransform: 'uppercase', padding: '0 4px 8px' }}>
-        📡 今日訊號變化（vs 前一日）
+        📡 今日訊號變化（vs 前一日，限前N名）
       </div>
       <div className="glass-panel" style={{ overflow: 'hidden', padding: '10px 14px' }}>
         {newEntry.length > 0 && (
@@ -719,6 +729,61 @@ function SignalChangeSection({ newEntry, dropped, onSelect }) {
   )
 }
 
+function ScoreMoversSection({ stocks, scoreDeltaMap, onSelect }) {
+  const { gainers, losers } = useMemo(() => {
+    if (!scoreDeltaMap || Object.keys(scoreDeltaMap).length === 0) return { gainers: [], losers: [] }
+    const withDelta = stocks
+      .map(s => ({ ...s, _delta: scoreDeltaMap[String(s.stock_id)] ?? null }))
+      .filter(s => s._delta !== null && Math.abs(s._delta) >= 80)
+    const gainers = withDelta.filter(s => s._delta > 0).sort((a, b) => b._delta - a._delta).slice(0, 5)
+    const losers  = withDelta.filter(s => s._delta < 0).sort((a, b) => a._delta - b._delta).slice(0, 5)
+    return { gainers, losers }
+  }, [stocks, scoreDeltaMap])
+
+  if (gainers.length === 0 && losers.length === 0) return null
+
+  const Pill = ({ s, isGain, onClick }) => (
+    <button onClick={onClick} style={{
+      background: isGain ? 'rgba(48,209,88,0.10)' : 'rgba(255,69,58,0.10)',
+      border: `0.5px solid ${isGain ? 'rgba(48,209,88,0.3)' : 'rgba(255,69,58,0.3)'}`,
+      borderRadius: 8, padding: '4px 9px', cursor: 'pointer',
+      display: 'flex', alignItems: 'center', gap: 6,
+    }}>
+      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)' }}>{s.stock_id}</span>
+      <span style={{ fontSize: 11, color: 'var(--ios-label2)' }}>{s.name}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: isGain ? '#30D158' : '#FF453A', fontFamily: 'var(--font-mono)' }}>
+        {isGain ? '▲' : '▼'}{Math.abs(Math.round(s._delta))}
+      </span>
+    </button>
+  )
+
+  return (
+    <div style={{ margin: '0 16px 16px' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.7, textTransform: 'uppercase', padding: '0 4px 8px' }}>
+        📊 分數大幅變動（較前日）
+      </div>
+      <div className="glass-panel" style={{ overflow: 'hidden', padding: '10px 14px' }}>
+        {gainers.length > 0 && (
+          <div style={{ marginBottom: losers.length ? 10 : 0 }}>
+            <div style={{ fontSize: 10, color: '#30D158', fontWeight: 700, marginBottom: 5 }}>▲ 大漲（+80分以上）</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {gainers.map(s => <Pill key={s.stock_id} s={s} isGain onClick={() => onSelect?.(s)} />)}
+            </div>
+          </div>
+        )}
+        {losers.length > 0 && (
+          <div>
+            <div style={{ fontSize: 10, color: '#FF453A', fontWeight: 700, marginBottom: 5 }}>▼ 大跌（−80分以上）</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {losers.map(s => <Pill key={s.stock_id} s={s} isGain={false} onClick={() => onSelect?.(s)} />)}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function NearBreakoutSection({ stocks, onSelect }) {
   const candidates = useMemo(() => {
     return (stocks || [])
@@ -748,6 +813,36 @@ function NearBreakoutSection({ stocks, onSelect }) {
     { key: 'rsi',      label: 'RSI', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: (s.rsi14 || 0) > 60 ? '#30D158' : 'var(--ios-label3)' }}>{s.rsi14?.toFixed(0)}</span> },
   ]
   return <AlertTable title="📐 近突破雷達（距20日高點 ≤2%，尚未入場）" accentColor="#FF9F0A" stocks={candidates} columns={cols} onSelect={onSelect} />
+}
+
+function VolumeSurgeSection({ stocks, onSelect }) {
+  const candidates = useMemo(() => {
+    return (stocks || [])
+      .filter(s => {
+        const vol = s.volume_ratio || 0
+        return vol >= 2.5 && !s.entry_signal && (s.rsi14 || 0) > 35 && (s.rsi14 || 0) < 80
+      })
+      .sort((a, b) => (b.volume_ratio || 0) - (a.volume_ratio || 0))
+      .slice(0, 10)
+  }, [stocks])
+
+  if (candidates.length === 0) return null
+
+  const cols = [
+    { key: 'stock_id', label: '股號', render: s => <span style={{ color: '#FF6B35', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{s.stock_id}</span> },
+    { key: 'name',     label: '名稱', render: s => <span style={{ fontSize: 13 }}>{s.name}</span> },
+    { key: 'close',    label: '收盤', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{s.close?.toFixed(s.close >= 100 ? 0 : 1)}</span> },
+    { key: 'vol',      label: '量比', render: s => (
+      <span style={{
+        background: (s.volume_ratio || 0) >= 5 ? 'rgba(255,69,58,0.2)' : 'rgba(255,107,53,0.14)',
+        color: (s.volume_ratio || 0) >= 5 ? '#FF453A' : '#FF6B35',
+        borderRadius: 6, padding: '2px 8px', fontWeight: 700, fontSize: 12,
+      }}>{(s.volume_ratio || 0).toFixed(1)}x</span>
+    )},
+    { key: 'rsi', label: 'RSI', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: (s.rsi14 || 0) > 60 ? '#30D158' : 'var(--ios-label3)' }}>{s.rsi14?.toFixed(0)}</span> },
+    { key: 'score', label: '分數', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ios-label2)' }}>{Math.round(s.entry_score)}</span> },
+  ]
+  return <AlertTable title="🔥 放量異動（量比≥2.5x，尚未入場）" accentColor="#FF6B35" stocks={candidates} columns={cols} onSelect={onSelect} />
 }
 
 function LimitDownSection({ items, onSelect }) {
@@ -1439,15 +1534,35 @@ export default function Dashboard({ data, error }) {
 
   const watchlistStocks = useMemo(() => stocks.filter(s => watchlist.has(s.stock_id)), [stocks, watchlist])
 
-  // Signal change: stocks that newly entered or dropped out of entry_signal vs previous date
+  // Score delta map: stock_id → (today_score - prev_score), only when prevScan has the same stock
+  const scoreDeltaMap = useMemo(() => {
+    if (!prevScan?.top_stocks) return {}
+    const prevScores = {}
+    for (const s of prevScan.top_stocks) prevScores[String(s.stock_id)] = s.entry_score || 0
+    const map = {}
+    for (const s of stocks) {
+      const prev = prevScores[String(s.stock_id)]
+      if (prev !== undefined) map[String(s.stock_id)] = (s.entry_score || 0) - prev
+    }
+    return map
+  }, [stocks, prevScan])
+
+  // Signal change: stocks that newly entered or dropped out of entry_signal vs previous date.
+  // Scope is limited to today's top_stocks list — we can't detect changes outside that cutoff.
+  // "dropped" only counts stocks still visible today (but lost signal), not those that fell off the list.
   const signalChanges = useMemo(() => {
     if (!prevScan?.top_stocks) return { newEntry: [], dropped: [] }
     const prevEntryIds = new Set(prevScan.top_stocks.filter(s => s.entry_signal).map(s => String(s.stock_id)))
+    const todayStockIds = new Set(stocks.map(s => String(s.stock_id)))
     const todayEntryIds = new Set(entryStocks.map(s => String(s.stock_id)))
     const newEntry = entryStocks.filter(s => !prevEntryIds.has(String(s.stock_id)))
-    const dropped = (prevScan.top_stocks || []).filter(s => s.entry_signal && !todayEntryIds.has(String(s.stock_id)))
+    const dropped = (prevScan.top_stocks || []).filter(s =>
+      s.entry_signal &&
+      todayStockIds.has(String(s.stock_id)) &&
+      !todayEntryIds.has(String(s.stock_id))
+    )
     return { newEntry, dropped }
-  }, [entryStocks, prevScan])
+  }, [entryStocks, prevScan, stocks])
 
   const persistentMap = useMemo(() => {
     const m = {}
@@ -1977,11 +2092,28 @@ export default function Dashboard({ data, error }) {
         {/* Main stock table */}
         <div style={{ marginTop: 12 }}>
           <div style={{ padding: '0 20px 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            {entryStocks.length > 0 && viewTab === 'all' && !searchQuery && (
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ios-green)', textTransform: 'uppercase', letterSpacing: 0.3 }}>
-                進場訊號 · {entryStocks.length} 支
-              </span>
-            )}
+            {entryStocks.length > 0 && viewTab === 'all' && !searchQuery && (() => {
+              const total = scan.total_scanned || stocks.length
+              const entryRate = total > 0 ? Math.round(entryStocks.length / total * 100 * 10) / 10 : 0
+              const rateColor = entryRate >= 5 ? 'var(--ios-green)' : entryRate >= 2 ? 'var(--ios-yellow)' : 'var(--ios-label3)'
+              return (
+                <>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ios-green)', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                    進場訊號 · {entryStocks.length} 支
+                  </span>
+                  {total > 0 && (
+                    <span style={{ fontSize: 11, color: rateColor, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                      {entryRate}%
+                    </span>
+                  )}
+                  {total > 0 && (
+                    <div style={{ flex: 1, height: 3, background: 'var(--ios-fill2)', borderRadius: 9999, overflow: 'hidden', maxWidth: 80 }}>
+                      <div style={{ height: '100%', width: `${Math.min(100, entryRate * 10)}%`, background: rateColor, borderRadius: 9999 }} />
+                    </div>
+                  )}
+                </>
+              )
+            })()}
             {searchQuery && (
               <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>
                 找到 {filteredAndSorted.length} 支
@@ -2012,6 +2144,7 @@ export default function Dashboard({ data, error }) {
               watchlist={watchlist}
               toggleWatchlist={toggleWatchlist}
               persistentMap={persistentMap}
+              scoreDeltaMap={scoreDeltaMap}
             />
           )}
           {/* Pagination */}
@@ -2048,6 +2181,7 @@ export default function Dashboard({ data, error }) {
           dropped={signalChanges.dropped}
           onSelect={setSelectedStock}
         />
+        <ScoreMoversSection stocks={stocks} scoreDeltaMap={scoreDeltaMap} onSelect={setSelectedStock} />
 
         {persistent.length > 0 && (
           <PersistentSection
@@ -2060,6 +2194,7 @@ export default function Dashboard({ data, error }) {
         )}
 
         <NearBreakoutSection stocks={stocks} onSelect={setSelectedStock} />
+        <VolumeSurgeSection stocks={stocks} onSelect={setSelectedStock} />
 
         {limitDownAlerts.length > 0 && (
           <LimitDownSection items={limitDownAlerts} onSelect={setSelectedStock} />
