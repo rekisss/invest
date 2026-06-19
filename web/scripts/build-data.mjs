@@ -604,6 +604,7 @@ function processScanData() {
       foreign_buy_accel: toBool(row.foreign_buy_accel),
       invest_trust_accel: toBool(row.invest_trust_accel),
       is_sector_leader: toBool(row.is_sector_leader),
+      base_exit_signal: toBool(row.base_exit_signal),
     }))
 
     scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, filter_stocks: filterStocks, limit_down_alerts: limitDownAlerts, is_partial: allStocks.length < 500, data_date: dominantDataDate }
