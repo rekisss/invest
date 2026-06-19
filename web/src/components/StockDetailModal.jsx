@@ -200,6 +200,45 @@ function mfiCalc(bars, n = 14) {
   return result
 }
 
+// CDP (逆勢操作系統): uses previous bar's H/L/C
+function cdpCalc(bars) {
+  if (!bars || bars.length < 2) return null
+  const prev = bars[bars.length - 2]
+  if (prev.high == null || prev.low == null || prev.close == null) return null
+  const cdp = (prev.high + prev.low + prev.close * 2) / 4
+  const range = prev.high - prev.low
+  const r2 = v => Math.round(v * 100) / 100
+  return { cdp: r2(cdp), ah: r2(cdp + range), nh: r2(2 * cdp - prev.low), nl: r2(2 * cdp - prev.high), al: r2(cdp - range) }
+}
+
+// ATR (平均真實波幅) using Wilder smoothing
+function atrCalc(bars, n = 14) {
+  if (!bars || bars.length < n + 1 || bars[1]?.high == null) return null
+  let atr = 0
+  for (let i = 1; i <= n; i++) {
+    const b = bars[i], p = bars[i - 1]
+    atr += Math.max(b.high - b.low, Math.abs(b.high - (p.close ?? b.high)), Math.abs(b.low - (p.close ?? b.low)))
+  }
+  atr /= n
+  for (let i = n + 1; i < bars.length; i++) {
+    const b = bars[i], p = bars[i - 1]
+    if (b.high == null) continue
+    const tr = Math.max(b.high - b.low, Math.abs(b.high - (p.close ?? b.high)), Math.abs(b.low - (p.close ?? b.low)))
+    atr = (atr * (n - 1) + tr) / n
+  }
+  return Math.round(atr * 100) / 100
+}
+
+// 乖離率 (BIAS) = (close - SMA) / SMA * 100
+function biasCalc(closes, period = 20) {
+  const ma = smaCalc(closes, period)
+  const last = closes[closes.length - 1]
+  for (let i = ma.length - 1; i >= 0; i--) {
+    if (ma[i] != null && ma[i] > 0) return Math.round((last - ma[i]) / ma[i] * 10000) / 100
+  }
+  return null
+}
+
 // Build a polyline points string, splitting at nulls into segments
 function toPolySegs(values, toXFn, toYFn) {
   const segments = []
@@ -341,7 +380,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
 
 // ── Candlestick chart ────────────────────────────────────────────────────────
 
-function CandleSVG({ data, maLines, bbBands, onHoverIdx, chartW: propChartW }) {
+function CandleSVG({ data, maLines, bbBands, cdpLevels, onHoverIdx, chartW: propChartW }) {
   const [hovered, setHovered] = useState(null)
   const touchRef = useRef(null)
 
@@ -352,8 +391,9 @@ function CandleSVG({ data, maLines, bbBands, onHoverIdx, chartW: propChartW }) {
     const W = propChartW || Math.max(CHART_W, n * BAR_W + CHART_PL + CHART_PR)
     const CH = 200, VH = 45, GAP = 6, H = CH + GAP + VH
     const PL = CHART_PL, PR = CHART_PR, PT = 8
-    const maxP = Math.max(...bars.map(d => d.high ?? d.close ?? 0), ...(bbBands?.upper?.filter(Boolean) || []))
-    const minP = Math.min(...bars.map(d => d.low  ?? d.close ?? 0), ...(bbBands?.lower?.filter(Boolean) || []))
+    const cdpVals = cdpLevels ? [cdpLevels.ah, cdpLevels.nh, cdpLevels.cdp, cdpLevels.nl, cdpLevels.al].filter(Boolean) : []
+    const maxP = Math.max(...bars.map(d => d.high ?? d.close ?? 0), ...(bbBands?.upper?.filter(Boolean) || []), ...cdpVals)
+    const minP = Math.min(...bars.map(d => d.low  ?? d.close ?? 0), ...(bbBands?.lower?.filter(Boolean) || []), ...cdpVals)
     const pRange = (isNaN(maxP) || isNaN(minP) || maxP === minP) ? 1 : maxP - minP
     const maxVol = Math.max(...bars.map(d => d.volume ?? 0), 1)
     const slotW = (W - PL - PR) / n
@@ -366,7 +406,7 @@ function CandleSVG({ data, maLines, bbBands, onHoverIdx, chartW: propChartW }) {
     const xStep = Math.max(1, Math.floor(n / 5))
     const xLabels = bars.map((d, i) => ({ i, label: d.time ? d.time.slice(5) : '' })).filter((_, i) => i % xStep === 0 || i === n - 1)
     return { bars, W, CH, VH, GAP, H, PL, PR, PT, maxVol, n, slotW, bW, toY, toX, gridLevels, xLabels }
-  }, [data, bbBands, propChartW])
+  }, [data, bbBands, cdpLevels, propChartW])
 
   if (!chart) return (
     <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
@@ -454,6 +494,23 @@ function CandleSVG({ data, maLines, bbBands, onHoverIdx, chartW: propChartW }) {
         {bbSegs.mid.map((pts, i)   => <polyline key={`bbm${i}`} points={pts} fill="none" stroke="rgba(10,132,255,0.28)" strokeWidth={0.8} />)}
         {bbSegs.lower.map((pts, i) => <polyline key={`bbl${i}`} points={pts} fill="none" stroke="rgba(10,132,255,0.45)" strokeWidth={0.8} strokeDasharray="4,3" />)}
       </>}
+
+      {/* CDP 逆勢操作系統 horizontal levels */}
+      {cdpLevels && [
+        { key: 'ah',  price: cdpLevels.ah,  color: 'rgba(255,69,58,0.8)',   dash: '5,3', label: 'AH' },
+        { key: 'nh',  price: cdpLevels.nh,  color: 'rgba(255,159,10,0.7)',  dash: '4,3', label: 'NH' },
+        { key: 'cdp', price: cdpLevels.cdp, color: 'rgba(255,214,10,0.75)', dash: '6,2', label: 'CDP' },
+        { key: 'nl',  price: cdpLevels.nl,  color: 'rgba(48,209,88,0.7)',   dash: '4,3', label: 'NL' },
+        { key: 'al',  price: cdpLevels.al,  color: 'rgba(48,209,88,0.85)',  dash: '5,3', label: 'AL' },
+      ].map(({ key, price, color, dash, label }) => {
+        const y = toY(price)
+        return (
+          <g key={key}>
+            <line x1={PL} y1={y} x2={W - PR} y2={y} stroke={color} strokeWidth={0.9} strokeDasharray={dash} />
+            <text x={PL + 3} y={y - 2} fontSize={7} fill={color}>{label} {price}</text>
+          </g>
+        )
+      })}
 
       {/* Candles + volume */}
       {bars.map((d, i) => {
@@ -919,6 +976,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
             data={bars}
             maLines={active.ma && indicators ? indicators.maLines : []}
             bbBands={active.bb && indicators ? indicators.bbBands : null}
+            cdpLevels={ci.cdp}
             onHoverIdx={setHoveredIdx}
             chartW={totalChartW}
           />
@@ -1150,17 +1208,25 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
     }
 
     let stoch_k = null, stoch_d = null, williams_r = null, cci20 = null, mfi14 = null
+    let cdp = null, atr14 = null, adx14 = null
+    const rsi14 = lastOf(rsiCalc(closes))
+    const bias20 = biasCalc(closes, 20)
+    const bias60 = biasCalc(closes, 60)
     if (hasHL) {
       const kd = kdCalc(ph); stoch_k = lastOf(kd.kArr); stoch_d = lastOf(kd.dArr)
       williams_r = lastOf(williamsRCalc(ph))
       cci20 = lastOf(cciCalc(ph))
       if (hasVol) mfi14 = lastOf(mfiCalc(ph))
+      cdp = cdpCalc(ph)
+      atr14 = atrCalc(ph, 14)
+      adx14 = lastOf(adxCalc(ph).adxLine)
     }
 
     return {
       ema20: lastOf(ema20arr), ema60: lastOf(ema60arr), ema120: lastOf(ema120arr),
       macd: lastOf(macdLine), macd_signal: lastOf(signalLine), macd_hist: lastOf(hist),
       bb_pct_b, bb_bandwidth, stoch_k, stoch_d, williams_r, cci20, mfi14,
+      rsi14, adx14, atr14, bias20, bias60, cdp,
     }
   }, [ph])
 
@@ -1354,9 +1420,9 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
           <Row label="收盤價" value={`${fmt(s.close, 1)} 元`} />
           <Row label="日漲跌" value={pct(s.day_return != null ? s.day_return * 100 : null)} valueStyle={{ color: colorNum(s.day_return) }} />
           <Row label="5日報酬" value={pct(s.return_5d != null ? s.return_5d * 100 : null)} valueStyle={{ color: colorNum(s.return_5d) }} />
-          <Row label="RSI(14)" value={fmt(s.rsi14, 1)} valueStyle={{ color: s.rsi14 > 70 ? 'var(--ios-red)' : s.rsi14 < 30 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
-          <Row label="ADX(14)" value={fmt(s.adx14, 1)} valueStyle={{ color: s.adx14 > 25 ? 'var(--ios-blue)' : 'var(--ios-label)' }} />
-          <Row label="ATR(14)" value={fmt(s.atr14, 2)} />
+          {(() => { const v = s.rsi14 ?? ci.rsi14; return <Row label="RSI(14)" value={fmt(v, 1)} valueStyle={{ color: v > 70 ? 'var(--ios-red)' : v < 30 ? 'var(--ios-green)' : 'var(--ios-label)' }} /> })()}
+          {(() => { const v = s.adx14 ?? ci.adx14; return <Row label="ADX(14)" value={fmt(v, 1)} valueStyle={{ color: v > 25 ? 'var(--ios-blue)' : 'var(--ios-label)' }} /> })()}
+          {(() => { const v = s.atr14 ?? ci.atr14; return <Row label="ATR(14)" value={fmt(v, 2)} /> })()}
           <Row label="量比" value={`${fmt(s.volume_ratio, 1)}x`} valueStyle={{ color: s.volume_ratio > 2 ? 'var(--ios-yellow)' : 'var(--ios-label)' }} />
           {s.volume_ma20 > 0 && (() => {
             const lots = Math.round(s.volume_ma20 / 1000)
@@ -1379,7 +1445,24 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
           {(() => { const v = s.mfi14 ?? ci.mfi14; return <Row label="MFI(14)" value={fmt(v, 1)} valueStyle={{ color: v > 80 ? 'var(--ios-red)' : v < 20 ? 'var(--ios-green)' : 'var(--ios-label)' }} /> })()}
           <Row label="動能分數" value={fmt(s.momentum_score, 0)} />
           <Row label="相對強度5日" value={pct(s.relative_strength_5d != null ? s.relative_strength_5d * 100 : null)} valueStyle={{ color: colorNum(s.relative_strength_5d) }} />
+          {ci.bias20 != null && <Row label="乖離率 MA20" value={`${fmt(ci.bias20, 2)}%`} valueStyle={{ color: ci.bias20 > 8 ? 'var(--ios-red)' : ci.bias20 < -8 ? 'var(--ios-green)' : 'var(--ios-label)' }} />}
+          {ci.bias60 != null && <Row label="乖離率 MA60" value={`${fmt(ci.bias60, 2)}%`} valueStyle={{ color: ci.bias60 > 15 ? 'var(--ios-red)' : ci.bias60 < -15 ? 'var(--ios-green)' : 'var(--ios-label)' }} />}
         </Section>
+
+        {/* CDP 逆勢操作系統 */}
+        {ci.cdp && (() => {
+          const { cdp, ah, nh, nl, al } = ci.cdp
+          const close = s.close
+          return (
+            <Section title="CDP 逆勢操作系統">
+              <Row label="AH 強力壓力" value={fmt(ah, 2)} valueStyle={{ color: 'rgba(255,69,58,0.9)', fontWeight: 700 }} />
+              <Row label="NH 一般壓力" value={fmt(nh, 2)} valueStyle={{ color: close != null && close >= nh ? 'var(--ios-red)' : 'var(--ios-label3)' }} />
+              <Row label="CDP 中樞" value={fmt(cdp, 2)} valueStyle={{ color: 'var(--ios-yellow)', fontWeight: 600 }} />
+              <Row label="NL 一般支撐" value={fmt(nl, 2)} valueStyle={{ color: close != null && close <= nl ? 'var(--ios-green)' : 'var(--ios-label3)' }} />
+              <Row label="AL 強力支撐" value={fmt(al, 2)} valueStyle={{ color: 'rgba(48,209,88,0.9)', fontWeight: 700 }} />
+            </Section>
+          )
+        })()}
 
         {/* 技術訊號旗標 */}
         {(() => {
