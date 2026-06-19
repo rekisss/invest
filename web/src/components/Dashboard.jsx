@@ -156,7 +156,7 @@ function ScoreCell({ score, entry_signal }) {
   )
 }
 
-function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {} }) {
+function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {} }) {
   if (!stocks || stocks.length === 0) {
     return (
       <div style={{ padding: '40px 20px', textAlign: 'center' }}>
@@ -202,6 +202,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const momentumScore = s.momentum_score || 0
           const revenueYoyVal = s.revenue_yoy || 0
           const revenueMom = s.revenue_mom || 0
+          const scoreDelta = scoreDeltaMap[String(s.stock_id)]
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -282,6 +283,15 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   }} />
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 700, color: scoreColor, fontFamily: 'var(--font-mono)', minWidth: 24, textAlign: 'right' }}>{normScore}</span>
+                {scoreDelta != null && Math.abs(scoreDelta) >= 30 && (
+                  <span title={`分數較前日${scoreDelta > 0 ? '上升' : '下滑'} ${Math.abs(Math.round(scoreDelta))}`} style={{
+                    fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                    color: scoreDelta > 0 ? '#30D158' : '#FF453A',
+                    flexShrink: 0, whiteSpace: 'nowrap',
+                  }}>
+                    {scoreDelta > 0 ? '▲' : '▼'}{Math.abs(Math.round(scoreDelta))}
+                  </span>
+                )}
                 <div style={{ flexShrink: 0 }}>
                   <Sparkline data={s.price_history} stockId={s.stock_id} />
                   <BBPositionBar bbPctB={s.bb_pct_b} width={56} />
@@ -1469,6 +1479,19 @@ export default function Dashboard({ data, error }) {
 
   const watchlistStocks = useMemo(() => stocks.filter(s => watchlist.has(s.stock_id)), [stocks, watchlist])
 
+  // Score delta map: stock_id → (today_score - prev_score), only when prevScan has the same stock
+  const scoreDeltaMap = useMemo(() => {
+    if (!prevScan?.top_stocks) return {}
+    const prevScores = {}
+    for (const s of prevScan.top_stocks) prevScores[String(s.stock_id)] = s.entry_score || 0
+    const map = {}
+    for (const s of stocks) {
+      const prev = prevScores[String(s.stock_id)]
+      if (prev !== undefined) map[String(s.stock_id)] = (s.entry_score || 0) - prev
+    }
+    return map
+  }, [stocks, prevScan])
+
   // Signal change: stocks that newly entered or dropped out of entry_signal vs previous date
   const signalChanges = useMemo(() => {
     if (!prevScan?.top_stocks) return { newEntry: [], dropped: [] }
@@ -2042,6 +2065,7 @@ export default function Dashboard({ data, error }) {
               watchlist={watchlist}
               toggleWatchlist={toggleWatchlist}
               persistentMap={persistentMap}
+              scoreDeltaMap={scoreDeltaMap}
             />
           )}
           {/* Pagination */}
