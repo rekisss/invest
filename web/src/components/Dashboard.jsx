@@ -2085,11 +2085,28 @@ export default function Dashboard({ data, error }) {
         {/* Main stock table */}
         <div style={{ marginTop: 12 }}>
           <div style={{ padding: '0 20px 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            {entryStocks.length > 0 && viewTab === 'all' && !searchQuery && (
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ios-green)', textTransform: 'uppercase', letterSpacing: 0.3 }}>
-                進場訊號 · {entryStocks.length} 支
-              </span>
-            )}
+            {entryStocks.length > 0 && viewTab === 'all' && !searchQuery && (() => {
+              const total = scan.total_scanned || stocks.length
+              const entryRate = total > 0 ? Math.round(entryStocks.length / total * 100 * 10) / 10 : 0
+              const rateColor = entryRate >= 5 ? 'var(--ios-green)' : entryRate >= 2 ? 'var(--ios-yellow)' : 'var(--ios-label3)'
+              return (
+                <>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ios-green)', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                    進場訊號 · {entryStocks.length} 支
+                  </span>
+                  {total > 0 && (
+                    <span style={{ fontSize: 11, color: rateColor, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                      {entryRate}%
+                    </span>
+                  )}
+                  {total > 0 && (
+                    <div style={{ flex: 1, height: 3, background: 'var(--ios-fill2)', borderRadius: 9999, overflow: 'hidden', maxWidth: 80 }}>
+                      <div style={{ height: '100%', width: `${Math.min(100, entryRate * 10)}%`, background: rateColor, borderRadius: 9999 }} />
+                    </div>
+                  )}
+                </>
+              )
+            })()}
             {searchQuery && (
               <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>
                 找到 {filteredAndSorted.length} 支
