@@ -416,34 +416,26 @@ function processScanData() {
     const dominantDataDate = Object.entries(ddCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || date
     const allStocks = Object.values(stockMap).sort((a, b) => toNum(b.entry_score) - toNum(a.entry_score))
 
-    // Compute fallback grade + score_pct when CSV has no positive-signal grades.
-    // Triggers when: (a) no grade at all, or (b) only C/D/X with no A or B —
-    // the latter happens in morning scans before 三大法人 data is published (17:00 CST),
-    // where entry_signal=False for all stocks and A/B conditions can never be met.
-    // In that case we use entry_score percentile rank so the ranking is still meaningful.
-    // X grades from scan_enrich.py are preserved (those stocks remain excluded).
-    const hasPositiveGrade = allStocks.some(r => r.grade === 'A' || r.grade === 'B')
-    if (!hasPositiveGrade) {
-      if (!allStocks.some(r => r.grade)) console.log(`    [grade] no grades in CSV — applying percentile fallback`)
-      else console.log(`    [grade] only C/D/X grades (morning scan, no 法人 data) — applying percentile fallback`)
-      const sortedScores = allStocks.map(r => toNum(r.entry_score)).sort((a, b) => a - b)
-      const n = sortedScores.length
+    // Always compute score_pct (entry_score percentile rank) for every stock so the
+    // detail panel can display 市場百分位 regardless of grade source.
+    const sortedScores = allStocks.map(r => toNum(r.entry_score)).sort((a, b) => a - b)
+    const n = sortedScores.length
+    allStocks.forEach(row => {
+      const sc = toNum(row.entry_score)
+      let lo = 0, hi = n
+      while (lo < hi) { const m = (lo + hi) >>> 1; if (sortedScores[m] <= sc) lo = m + 1; else hi = m }
+      row.score_pct = String(Math.round((n > 0 ? lo / n * 100 : 50) * 10) / 10)
+    })
+
+    // Apply grade fallback ONLY when grades are truly absent (scan_enrich.py hasn't run yet).
+    // If grades are present (any of A/B/C/D/X), honour them even when no A/B exists —
+    // a weak day where every stock is legitimately C/D/X is valid signal, not missing data.
+    const hasAnyGrade = allStocks.some(r => r.grade && r.grade.trim() !== '')
+    if (!hasAnyGrade) {
+      console.log(`    [grade] no grades in CSV — applying percentile fallback`)
       allStocks.forEach(row => {
-        if (row.grade === 'X') {
-          // Keep existing X but still compute score_pct
-          const sc = toNum(row.entry_score)
-          let lo = 0, hi = n
-          while (lo < hi) { const m = (lo + hi) >>> 1; if (sortedScores[m] <= sc) lo = m + 1; else hi = m }
-          row.score_pct = String(Math.round((n > 0 ? lo / n * 100 : 50) * 10) / 10)
-          return
-        }
-        const sc = toNum(row.entry_score), ld = toNum(row.limit_down_streak)
-        // Binary search: count of values ≤ sc (O(log n))
-        let lo = 0, hi = n
-        while (lo < hi) { const m = (lo + hi) >>> 1; if (sortedScores[m] <= sc) lo = m + 1; else hi = m }
-        const pct = n > 0 ? lo / n * 100 : 50
+        const ld = toNum(row.limit_down_streak), pct = toNum(row.score_pct)
         row.grade = ld >= 1 ? 'X' : pct >= 98 ? 'A' : pct >= 90 ? 'B' : pct >= 75 ? 'C' : 'D'
-        row.score_pct = String(Math.round(pct * 10) / 10)
       })
     }
 
