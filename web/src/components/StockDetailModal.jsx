@@ -583,7 +583,7 @@ function ChartValueStrip({ bars, indicators, active, hoveredIdx }) {
       marginBottom: 1, minHeight: 26,
     }}>
       <span style={{ color: 'var(--ios-label3)', fontSize: 10, minWidth: 44, flexShrink: 0 }}>
-        {hoveredIdx != null ? bar.time.slice(5) : '最新'}
+        {hoveredIdx != null ? (bar.time ? bar.time.slice(5) : '') : '最新'}
       </span>
       {active.rsi && rsi != null && (
         <span style={{ color: 'var(--ios-label3)' }}>
