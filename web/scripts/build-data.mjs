@@ -1200,6 +1200,19 @@ for (const d of recentDates) {
 }
 console.log(`K-line: injected into stocks across ${recentDates.length} dates`)
 
+// Write slim stock_histories.json — last 60 close prices for ALL stocks (for Dashboard lazy load)
+// Format: { generated_at, stocks: { stock_id: [close1, close2, ...] } }
+// ~200KB gzipped; loaded lazily so it doesn't block the initial render
+const HISTORIES_FILE = join(PUBLIC_DIR, 'stock_histories.json')
+const historiesStocks = {}
+for (const [stockId, entry] of Object.entries(klineMap)) {
+  const bars = getKlineBars(entry, '1d')
+  if (!bars || bars.length < 2) continue
+  historiesStocks[stockId] = bars.slice(-60).map(b => b.close)
+}
+writeFileSync(HISTORIES_FILE, JSON.stringify({ generated_at: new Date().toISOString(), stocks: historiesStocks }), 'utf-8')
+console.log(`stock_histories.json written (${Object.keys(historiesStocks).length} stocks, ${(readFileSync(HISTORIES_FILE).length / 1024).toFixed(0)} KB)`)
+
 let prediction = readPrediction()
 const predictionHistory = readPredictionHistory()
 console.log(`Prediction: ${prediction ? prediction.date : 'none'}, history: ${predictionHistory.length} entries`)
