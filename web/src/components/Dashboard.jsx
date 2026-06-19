@@ -1251,27 +1251,38 @@ export default function Dashboard({ data, error }) {
         )}
 
         {/* Grade distribution summary */}
-        {stocks.length > 0 && (
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>分佈</span>
-            {Object.entries(gradeDistribution).filter(([, n]) => n > 0).map(([g, n]) => {
-              const gs = GRADE_STYLE[g] || GRADE_STYLE.D
-              const isActive = activeGrades.has(g)
-              return (
-                <button key={g} onClick={() => g !== 'X' && toggleGrade(g)} style={{
-                  fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 9999,
-                  background: isActive ? gs.bg : 'rgba(255,255,255,0.04)',
-                  color: gs.color, border: `0.5px solid ${isActive ? gs.border : 'rgba(255,255,255,0.08)'}`,
-                  cursor: g !== 'X' ? 'pointer' : 'default', flexShrink: 0,
-                  transition: 'all 0.15s',
-                }}>{g} {n}</button>
-              )
-            })}
-            {filteredAndSorted.length !== stocks.length && (
-              <span style={{ fontSize: 10, color: 'var(--ios-label3)', marginLeft: 2 }}>→ 篩選 {filteredAndSorted.length}</span>
-            )}
-          </div>
-        )}
+        {stocks.length > 0 && (() => {
+          const hasAnyFilter = activeGrades.size > 0 || activeSignals.size > 0 || activeSector || searchQuery.trim()
+          const clearAll = () => { setActiveGrades(new Set()); setActiveSignals(new Set()); setActiveSector(null); setSearchQuery('') }
+          return (
+            <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>分佈</span>
+              {Object.entries(gradeDistribution).filter(([, n]) => n > 0).map(([g, n]) => {
+                const gs = GRADE_STYLE[g] || GRADE_STYLE.D
+                const isActive = activeGrades.has(g)
+                return (
+                  <button key={g} onClick={() => g !== 'X' && toggleGrade(g)} style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 9999,
+                    background: isActive ? gs.bg : 'rgba(255,255,255,0.04)',
+                    color: gs.color, border: `0.5px solid ${isActive ? gs.border : 'rgba(255,255,255,0.08)'}`,
+                    cursor: g !== 'X' ? 'pointer' : 'default', flexShrink: 0,
+                    transition: 'all 0.15s',
+                  }}>{g} {n}</button>
+                )
+              })}
+              {hasAnyFilter && (
+                <button onClick={clearAll} style={{
+                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 9999,
+                  border: '0.5px solid rgba(255,69,58,0.35)', background: 'rgba(255,69,58,0.10)',
+                  color: 'var(--ios-red)', cursor: 'pointer', flexShrink: 0,
+                }}>✕ 清除</button>
+              )}
+              {hasAnyFilter && (
+                <span style={{ fontSize: 10, color: 'var(--ios-label3)', marginLeft: 2 }}>篩選 {filteredAndSorted.length}</span>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Search + Sort row */}
         <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
