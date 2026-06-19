@@ -469,7 +469,7 @@ function PersistentSection({ items, onSelect }) {
     { key: 'score',       label: '最新分', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{s.latest_score?.toLocaleString()}</span> },
     { key: 'trend',       label: '分數趨勢', render: s => (
       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: s.score_trend > 0 ? 'var(--ios-green)' : s.score_trend < 0 ? 'var(--ios-red)' : 'var(--ios-label2)' }}>
-        {s.score_trend > 0 ? '+' : ''}{s.score_trend}
+        {s.score_trend > 0 ? '+' : ''}{Math.round(s.score_trend)}
       </span>
     )},
   ]

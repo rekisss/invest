@@ -575,7 +575,7 @@ function processScanData() {
     .filter(([, d]) => d.scores.length >= 2)
     .map(([sid, d]) => {
       const sorted = d.scores.sort((a, b) => b.date.localeCompare(a.date))
-      return { stock_id: sid, name: d.name, industry_category: d.industry_category, days_in_top: d.scores.length, latest_score: sorted[0].score, score_trend: sorted[0].score - sorted[1].score }
+      return { stock_id: sid, name: d.name, industry_category: d.industry_category, days_in_top: d.scores.length, latest_score: Math.round(sorted[0].score), score_trend: Math.round(sorted[0].score - sorted[1].score) }
     })
     .sort((a, b) => b.days_in_top - a.days_in_top || b.latest_score - a.latest_score).slice(0, 20)
   if (dates.length > 0 && scans[dates[0]]) scans[dates[0]].persistent = persistent
