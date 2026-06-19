@@ -334,6 +334,8 @@ function buildTrending(news) {
       if (tag !== '其他') tagCount[tag] = (tagCount[tag] || 0) + 1
     }
     for (const [, code] of item.title.matchAll(STOCK_CODE_RE)) {
+      const n = parseInt(code, 10)
+      if (n >= 2020 && n <= 2035) continue  // skip years
       stockCount[code] = (stockCount[code] || 0) + 1
     }
   }
@@ -764,6 +766,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
   const [filter, setFilter] = useState('all')
   const [sentimentFilter, setSentimentFilter] = useState('all') // 'all' | 'bull' | 'bear'
   const [tagsExpanded, setTagsExpanded] = useState(false)
+  const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const [customRules, setCustomRules] = useState(loadCustomRules)
   const [showCustomPanel, setShowCustomPanel] = useState(false)
   const [nowTs, setNowTs] = useState(Date.now())
@@ -853,13 +856,32 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <style>{`@keyframes newBlink{0%,100%{opacity:1}50%{opacity:0.35}}`}</style>
-      {/* Trending bar */}
-      {news.length > 0 && (
-        <TrendingBar news={news} onFilter={tag => { setFilter(tag); setOpenIdx(null) }} />
-      )}
 
-      {/* Dynamic tab bar — top 4 always visible, rest collapsible */}
-      <div className="ios-category-bar">
+      {/* Collapsible header area */}
+      <div>
+        {/* Collapse toggle button */}
+        <button
+          onClick={() => setHeaderCollapsed(c => !c)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: 4, padding: '4px 0', fontSize: 10, fontWeight: 600,
+            color: 'var(--ios-label3)', background: 'transparent', border: 'none',
+            cursor: 'pointer', letterSpacing: 0.5,
+          }}
+        >
+          {headerCollapsed ? '▼ 展開篩選' : '▲ 收起篩選'}
+        </button>
+
+        {/* Collapsible body */}
+        {!headerCollapsed && (
+          <>
+            {/* Trending bar */}
+            {news.length > 0 && (
+              <TrendingBar news={news} onFilter={tag => { setFilter(tag); setOpenIdx(null) }} />
+            )}
+
+            {/* Dynamic tab bar — top 4 always visible, rest collapsible */}
+            <div className="ios-category-bar">
         {(() => {
           const ALWAYS_VISIBLE = 4 // 全部 + top 3
           const visibleTabs = tagsExpanded ? tabs : tabs.slice(0, ALWAYS_VISIBLE)
@@ -886,7 +908,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
             )
           }
           return (
-            <div style={{ display: 'flex', alignItems: 'center', overflowX: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}>
               {visibleTabs.map(cat => TabBtn(cat))}
               {hiddenCount > 0 && (
                 <button
@@ -973,6 +995,9 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
             )
           })}
         </div>
+          </div>
+        </>
+        )}
       </div>
 
       {/* Custom category panel */}
