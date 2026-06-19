@@ -330,11 +330,16 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 {isSectorLeader && (
                   <span style={{ fontSize: 11, color: '#FFD60A', whiteSpace: 'nowrap' }}>⭐旗手</span>
                 )}
-                {(persistentMap[s.stock_id] || 0) >= 2 && (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ios-green)', background: 'rgba(48,209,88,0.13)', borderRadius: 5, padding: '1px 5px', whiteSpace: 'nowrap', flexShrink: 0 }} title="近14天入榜次數">
-                    📅{persistentMap[s.stock_id]}次
-                  </span>
-                )}
+                {(persistentMap[s.stock_id]?.days || 0) >= 2 && (() => {
+                  const pm = persistentMap[s.stock_id]
+                  const trendArrow = pm.trend > 50 ? ' ↑' : pm.trend < -50 ? ' ↓' : ''
+                  const trendColor = pm.trend > 50 ? '#30D158' : pm.trend < -50 ? '#FF9F0A' : 'var(--ios-green)'
+                  return (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: trendColor, background: 'rgba(48,209,88,0.13)', borderRadius: 5, padding: '1px 5px', whiteSpace: 'nowrap', flexShrink: 0 }} title={`近14天入榜${pm.days}次，分數趨勢${pm.trend > 0 ? '上升' : '下滑'}${trendArrow}`}>
+                      📅{pm.days}次{trendArrow}
+                    </span>
+                  )
+                })()}
                 {rs5d > 0.01 && (
                   <span style={{ fontSize: 11, color: rs5d > 0.05 ? '#30D158' : '#94A3B8', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     RS <strong>+{(rs5d * 100).toFixed(1)}%</strong>
@@ -1282,7 +1287,7 @@ export default function Dashboard({ data, error }) {
   const watchlistStocks = useMemo(() => stocks.filter(s => watchlist.has(s.stock_id)), [stocks, watchlist])
   const persistentMap = useMemo(() => {
     const m = {}
-    ;(persistent || []).forEach(p => { m[p.stock_id] = p.days_in_top })
+    ;(persistent || []).forEach(p => { m[p.stock_id] = { days: p.days_in_top, trend: p.score_trend ?? 0 } })
     return m
   }, [persistent])
 
