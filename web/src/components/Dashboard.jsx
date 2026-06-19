@@ -167,7 +167,6 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const hasMarginWarning = marginChg > 5 || shortRatio > 15
           const fScore = s.f_score || 0
           const dealerStreak = s.dealer_buy_streak || 0
-          const revenueYoy = s.revenue_yoy || 0
           const skipReason = s.skip_reason || ''
           const expectedHoldDays = s.expected_hold_days || 0
           const baseExitSignal = s.base_exit_signal || false
@@ -177,6 +176,9 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const volumeBreak = s.volume_break || false
           const conditionCount = s.condition_count || 0
           const bbPctB = s.bb_pct_b ?? null
+          const momentumScore = s.momentum_score || 0
+          const revenueYoyValVal = s.revenue_yoy || 0
+          const revenueMom = s.revenue_mom || 0
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -351,14 +353,20 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     融{marginChg > 0 ? '↑' : '↓'}{Math.abs(marginChg).toFixed(1)}%
                   </span>
                 )}
-                {revenueYoy >= 0.05 && (
+                {revenueYoyVal >= 0.05 && (
                   <span style={{ fontSize: 11, color: '#30D158', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
-                    營收+{(revenueYoy * 100).toFixed(0)}%
+                    營收+{(revenueYoyVal * 100).toFixed(0)}%
+                    {revenueMom >= 0.05 && <span style={{ fontSize: 9, color: '#5AC8FA', marginLeft: 2 }}>MoM+{(revenueMom * 100).toFixed(0)}%</span>}
                   </span>
                 )}
-                {revenueYoy <= -0.10 && (
+                {revenueYoyVal <= -0.10 && (
                   <span style={{ fontSize: 11, color: '#FF453A', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
-                    營收{(revenueYoy * 100).toFixed(0)}%
+                    營收{(revenueYoyVal * 100).toFixed(0)}%
+                  </span>
+                )}
+                {momentumScore >= 50 && (
+                  <span title={`動能分數 ${momentumScore}`} style={{ fontSize: 11, color: momentumScore >= 80 ? '#FFD60A' : '#BF5AF2', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', fontWeight: 700 }}>
+                    MOM<strong>{Math.round(momentumScore)}</strong>
                   </span>
                 )}
                 {isEntry && expectedHoldDays > 0 && (
@@ -463,7 +471,7 @@ function BBPositionBar({ bbPctB, width = 56 }) {
 }
 
 /* ── Feature 3: Sector Heatmap ───────────────────────────────────── */
-function SectorHeatmap({ stocks }) {
+function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
   const sectors = useMemo(() => {
     const map = {}
     for (const s of stocks) {
@@ -501,27 +509,40 @@ function SectorHeatmap({ stocks }) {
     <div style={{ padding: '12px 16px 8px' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 10 }}>
         🌡 族群輪動熱圖（依市場RS均值排序）
+        {activeSector && (
+          <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--ios-blue)', fontWeight: 600 }}>
+            · 已篩：{activeSector}
+          </span>
+        )}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {sectors.map(sec => {
           const rsIntensity = sec.avgMarketRs / maxRs
           const hasEntry = sec.entries > 0
-          const bg = rsIntensity > 0.7
-            ? `rgba(48,209,88,${0.08 + rsIntensity * 0.20})`
-            : rsIntensity > 0.4
-              ? `rgba(10,132,255,${0.06 + rsIntensity * 0.12})`
-              : 'rgba(148,163,184,0.05)'
-          const textColor = rsIntensity > 0.7 ? '#30D158' : rsIntensity > 0.4 ? '#5AC8FA' : 'var(--ios-label3)'
-          const borderColor = rsIntensity > 0.7
-            ? `rgba(48,209,88,${0.15 + rsIntensity * 0.35})`
-            : rsIntensity > 0.4
-              ? `rgba(10,132,255,${0.15 + rsIntensity * 0.25})`
-              : 'var(--ios-sep)'
+          const isSelected = activeSector === sec.name
+          const bg = isSelected
+            ? 'rgba(10,132,255,0.18)'
+            : rsIntensity > 0.7
+              ? `rgba(48,209,88,${0.08 + rsIntensity * 0.20})`
+              : rsIntensity > 0.4
+                ? `rgba(10,132,255,${0.06 + rsIntensity * 0.12})`
+                : 'rgba(148,163,184,0.05)'
+          const textColor = isSelected ? '#0A84FF' : rsIntensity > 0.7 ? '#30D158' : rsIntensity > 0.4 ? '#5AC8FA' : 'var(--ios-label3)'
+          const borderColor = isSelected
+            ? 'rgba(10,132,255,0.6)'
+            : rsIntensity > 0.7
+              ? `rgba(48,209,88,${0.15 + rsIntensity * 0.35})`
+              : rsIntensity > 0.4
+                ? `rgba(10,132,255,${0.15 + rsIntensity * 0.25})`
+                : 'var(--ios-sep)'
           return (
-            <div key={sec.name} style={{
+            <div key={sec.name} onClick={() => onSectorClick && onSectorClick(sec.name)} style={{
               padding: '6px 10px', borderRadius: 10,
               background: bg, border: `0.5px solid ${borderColor}`,
               display: 'flex', flexDirection: 'column', gap: 2, minWidth: 88,
+              cursor: onSectorClick ? 'pointer' : 'default',
+              transform: isSelected ? 'scale(1.04)' : 'none',
+              transition: 'all 0.15s',
             }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: textColor, lineHeight: 1.3, letterSpacing: '-0.1px' }}>
                 {sec.name.length > 6 ? sec.name.slice(0, 6) + '…' : sec.name}
@@ -541,7 +562,7 @@ function SectorHeatmap({ stocks }) {
           )
         })}
       </div>
-      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 8 }}>RS=市場RS均值（跨類股百分位）· %=60日MA上方比例 · ↑=入榜支數</div>
+      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 8 }}>RS=市場RS均值（跨類股百分位）· %=60日MA上方比例 · ↑=入榜支數 · 點擊族群篩選</div>
     </div>
   )
 }
@@ -1846,7 +1867,14 @@ export default function Dashboard({ data, error }) {
             )}
           </div>
           {viewTab === 'heatmap' ? (
-            <SectorHeatmap stocks={stocks} />
+            <SectorHeatmap
+              stocks={stocks}
+              activeSector={activeSector}
+              onSectorClick={sec => {
+                setActiveSector(prev => prev === sec ? null : sec)
+                if (activeSector !== sec) setViewTab('all')
+              }}
+            />
           ) : viewTab === 'watchlist' && watchlistStocks.length === 0 ? (
             <div style={{ padding: '48px 20px', textAlign: 'center' }}>
               <div style={{ fontSize: 40, marginBottom: 10 }}>☆</div>
