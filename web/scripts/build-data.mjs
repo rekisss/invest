@@ -15,6 +15,10 @@ const TOP_N = 50
 const MAX_DATES = 30
 const MIN_VALID_STOCKS = 100   // fewer than this = very incomplete scan, skip as primary date (partial scans still shown)
 
+// Outcome stats only count scan data on or after this date.
+// Set to a date when the scoring system was stable. Changing this resets the win-rate panel.
+const OUTCOME_STATS_SINCE = '2026-06-23'
+
 // ── CSV parser ──────────────────────────────────────────────────────────────
 function parseCSVLine(line) {
   const result = []
@@ -591,8 +595,10 @@ function computeOutcomeStats(dates, dateMap, priceHistoryMap) {
   if (dates.length < 6) return buildResult(stats)
 
   // dates is sorted desc; skip dates[0..4] (too recent); process dates[5..]
+  // Only count dates on or after OUTCOME_STATS_SINCE to allow a clean reset.
   for (let i = 5; i < dates.length; i++) {
     const entryDate = dates[i]
+    if (OUTCOME_STATS_SINCE && entryDate < OUTCOME_STATS_SINCE) continue
     const rows = dateMap[entryDate]
     if (!rows) continue
 
@@ -650,8 +656,10 @@ function computeStrategyAccuracy(dates, dateMap, priceHistoryMap) {
   if (dates.length < maxH + 1) return finalize()
 
   // dates sorted desc; skip the maxH most recent (no forward outcome yet)
+  // Respect OUTCOME_STATS_SINCE to allow a clean baseline reset.
   for (let i = maxH; i < dates.length; i++) {
     const entryDate = dates[i]
+    if (OUTCOME_STATS_SINCE && entryDate < OUTCOME_STATS_SINCE) continue
     const rows = dateMap[entryDate]
     if (!rows) continue
 
