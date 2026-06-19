@@ -468,59 +468,76 @@ function SectorHeatmap({ stocks }) {
     const map = {}
     for (const s of stocks) {
       const sec = s.industry_category || '其他'
-      if (!map[sec]) map[sec] = { count: 0, entries: 0, totalScore: 0 }
+      if (!map[sec]) map[sec] = {
+        count: 0, entries: 0, totalScore: 0,
+        sectorRsRank: s.sector_rs_rank || 0,
+        breadth60: s.sector_breadth_60 || 0,
+        volZscore: s.sector_vol_zscore || 0,
+      }
       map[sec].count++
       if (s.entry_signal) map[sec].entries++
       map[sec].totalScore += s.entry_score || 0
+      // keep highest sector RS rank seen (in case stocks in same sector differ slightly)
+      if ((s.sector_rs_rank || 0) > map[sec].sectorRsRank) {
+        map[sec].sectorRsRank = s.sector_rs_rank || 0
+        map[sec].breadth60 = s.sector_breadth_60 || 0
+        map[sec].volZscore = s.sector_vol_zscore || 0
+      }
     }
     return Object.entries(map)
-      .map(([name, d]) => ({ name, ...d, entryRate: Math.round(d.entries / d.count * 100) }))
-      .sort((a, b) => b.entries - a.entries || b.entryRate - a.entryRate)
+      .map(([name, d]) => ({ name, ...d }))
+      .sort((a, b) => b.sectorRsRank - a.sectorRsRank || b.entries - a.entries)
       .slice(0, 30)
   }, [stocks])
 
   if (sectors.length === 0) return null
-  const maxEntries = Math.max(...sectors.map(s => s.entries), 1)
+  const maxRs = Math.max(...sectors.map(s => s.sectorRsRank), 1)
 
   return (
     <div style={{ padding: '12px 16px 8px' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 10 }}>
-        🌡 族群輪動熱圖
+        🌡 族群輪動熱圖（依類股RS排序）
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {sectors.map(sec => {
-          const intensity = sec.entries / maxEntries
-          const r = Math.round(48 + intensity * (48 - 48))
-          const g = Math.round(209 * intensity)
-          const b = Math.round(88 * intensity)
-          const bg = sec.entries > 0
-            ? `rgba(${48 + Math.round(intensity * 20)},${Math.round(209 * intensity)},${Math.round(88 * intensity)},${0.10 + intensity * 0.25})`
-            : 'rgba(148,163,184,0.07)'
-          const textColor = sec.entries > 0
-            ? (intensity > 0.5 ? '#30D158' : '#A8D8B9')
-            : 'var(--ios-label3)'
-          const borderColor = sec.entries > 0
-            ? `rgba(48,209,88,${0.15 + intensity * 0.4})`
-            : 'var(--ios-sep)'
+          const rsIntensity = sec.sectorRsRank / maxRs
+          const hasEntry = sec.entries > 0
+          const bg = rsIntensity > 0.7
+            ? `rgba(48,209,88,${0.08 + rsIntensity * 0.20})`
+            : rsIntensity > 0.4
+              ? `rgba(10,132,255,${0.06 + rsIntensity * 0.12})`
+              : 'rgba(148,163,184,0.05)'
+          const textColor = rsIntensity > 0.7 ? '#30D158' : rsIntensity > 0.4 ? '#5AC8FA' : 'var(--ios-label3)'
+          const borderColor = rsIntensity > 0.7
+            ? `rgba(48,209,88,${0.15 + rsIntensity * 0.35})`
+            : rsIntensity > 0.4
+              ? `rgba(10,132,255,${0.15 + rsIntensity * 0.25})`
+              : 'var(--ios-sep)'
           return (
             <div key={sec.name} style={{
               padding: '6px 10px', borderRadius: 10,
               background: bg, border: `0.5px solid ${borderColor}`,
-              display: 'flex', flexDirection: 'column', gap: 2, minWidth: 80,
+              display: 'flex', flexDirection: 'column', gap: 2, minWidth: 88,
             }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: textColor, lineHeight: 1.3, letterSpacing: '-0.1px' }}>
                 {sec.name.length > 6 ? sec.name.slice(0, 6) + '…' : sec.name}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                {sec.entries > 0 && (
-                  <span style={{ fontSize: 10, color: '#30D158', fontWeight: 700 }}>↑{sec.entries}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                {sec.sectorRsRank > 0 && (
+                  <span style={{ fontSize: 9, color: textColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>RS{Math.round(sec.sectorRsRank)}</span>
                 )}
-                <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>{sec.count}支</span>
+                {sec.breadth60 > 0 && (
+                  <span style={{ fontSize: 9, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)' }}>{Math.round(sec.breadth60)}%</span>
+                )}
+                {hasEntry && (
+                  <span style={{ fontSize: 9, color: '#30D158', fontWeight: 700 }}>↑{sec.entries}</span>
+                )}
               </div>
             </div>
           )
         })}
       </div>
+      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 8 }}>RS=類股相對強度排名 · %=60日MA上方比例 · ↑=入榜支數</div>
     </div>
   )
 }
