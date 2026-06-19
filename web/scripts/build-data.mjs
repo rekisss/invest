@@ -537,6 +537,9 @@ function processScanData() {
       // insider / buyback
       insider_net_30d: r2(row.insider_net_30d),
       has_buyback: toBool(row.has_buyback),
+      // derived boolean flags for UI signal-chip filters
+      f_score_high: toNum(row.f_score) >= 7,
+      margin_shrinking: r2(row.margin_change_5d) < -1,
       // extra numeric fields not previously exported
       volume_ma20: r2(row.volume_ma20),
       sma5: r2(row.sma5),

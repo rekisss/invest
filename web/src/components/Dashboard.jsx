@@ -23,6 +23,8 @@ const SIGNAL_FILTERS = [
   { key: 'bb_squeeze_breakout',  label: 'BB突破' },
   { key: 'adx_trending',         label: 'ADX趨勢' },
   { key: 'rsi_strong',           label: 'RSI強勢' },
+  { key: 'f_score_high',         label: 'F-Score 7+' },
+  { key: 'margin_shrinking',     label: '融資縮減' },
 ]
 
 const GRADE_STYLE = {
