@@ -48,6 +48,7 @@ const REASON_LABEL = {
   obv_uptrend: 'OBV↑', bb_squeeze_breakout: 'BB突破', above_ichimoku_cloud: '雲上',
   cci_momentum: 'CCI強', mfi_strong: 'MFI強', williams_r_recovery: 'W%R回升',
   stronger_than_market: 'RS強', market_above_ma60: '大盤MA60上',
+  breakout_volume_confirm: '突破量確認',
 }
 
 const GRADE_STYLE = {
