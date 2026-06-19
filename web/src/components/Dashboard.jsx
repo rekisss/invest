@@ -3,6 +3,13 @@ import StockDetailModal from './StockDetailModal'
 
 const PAGE_SIZE = 50
 
+const FILTER_PRESETS = [
+  { label: '外資主攻', filters: ['foreign_buy_3d', 'invest_trust_buy_2d'], color: '#30D158' },
+  { label: '突破帶量', filters: ['breakout_20d', 'volume_break', 'adx_trending'], color: '#FF9F0A' },
+  { label: '基本面強', filters: ['f_score_high', 'margin_shrinking'], color: '#5AC8FA' },
+  { label: '技術共振', filters: ['macd_golden_cross', 'kd_golden_cross', 'rsi_strong'], color: '#BF5AF2' },
+]
+
 const SORT_OPTIONS = [
   { value: 'entry_score',           label: '分數' },
   { value: 'market_rs_rank',        label: '市場RS' },
@@ -32,6 +39,17 @@ const SIGNAL_FILTERS = [
   { key: 'margin_shrinking',     label: '融資縮減' },
   { key: 'volume_surge_3x',      label: '爆量3x+' },
 ]
+
+const REASON_LABEL = {
+  macd_golden_cross: 'MACD金叉', kd_golden_cross: 'KD金叉', hist_turn_positive: 'MACD翻正',
+  above_ema60: 'EMA60上', ema60_gt_ema120: '均線多頭', volume_break: '放量突破',
+  rsi_strong: 'RSI強', adx_trending: 'ADX趨勢', breakout_20d: '突破20高',
+  foreign_buy_3d: '外資連買', invest_trust_buy_2d: '投信買', dealer_buy_3d: '自營買',
+  obv_uptrend: 'OBV↑', bb_squeeze_breakout: 'BB突破', above_ichimoku_cloud: '雲上',
+  cci_momentum: 'CCI強', mfi_strong: 'MFI強', williams_r_recovery: 'W%R回升',
+  stronger_than_market: 'RS強', market_above_ma60: '大盤MA60上',
+  breakout_volume_confirm: '突破量確認',
+}
 
 const GRADE_STYLE = {
   A: { color: '#FFD60A', bg: 'rgba(255,214,10,0.15)',  border: 'rgba(255,214,10,0.35)' },
@@ -157,6 +175,8 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const gapTo20dHigh = s.gap_to_20d_high_pct ?? null
           const nearBreakout = gapTo20dHigh !== null && gapTo20dHigh >= 0 && gapTo20dHigh < 2
           const volumeBreak = s.volume_break || false
+          const conditionCount = s.condition_count || 0
+          const bbPctB = s.bb_pct_b ?? null
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -237,11 +257,26 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   }} />
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 700, color: scoreColor, fontFamily: 'var(--font-mono)', minWidth: 24, textAlign: 'right' }}>{normScore}</span>
-                <Sparkline data={s.price_history} />
+                <div style={{ flexShrink: 0 }}>
+                  <Sparkline data={s.price_history} stockId={s.stock_id} />
+                  <BBPositionBar bbPctB={s.bb_pct_b} width={56} />
+                </div>
                 {s.close != null && (
-                  <span style={{ fontSize: 12, color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)' }}>
-                    {s.close > 100 ? s.close.toFixed(0) : s.close.toFixed(1)}
-                  </span>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)' }}>
+                      {s.close > 100 ? s.close.toFixed(0) : s.close.toFixed(1)}
+                    </div>
+                    {s.day_return != null && s.day_return !== 0 && (
+                      <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, color: s.day_return > 0 ? '#FF453A' : '#30D158' }}>
+                        {s.day_return > 0 ? '+' : ''}{(s.day_return * 100).toFixed(1)}%
+                      </div>
+                    )}
+                    {s.return_5d != null && Math.abs(s.return_5d) >= 0.05 && (
+                      <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: s.return_5d > 0 ? '#FF9F0A' : '#30D158', opacity: 0.8 }} title="5日報酬">
+                        5d{s.return_5d > 0 ? '+' : ''}{(s.return_5d * 100).toFixed(0)}%
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -253,6 +288,11 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 <span style={{ fontSize: 11, color: adxColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                   ADX <strong>{adx.toFixed(0)}</strong>
                 </span>
+                {conditionCount > 0 && (
+                  <span title={`${conditionCount} 個技術條件達成`} style={{ fontSize: 11, color: conditionCount >= 9 ? '#30D158' : conditionCount >= 6 ? '#0A84FF' : '#94A3B8', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                    ✓<strong>{conditionCount}</strong>
+                  </span>
+                )}
                 {vol > 0 && (
                   vol >= 3 ? (
                     <span title="爆量（量比≥3x）" style={{ fontSize: 11, color: '#FF6B35', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', fontWeight: 700 }}>
@@ -291,11 +331,16 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 {isSectorLeader && (
                   <span style={{ fontSize: 11, color: '#FFD60A', whiteSpace: 'nowrap' }}>⭐旗手</span>
                 )}
-                {(persistentMap[s.stock_id] || 0) >= 2 && (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ios-green)', background: 'rgba(48,209,88,0.13)', borderRadius: 5, padding: '1px 5px', whiteSpace: 'nowrap', flexShrink: 0 }} title="近14天入榜次數">
-                    📅{persistentMap[s.stock_id]}次
-                  </span>
-                )}
+                {(persistentMap[s.stock_id]?.days || 0) >= 2 && (() => {
+                  const pm = persistentMap[s.stock_id]
+                  const trendArrow = pm.trend > 50 ? ' ↑' : pm.trend < -50 ? ' ↓' : ''
+                  const trendColor = pm.trend > 50 ? '#30D158' : pm.trend < -50 ? '#FF9F0A' : 'var(--ios-green)'
+                  return (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: trendColor, background: 'rgba(48,209,88,0.13)', borderRadius: 5, padding: '1px 5px', whiteSpace: 'nowrap', flexShrink: 0 }} title={`近14天入榜${pm.days}次，分數趨勢${pm.trend > 0 ? '上升' : '下滑'}${trendArrow}`}>
+                      📅{pm.days}次{trendArrow}
+                    </span>
+                  )
+                })()}
                 {rs5d > 0.01 && (
                   <span style={{ fontSize: 11, color: rs5d > 0.05 ? '#30D158' : '#94A3B8', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     RS <strong>+{(rs5d * 100).toFixed(1)}%</strong>
@@ -327,14 +372,21 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   </span>
                 )}
               </div>
-              {/* Row 4: entry reason + skip/exit warnings */}
+              {/* Row 4: entry reason chips + skip/exit warnings */}
               {(entryReason || skipReason || baseExitSignal) && (
                 <div style={{ marginTop: 4, lineHeight: 1.5 }}>
-                  {entryReason && (
-                    <div style={{ fontSize: 10, color: 'var(--ios-label3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      💡 {entryReason.split(';').slice(0, 2).join(' · ')}
-                    </div>
-                  )}
+                  {entryReason && (() => {
+                    const keys = entryReason.split(/[,;]/).map(s => s.trim()).filter(Boolean)
+                    const labels = keys.map(k => REASON_LABEL[k] || null).filter(Boolean).slice(0, 6)
+                    if (labels.length === 0) return null
+                    return (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 2 }}>
+                        {labels.map(l => (
+                          <span key={l} style={{ fontSize: 9, color: 'var(--ios-label3)', background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>{l}</span>
+                        ))}
+                      </div>
+                    )
+                  })()}
                   {skipReason && (
                     <div style={{ fontSize: 10, color: 'var(--ios-red)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       ⚠ {skipReason}
@@ -356,24 +408,57 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
 }
 
 /* ── Feature 1: Sparkline ────────────────────────────────────────── */
-function Sparkline({ data, width = 56, height = 20 }) {
+function Sparkline({ data, stockId, width = 56, height = 20, days = 60 }) {
   if (!data || data.length < 2) return null
-  const closes = data.map(p => p.close).filter(v => v != null)
+  const slice = data.slice(-days)
+  const closes = slice.map(p => p.close).filter(v => v != null)
   if (closes.length < 2) return null
   const min = Math.min(...closes), max = Math.max(...closes)
   const range = max - min || 1
+  const n = closes.length
   const pts = closes.map((c, i) => {
-    const x = (i / (closes.length - 1)) * width
+    const x = (i / (n - 1)) * width
     const y = height - ((c - min) / range) * (height - 3) - 1.5
-    return `${x.toFixed(1)},${y.toFixed(1)}`
-  }).join(' ')
-  const isUp = closes[closes.length - 1] >= closes[0]
+    return [x.toFixed(1), y.toFixed(1)]
+  })
+  const isUp = closes[n - 1] >= closes[0]
   const color = isUp ? '#30D158' : '#FF453A'
+  const linePoints = pts.map(([x, y]) => `${x},${y}`).join(' ')
+  const areaPoints = `0,${height} ${linePoints} ${width},${height}`
+  const gradId = `spk-${stockId || 'x'}`
+  const [lastX, lastY] = pts[pts.length - 1]
   return (
-    <svg width={width} height={height} style={{ flexShrink: 0, opacity: 0.85 }}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={closes.map((_, i) => (i / (closes.length - 1)) * width).pop().toFixed(1)} cy={(height - ((closes[closes.length - 1] - min) / range) * (height - 3) - 1.5).toFixed(1)} r="2" fill={color} />
+    <svg width={width} height={height} style={{ flexShrink: 0, opacity: 0.9 }}>
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.28"/>
+          <stop offset="100%" stopColor={color} stopOpacity="0.02"/>
+        </linearGradient>
+      </defs>
+      <polygon points={areaPoints} fill={`url(#${gradId})`}/>
+      <polyline points={linePoints} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lastX} cy={lastY} r="2" fill={color} />
     </svg>
+  )
+}
+
+/* ── BB Position Bar ─────────────────────────────────────────────── */
+function BBPositionBar({ bbPctB, width = 56 }) {
+  if (bbPctB == null) return null
+  // bb_pct_b: 0=lower band, 0.5=mid, 1=upper band, >1=above upper (breakout)
+  const clamped = Math.max(-0.2, Math.min(1.5, bbPctB))
+  const pct = Math.min(((clamped + 0.2) / 1.7) * 100, 100)
+  let color
+  if (bbPctB > 1.1) color = '#30D158'
+  else if (bbPctB > 0.8) color = '#34C759'
+  else if (bbPctB > 0.5) color = '#0A84FF'
+  else if (bbPctB > 0.2) color = '#FF9F0A'
+  else color = '#FF453A'
+  const label = bbPctB > 1.1 ? '突破上軌' : bbPctB > 0.8 ? '強勢上半' : bbPctB > 0.5 ? '中上' : bbPctB > 0.2 ? '中下' : '近下軌'
+  return (
+    <div title={`BB%B ${bbPctB.toFixed(2)} — ${label}`} style={{ width, height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
+      <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 9999 }}/>
+    </div>
   )
 }
 
@@ -383,59 +468,76 @@ function SectorHeatmap({ stocks }) {
     const map = {}
     for (const s of stocks) {
       const sec = s.industry_category || '其他'
-      if (!map[sec]) map[sec] = { count: 0, entries: 0, totalScore: 0 }
+      if (!map[sec]) map[sec] = {
+        count: 0, entries: 0, totalScore: 0,
+        sectorRsRank: s.sector_rs_rank || 0,
+        breadth60: s.sector_breadth_60 || 0,
+        volZscore: s.sector_vol_zscore || 0,
+      }
       map[sec].count++
       if (s.entry_signal) map[sec].entries++
       map[sec].totalScore += s.entry_score || 0
+      // keep highest sector RS rank seen (in case stocks in same sector differ slightly)
+      if ((s.sector_rs_rank || 0) > map[sec].sectorRsRank) {
+        map[sec].sectorRsRank = s.sector_rs_rank || 0
+        map[sec].breadth60 = s.sector_breadth_60 || 0
+        map[sec].volZscore = s.sector_vol_zscore || 0
+      }
     }
     return Object.entries(map)
-      .map(([name, d]) => ({ name, ...d, entryRate: Math.round(d.entries / d.count * 100) }))
-      .sort((a, b) => b.entries - a.entries || b.entryRate - a.entryRate)
+      .map(([name, d]) => ({ name, ...d }))
+      .sort((a, b) => b.sectorRsRank - a.sectorRsRank || b.entries - a.entries)
       .slice(0, 30)
   }, [stocks])
 
   if (sectors.length === 0) return null
-  const maxEntries = Math.max(...sectors.map(s => s.entries), 1)
+  const maxRs = Math.max(...sectors.map(s => s.sectorRsRank), 1)
 
   return (
     <div style={{ padding: '12px 16px 8px' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 10 }}>
-        🌡 族群輪動熱圖
+        🌡 族群輪動熱圖（依類股RS排序）
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {sectors.map(sec => {
-          const intensity = sec.entries / maxEntries
-          const r = Math.round(48 + intensity * (48 - 48))
-          const g = Math.round(209 * intensity)
-          const b = Math.round(88 * intensity)
-          const bg = sec.entries > 0
-            ? `rgba(${48 + Math.round(intensity * 20)},${Math.round(209 * intensity)},${Math.round(88 * intensity)},${0.10 + intensity * 0.25})`
-            : 'rgba(148,163,184,0.07)'
-          const textColor = sec.entries > 0
-            ? (intensity > 0.5 ? '#30D158' : '#A8D8B9')
-            : 'var(--ios-label3)'
-          const borderColor = sec.entries > 0
-            ? `rgba(48,209,88,${0.15 + intensity * 0.4})`
-            : 'var(--ios-sep)'
+          const rsIntensity = sec.sectorRsRank / maxRs
+          const hasEntry = sec.entries > 0
+          const bg = rsIntensity > 0.7
+            ? `rgba(48,209,88,${0.08 + rsIntensity * 0.20})`
+            : rsIntensity > 0.4
+              ? `rgba(10,132,255,${0.06 + rsIntensity * 0.12})`
+              : 'rgba(148,163,184,0.05)'
+          const textColor = rsIntensity > 0.7 ? '#30D158' : rsIntensity > 0.4 ? '#5AC8FA' : 'var(--ios-label3)'
+          const borderColor = rsIntensity > 0.7
+            ? `rgba(48,209,88,${0.15 + rsIntensity * 0.35})`
+            : rsIntensity > 0.4
+              ? `rgba(10,132,255,${0.15 + rsIntensity * 0.25})`
+              : 'var(--ios-sep)'
           return (
             <div key={sec.name} style={{
               padding: '6px 10px', borderRadius: 10,
               background: bg, border: `0.5px solid ${borderColor}`,
-              display: 'flex', flexDirection: 'column', gap: 2, minWidth: 80,
+              display: 'flex', flexDirection: 'column', gap: 2, minWidth: 88,
             }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: textColor, lineHeight: 1.3, letterSpacing: '-0.1px' }}>
                 {sec.name.length > 6 ? sec.name.slice(0, 6) + '…' : sec.name}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                {sec.entries > 0 && (
-                  <span style={{ fontSize: 10, color: '#30D158', fontWeight: 700 }}>↑{sec.entries}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                {sec.sectorRsRank > 0 && (
+                  <span style={{ fontSize: 9, color: textColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>RS{Math.round(sec.sectorRsRank)}</span>
                 )}
-                <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>{sec.count}支</span>
+                {sec.breadth60 > 0 && (
+                  <span style={{ fontSize: 9, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)' }}>{Math.round(sec.breadth60)}%</span>
+                )}
+                {hasEntry && (
+                  <span style={{ fontSize: 9, color: '#30D158', fontWeight: 700 }}>↑{sec.entries}</span>
+                )}
               </div>
             </div>
           )
         })}
       </div>
+      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 8 }}>RS=類股相對強度排名 · %=60日MA上方比例 · ↑=入榜支數</div>
     </div>
   )
 }
@@ -1203,7 +1305,7 @@ export default function Dashboard({ data, error }) {
   const watchlistStocks = useMemo(() => stocks.filter(s => watchlist.has(s.stock_id)), [stocks, watchlist])
   const persistentMap = useMemo(() => {
     const m = {}
-    ;(persistent || []).forEach(p => { m[p.stock_id] = p.days_in_top })
+    ;(persistent || []).forEach(p => { m[p.stock_id] = { days: p.days_in_top, trend: p.score_trend ?? 0 } })
     return m
   }, [persistent])
 
@@ -1356,6 +1458,44 @@ export default function Dashboard({ data, error }) {
             </div>
           </div>
         )}
+
+        {/* Market context micro-bar from prediction data */}
+        {pred?.market_data && (() => {
+          const md = pred.market_data
+          const fn = md.futures_net
+          const nc = md.night_change
+          const rsi = md.taiex_rsi
+          const disp = md.disposition_count
+          const chips = []
+          if (fn != null) chips.push({
+            label: `期貨 ${fn > 0 ? '+' : ''}${Math.round(fn / 1000)}k口`,
+            color: fn >= 0 ? '#30D158' : '#FF453A',
+          })
+          if (nc != null) chips.push({
+            label: `夜盤 ${nc > 0 ? '+' : ''}${Math.round(nc)}pt`,
+            color: nc >= 0 ? '#30D158' : '#FF453A',
+          })
+          if (rsi != null) chips.push({
+            label: `大盤RSI ${rsi.toFixed(0)}`,
+            color: rsi > 70 ? '#FF453A' : rsi > 60 ? '#FF9F0A' : rsi < 40 ? '#30D158' : '#94A3B8',
+          })
+          if (disp != null && disp > 0) chips.push({
+            label: `處置 ${disp}支`,
+            color: disp >= 50 ? '#FF453A' : '#FF9F0A',
+          })
+          if (chips.length === 0) return null
+          return (
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 4 }}>
+              {chips.map(chip => (
+                <span key={chip.label} style={{
+                  fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 9999,
+                  background: `${chip.color}15`, color: chip.color,
+                  border: `0.5px solid ${chip.color}40`, flexShrink: 0,
+                }}>{chip.label}</span>
+              ))}
+            </div>
+          )
+        })()}
 
         {/* Grade distribution summary */}
         {stocks.length > 0 && (() => {
@@ -1512,6 +1652,37 @@ export default function Dashboard({ data, error }) {
                 }}
               >✕ 清除</button>
             )}
+          </div>
+        )}
+
+        {/* Filter preset combos */}
+        {viewTab !== 'limitdown' && stocks.length > 0 && (
+          <div style={{ marginTop: 6, display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>組合</span>
+            {FILTER_PRESETS.map(preset => {
+              const isActive = preset.filters.every(k => activeSignals.has(k))
+              return (
+                <button key={preset.label} onClick={() => {
+                  setActiveSignals(prev => {
+                    if (isActive) {
+                      // deactivate: remove preset's filters
+                      const next = new Set(prev)
+                      preset.filters.forEach(k => next.delete(k))
+                      return next
+                    }
+                    // activate: add preset's filters (merge)
+                    return new Set([...prev, ...preset.filters])
+                  })
+                }} style={{
+                  flexShrink: 0, fontSize: 10, fontWeight: 700,
+                  padding: '3px 9px', borderRadius: 9999, cursor: 'pointer',
+                  border: `1px solid ${isActive ? preset.color : 'rgba(255,255,255,0.1)'}`,
+                  background: isActive ? `${preset.color}22` : 'var(--ios-bg3)',
+                  color: isActive ? preset.color : 'var(--ios-label3)',
+                  transition: 'all 0.15s',
+                }}>{isActive ? '✓ ' : ''}{preset.label}</button>
+              )
+            })}
           </div>
         )}
 
