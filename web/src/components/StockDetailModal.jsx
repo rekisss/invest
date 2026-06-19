@@ -1124,6 +1124,46 @@ function Section({ title, children }) {
 // ── Main modal ───────────────────────────────────────────────────────────────
 
 export default function StockDetailModal({ stock, notionInfo, onClose, allScans }) {
+  // Compute technical indicators from price_history for non-top-50 stocks.
+  // Top-50 stocks already have pre-computed values from Python scan; slim stocks don't.
+  // This fills all the "—" rows using the OHLCV bars we now carry for every scanned stock.
+  const ph = stock?.price_history
+  const ci = useMemo(() => {
+    if (!ph || ph.length < 26) return {}
+    const closes = ph.map(b => b.close)
+    const lastOf = arr => { for (let i = arr.length - 1; i >= 0; i--) { if (arr[i] != null && isFinite(arr[i])) return arr[i] } return null }
+    const hasHL = ph[0]?.high != null && ph[0]?.low != null
+    const hasVol = ph[0]?.volume != null
+
+    const ema20arr  = emaCalc(closes, 20)
+    const ema60arr  = emaCalc(closes, 60)
+    const ema120arr = emaCalc(closes, 120)
+    const { macdLine, signalLine, hist } = macdCalc(closes)
+    const bbs = bollingerCalc(closes, 20, 2)
+    let bb_pct_b = null, bb_bandwidth = null
+    for (let i = bbs.length - 1; i >= 0; i--) {
+      const b = bbs[i]
+      if (!b) continue
+      const bw = b.upper - b.lower
+      if (bw > 0) { bb_pct_b = (closes[i] - b.lower) / bw; bb_bandwidth = bw / b.mid }
+      break
+    }
+
+    let stoch_k = null, stoch_d = null, williams_r = null, cci20 = null, mfi14 = null
+    if (hasHL) {
+      const kd = kdCalc(ph); stoch_k = lastOf(kd.kArr); stoch_d = lastOf(kd.dArr)
+      williams_r = lastOf(williamsRCalc(ph))
+      cci20 = lastOf(cciCalc(ph))
+      if (hasVol) mfi14 = lastOf(mfiCalc(ph))
+    }
+
+    return {
+      ema20: lastOf(ema20arr), ema60: lastOf(ema60arr), ema120: lastOf(ema120arr),
+      macd: lastOf(macdLine), macd_signal: lastOf(signalLine), macd_hist: lastOf(hist),
+      bb_pct_b, bb_bandwidth, stoch_k, stoch_d, williams_r, cci20, mfi14,
+    }
+  }, [ph])
+
   if (!stock) return null
   const s = stock
   const n = notionInfo || null
@@ -1324,19 +1364,19 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
           })()}
           {s.sma5 > 0 && <Row label="SMA5" value={`${fmt(s.sma5, 1)} 元`} valueStyle={{ color: s.close > s.sma5 ? 'var(--ios-red)' : 'var(--ios-green)' }} />}
           {s.sma10 > 0 && <Row label="SMA10" value={`${fmt(s.sma10, 1)} 元`} valueStyle={{ color: s.close > s.sma10 ? 'var(--ios-red)' : 'var(--ios-green)' }} />}
-          <Row label="EMA20" value={fmt(s.ema20, 1)} />
-          <Row label="EMA60" value={fmt(s.ema60, 1)} />
-          <Row label="布林帶位置" value={fmt(s.bb_pct_b, 2)} />
-          <Row label="KD K值" value={fmt(s.stoch_k, 1)} />
-          <Row label="KD D值" value={fmt(s.stoch_d, 1)} />
-          <Row label="MACD" value={fmt(s.macd, 3)} />
-          <Row label="MACD訊號" value={fmt(s.macd_signal, 3)} valueStyle={{ color: colorNum(s.macd_signal) }} />
-          <Row label="MACD柱" value={fmt(s.macd_hist, 3)} valueStyle={{ color: colorNum(s.macd_hist) }} />
-          <Row label="EMA120" value={fmt(s.ema120, 1)} />
-          <Row label="BB帶寬" value={fmt(s.bb_bandwidth, 2)} valueStyle={{ color: s.bb_bandwidth != null && s.bb_bandwidth < 0.05 ? 'var(--ios-yellow)' : 'var(--ios-label)' }} />
-          <Row label="Williams %R" value={fmt(s.williams_r, 1)} valueStyle={{ color: s.williams_r < -80 ? 'var(--ios-green)' : s.williams_r > -20 ? 'var(--ios-red)' : 'var(--ios-label)' }} />
-          <Row label="CCI(20)" value={fmt(s.cci20, 1)} valueStyle={{ color: s.cci20 > 100 ? 'var(--ios-red)' : s.cci20 < -100 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
-          <Row label="MFI(14)" value={fmt(s.mfi14, 1)} valueStyle={{ color: s.mfi14 > 80 ? 'var(--ios-red)' : s.mfi14 < 20 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
+          <Row label="EMA20" value={fmt(s.ema20 ?? ci.ema20, 1)} />
+          <Row label="EMA60" value={fmt(s.ema60 ?? ci.ema60, 1)} />
+          {(() => { const v = s.bb_pct_b ?? ci.bb_pct_b; return <Row label="布林帶位置" value={fmt(v, 2)} /> })()}
+          {(() => { const k = s.stoch_k ?? ci.stoch_k; return <Row label="KD K值" value={fmt(k, 1)} /> })()}
+          {(() => { const d = s.stoch_d ?? ci.stoch_d; return <Row label="KD D值" value={fmt(d, 1)} /> })()}
+          {(() => { const v = s.macd ?? ci.macd; return <Row label="MACD" value={fmt(v, 3)} /> })()}
+          {(() => { const v = s.macd_signal ?? ci.macd_signal; return <Row label="MACD訊號" value={fmt(v, 3)} valueStyle={{ color: colorNum(v) }} /> })()}
+          {(() => { const v = s.macd_hist ?? ci.macd_hist; return <Row label="MACD柱" value={fmt(v, 3)} valueStyle={{ color: colorNum(v) }} /> })()}
+          <Row label="EMA120" value={fmt(s.ema120 ?? ci.ema120, 1)} />
+          {(() => { const v = s.bb_bandwidth ?? ci.bb_bandwidth; return <Row label="BB帶寬" value={fmt(v, 2)} valueStyle={{ color: v != null && v < 0.05 ? 'var(--ios-yellow)' : 'var(--ios-label)' }} /> })()}
+          {(() => { const v = s.williams_r ?? ci.williams_r; return <Row label="Williams %R" value={fmt(v, 1)} valueStyle={{ color: v < -80 ? 'var(--ios-green)' : v > -20 ? 'var(--ios-red)' : 'var(--ios-label)' }} /> })()}
+          {(() => { const v = s.cci20 ?? ci.cci20; return <Row label="CCI(20)" value={fmt(v, 1)} valueStyle={{ color: v > 100 ? 'var(--ios-red)' : v < -100 ? 'var(--ios-green)' : 'var(--ios-label)' }} /> })()}
+          {(() => { const v = s.mfi14 ?? ci.mfi14; return <Row label="MFI(14)" value={fmt(v, 1)} valueStyle={{ color: v > 80 ? 'var(--ios-red)' : v < 20 ? 'var(--ios-green)' : 'var(--ios-label)' }} /> })()}
           <Row label="動能分數" value={fmt(s.momentum_score, 0)} />
           <Row label="相對強度5日" value={pct(s.relative_strength_5d != null ? s.relative_strength_5d * 100 : null)} valueStyle={{ color: colorNum(s.relative_strength_5d) }} />
         </Section>
