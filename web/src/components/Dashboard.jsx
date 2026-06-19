@@ -470,37 +470,41 @@ function SectorHeatmap({ stocks }) {
       const sec = s.industry_category || '其他'
       if (!map[sec]) map[sec] = {
         count: 0, entries: 0, totalScore: 0,
-        sectorRsRank: s.sector_rs_rank || 0,
-        breadth60: s.sector_breadth_60 || 0,
-        volZscore: s.sector_vol_zscore || 0,
+        totalMarketRs: 0, totalBreadth60: 0, breadth60Count: 0,
       }
       map[sec].count++
       if (s.entry_signal) map[sec].entries++
       map[sec].totalScore += s.entry_score || 0
-      // keep highest sector RS rank seen (in case stocks in same sector differ slightly)
-      if ((s.sector_rs_rank || 0) > map[sec].sectorRsRank) {
-        map[sec].sectorRsRank = s.sector_rs_rank || 0
-        map[sec].breadth60 = s.sector_breadth_60 || 0
-        map[sec].volZscore = s.sector_vol_zscore || 0
+      // Use market_rs_rank (cross-sector percentile) for aggregation — avoids each sector
+      // always having a max near 100 that sector_rs_rank (intra-sector) would produce.
+      map[sec].totalMarketRs += s.market_rs_rank || 0
+      if (s.sector_breadth_60 > 0) {
+        map[sec].totalBreadth60 += s.sector_breadth_60
+        map[sec].breadth60Count++
       }
     }
     return Object.entries(map)
-      .map(([name, d]) => ({ name, ...d }))
-      .sort((a, b) => b.sectorRsRank - a.sectorRsRank || b.entries - a.entries)
+      .map(([name, d]) => ({
+        name, count: d.count, entries: d.entries,
+        avgScore: d.count > 0 ? d.totalScore / d.count : 0,
+        avgMarketRs: d.count > 0 ? d.totalMarketRs / d.count : 0,
+        breadth60: d.breadth60Count > 0 ? d.totalBreadth60 / d.breadth60Count : 0,
+      }))
+      .sort((a, b) => b.avgMarketRs - a.avgMarketRs || b.entries - a.entries)
       .slice(0, 30)
   }, [stocks])
 
   if (sectors.length === 0) return null
-  const maxRs = Math.max(...sectors.map(s => s.sectorRsRank), 1)
+  const maxRs = Math.max(...sectors.map(s => s.avgMarketRs), 1)
 
   return (
     <div style={{ padding: '12px 16px 8px' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 10 }}>
-        🌡 族群輪動熱圖（依類股RS排序）
+        🌡 族群輪動熱圖（依市場RS均值排序）
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {sectors.map(sec => {
-          const rsIntensity = sec.sectorRsRank / maxRs
+          const rsIntensity = sec.avgMarketRs / maxRs
           const hasEntry = sec.entries > 0
           const bg = rsIntensity > 0.7
             ? `rgba(48,209,88,${0.08 + rsIntensity * 0.20})`
@@ -523,8 +527,8 @@ function SectorHeatmap({ stocks }) {
                 {sec.name.length > 6 ? sec.name.slice(0, 6) + '…' : sec.name}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                {sec.sectorRsRank > 0 && (
-                  <span style={{ fontSize: 9, color: textColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>RS{Math.round(sec.sectorRsRank)}</span>
+                {sec.avgMarketRs > 0 && (
+                  <span style={{ fontSize: 9, color: textColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>RS{Math.round(sec.avgMarketRs)}</span>
                 )}
                 {sec.breadth60 > 0 && (
                   <span style={{ fontSize: 9, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)' }}>{Math.round(sec.breadth60)}%</span>
@@ -537,7 +541,7 @@ function SectorHeatmap({ stocks }) {
           )
         })}
       </div>
-      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 8 }}>RS=類股相對強度排名 · %=60日MA上方比例 · ↑=入榜支數</div>
+      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 8 }}>RS=市場RS均值（跨類股百分位）· %=60日MA上方比例 · ↑=入榜支數</div>
     </div>
   )
 }
