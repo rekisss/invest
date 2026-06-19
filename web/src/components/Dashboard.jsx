@@ -729,6 +729,61 @@ function SignalChangeSection({ newEntry, dropped, onSelect }) {
   )
 }
 
+function ScoreMoversSection({ stocks, scoreDeltaMap, onSelect }) {
+  const { gainers, losers } = useMemo(() => {
+    if (!scoreDeltaMap || Object.keys(scoreDeltaMap).length === 0) return { gainers: [], losers: [] }
+    const withDelta = stocks
+      .map(s => ({ ...s, _delta: scoreDeltaMap[String(s.stock_id)] ?? null }))
+      .filter(s => s._delta !== null && Math.abs(s._delta) >= 80)
+    const gainers = withDelta.filter(s => s._delta > 0).sort((a, b) => b._delta - a._delta).slice(0, 5)
+    const losers  = withDelta.filter(s => s._delta < 0).sort((a, b) => a._delta - b._delta).slice(0, 5)
+    return { gainers, losers }
+  }, [stocks, scoreDeltaMap])
+
+  if (gainers.length === 0 && losers.length === 0) return null
+
+  const Pill = ({ s, isGain, onClick }) => (
+    <button onClick={onClick} style={{
+      background: isGain ? 'rgba(48,209,88,0.10)' : 'rgba(255,69,58,0.10)',
+      border: `0.5px solid ${isGain ? 'rgba(48,209,88,0.3)' : 'rgba(255,69,58,0.3)'}`,
+      borderRadius: 8, padding: '4px 9px', cursor: 'pointer',
+      display: 'flex', alignItems: 'center', gap: 6,
+    }}>
+      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)' }}>{s.stock_id}</span>
+      <span style={{ fontSize: 11, color: 'var(--ios-label2)' }}>{s.name}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: isGain ? '#30D158' : '#FF453A', fontFamily: 'var(--font-mono)' }}>
+        {isGain ? '▲' : '▼'}{Math.abs(Math.round(s._delta))}
+      </span>
+    </button>
+  )
+
+  return (
+    <div style={{ margin: '0 16px 16px' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.7, textTransform: 'uppercase', padding: '0 4px 8px' }}>
+        📊 分數大幅變動（較前日）
+      </div>
+      <div className="glass-panel" style={{ overflow: 'hidden', padding: '10px 14px' }}>
+        {gainers.length > 0 && (
+          <div style={{ marginBottom: losers.length ? 10 : 0 }}>
+            <div style={{ fontSize: 10, color: '#30D158', fontWeight: 700, marginBottom: 5 }}>▲ 大漲（+80分以上）</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {gainers.map(s => <Pill key={s.stock_id} s={s} isGain onClick={() => onSelect?.(s)} />)}
+            </div>
+          </div>
+        )}
+        {losers.length > 0 && (
+          <div>
+            <div style={{ fontSize: 10, color: '#FF453A', fontWeight: 700, marginBottom: 5 }}>▼ 大跌（−80分以上）</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {losers.map(s => <Pill key={s.stock_id} s={s} isGain={false} onClick={() => onSelect?.(s)} />)}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function NearBreakoutSection({ stocks, onSelect }) {
   const candidates = useMemo(() => {
     return (stocks || [])
@@ -2102,6 +2157,7 @@ export default function Dashboard({ data, error }) {
           dropped={signalChanges.dropped}
           onSelect={setSelectedStock}
         />
+        <ScoreMoversSection stocks={stocks} scoreDeltaMap={scoreDeltaMap} onSelect={setSelectedStock} />
 
         {persistent.length > 0 && (
           <PersistentSection
