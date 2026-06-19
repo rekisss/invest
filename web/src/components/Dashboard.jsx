@@ -1155,6 +1155,117 @@ function DailyActionPanel({ scan, prevScan, persistent }) {
   )
 }
 
+/* ── Today vs Previous Day comparison ───────────────────────────── */
+function DateComparisonPanel({ scan, prevScan }) {
+  const todayStocks = scan?.top_stocks || []
+  const prevStocks  = prevScan?.top_stocks || []
+  if (!prevStocks.length || !todayStocks.length) return null
+
+  const todayEntry  = todayStocks.filter(s => s.entry_signal).length
+  const prevEntry   = prevStocks.filter(s => s.entry_signal).length
+  const todayAB     = todayStocks.filter(s => s.grade === 'A' || s.grade === 'B').length
+  const prevAB      = prevStocks.filter(s => s.grade === 'A' || s.grade === 'B').length
+  const todayAvg    = Math.round(todayStocks.reduce((a, s) => a + (s.entry_score || 0), 0) / (todayStocks.length || 1))
+  const prevAvg     = Math.round(prevStocks.reduce((a, s) => a + (s.entry_score || 0), 0) / (prevStocks.length || 1))
+
+  const topSector = (arr) => {
+    const m = {}
+    for (const s of arr) if (s.entry_signal) m[s.industry_category || '其他'] = (m[s.industry_category || '其他'] || 0) + 1
+    return Object.entries(m).sort((a, b) => b[1] - a[1])[0] || null
+  }
+  const todaySec = topSector(todayStocks)
+  const prevSec  = topSector(prevStocks)
+
+  const rows = [
+    { label: '進場訊號', today: todayEntry, prev: prevEntry, suffix: '支' },
+    { label: 'A/B 級',   today: todayAB,    prev: prevAB,    suffix: '支' },
+    { label: '均分',     today: todayAvg,   prev: prevAvg,   suffix: '' },
+  ]
+
+  const overallDelta = (todayEntry - prevEntry) + (todayAB - prevAB)
+  const headerColor = overallDelta > 0 ? '#30D158' : overallDelta < 0 ? '#FF453A' : 'var(--ios-label3)'
+
+  return (
+    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '12px 14px', boxShadow: 'var(--shadow-card)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: headerColor, letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 8 }}>
+        🔀 今日 vs 前日
+      </div>
+      {rows.map((r, i) => {
+        const delta = r.today - r.prev
+        const dColor = delta > 0 ? '#30D158' : delta < 0 ? '#FF453A' : 'var(--ios-label3)'
+        return (
+          <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '0.5px solid var(--ios-sep)' }}>
+            <span style={{ fontSize: 12, color: 'var(--ios-label2)', flex: 1 }}>{r.label}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-label)', fontFamily: 'var(--font-mono)' }}>
+              {r.today.toLocaleString()}{r.suffix}
+            </span>
+            {delta !== 0 && (
+              <span style={{ fontSize: 11, fontWeight: 700, color: dColor, fontFamily: 'var(--font-mono)', minWidth: 36, textAlign: 'right', flexShrink: 0 }}>
+                {delta > 0 ? '▲' : '▼'}{Math.abs(delta).toLocaleString()}
+              </span>
+            )}
+            {delta === 0 && <span style={{ fontSize: 11, color: 'var(--ios-label4)', minWidth: 36, textAlign: 'right', flexShrink: 0 }}>—</span>}
+          </div>
+        )
+      })}
+      {todaySec && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 5 }}>
+          <span style={{ fontSize: 12, color: 'var(--ios-label2)', flex: 1 }}>主導族群</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ios-blue)' }}>
+            {todaySec[0]} <span style={{ color: 'var(--ios-label3)', fontWeight: 400 }}>{todaySec[1]}支</span>
+          </span>
+          {prevSec && prevSec[0] !== todaySec[0] && (
+            <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>← {prevSec[0]}</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Market Breadth Bar ──────────────────────────────────────────── */
+function MarketBreadthBar({ stocks }) {
+  const stats = useMemo(() => {
+    const n = stocks.length || 1
+    const ema60    = stocks.filter(s => s.above_ema60).length
+    const trending = stocks.filter(s => s.adx_trending).length
+    const rsiStr   = stocks.filter(s => s.rsi_strong).length
+    const foreign  = stocks.filter(s => (s.foreign_buy_streak || 0) >= 1).length
+    return [
+      { label: 'EMA60上', value: ema60,    pct: ema60 / n * 100,    color: '#30D158' },
+      { label: 'ADX趨勢', value: trending, pct: trending / n * 100, color: '#5AC8FA' },
+      { label: 'RSI強勢', value: rsiStr,   pct: rsiStr / n * 100,   color: '#FF9F0A' },
+      { label: '外資買',  value: foreign,  pct: foreign / n * 100,  color: '#BF5AF2' },
+    ]
+  }, [stocks])
+
+  if (!stocks.length) return null
+  const allZero = stats.every(s => s.value === 0)
+  if (allZero) return null
+
+  return (
+    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '12px 14px', boxShadow: 'var(--shadow-card)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
+        📡 市場廣度（前 {stocks.length} 名）
+      </div>
+      {stats.map(s => (
+        <div key={s.label} style={{ marginBottom: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+            <span style={{ fontSize: 11, color: 'var(--ios-label2)' }}>{s.label}</span>
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: s.color, fontWeight: 700 }}>
+              {s.value} 支 ({s.pct.toFixed(0)}%)
+            </span>
+          </div>
+          <div style={{ height: 4, background: 'var(--ios-fill2)', borderRadius: 9999, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${s.pct}%`, background: s.color, borderRadius: 9999, transition: 'width 0.7s cubic-bezier(0.34,1.56,0.64,1)' }} />
+          </div>
+        </div>
+      ))}
+      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 4 }}>EMA60上＝站穩60日均線；ADX趨勢＝ADX>25強趨勢；RSI強勢＝RSI>55；外資買＝外資連買中</div>
+    </div>
+  )
+}
+
 /* ── Institutional money-flow leaderboard ────────────────────────── */
 function InstitutionalLeaderboard({ stocks, onSelect }) {
   const ranked = useMemo(() => {
@@ -2051,6 +2162,8 @@ export default function Dashboard({ data, error }) {
         <OutcomeStatsPanel outcomeStats={outcomeStats} />
         <StrategyAccuracyPanel accuracy={data.strategyAccuracy} />
         <BacktestSimulator accuracy={data.strategyAccuracy} />
+        <DateComparisonPanel scan={scan} prevScan={prevScan} />
+        <MarketBreadthBar stocks={stocks} />
         <InstitutionalLeaderboard stocks={stocks} onSelect={setSelectedStock} />
         <SectorRotationTracker scans={data.scans} dates={sortedDates} />
         <DailyActionPanel scan={scan} prevScan={prevScan} persistent={persistent} />
