@@ -684,7 +684,7 @@ function SignalChangeSection({ newEntry, dropped, onSelect }) {
   return (
     <div style={{ margin: '0 16px 16px' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.7, textTransform: 'uppercase', padding: '0 4px 8px' }}>
-        📡 今日訊號變化（vs 前一日）
+        📡 今日訊號變化（vs 前一日，限前N名）
       </div>
       <div className="glass-panel" style={{ overflow: 'hidden', padding: '10px 14px' }}>
         {newEntry.length > 0 && (
@@ -1547,15 +1547,22 @@ export default function Dashboard({ data, error }) {
     return map
   }, [stocks, prevScan])
 
-  // Signal change: stocks that newly entered or dropped out of entry_signal vs previous date
+  // Signal change: stocks that newly entered or dropped out of entry_signal vs previous date.
+  // Scope is limited to today's top_stocks list — we can't detect changes outside that cutoff.
+  // "dropped" only counts stocks still visible today (but lost signal), not those that fell off the list.
   const signalChanges = useMemo(() => {
     if (!prevScan?.top_stocks) return { newEntry: [], dropped: [] }
     const prevEntryIds = new Set(prevScan.top_stocks.filter(s => s.entry_signal).map(s => String(s.stock_id)))
+    const todayStockIds = new Set(stocks.map(s => String(s.stock_id)))
     const todayEntryIds = new Set(entryStocks.map(s => String(s.stock_id)))
     const newEntry = entryStocks.filter(s => !prevEntryIds.has(String(s.stock_id)))
-    const dropped = (prevScan.top_stocks || []).filter(s => s.entry_signal && !todayEntryIds.has(String(s.stock_id)))
+    const dropped = (prevScan.top_stocks || []).filter(s =>
+      s.entry_signal &&
+      todayStockIds.has(String(s.stock_id)) &&
+      !todayEntryIds.has(String(s.stock_id))
+    )
     return { newEntry, dropped }
-  }, [entryStocks, prevScan])
+  }, [entryStocks, prevScan, stocks])
 
   const persistentMap = useMemo(() => {
     const m = {}
