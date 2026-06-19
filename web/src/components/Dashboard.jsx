@@ -728,7 +728,7 @@ function OutcomeStatsPanel({ outcomeStats }) {
         })}
       </div>
       <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 8, textAlign: 'right' }}>
-        基於歷史掃描交叉驗算（入場後第5個交易日收盤）
+        基於歷史掃描交叉驗算（入場後第5個交易日收盤）· 統計起算：2026-06-23
       </div>
     </div>
   )
@@ -788,7 +788,7 @@ function StrategyAccuracyPanel({ accuracy }) {
         </div>
       ))}
       <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 6, lineHeight: 1.5 }}>
-        勝率＝N日後收盤上漲比例；下方為平均報酬。若高分股勝率與報酬持續高於全市場均值，代表評分有預測力。樣本取自近期歷史掃描，期間有限僅供參考。
+        勝率＝N日後收盤上漲比例；下方為平均報酬。若高分股勝率與報酬持續高於全市場均值，代表評分有預測力。統計起算：2026-06-23（新基準），資料累積中。
       </div>
     </div>
   )
