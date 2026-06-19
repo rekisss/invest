@@ -3,6 +3,13 @@ import StockDetailModal from './StockDetailModal'
 
 const PAGE_SIZE = 50
 
+const FILTER_PRESETS = [
+  { label: '外資主攻', filters: ['foreign_buy_3d', 'invest_trust_buy_2d'], color: '#30D158' },
+  { label: '突破帶量', filters: ['breakout_20d', 'volume_break', 'adx_trending'], color: '#FF9F0A' },
+  { label: '基本面強', filters: ['f_score_high', 'margin_shrinking'], color: '#5AC8FA' },
+  { label: '技術共振', filters: ['macd_golden_cross', 'kd_golden_cross', 'rsi_strong'], color: '#BF5AF2' },
+]
+
 const SORT_OPTIONS = [
   { value: 'entry_score',           label: '分數' },
   { value: 'market_rs_rank',        label: '市場RS' },
@@ -1400,6 +1407,44 @@ export default function Dashboard({ data, error }) {
           </div>
         )}
 
+        {/* Market context micro-bar from prediction data */}
+        {pred?.market_data && (() => {
+          const md = pred.market_data
+          const fn = md.futures_net
+          const nc = md.night_change
+          const rsi = md.taiex_rsi
+          const disp = md.disposition_count
+          const chips = []
+          if (fn != null) chips.push({
+            label: `期貨 ${fn > 0 ? '+' : ''}${Math.round(fn / 1000)}k口`,
+            color: fn >= 0 ? '#30D158' : '#FF453A',
+          })
+          if (nc != null) chips.push({
+            label: `夜盤 ${nc > 0 ? '+' : ''}${Math.round(nc)}pt`,
+            color: nc >= 0 ? '#30D158' : '#FF453A',
+          })
+          if (rsi != null) chips.push({
+            label: `大盤RSI ${rsi.toFixed(0)}`,
+            color: rsi > 70 ? '#FF453A' : rsi > 60 ? '#FF9F0A' : rsi < 40 ? '#30D158' : '#94A3B8',
+          })
+          if (disp != null && disp > 0) chips.push({
+            label: `處置 ${disp}支`,
+            color: disp >= 50 ? '#FF453A' : '#FF9F0A',
+          })
+          if (chips.length === 0) return null
+          return (
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 4 }}>
+              {chips.map(chip => (
+                <span key={chip.label} style={{
+                  fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 9999,
+                  background: `${chip.color}15`, color: chip.color,
+                  border: `0.5px solid ${chip.color}40`, flexShrink: 0,
+                }}>{chip.label}</span>
+              ))}
+            </div>
+          )
+        })()}
+
         {/* Grade distribution summary */}
         {stocks.length > 0 && (() => {
           const hasAnyFilter = activeGrades.size > 0 || activeSignals.size > 0 || activeSector || searchQuery.trim()
@@ -1555,6 +1600,37 @@ export default function Dashboard({ data, error }) {
                 }}
               >✕ 清除</button>
             )}
+          </div>
+        )}
+
+        {/* Filter preset combos */}
+        {viewTab !== 'limitdown' && stocks.length > 0 && (
+          <div style={{ marginTop: 6, display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>組合</span>
+            {FILTER_PRESETS.map(preset => {
+              const isActive = preset.filters.every(k => activeSignals.has(k))
+              return (
+                <button key={preset.label} onClick={() => {
+                  setActiveSignals(prev => {
+                    if (isActive) {
+                      // deactivate: remove preset's filters
+                      const next = new Set(prev)
+                      preset.filters.forEach(k => next.delete(k))
+                      return next
+                    }
+                    // activate: add preset's filters (merge)
+                    return new Set([...prev, ...preset.filters])
+                  })
+                }} style={{
+                  flexShrink: 0, fontSize: 10, fontWeight: 700,
+                  padding: '3px 9px', borderRadius: 9999, cursor: 'pointer',
+                  border: `1px solid ${isActive ? preset.color : 'rgba(255,255,255,0.1)'}`,
+                  background: isActive ? `${preset.color}22` : 'var(--ios-bg3)',
+                  color: isActive ? preset.color : 'var(--ios-label3)',
+                  transition: 'all 0.15s',
+                }}>{isActive ? '✓ ' : ''}{preset.label}</button>
+              )
+            })}
           </div>
         )}
 
