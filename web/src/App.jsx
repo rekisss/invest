@@ -8,6 +8,7 @@ const PredictionPanel = lazy(() => import('./components/PredictionPanel.jsx'))
 const ApiKeyInput = lazy(() => import('./components/ApiKeyInput.jsx'))
 const AgentPanel = lazy(() => import('./components/AgentPanel.jsx'))
 const QuotaPanel = lazy(() => import('./components/QuotaPanel.jsx'))
+const Portfolio = lazy(() => import('./components/Portfolio.jsx'))
 
 const BASE = import.meta.env.BASE_URL || '/'
 
@@ -24,17 +25,19 @@ function startsOnHScrollable(target, root) {
 }
 
 const TABS = [
-  { key: 'overview',  label: '總覽', icon: '⚡' },
-  { key: 'dashboard', label: '掃描', icon: '📊' },
-  { key: 'news',      label: '新聞', icon: '📰' },
-  { key: 'predict',   label: '預測', icon: '🔮' },
-  { key: 'quota',     label: '配額', icon: '📡' },
-  { key: 'ai',        label: 'AI',   icon: '🤖' },
+  { key: 'overview',   label: '總覽', icon: '⚡' },
+  { key: 'dashboard',  label: '掃描', icon: '📊' },
+  { key: 'portfolio',  label: '持倉', icon: '💼' },
+  { key: 'news',       label: '新聞', icon: '📰' },
+  { key: 'predict',    label: '預測', icon: '🔮' },
+  { key: 'quota',      label: '配額', icon: '📡' },
+  { key: 'ai',         label: 'AI',   icon: '🤖' },
 ]
 
 const TAB_TITLES = {
   overview:  '今日總覽',
   dashboard: '掃描結果',
+  portfolio: '持倉追蹤',
   news:      '市場新聞',
   predict:   '盤前預測',
   quota:     '配額狀態',
@@ -166,9 +169,10 @@ export default function App() {
   const tabContent = (() => {
     if (loading) return null
     switch (tab) {
-      case 'overview':  return <Overview data={data} error={error} />
-      case 'dashboard': return <Dashboard data={data} error={error} />
-      case 'news':      return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} />
+      case 'overview':   return <Overview data={data} error={error} />
+      case 'dashboard':  return <Dashboard data={data} error={error} />
+      case 'portfolio':  return <Portfolio data={data} />
+      case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} />
       case 'predict':   return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />
       case 'quota':     return <QuotaPanel quota={data?.quota} generatedAt={data?.generated_at} />
       case 'ai':        return apiKey
