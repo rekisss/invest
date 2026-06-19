@@ -1713,8 +1713,10 @@ export default function Dashboard({ data, error }) {
     return counts
   }, [allScanStocks])
 
-  // Reset page whenever filters or tab/date change
-  useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals, activeGrades, activeSector])
+  const [showAllFiltered, setShowAllFiltered] = useState(false)
+
+  // Reset page and show-all whenever filters or tab/date change
+  useEffect(() => { setPage(0); setShowAllFiltered(false) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals, activeGrades, activeSector])
 
   const hasActiveFilter = activeSignals.size > 0 || activeGrades.size > 0 || !!activeSector || !!searchQuery.trim()
   const baseStocks = viewTab === 'entry' ? entryStocks
@@ -1760,8 +1762,16 @@ export default function Dashboard({ data, error }) {
     })
   }, [baseStocks, searchQuery, sortField, sortDir, activeSignals, activeGrades, activeSector])
 
-  const totalPages = Math.ceil(filteredAndSorted.length / PAGE_SIZE)
-  const pagedStocks = filteredAndSorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  // When a grade/signal/sector/preset filter is active in the 'all' tab, cap to top 20
+  // so the user sees "top 20 from full universe" — avoids scrolling through hundreds.
+  // Search is intentionally excluded from the cap (user is looking for a specific stock).
+  const FILTER_CAP = 20
+  const filterCapActive = (activeSignals.size > 0 || activeGrades.size > 0 || !!activeSector) &&
+    !searchQuery.trim() && viewTab === 'all' && !showAllFiltered && filteredAndSorted.length > FILTER_CAP
+  const displayList = filterCapActive ? filteredAndSorted.slice(0, FILTER_CAP) : filteredAndSorted
+
+  const totalPages = Math.ceil(displayList.length / PAGE_SIZE)
+  const pagedStocks = displayList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   const viewOptions = [
     { id: 'all',       label: `全部` },
@@ -2247,6 +2257,11 @@ export default function Dashboard({ data, error }) {
                 </>
               )
             })()}
+            {filterCapActive && (
+              <span style={{ fontSize: 12, color: 'var(--ios-label2)', fontWeight: 600 }}>
+                前 {FILTER_CAP} 強（共 {filteredAndSorted.length} 支符合）
+              </span>
+            )}
             {searchQuery && (
               <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>
                 找到 {filteredAndSorted.length} 支
@@ -2279,6 +2294,21 @@ export default function Dashboard({ data, error }) {
               persistentMap={persistentMap}
               scoreDeltaMap={scoreDeltaMap}
             />
+          )}
+          {/* Show-more button when result is capped at top 20 */}
+          {filterCapActive && (
+            <div style={{ padding: '10px 20px 4px', textAlign: 'center' }}>
+              <button
+                onClick={() => setShowAllFiltered(true)}
+                style={{
+                  background: 'var(--ios-bg3)', border: '0.5px solid rgba(255,255,255,0.12)',
+                  color: 'var(--ios-label2)', borderRadius: 12, padding: '8px 20px',
+                  fontSize: 13, cursor: 'pointer', width: '100%',
+                }}
+              >
+                顯示全部 {filteredAndSorted.length} 支符合結果 ↓
+              </button>
+            </div>
           )}
           {/* Pagination */}
           {totalPages > 1 && (
