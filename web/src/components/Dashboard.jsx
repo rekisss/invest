@@ -141,6 +141,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const hasMarginWarning = marginChg > 5 || shortRatio > 15
           const fScore = s.f_score || 0
           const dealerStreak = s.dealer_buy_streak || 0
+          const revenueYoy = s.revenue_yoy || 0
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -275,6 +276,16 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 {Math.abs(marginChg) >= 1 && (
                   <span style={{ fontSize: 11, color: marginChg < -1 ? '#30D158' : '#FF453A', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     融{marginChg > 0 ? '↑' : '↓'}{Math.abs(marginChg).toFixed(1)}%
+                  </span>
+                )}
+                {revenueYoy >= 0.05 && (
+                  <span style={{ fontSize: 11, color: '#30D158', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
+                    營收+{(revenueYoy * 100).toFixed(0)}%
+                  </span>
+                )}
+                {revenueYoy <= -0.10 && (
+                  <span style={{ fontSize: 11, color: '#FF453A', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
+                    營收{(revenueYoy * 100).toFixed(0)}%
                   </span>
                 )}
               </div>
