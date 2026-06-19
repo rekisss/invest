@@ -139,6 +139,8 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const marginChg = s.margin_change_5d || 0
           const shortRatio = s.short_ratio || 0
           const hasMarginWarning = marginChg > 5 || shortRatio > 15
+          const fScore = s.f_score || 0
+          const dealerStreak = s.dealer_buy_streak || 0
           const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
           const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
@@ -183,6 +185,13 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     title={marginChg > 5 ? `融資5日暴增 +${marginChg.toFixed(1)}%` : `融券比率 ${shortRatio.toFixed(1)}%`}
                     style={{ fontSize: 10, fontWeight: 700, color: '#FF9F0A', background: 'rgba(255,159,10,0.12)', border: '1px solid rgba(255,159,10,0.3)', borderRadius: 9999, padding: '2px 6px', flexShrink: 0 }}
                   >⚠</span>
+                )}
+                {fScore >= 7 && (
+                  <span title={`Piotroski F-Score ${fScore}/9 — 基本面優質`} style={{
+                    fontSize: 9, fontWeight: 800, color: '#5AC8FA',
+                    background: 'rgba(90,200,250,0.12)', border: '1px solid rgba(90,200,250,0.3)',
+                    borderRadius: 5, padding: '1px 5px', flexShrink: 0,
+                  }}>F{fScore}</span>
                 )}
                 <button
                   onClick={e => { e.stopPropagation(); toggleWatchlist && toggleWatchlist(s.stock_id) }}
@@ -238,6 +247,11 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 {investStreak > 0 && (
                   <span style={{ fontSize: 11, color: '#BF5AF2', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     投+<strong>{investStreak}</strong>天{s.invest_trust_accel ? <span style={{ fontSize: 9, color: 'var(--ios-orange)', fontWeight: 700 }}>↑</span> : null}
+                  </span>
+                )}
+                {dealerStreak > 0 && (
+                  <span style={{ fontSize: 11, color: '#0A84FF', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                    自+<strong>{dealerStreak}</strong>天
                   </span>
                 )}
                 {marketRsRank > 0 && (
@@ -1098,6 +1112,12 @@ export default function Dashboard({ data, error }) {
       .map(([sec, count]) => ({ sec, count }))
   }, [stocks])
 
+  const gradeDistribution = useMemo(() => {
+    const counts = { A: 0, B: 0, C: 0, D: 0, X: 0 }
+    for (const s of stocks) { if (s.grade && counts[s.grade] !== undefined) counts[s.grade]++ }
+    return counts
+  }, [stocks])
+
   // Reset page whenever filters or tab/date change
   useEffect(() => { setPage(0) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals, activeGrades, activeSector])
 
@@ -1219,8 +1239,31 @@ export default function Dashboard({ data, error }) {
           </div>
         )}
 
+        {/* Grade distribution summary */}
+        {stocks.length > 0 && (
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>分佈</span>
+            {Object.entries(gradeDistribution).filter(([, n]) => n > 0).map(([g, n]) => {
+              const gs = GRADE_STYLE[g] || GRADE_STYLE.D
+              const isActive = activeGrades.has(g)
+              return (
+                <button key={g} onClick={() => g !== 'X' && toggleGrade(g)} style={{
+                  fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 9999,
+                  background: isActive ? gs.bg : 'rgba(255,255,255,0.04)',
+                  color: gs.color, border: `0.5px solid ${isActive ? gs.border : 'rgba(255,255,255,0.08)'}`,
+                  cursor: g !== 'X' ? 'pointer' : 'default', flexShrink: 0,
+                  transition: 'all 0.15s',
+                }}>{g} {n}</button>
+              )
+            })}
+            {filteredAndSorted.length !== stocks.length && (
+              <span style={{ fontSize: 10, color: 'var(--ios-label3)', marginLeft: 2 }}>→ 篩選 {filteredAndSorted.length}</span>
+            )}
+          </div>
+        )}
+
         {/* Search + Sort row */}
-        <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
           <input
             type="search"
             value={searchQuery}
