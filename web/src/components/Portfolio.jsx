@@ -9,6 +9,13 @@ function savePositions(p) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)) } catch {}
 }
 
+// Rough 上市/上櫃 split by stock-id range — picks which Yahoo suffix to try first.
+function isOTC(stockId) {
+  const n = parseInt(String(stockId), 10)
+  return (n >= 4200 && n <= 4999) || (n >= 5000 && n <= 5999) ||
+         (n >= 6000 && n <= 6999) || (n >= 8000 && n <= 8999) || (n >= 9200 && n <= 9999)
+}
+
 // Find the most recent scan object that actually has stock rows.
 function latestScan(data) {
   if (!data?.scans) return null
