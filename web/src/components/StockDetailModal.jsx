@@ -466,7 +466,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
 
   const getIdx = (clientX, svgEl) => {
     const rect = svgEl.getBoundingClientRect()
-    const svgX = (clientX - rect.left) / rect.width * W
+    const svgX = (clientX - rect.left) / rect.width * (W + rightExt)
     return Math.floor((svgX - PL) / slotW)
   }
 
