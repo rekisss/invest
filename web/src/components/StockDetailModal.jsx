@@ -404,14 +404,14 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
       {[0, 0.5, 1].map(t => {
         const v = minV + t * range
         const y = PT + (1 - t) * (H - PT * 2)
-        const label = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : Math.abs(v) < 10 ? v.toFixed(1) : v.toFixed(0)
+        const lbl = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : Math.abs(v) < 10 ? v.toFixed(1) : v.toFixed(0)
         return (
-          <text key={t} x={CHART_PL - 3} y={y + 3.5} fontSize={7.5} fill="#48484A" textAnchor="end">{label}</text>
+          <text key={t} x={CHART_PL - 3} y={y + 3.5} fontSize={8} fill="#636366" textAnchor="end" opacity={0.85}>{lbl}</text>
         )
       })}
 
       {/* Chart label */}
-      <text x={CHART_PL + 3} y={PT + 9} fontSize={8} fill="#636366" fontWeight="bold">{label}</text>
+      <text x={CHART_PL + 3} y={PT + 9} fontSize={8.5} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">{label}</text>
 
       {/* Hover values */}
       {hoveredIdx != null && (lines || []).map((series, si) => {
@@ -713,37 +713,45 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
             <text x={PL - 5} y={toY(b.close) + 4} fontSize={8} fill={closeColor} textAnchor="end" fontWeight="bold">
               {fmtP(b.close)}
             </text>
-            <rect x={tipX} y={tipY} width={tipW} height={fullH} fill="#1C1C1E" rx={6} stroke="#3A3A3C" strokeWidth={0.8} />
-            <text x={tipX + 7} y={tipY + 13} fontSize={9} fill="#8E8E93" fontWeight="bold">{b.time || ''}</text>
-            <line x1={tipX + 4} y1={tipY + 17} x2={tipX + tipW - 4} y2={tipY + 17} stroke="#2C2C2E" strokeWidth={0.5} />
+            <rect x={tipX} y={tipY} width={tipW} height={fullH} fill="#1C1C1E" rx={7} stroke="#3A3A3C" strokeWidth={0.8} />
+            <text x={tipX + 8} y={tipY + 13} fontSize={9} fill="#6E6E73" fontWeight="600" letterSpacing="0.3">{b.time || ''}</text>
+            <line x1={tipX + 5} y1={tipY + 17} x2={tipX + tipW - 5} y2={tipY + 17} stroke="#2C2C2E" strokeWidth={0.5} />
             {slimOnly ? (
-              <text x={tipX + 7} y={tipY + 32} fontSize={8.5} fill="#636366">收 <tspan fill={closeColor} fontWeight="bold">{fmtP(b.close)}</tspan></text>
+              <>
+                <text x={tipX + 8} y={tipY + 32} fontSize={8} fill="#48484A">收</text>
+                <text x={tipX + tipW - 6} y={tipY + 32} fontSize={9} fill={closeColor} fontWeight="700" textAnchor="end">{fmtP(b.close)}</text>
+              </>
             ) : <>
-              <text x={tipX + 7} y={tipY + 30} fontSize={8.5} fill="#636366">開 <tspan fill="#EBEBF5">{fmtP(b.open)}</tspan></text>
-              <text x={tipX + 7} y={tipY + 43} fontSize={8.5} fill="#636366">高 <tspan fill="#FF453A">{fmtP(b.high)}</tspan></text>
-              <text x={tipX + 7} y={tipY + 56} fontSize={8.5} fill="#636366">低 <tspan fill="#30D158">{fmtP(b.low)}</tspan></text>
-              <text x={tipX + 7} y={tipY + 69} fontSize={8.5} fill="#636366">收 <tspan fill={closeColor} fontWeight="bold">{fmtP(b.close)}</tspan></text>
-              <text x={tipX + 7} y={tipY + 82} fontSize={8.5} fill="#636366">量 <tspan fill="#8E8E93">{vol}</tspan></text>
+              <text x={tipX + 8} y={tipY + 30} fontSize={8} fill="#48484A">開</text>
+              <text x={tipX + tipW - 6} y={tipY + 30} fontSize={9} fill="#EBEBF5" fontWeight="600" textAnchor="end">{fmtP(b.open)}</text>
+              <text x={tipX + 8} y={tipY + 43} fontSize={8} fill="#48484A">高</text>
+              <text x={tipX + tipW - 6} y={tipY + 43} fontSize={9} fill="#FF453A" fontWeight="600" textAnchor="end">{fmtP(b.high)}</text>
+              <text x={tipX + 8} y={tipY + 56} fontSize={8} fill="#48484A">低</text>
+              <text x={tipX + tipW - 6} y={tipY + 56} fontSize={9} fill="#30D158" fontWeight="600" textAnchor="end">{fmtP(b.low)}</text>
+              <text x={tipX + 8} y={tipY + 69} fontSize={8} fill="#48484A">收</text>
+              <text x={tipX + tipW - 6} y={tipY + 69} fontSize={9} fill={closeColor} fontWeight="700" textAnchor="end">{fmtP(b.close)}</text>
+              <text x={tipX + 8} y={tipY + 82} fontSize={8} fill="#48484A">量</text>
+              <text x={tipX + tipW - 6} y={tipY + 82} fontSize={9} fill="#636366" fontWeight="600" textAnchor="end">{vol}</text>
             </>}
             {patInfo && !slimOnly && (() => {
               const pd = PATTERN_DESC[patInfo.name]
               const patColor = patInfo.type === 'bullish' ? '#30D158' : patInfo.type === 'bearish' ? '#FF453A' : '#8E8E93'
               return (
                 <>
-                  <line x1={tipX+4} y1={tipY+tipH} x2={tipX+tipW-4} y2={tipY+tipH} stroke="#2C2C2E" strokeWidth={0.5} />
-                  <text x={tipX+7} y={tipY+tipH+11} fontSize={8} fill="#8E8E93">型態</text>
-                  <text x={tipX+tipW-6} y={tipY+tipH+11} fontSize={8.5} fill={patColor} fontWeight="bold" textAnchor="end">{patInfo.name}</text>
-                  {pd && <text x={tipX+7} y={tipY+tipH+21} fontSize={7} fill={patColor} opacity={0.8}>{pd.short}</text>}
+                  <line x1={tipX+5} y1={tipY+tipH} x2={tipX+tipW-5} y2={tipY+tipH} stroke="#2C2C2E" strokeWidth={0.5} />
+                  <text x={tipX+8} y={tipY+tipH+11} fontSize={8} fill="#48484A" fontWeight="600">型態</text>
+                  <text x={tipX+tipW-6} y={tipY+tipH+11} fontSize={9} fill={patColor} fontWeight="700" textAnchor="end">{patInfo.name}</text>
+                  {pd && <text x={tipX+8} y={tipY+tipH+22} fontSize={7.5} fill={patColor} opacity={0.75}>{pd.short}</text>}
                 </>
               )
             })()}
             {cdpLv && <>
-              <line x1={tipX+4} y1={tipY+baseH+patOffset+2} x2={tipX+tipW-4} y2={tipY+baseH+patOffset+2} stroke="#2C2C2E" strokeWidth={0.5} />
+              <line x1={tipX+5} y1={tipY+baseH+patOffset+2} x2={tipX+tipW-5} y2={tipY+baseH+patOffset+2} stroke="#2C2C2E" strokeWidth={0.5} />
               {CDP_TIP.map(({ label, v, c }, ri) => (
                 <g key={label}>
-                  <circle cx={tipX+10} cy={tipY+baseH+patOffset+12+ri*13} r={2.5} fill={c} />
-                  <text x={tipX+17} y={tipY+baseH+patOffset+16+ri*13} fontSize={8} fill="#636366">{label}</text>
-                  <text x={tipX+tipW-6} y={tipY+baseH+patOffset+16+ri*13} fontSize={8.5} fill={c} fontWeight="bold" textAnchor="end">{fmtP(v)}</text>
+                  <rect x={tipX+7} y={tipY+baseH+patOffset+6+ri*13} width={16} height={10} fill={`${c}25`} rx={2} />
+                  <text x={tipX+15} y={tipY+baseH+patOffset+14+ri*13} fontSize={7.5} fill={c} fontWeight="700" textAnchor="middle">{label}</text>
+                  <text x={tipX+tipW-6} y={tipY+baseH+patOffset+14+ri*13} fontSize={9} fill={c} fontWeight="600" textAnchor="end">{fmtP(v)}</text>
                 </g>
               ))}
             </>}
@@ -810,54 +818,77 @@ function ChartValueStrip({ bars, indicators, active, hoveredIdx }) {
   const mfi   = indicators.mfi?.[i]
   const vn = (val, dec = 1) => val != null ? Number(val).toFixed(dec) : '—'
 
+  const Chip = ({ label, borderColor, children }) => (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      background: `${borderColor}18`, border: `0.5px solid ${borderColor}45`,
+      borderRadius: 7, padding: '2px 6px', flexShrink: 0, whiteSpace: 'nowrap',
+    }}>
+      <span style={{ fontSize: 9, color: '#636366', fontWeight: 600, letterSpacing: 0.2 }}>{label}</span>
+      {children}
+    </span>
+  )
+  const V = ({ v, c }) => <b style={{ fontSize: 10.5, color: c, fontWeight: 700 }}>{v}</b>
+
+  const hasAny = (active.rsi && rsi != null) || (active.macd && macdL != null) ||
+    (active.kd && k != null) || (active.adx && adx != null) || (active.wr && wr != null) ||
+    (active.cci && cci != null) || (active.mfi && mfi != null)
+  if (!hasAny) return null
+
   return (
     <div style={{
-      display: 'flex', gap: 10, padding: '5px 2px 5px', fontSize: 10.5,
-      flexWrap: 'wrap', alignItems: 'center', borderBottom: '0.5px solid var(--ios-sep)',
-      marginBottom: 1, minHeight: 26,
+      display: 'flex', gap: 4, padding: '4px 0 3px',
+      overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+      alignItems: 'center', borderBottom: '0.5px solid var(--ios-sep)',
+      marginBottom: 1, scrollbarWidth: 'none', msOverflowStyle: 'none',
     }}>
-      <span style={{ color: 'var(--ios-label3)', fontSize: 10, minWidth: 44, flexShrink: 0 }}>
+      <span style={{ fontSize: 9, color: '#48484A', minWidth: 34, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
         {hoveredIdx != null ? (bar.time ? bar.time.slice(5) : '') : '最新'}
       </span>
-      {active.rsi && rsi != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          RSI <b style={{ color: rsi > 70 ? '#FF453A' : rsi < 30 ? '#30D158' : '#BF5AF2' }}>{vn(rsi)}</b>
-        </span>
-      )}
+
+      {active.rsi && rsi != null && (() => {
+        const c = rsi > 70 ? '#FF453A' : rsi < 30 ? '#30D158' : '#BF5AF2'
+        return <Chip label="RSI" borderColor={c}><V v={vn(rsi)} c={c} /></Chip>
+      })()}
+
       {active.macd && macdL != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          MACD <b style={{ color: '#0A84FF' }}>{vn(macdL, 2)}</b>
-          {macdH != null && <> <b style={{ color: macdH >= 0 ? '#FF453A' : '#30D158' }}>({macdH >= 0 ? '+' : ''}{vn(macdH, 2)})</b></>}
-        </span>
+        <Chip label="MACD" borderColor="#0A84FF">
+          <V v={vn(macdL, 2)} c="#0A84FF" />
+          {macdH != null && <span style={{ fontSize: 9.5, color: macdH >= 0 ? '#FF453A' : '#30D158', fontWeight: 700, marginLeft: 1 }}>{macdH >= 0 ? '▲' : '▼'}{Math.abs(macdH) < 0.01 ? macdH.toFixed(3) : vn(macdH, 2)}</span>}
+        </Chip>
       )}
+
       {active.kd && k != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          K <b style={{ color: '#FF9F0A' }}>{vn(k)}</b>{' '}
-          D <b style={{ color: '#0A84FF' }}>{vn(d)}</b>
-        </span>
+        <Chip label="KD" borderColor="#FF9F0A">
+          <span style={{ fontSize: 9, color: '#636366' }}>K</span><V v={vn(k)} c="#FF9F0A" />
+          <span style={{ fontSize: 9, color: '#636366' }}>D</span><V v={vn(d)} c="#0A84FF" />
+        </Chip>
       )}
-      {active.adx && adx != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          ADX <b style={{ color: adx > 25 ? '#FF453A' : '#FF453A88' }}>{vn(adx)}</b>
-          {pdi != null && <> +DI<b style={{ color: '#30D158' }}>{vn(pdi)}</b></>}
-          {ndi != null && <> -DI<b style={{ color: '#FF6B35' }}>{vn(ndi)}</b></>}
-        </span>
-      )}
-      {active.wr && wr != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          W%R <b style={{ color: wr > -20 ? '#FF453A' : wr < -80 ? '#30D158' : '#FF6B35' }}>{vn(wr)}</b>
-        </span>
-      )}
-      {active.cci && cci != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          CCI <b style={{ color: cci > 100 ? '#FF453A' : cci < -100 ? '#30D158' : '#5E5CE6' }}>{vn(cci, 0)}</b>
-        </span>
-      )}
-      {active.mfi && mfi != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          MFI <b style={{ color: mfi > 80 ? '#FF453A' : mfi < 20 ? '#30D158' : '#FFD60A' }}>{vn(mfi)}</b>
-        </span>
-      )}
+
+      {active.adx && adx != null && (() => {
+        const c = adx > 25 ? '#FF453A' : '#FF6B35'
+        return (
+          <Chip label="ADX" borderColor={c}>
+            <V v={vn(adx)} c={c} />
+            {pdi != null && <><span style={{ fontSize: 9, color: '#30D158', fontWeight: 700 }}>+{vn(pdi, 0)}</span><span style={{ fontSize: 9, color: '#FF6B35', fontWeight: 700 }}>-{vn(ndi, 0)}</span></>}
+          </Chip>
+        )
+      })()}
+
+      {active.wr && wr != null && (() => {
+        const c = wr > -20 ? '#FF453A' : wr < -80 ? '#30D158' : '#FF6B35'
+        return <Chip label="W%R" borderColor={c}><V v={vn(wr)} c={c} /></Chip>
+      })()}
+
+      {active.cci && cci != null && (() => {
+        const c = cci > 100 ? '#FF453A' : cci < -100 ? '#30D158' : '#5E5CE6'
+        return <Chip label="CCI" borderColor={c}><V v={vn(cci, 0)} c={c} /></Chip>
+      })()}
+
+      {active.mfi && mfi != null && (() => {
+        const c = mfi > 80 ? '#FF453A' : mfi < 20 ? '#30D158' : '#FFD60A'
+        return <Chip label="MFI" borderColor={c}><V v={vn(mfi)} c={c} /></Chip>
+      })()}
     </div>
   )
 }
@@ -1218,7 +1249,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
       })()}
 
       {/* Top controls row */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 5, marginBottom: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         {/* Interval */}
         <div style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--ios-fill4)', borderRadius: 8 }}>
           {INTERVAL_LABELS.map(t => {
@@ -1270,14 +1301,29 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
             }}>{label}</button>
           ))}
         </div>
-        {/* Indicator toggles */}
-        {TOGGLE_DEFS.map(({ key, label, color, title }) => (
+      </div>
+
+      {/* Indicator toggles — two grouped rows */}
+      <div style={{ display: 'flex', gap: 3, marginBottom: 6, alignItems: 'center', overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+        <span style={{ fontSize: 8.5, color: '#48484A', fontWeight: 600, flexShrink: 0, marginRight: 1, letterSpacing: 0.3 }}>疊加</span>
+        {TOGGLE_DEFS.slice(0, 5).map(({ key, label, color, title }) => (
           <button key={key} onClick={() => toggle(key)} title={title} style={{
-            background: active[key] ? `${color}20` : 'var(--ios-fill4)',
+            background: active[key] ? `${color}22` : 'var(--ios-fill4)',
             color: active[key] ? color : 'var(--ios-label3)',
-            border: `0.5px solid ${active[key] ? color : 'transparent'}`,
-            borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600,
-            transition: 'all 0.15s',
+            border: `0.5px solid ${active[key] ? color + '80' : 'transparent'}`,
+            borderRadius: 6, padding: '3px 9px', fontSize: 11, cursor: 'pointer', fontWeight: active[key] ? 700 : 500,
+            transition: 'all 0.15s', flexShrink: 0,
+          }}>{label}</button>
+        ))}
+        <div style={{ width: 1, height: 14, background: 'var(--ios-sep)', flexShrink: 0, margin: '0 3px' }} />
+        <span style={{ fontSize: 8.5, color: '#48484A', fontWeight: 600, flexShrink: 0, marginRight: 1, letterSpacing: 0.3 }}>副圖</span>
+        {TOGGLE_DEFS.slice(5).map(({ key, label, color, title }) => (
+          <button key={key} onClick={() => toggle(key)} title={title} style={{
+            background: active[key] ? `${color}22` : 'var(--ios-fill4)',
+            color: active[key] ? color : 'var(--ios-label3)',
+            border: `0.5px solid ${active[key] ? color + '80' : 'transparent'}`,
+            borderRadius: 6, padding: '3px 9px', fontSize: 11, cursor: 'pointer', fontWeight: active[key] ? 700 : 500,
+            transition: 'all 0.15s', flexShrink: 0,
           }}>{label}</button>
         ))}
       </div>
