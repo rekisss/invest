@@ -5,7 +5,6 @@ import Overview from './components/Overview.jsx'
 const Dashboard = lazy(() => import('./components/Dashboard.jsx'))
 const NewsFeed = lazy(() => import('./components/NewsFeed.jsx'))
 const PredictionPanel = lazy(() => import('./components/PredictionPanel.jsx'))
-const ApiKeyInput = lazy(() => import('./components/ApiKeyInput.jsx'))
 const AgentPanel = lazy(() => import('./components/AgentPanel.jsx'))
 const QuotaPanel = lazy(() => import('./components/QuotaPanel.jsx'))
 const Portfolio = lazy(() => import('./components/Portfolio.jsx'))
@@ -175,9 +174,12 @@ export default function App() {
       case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} />
       case 'predict':   return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />
       case 'quota':     return <QuotaPanel quota={data?.quota} generatedAt={data?.generated_at} />
-      case 'ai':        return apiKey
-        ? <AgentPanel apiKey={apiKey} data={data} onClearKey={() => { sessionStorage.removeItem('anthropic_key'); setApiKey('') }} />
-        : <ApiKeyInput onSave={key => { sessionStorage.setItem('anthropic_key', key); setApiKey(key) }} />
+      case 'ai':        return <AgentPanel
+        apiKey={apiKey}
+        data={data}
+        onSaveKey={key => { sessionStorage.setItem('anthropic_key', key); setApiKey(key) }}
+        onClearKey={() => { sessionStorage.removeItem('anthropic_key'); setApiKey('') }}
+      />
       default: return null
     }
   })()

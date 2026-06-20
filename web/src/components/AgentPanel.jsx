@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
 import { STOCK_AGENTS } from './StockAgents.jsx'
 
 const GeminiStudio = lazy(() => import('./GeminiStudio.jsx'))
+const ApiKeyInput = lazy(() => import('./ApiKeyInput.jsx'))
 
 const MODEL = 'claude-haiku-4-5-20251001'
 const MAX_TOKENS = 600
@@ -323,10 +324,11 @@ async function callFinMindAPI(input, token) {
   return { total: data.length, data: data.slice(-30) }
 }
 
-export default function AgentPanel({ apiKey, data, onClearKey }) {
+export default function AgentPanel({ apiKey, data, onSaveKey, onClearKey }) {
   const [agentId, setAgentId] = useState('premarket')
   const [showRoster, setShowRoster] = useState(true)
   const [showStudio, setShowStudio] = useState(false)
+  const [pendingAgent, setPendingAgent] = useState(null)  // Claude agent awaiting Anthropic key
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -345,6 +347,8 @@ export default function AgentPanel({ apiKey, data, onClearKey }) {
   }, [messages])
 
   function handleAgentSwitch(id) {
+    // Claude agents need an Anthropic key; prompt for it if missing.
+    if (!apiKey) { setPendingAgent(id); return }
     setAgentId(id)
     setShowRoster(false)
     setMessages([])
@@ -521,6 +525,30 @@ export default function AgentPanel({ apiKey, data, onClearKey }) {
     return (
       <Suspense fallback={<div style={{ ...s.root, alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)' }}>載入圓桌研究室…</div>}>
         <GeminiStudio data={data} onBack={() => setShowStudio(false)} />
+      </Suspense>
+    )
+  }
+
+  // A Claude agent was picked but there's no Anthropic key yet — collect it.
+  if (pendingAgent && !apiKey) {
+    return (
+      <Suspense fallback={<div style={{ ...s.root, alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)' }}>載入中…</div>}>
+        <div style={s.root}>
+          <div style={{ padding: '10px 14px', flexShrink: 0 }}>
+            <button style={s.keyBtn} onClick={() => setPendingAgent(null)}>← 返回團隊</button>
+          </div>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <ApiKeyInput onSave={key => {
+              onSaveKey?.(key)
+              const id = pendingAgent
+              setPendingAgent(null)
+              setAgentId(id)
+              setShowRoster(false)
+              setMessages([])
+              setShowFmInput(STOCK_AGENTS[id]?.useFinmind && !sessionStorage.getItem('fm_agent_token'))
+            }} />
+          </div>
+        </div>
       </Suspense>
     )
   }
