@@ -119,23 +119,58 @@ function fmtTime(ts) {
   } catch { return '' }
 }
 
-// ── Claude streaming API ─────────────────────────────────────────────────────
+// ── Claude API (non-streaming for iOS Safari CORS compatibility) ─────────────
 async function callClaude(apiKey, model, systemPrompt, userPrompt, onChunk) {
+  const HEADERS = {
+    'Content-Type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-allow-browser': 'true',
+  }
+  const BODY = { model, max_tokens: 350, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }
+
+  // Try streaming first (desktop Chrome/Firefox). Falls back to non-streaming
+  // if ReadableStream is unavailable or the response body can't be read
+  // (iOS Safari blocks body.getReader() on CORS responses in some versions).
+  const supportsStreaming = typeof ReadableStream !== 'undefined' &&
+    !(/iPhone|iPad|iPod/.test(navigator.userAgent))  // skip SSE on iOS — CORS + streams unreliable
+
+  if (supportsStreaming) {
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST', headers: HEADERS,
+        body: JSON.stringify({ ...BODY, stream: true }),
+      })
+      if (resp.ok) {
+        const reader = resp.body.getReader()
+        const decoder = new TextDecoder()
+        let text = '', buf = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buf += decoder.decode(value, { stream: true })
+          const lines = buf.split('\n'); buf = lines.pop()
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            const raw = line.slice(6).trim()
+            if (!raw || raw === '[DONE]') continue
+            try {
+              const j = JSON.parse(raw)
+              if (j.type === 'content_block_delta' && j.delta?.type === 'text_delta') {
+                text += j.delta.text; onChunk?.(text)
+              }
+            } catch { /* ignore malformed SSE */ }
+          }
+        }
+        if (text) return text.trim()
+      }
+    } catch { /* streaming failed — fall through to non-streaming */ }
+  }
+
+  // Non-streaming fallback (always works on iOS Safari and all CORS environments)
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-allow-browser': 'true',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 350,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-      stream: true,
-    }),
+    method: 'POST', headers: HEADERS,
+    body: JSON.stringify(BODY),
   })
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}))
@@ -144,31 +179,11 @@ async function callClaude(apiKey, model, systemPrompt, userPrompt, onChunk) {
     if (resp.status === 529 || resp.status === 503) throw new Error('Claude 服務暫時繁忙，請稍後再試')
     throw new Error(msg)
   }
-  const reader = resp.body.getReader()
-  const decoder = new TextDecoder()
-  let text = ''
-  let buf = ''
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buf += decoder.decode(value, { stream: true })
-    const lines = buf.split('\n')
-    buf = lines.pop()
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      const raw = line.slice(6).trim()
-      if (!raw || raw === '[DONE]') continue
-      try {
-        const j = JSON.parse(raw)
-        if (j.type === 'content_block_delta' && j.delta?.type === 'text_delta') {
-          text += j.delta.text
-          onChunk?.(text)
-        }
-      } catch { /* ignore malformed SSE */ }
-    }
-  }
+  const data = await resp.json()
+  const text = data?.content?.[0]?.text?.trim() || ''
   if (!text) throw new Error('Claude 無回應（可能觸發安全過濾）')
-  return text.trim()
+  onChunk?.(text)
+  return text
 }
 
 // ── Stock resolution + technical level computation ───────────────────────────
