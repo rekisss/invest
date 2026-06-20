@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
 import { STOCK_AGENTS } from './StockAgents.jsx'
 
-const GeminiStudio = lazy(() => import('./GeminiStudio.jsx'))
 const ApiKeyInput = lazy(() => import('./ApiKeyInput.jsx'))
 
 const MODEL = 'claude-haiku-4-5-20251001'
@@ -327,7 +326,6 @@ async function callFinMindAPI(input, token) {
 export default function AgentPanel({ apiKey, data, onSaveKey, onClearKey }) {
   const [agentId, setAgentId] = useState('premarket')
   const [showRoster, setShowRoster] = useState(true)
-  const [showStudio, setShowStudio] = useState(false)
   const [pendingAgent, setPendingAgent] = useState(null)  // Claude agent awaiting Anthropic key
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -521,14 +519,6 @@ export default function AgentPanel({ apiKey, data, onSaveKey, onClearKey }) {
 
   const userCount = messages.filter(m => m.role === 'user').length
 
-  if (showStudio) {
-    return (
-      <Suspense fallback={<div style={{ ...s.root, alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)' }}>載入圓桌研究室…</div>}>
-        <GeminiStudio data={data} onBack={() => setShowStudio(false)} />
-      </Suspense>
-    )
-  }
-
   // A Claude agent was picked but there's no Anthropic key yet — collect it.
   if (pendingAgent && !apiKey) {
     return (
@@ -632,29 +622,6 @@ export default function AgentPanel({ apiKey, data, onSaveKey, onClearKey }) {
             <div style={{ fontSize: '40px', marginBottom: '8px' }}>🤖</div>
             <div style={{ fontSize: '17px', fontWeight: 700, color: 'var(--ios-label)', marginBottom: '4px' }}>AI 技術分析團隊</div>
             <div style={{ fontSize: '13px', color: 'var(--ios-label2)' }}>選擇分析師開始對話</div>
-          </div>
-
-          {/* Featured: Gemini multi-agent roundtable */}
-          <div
-            onClick={() => setShowStudio(true)}
-            style={{
-              background: 'linear-gradient(135deg, rgba(10,132,255,0.15), rgba(191,90,242,0.15))',
-              border: '1px solid rgba(10,132,255,0.4)',
-              borderRadius: '16px', padding: '16px', cursor: 'pointer', marginBottom: '14px',
-              display: 'flex', alignItems: 'center', gap: '14px',
-            }}
-          >
-            <div style={{ fontSize: '34px', flexShrink: 0 }}>🎯</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ios-label)' }}>AI 圓桌研究室</span>
-                <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ios-green)', background: 'rgba(48,209,88,0.15)', padding: '2px 7px', borderRadius: 6 }}>🆓 免費</span>
-              </div>
-              <div style={{ fontSize: '11.5px', color: 'var(--ios-label2)', lineHeight: 1.5, marginTop: 4 }}>
-                四位分析師用掃描資料即時討論一支股票 · Gemini 驅動
-              </div>
-            </div>
-            <div style={{ fontSize: '18px', color: 'var(--ios-blue)', flexShrink: 0 }}>→</div>
           </div>
 
           <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ios-label3)', margin: '4px 2px 10px', letterSpacing: 0.3 }}>單一分析師（Claude）</div>
