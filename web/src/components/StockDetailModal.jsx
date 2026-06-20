@@ -1009,6 +1009,12 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const barCountRef = useRef(250)
   const maxBarsRef = useRef(0)
 
+  // Auto-reset barCount when interval changes so warm-up bars are available
+  useEffect(() => {
+    const defaults = { '1wk': 60, '1mo': 24 }
+    setBarCount(defaults[chartInterval] || 250)
+  }, [chartInterval])
+
   const toggle = key => { setActive(prev => ({ ...prev, [key]: !prev[key] })); setPreset(null) }
   const applyPreset = p => { setActive(p.state); setPreset(p.id) }
 
@@ -1062,9 +1068,9 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
 
   const indicators = useMemo(() => {
     if (bars.length < 2) return null
-    // Use extra leading bars as warm-up so indicators are fully populated on the visible range
-    const WARMUP = 60
-    const warmBars = _allBars.slice(-(bars.length + WARMUP))
+    // Use ALL available bars as warm-up so indicators converge on the visible range.
+    // This is critical for weekly/monthly where there are few resampled bars.
+    const warmBars = _allBars
     const off = warmBars.length - bars.length  // how many leading warm-up bars
     const closes = warmBars.map(d => d.close)
     const sl = arr => arr.slice(off)           // slice back to display range
@@ -1589,7 +1595,6 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
 
   const [swipeX, setSwipeX]   = useState(0)
   const [closing, setClosing] = useState(false)
-  const [copied, setCopied]   = useState(false)
   const swipeRef = useRef(null)
   useEffect(() => { setSwipeX(0); setClosing(false) }, [stock?.stock_id])
 
@@ -1615,16 +1620,10 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
     swipeRef.current = null
   }
 
-  const copyStock = () => {
-    const rsi = s.rsi14 ?? ci.rsi14; const adx = s.adx14 ?? ci.adx14
-    const text = [
-      `${s.stock_id} ${s.name}${s.grade ? ` [${s.grade}]` : ''}`,
-      `評分 ${s.entry_score != null ? Math.round(s.entry_score) : '—'} | RSI ${fmt(rsi,1)} | ADX ${fmt(adx,1)}`,
-      s.foreign_buy_streak > 0 ? `外資連買 ${s.foreign_buy_streak} 日` : s.foreign_buy_streak < 0 ? `外資連賣 ${Math.abs(s.foreign_buy_streak)} 日` : '',
-      s.entry_signal ? '✅ 進場訊號成立' : '',
-      s.entry_reason || '',
-    ].filter(Boolean).join('\n')
-    navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+  const sendToStudio = () => {
+    localStorage.setItem('gemini_prefill_stock', String(s.stock_id))
+    window.dispatchEvent(new CustomEvent('navigate-to-studio'))
+    doClose()
   }
 
   return (
@@ -1688,15 +1687,14 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
           </div>
           <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexShrink: 0 }}>
             <button
-              onClick={copyStock}
-              title="複製摘要"
+              onClick={sendToStudio}
+              title="在 AI 圓桌研究室分析此股"
               style={{
-                background: copied ? 'rgba(48,209,88,0.18)' : 'var(--ios-fill3)', border: 'none',
-                color: copied ? 'var(--ios-green)' : 'var(--ios-label2)', borderRadius: 9999, width: 28, height: 28,
+                background: 'var(--ios-fill3)', border: 'none',
+                color: 'var(--ios-label2)', borderRadius: 9999, width: 28, height: 28,
                 cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all 0.2s',
               }}
-            >{copied ? '✓' : '⎘'}</button>
+            >🎯</button>
             <button
               onClick={doClose}
               style={{
@@ -2078,6 +2076,8 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
             ⚠️ 資料品質警示：此股票部分指標資料不完整，評分參考性較低
           </div>
         )}
+        {/* Bottom spacer — ensures last card is always fully visible on mobile */}
+        <div style={{ height: 48, flexShrink: 0 }} />
       </div>
     </div>
     </>

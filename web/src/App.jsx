@@ -81,6 +81,13 @@ export default function App() {
 
   useEffect(() => { loadData(false) }, [loadData])
 
+  // Navigate to studio tab when StockDetailModal's 🎯 button fires this event
+  useEffect(() => {
+    const handler = () => setTabIdx(TABS.findIndex(t => t.key === 'studio'))
+    window.addEventListener('navigate-to-studio', handler)
+    return () => window.removeEventListener('navigate-to-studio', handler)
+  }, [])
+
   function goToTab(newIdx) {
     if (newIdx === tabIdx) return
     setSlideDir(newIdx > tabIdx ? 'right' : 'left')
