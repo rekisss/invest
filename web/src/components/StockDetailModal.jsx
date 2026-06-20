@@ -391,9 +391,9 @@ function CandleSVG({ data, maLines, bbBands, cdpLevels, onHoverIdx, chartW: prop
     const W = propChartW || Math.max(CHART_W, n * BAR_W + CHART_PL + CHART_PR)
     const CH = 200, VH = 45, GAP = 6, H = CH + GAP + VH
     const PL = CHART_PL, PR = CHART_PR, PT = 8
-    const cdpVals = cdpLevels ? [cdpLevels.ah, cdpLevels.nh, cdpLevels.cdp, cdpLevels.nl, cdpLevels.al].filter(Boolean) : []
-    const maxP = Math.max(...bars.map(d => d.high ?? d.close ?? 0), ...(bbBands?.upper?.filter(Boolean) || []), ...cdpVals)
-    const minP = Math.min(...bars.map(d => d.low  ?? d.close ?? 0), ...(bbBands?.lower?.filter(Boolean) || []), ...cdpVals)
+    // CDP not included in Y range — avoids distorting the scale on long-uptrend charts
+    const maxP = Math.max(...bars.map(d => d.high ?? d.close ?? 0), ...(bbBands?.upper?.filter(Boolean) || []))
+    const minP = Math.min(...bars.map(d => d.low  ?? d.close ?? 0), ...(bbBands?.lower?.filter(Boolean) || []))
     const pRange = (isNaN(maxP) || isNaN(minP) || maxP === minP) ? 1 : maxP - minP
     const maxVol = Math.max(...bars.map(d => d.volume ?? 0), 1)
     const slotW = (W - PL - PR) / n
@@ -495,22 +495,27 @@ function CandleSVG({ data, maLines, bbBands, cdpLevels, onHoverIdx, chartW: prop
         {bbSegs.lower.map((pts, i) => <polyline key={`bbl${i}`} points={pts} fill="none" stroke="rgba(10,132,255,0.45)" strokeWidth={0.8} strokeDasharray="4,3" />)}
       </>}
 
-      {/* CDP 逆勢操作系統 horizontal levels */}
-      {cdpLevels && [
-        { key: 'ah',  price: cdpLevels.ah,  color: 'rgba(255,69,58,0.8)',   dash: '5,3', label: 'AH' },
-        { key: 'nh',  price: cdpLevels.nh,  color: 'rgba(255,159,10,0.7)',  dash: '4,3', label: 'NH' },
-        { key: 'cdp', price: cdpLevels.cdp, color: 'rgba(255,214,10,0.75)', dash: '6,2', label: 'CDP' },
-        { key: 'nl',  price: cdpLevels.nl,  color: 'rgba(48,209,88,0.7)',   dash: '4,3', label: 'NL' },
-        { key: 'al',  price: cdpLevels.al,  color: 'rgba(48,209,88,0.85)',  dash: '5,3', label: 'AL' },
-      ].map(({ key, price, color, dash, label }) => {
-        const y = toY(price)
-        return (
-          <g key={key}>
-            <line x1={PL} y1={y} x2={W - PR} y2={y} stroke={color} strokeWidth={0.9} strokeDasharray={dash} />
-            <text x={PL + 3} y={y - 2} fontSize={7} fill={color}>{label} {price}</text>
-          </g>
-        )
-      })}
+      {/* CDP 逆勢操作系統 — drawn only at the right edge so they don't pollute historical bars */}
+      {cdpLevels && (() => {
+        const lineStart = Math.max(PL, toX(n - 1) - 40)
+        const lineEnd   = W - PR
+        const labelX    = lineEnd - 1
+        return [
+          { key: 'ah',  price: cdpLevels.ah,  color: 'rgba(255,69,58,0.85)',  dash: '5,3', label: 'AH' },
+          { key: 'nh',  price: cdpLevels.nh,  color: 'rgba(255,159,10,0.8)',  dash: '4,3', label: 'NH' },
+          { key: 'cdp', price: cdpLevels.cdp, color: 'rgba(255,214,10,0.85)', dash: '6,2', label: 'CDP' },
+          { key: 'nl',  price: cdpLevels.nl,  color: 'rgba(48,209,88,0.8)',   dash: '4,3', label: 'NL' },
+          { key: 'al',  price: cdpLevels.al,  color: 'rgba(48,209,88,0.9)',   dash: '5,3', label: 'AL' },
+        ].filter(({ price }) => price >= minP && price <= maxP * 1.02).map(({ key, price, color, dash, label }) => {
+          const y = toY(price)
+          return (
+            <g key={key}>
+              <line x1={lineStart} y1={y} x2={lineEnd} y2={y} stroke={color} strokeWidth={1} strokeDasharray={dash} />
+              <text x={labelX} y={y - 2} fontSize={7} fill={color} textAnchor="end">{label} {price}</text>
+            </g>
+          )
+        })
+      })()}
 
       {/* Candles + volume */}
       {bars.map((d, i) => {
