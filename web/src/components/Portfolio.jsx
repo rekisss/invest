@@ -11,13 +11,13 @@ function savePositions(p) {
 
 function getCurrentPrice(stockId, data) {
   if (!data) return null
-  const all = [...(data.top_stocks || []), ...(data.scan_results || [])]
+  const all = [...(data.top_stocks || []), ...(data.filter_stocks || [])]
   const m = all.find(s => String(s.stock_id) === String(stockId))
   return m?.close ?? null
 }
 function getScanInfo(stockId, data) {
   if (!data) return null
-  const all = [...(data.top_stocks || []), ...(data.scan_results || [])]
+  const all = [...(data.top_stocks || []), ...(data.filter_stocks || [])]
   return all.find(s => String(s.stock_id) === String(stockId)) ?? null
 }
 
