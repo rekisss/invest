@@ -86,12 +86,15 @@ function macdCalc(arr, fast = 12, slow = 26, sig = 9) {
 }
 
 function obvCalc(bars) {
+  // If all volumes are 0/missing, fall back to price-direction counting (unit volume)
+  const hasVol = bars.some(b => (b.volume || 0) > 0)
   const result = new Array(bars.length).fill(0)
   let obv = 0
   for (let i = 0; i < bars.length; i++) {
     if (i > 0) {
-      if (bars[i].close > bars[i - 1].close) obv += bars[i].volume
-      else if (bars[i].close < bars[i - 1].close) obv -= bars[i].volume
+      const vol = hasVol ? (bars[i].volume || 0) : 1
+      if (bars[i].close > bars[i - 1].close) obv += vol
+      else if (bars[i].close < bars[i - 1].close) obv -= vol
     }
     result[i] = obv
   }
@@ -254,6 +257,18 @@ function toPolySegs(values, toXFn, toYFn) {
   }
   if (cur.length >= 2) segments.push(cur.join(' '))
   return segments
+}
+
+// ── K-line pattern descriptions ─────────────────────────────────────────────
+
+const PATTERN_DESC = {
+  '十字星':  { short: '多空猶豫', hint: '開收相近，趨勢可能轉折，需等下一根K棒確認方向' },
+  '錘子線':  { short: '底部反轉↑', hint: '長下影線代表空方試圖壓低但多方強力拉回，底部見到為強力多頭訊號' },
+  '吊頸線':  { short: '頂部警示↓', hint: '外形像錘子但出現在高位，暗示多頭力道衰竭，需謹慎' },
+  '流星線':  { short: '頂部反轉↓', hint: '長上影線代表多方嘗試拉高但遭空方壓回，頂部出現為強力空頭訊號' },
+  '倒錘子':  { short: '潛在反彈↑', hint: '長上影線出現在底部，代表多方開始嘗試反攻，需次日確認' },
+  '多頭吞噬': { short: '強力多頭↑', hint: '大紅棒完全包住前一根黑棒，力道強，常見於底部反轉起點' },
+  '空頭吞噬': { short: '強力空頭↓', hint: '大黑棒完全包住前一根紅棒，力道強，常見於頂部反轉起點' },
 }
 
 // ── K-line pattern detection ─────────────────────────────────────────────────
@@ -679,7 +694,8 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
         // CDP levels and K-line pattern for hovered bar
         const cdpLv = cdpSeries?.[hovered.idx] ?? null
         const patInfo = patterns?.[hovered.idx] ?? null
-        const patOffset = (patInfo && !slimOnly) ? 16 : 0
+        const hasPD = patInfo && PATTERN_DESC[patInfo.name]
+        const patOffset = (patInfo && !slimOnly) ? (hasPD ? 26 : 16) : 0
         const baseH = slimOnly ? 42 : tipH
         const fullH = baseH + patOffset + (cdpLv ? 72 : 0)
         const CDP_TIP = cdpLv ? [
@@ -709,15 +725,18 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
               <text x={tipX + 7} y={tipY + 69} fontSize={8.5} fill="#636366">收 <tspan fill={closeColor} fontWeight="bold">{fmtP(b.close)}</tspan></text>
               <text x={tipX + 7} y={tipY + 82} fontSize={8.5} fill="#636366">量 <tspan fill="#8E8E93">{vol}</tspan></text>
             </>}
-            {patInfo && !slimOnly && (
-              <>
-                <line x1={tipX+4} y1={tipY+tipH} x2={tipX+tipW-4} y2={tipY+tipH} stroke="#2C2C2E" strokeWidth={0.5} />
-                <text x={tipX+7} y={tipY+tipH+11} fontSize={8} fill="#8E8E93">型態</text>
-                <text x={tipX+tipW-6} y={tipY+tipH+11} fontSize={8.5}
-                  fill={patInfo.type === 'bullish' ? '#30D158' : patInfo.type === 'bearish' ? '#FF453A' : '#8E8E93'}
-                  fontWeight="bold" textAnchor="end">{patInfo.name}</text>
-              </>
-            )}
+            {patInfo && !slimOnly && (() => {
+              const pd = PATTERN_DESC[patInfo.name]
+              const patColor = patInfo.type === 'bullish' ? '#30D158' : patInfo.type === 'bearish' ? '#FF453A' : '#8E8E93'
+              return (
+                <>
+                  <line x1={tipX+4} y1={tipY+tipH} x2={tipX+tipW-4} y2={tipY+tipH} stroke="#2C2C2E" strokeWidth={0.5} />
+                  <text x={tipX+7} y={tipY+tipH+11} fontSize={8} fill="#8E8E93">型態</text>
+                  <text x={tipX+tipW-6} y={tipY+tipH+11} fontSize={8.5} fill={patColor} fontWeight="bold" textAnchor="end">{patInfo.name}</text>
+                  {pd && <text x={tipX+7} y={tipY+tipH+21} fontSize={7} fill={patColor} opacity={0.8}>{pd.short}</text>}
+                </>
+              )
+            })()}
             {cdpLv && <>
               <line x1={tipX+4} y1={tipY+baseH+patOffset+2} x2={tipX+tipW-4} y2={tipY+baseH+patOffset+2} stroke="#2C2C2E" strokeWidth={0.5} />
               {CDP_TIP.map(({ label, v, c }, ri) => (
@@ -866,19 +885,19 @@ const STRATEGY_PRESETS = [
 ]
 
 const TOGGLE_DEFS = [
-  { key: 'ma',   label: 'MA',   color: '#5AC8FA' },
-  { key: 'bb',   label: 'BB',   color: '#0A84FF' },
-  { key: 'cdp',  label: 'CDP',  color: '#FFD60A' },
-  { key: 'fib',  label: 'Fib',  color: '#FF9F0A' },
-  { key: 'pat',  label: '型態', color: '#BF5AF2' },
-  { key: 'macd', label: 'MACD', color: '#FF9F0A' },
-  { key: 'rsi',  label: 'RSI',  color: '#BF5AF2' },
-  { key: 'kd',   label: 'KD',   color: '#30D158' },
-  { key: 'obv',  label: 'OBV',  color: '#64D2FF' },
-  { key: 'adx',  label: 'ADX',  color: '#FF453A' },
-  { key: 'wr',   label: 'W%R',  color: '#FF6B35' },
-  { key: 'cci',  label: 'CCI',  color: '#5E5CE6' },
-  { key: 'mfi',  label: 'MFI',  color: '#FFD60A' },
+  { key: 'ma',   label: 'MA',   color: '#5AC8FA', title: '移動平均線 (MA5/10/20/60)：追蹤趨勢方向，多頭排列=看漲' },
+  { key: 'bb',   label: 'BB',   color: '#0A84FF', title: '布林通道 (BB)：上軌壓力/下軌支撐，突破上軌=強勢，跌破下軌=弱勢' },
+  { key: 'cdp',  label: 'CDP',  color: '#FFD60A', title: '逆勢操作 (CDP)：AH/NH 為當日壓力，NL/AL 為當日支撐' },
+  { key: 'fib',  label: 'Fib',  color: '#FF9F0A', title: '費波那契回撤：0%高點/100%低點，38.2%/61.8%是常見支撐壓力' },
+  { key: 'pat',  label: '型態', color: '#BF5AF2', title: 'K 線型態：錘子/吞噬/十字星等反轉型態，滑動時顯示（開啟後見下方說明）' },
+  { key: 'macd', label: 'MACD', color: '#FF9F0A', title: 'MACD(12,26,9)：柱子翻紅=多頭動能增強，金叉(藍穿紅上)=買進訊號' },
+  { key: 'rsi',  label: 'RSI',  color: '#BF5AF2', title: 'RSI(14)：>70 超買警示，<30 超賣反彈機會，50 以上偏多' },
+  { key: 'kd',   label: 'KD',   color: '#30D158', title: 'KD(9)：低檔金叉(K穿D上)買進訊號，高檔死叉賣出訊號' },
+  { key: 'obv',  label: 'OBV',  color: '#64D2FF', title: 'OBV 能量潮：OBV 隨價上升=量價配合，OBV 背離=潛在反轉' },
+  { key: 'adx',  label: 'ADX',  color: '#FF453A', title: 'ADX/DMI(14)：ADX>25 趨勢強，+DI>-DI 多頭趨勢，反之空頭' },
+  { key: 'wr',   label: 'W%R',  color: '#FF6B35', title: 'Williams %R(14)：>-20 超買，<-80 超賣，由超賣回升=買進機會' },
+  { key: 'cci',  label: 'CCI',  color: '#5E5CE6', title: 'CCI(20)：>+100 超買，<-100 超賣，穿越±100 往往是趨勢啟動點' },
+  { key: 'mfi',  label: 'MFI',  color: '#FFD60A', title: 'MFI(14) 資金流量指標：>80 超買，<20 超賣，結合量能判斷主力動向' },
 ]
 
 // ── Strategy win-rate backtest (per-stock, on its own price history) ─────────
@@ -1252,8 +1271,8 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
           ))}
         </div>
         {/* Indicator toggles */}
-        {TOGGLE_DEFS.map(({ key, label, color }) => (
-          <button key={key} onClick={() => toggle(key)} style={{
+        {TOGGLE_DEFS.map(({ key, label, color, title }) => (
+          <button key={key} onClick={() => toggle(key)} title={title} style={{
             background: active[key] ? `${color}20` : 'var(--ios-fill4)',
             color: active[key] ? color : 'var(--ios-label3)',
             border: `0.5px solid ${active[key] ? color : 'transparent'}`,
@@ -1443,6 +1462,31 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         )}
       </div>
 
+      {/* K-line pattern legend — appears when pattern mode is on */}
+      {active.pat && (
+        <div style={{ margin: '8px 0 4px', padding: '10px 12px', background: 'rgba(28,28,30,0.92)', borderRadius: 10, border: '0.5px solid var(--ios-sep)' }}>
+          <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 7, fontWeight: 600, letterSpacing: 0.3 }}>K 線型態說明（滑動時浮現）</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 10px' }}>
+            {Object.entries(PATTERN_DESC).map(([name, { short, hint }]) => {
+              const type = name === '十字星' ? 'neutral' : (name.includes('多頭') || name.includes('錘子') || name.includes('倒錘')) ? 'bullish' : 'bearish'
+              const color = type === 'bullish' ? '#30D158' : type === 'bearish' ? '#FF453A' : '#8E8E93'
+              return (
+                <div key={name} title={hint} style={{ display: 'flex', flexDirection: 'column', gap: 1, cursor: 'help' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color }}>{name}</span>
+                    <span style={{ fontSize: 9, color, opacity: 0.8 }}>({short})</span>
+                  </div>
+                  <span style={{ fontSize: 9, color: 'var(--ios-label3)', lineHeight: 1.35 }}>{hint}</span>
+                </div>
+              )
+            })}
+          </div>
+          <div style={{ marginTop: 6, fontSize: 9, color: 'var(--ios-label3)', opacity: 0.7 }}>
+            💡 型態僅為輔助參考，需配合量能與趨勢確認，不宜單獨作為進出場依據
+          </div>
+        </div>
+      )}
+
       {/* Dynamic indicator value strip — updates with crosshair */}
       {bars.length >= 2 && indicators && (
         <ChartValueStrip bars={bars} indicators={indicators} active={active} hoveredIdx={hoveredIdx} />
@@ -1456,6 +1500,11 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
       />
 
       {/* Footer */}
+      {chartInterval !== '1d' && !priceHistoryWk && daily.length >= 2 && (
+        <div style={{ fontSize: 9.5, color: 'var(--ios-label3)', margin: '4px 0', padding: '5px 8px', background: 'rgba(255,159,10,0.08)', borderRadius: 6, border: '0.5px solid rgba(255,159,10,0.2)' }}>
+          ⚠️ {chartInterval === '1wk' ? '週線' : '月線'}由每日掃描紀錄重採樣，非連續交易日資料，指標值供趨勢參考（非精確量化）
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, flexWrap: 'wrap', gap: 6 }}>
         {bars.length >= 2 && <span style={{ fontSize: 10, color: 'var(--ios-label3)' }}>近 {bars.length} {unitLabel[chartInterval]}</span>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
