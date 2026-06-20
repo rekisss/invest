@@ -7,11 +7,19 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 
 const GEMINI_KEY_STORAGE = 'gemini_api_key'
 const GEMINI_MODEL_STORAGE = 'gemini_model'
+const ANTHROPIC_KEY_STORAGE = 'anthropic_key'   // shared with main ApiKeyInput
+const MODE_STORAGE = 'roundtable_mode'           // 'claude' | 'gemini'
+const CLAUDE_MODEL_STORAGE = 'claude_roundtable_model'
+
 const MODELS = [
   { id: 'gemini-2.0-flash',      label: 'Gemini 2.0 Flash（推薦）' },
   { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash' },
   { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite' },
   { id: 'gemini-1.5-flash',      label: 'Gemini 1.5 Flash（舊版）' },
+]
+const CLAUDE_MODELS = [
+  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku（快 · ~$0.025/場）' },
+  { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet（深度 · ~$0.09/場）' },
 ]
 
 const ANALYSTS = [
@@ -76,6 +84,8 @@ const s = {
 
 function geminiKey() { return sessionStorage.getItem(GEMINI_KEY_STORAGE) || '' }
 function savedModel() { return localStorage.getItem(GEMINI_MODEL_STORAGE) || MODELS[0].id }
+function savedClaudeModel() { return localStorage.getItem(CLAUDE_MODEL_STORAGE) || CLAUDE_MODELS[0].id }
+function savedMode() { return localStorage.getItem(MODE_STORAGE) || 'claude' }
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const r2 = v => (v == null || isNaN(v) ? null : Math.round(v * 100) / 100)
 
@@ -151,6 +161,58 @@ async function callGemini(apiKey, model, systemPrompt, userPrompt, onRetry) {
     if (!text) throw new Error('Gemini 無回應（可能觸發安全過濾）')
     return text.trim()
   }
+}
+
+// ── Claude streaming API ─────────────────────────────────────────────────────
+async function callClaude(apiKey, model, systemPrompt, userPrompt, onChunk) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-allow-browser': 'true',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 350,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+      stream: true,
+    }),
+  })
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}))
+    const msg = err?.error?.message || `HTTP ${resp.status}`
+    if (resp.status === 401) throw new Error('Anthropic API Key 無效，請重新整理頁面重新輸入')
+    if (resp.status === 529 || resp.status === 503) throw new Error('Claude 服務暫時繁忙，請稍後再試')
+    throw new Error(msg)
+  }
+  const reader = resp.body.getReader()
+  const decoder = new TextDecoder()
+  let text = ''
+  let buf = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    const lines = buf.split('\n')
+    buf = lines.pop()
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const raw = line.slice(6).trim()
+      if (!raw || raw === '[DONE]') continue
+      try {
+        const j = JSON.parse(raw)
+        if (j.type === 'content_block_delta' && j.delta?.type === 'text_delta') {
+          text += j.delta.text
+          onChunk?.(text)
+        }
+      } catch { /* ignore malformed SSE */ }
+    }
+  }
+  if (!text) throw new Error('Claude 無回應（可能觸發安全過濾）')
+  return text.trim()
 }
 
 // ── Stock resolution + technical level computation ───────────────────────────
@@ -272,9 +334,11 @@ function buildBrief(resolved, levels, market, news) {
 }
 
 export default function GeminiStudio({ data }) {
+  const [mode, setMode] = useState(savedMode)
   const [apiKey, setApiKey] = useState(geminiKey)
   const [keyInput, setKeyInput] = useState('')
   const [model, setModel] = useState(savedModel)
+  const [claudeModel, setClaudeModel] = useState(savedClaudeModel)
   const [showSettings, setShowSettings] = useState(false)
   const [stockInput, setStockInput] = useState('')
   const [customTopic, setCustomTopic] = useState('')
@@ -305,9 +369,13 @@ export default function GeminiStudio({ data }) {
   const lastAccRef = useRef([])   // latest acc after each round
   const countdownRef = useRef(null)
   const sessionIdRef = useRef(null)
+  const modeRef = useRef(mode)
+  const claudeModelRef = useRef(claudeModel)
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
   useEffect(() => { localStorage.setItem(GEMINI_MODEL_STORAGE, model) }, [model])
+  useEffect(() => { localStorage.setItem(CLAUDE_MODEL_STORAGE, claudeModel); claudeModelRef.current = claudeModel }, [claudeModel])
+  useEffect(() => { localStorage.setItem(MODE_STORAGE, mode); modeRef.current = mode }, [mode])
   useEffect(() => { autoRunRef.current = autoRun }, [autoRun])
   // Persist in-progress session to sessionStorage so it survives page refreshes
   useEffect(() => {
@@ -376,7 +444,10 @@ export default function GeminiStudio({ data }) {
   }
 
   const runRoundInternal = useCallback(async (priorMessages, userNote) => {
-    if (!apiKey) return
+    const isClaude = modeRef.current === 'claude'
+    const curAnthKey = sessionStorage.getItem(ANTHROPIC_KEY_STORAGE) || ''
+    if (isClaude && !curAnthKey) return
+    if (!isClaude && !apiKey) return
     setRunning(true); setRetryNote(''); setCountdown(0)
     if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
     let acc = [...priorMessages]
@@ -404,12 +475,20 @@ export default function GeminiStudio({ data }) {
       ].join('\n')
 
       try {
-        const text = await callGemini(apiKey, model, sys, prompt, secs => setRetryNote(`額度限流，${secs}秒後自動重試…`))
+        let text
+        if (modeRef.current === 'claude') {
+          text = await callClaude(curAnthKey, claudeModelRef.current, sys, prompt, partial => {
+            setMessages(prev => prev.map(m => m.id === pid
+              ? { id: pid, role: 'analyst', analyst, content: partial, streaming: true } : m))
+          })
+        } else {
+          text = await callGemini(apiKey, model, sys, prompt, secs => setRetryNote(`額度限流，${secs}秒後自動重試…`))
+          if (ai < ANALYSTS.length - 1) await sleep(900)
+        }
         setRetryNote('')
         const msg = { id: pid, role: 'analyst', analyst, content: text }
         acc.push(msg)
         setMessages(prev => prev.map(m => m.id === pid ? msg : m))
-        if (ai < ANALYSTS.length - 1) await sleep(900)
       } catch (e) {
         setMessages(prev => prev.map(m => m.id === pid ? { id: pid, role: 'analyst', analyst, error: e.message } : m))
         setRunning(false); setRetryNote(''); setAutoRun(false)
@@ -476,35 +555,36 @@ export default function GeminiStudio({ data }) {
     }
   }
 
-  // ── No key yet ──────────────────────────────────────────────────────────────
-  if (!apiKey) {
+  // ── Gemini mode but no key yet ───────────────────────────────────────────────
+  if (mode === 'gemini' && !apiKey) {
     return (
       <div style={s.root}>
         <Header />
         <div style={s.setup}>
           <div style={{ textAlign: 'center', marginBottom: 20 }}>
-            <div style={{ fontSize: 40, marginBottom: 8 }}>🎯</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--ios-label)' }}>AI 圓桌研究室</div>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>🆓</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--ios-label)' }}>設定 Gemini API Key</div>
             <div style={{ fontSize: 13, color: 'var(--ios-label2)', marginTop: 6, lineHeight: 1.6 }}>
-              四位 AI 分析師用掃描資料 + 系統計算技術位即時討論一支股票。<br />
-              由 Google Gemini 驅動，<b style={{ color: 'var(--ios-green)' }}>完全免費</b>。
+              Gemini 免費模式需要 Google AI Studio 的 API Key。<br />
+              或切回 Claude 模式（使用已登入的 Anthropic Key）。
             </div>
           </div>
+          <button onClick={() => setMode('claude')} style={{
+            width: '100%', marginBottom: 16, padding: '11px', borderRadius: 10, border: 'none',
+            background: 'var(--ios-blue)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+          }}>← 切換回 Claude 模式</button>
           <div style={s.label}>Gemini API Key</div>
           <input style={s.input} type="password" value={keyInput} placeholder="貼上你的 Gemini API Key"
             onChange={e => setKeyInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveKey()} />
           <button onClick={saveKey} disabled={!keyInput.trim()} style={{
             width: '100%', marginTop: 12, padding: '11px', borderRadius: 10, border: 'none',
-            background: keyInput.trim() ? 'var(--ios-blue)' : 'var(--ios-fill3)',
-            color: keyInput.trim() ? '#fff' : 'var(--ios-label3)', fontSize: 15, fontWeight: 700,
+            background: keyInput.trim() ? 'var(--ios-fill3)' : 'var(--ios-fill4)',
+            color: keyInput.trim() ? 'var(--ios-label)' : 'var(--ios-label3)', fontSize: 15, fontWeight: 700,
             cursor: keyInput.trim() ? 'pointer' : 'default',
-          }}>開始使用</button>
+          }}>設定 Gemini Key</button>
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{
             display: 'block', textAlign: 'center', marginTop: 14, fontSize: 13, color: 'var(--ios-blue)',
           }}>→ 免費取得 Gemini API Key（Google AI Studio）</a>
-          <div style={{ marginTop: 16, fontSize: 11, color: 'var(--ios-label3)', lineHeight: 1.6, textAlign: 'center' }}>
-            Key 僅存於本分頁（sessionStorage），不上傳、不留存
-          </div>
         </div>
       </div>
     )
@@ -574,8 +654,8 @@ export default function GeminiStudio({ data }) {
       <div style={s.root}>
         <Header onSettings={() => setShowSettings(v => !v)}
           onHistory={history.length ? () => setView('history') : null}
-          onClearKey={() => { sessionStorage.removeItem(GEMINI_KEY_STORAGE); setApiKey('') }} />
-        {showSettings && <ModelPicker model={model} setModel={setModel} />}
+          onClearKey={mode === 'gemini' ? () => { sessionStorage.removeItem(GEMINI_KEY_STORAGE); setApiKey('') } : null} />
+        {showSettings && <ModelPicker mode={mode} setMode={setMode} model={model} setModel={setModel} claudeModel={claudeModel} setClaudeModel={setClaudeModel} />}
         <div style={s.setup}>
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
             <div style={{ fontSize: 34 }}>🎯</div>
@@ -643,7 +723,7 @@ export default function GeminiStudio({ data }) {
       <Header title={topic} onReset={() => { cancelAutoRun(); setMessages([]); setRound(0) }}
         onHistory={history.length ? () => setView('history') : null}
         onSettings={() => setShowSettings(v => !v)} />
-      {showSettings && <ModelPicker model={model} setModel={setModel} />}
+      {showSettings && <ModelPicker mode={mode} setMode={setMode} model={model} setModel={setModel} claudeModel={claudeModel} setClaudeModel={setClaudeModel} />}
 
       {/* Messages */}
       <div style={s.msgs}>
@@ -782,27 +862,56 @@ export default function GeminiStudio({ data }) {
           }}>{running ? '⏳' : '插話'}</button>
         </div>
         <div style={{ fontSize: 10.5, color: 'var(--ios-label3)', marginTop: 6, textAlign: 'center' }}>
-          🆓 Gemini 免費驅動 · Enter 插話 · Shift+Enter 換行
+          {mode === 'claude' ? '✨ Claude 串流驅動' : '🆓 Gemini 免費驅動'} · Enter 插話 · Shift+Enter 換行
         </div>
       </div>
     </div>
   )
 }
 
-function ModelPicker({ model, setModel }) {
+function ModelPicker({ mode, setMode, model, setModel, claudeModel, setClaudeModel }) {
+  const btn = (active, color = 'var(--ios-blue)') => ({
+    flex: 1, padding: '8px 0', borderRadius: 9, fontSize: 13, fontWeight: active ? 700 : 500,
+    border: `1px solid ${active ? color : 'var(--ios-sep)'}`,
+    background: active ? color + '22' : 'var(--ios-fill4)',
+    color: active ? color : 'var(--ios-label3)', cursor: 'pointer', textAlign: 'center',
+  })
+  const chip = (active) => ({
+    padding: '6px 11px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+    border: `1px solid ${active ? 'var(--ios-blue)' : 'var(--ios-sep)'}`,
+    background: active ? 'rgba(10,132,255,0.18)' : 'var(--ios-fill4)',
+    color: active ? 'var(--ios-blue)' : 'var(--ios-label2)', fontWeight: active ? 700 : 400,
+  })
   return (
-    <div style={{ padding: '10px 16px', background: 'var(--ios-bg3)', borderBottom: '0.5px solid var(--ios-sep)', flexShrink: 0 }}>
-      <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginBottom: 6 }}>遇到「額度用盡 limit: 0」時可切換模型：</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {MODELS.map(m => (
-          <div key={m.id} onClick={() => setModel(m.id)} style={{
-            padding: '6px 11px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
-            border: `1px solid ${m.id === model ? 'var(--ios-blue)' : 'var(--ios-sep)'}`,
-            background: m.id === model ? 'rgba(10,132,255,0.18)' : 'var(--ios-fill4)',
-            color: m.id === model ? 'var(--ios-blue)' : 'var(--ios-label2)', fontWeight: m.id === model ? 700 : 400,
-          }}>{m.label}</div>
-        ))}
+    <div style={{ padding: '12px 16px', background: 'var(--ios-bg3)', borderBottom: '0.5px solid var(--ios-sep)', flexShrink: 0 }}>
+      {/* Mode toggle */}
+      <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginBottom: 7 }}>驅動引擎</div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <div onClick={() => setMode('claude')} style={btn(mode === 'claude')}>✨ Claude（推薦）</div>
+        <div onClick={() => setMode('gemini')} style={btn(mode === 'gemini', '#30d158')}>🆓 Gemini 免費</div>
       </div>
+      {mode === 'claude' ? (
+        <>
+          <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginBottom: 7 }}>Claude 模型</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {CLAUDE_MODELS.map(m => (
+              <div key={m.id} onClick={() => setClaudeModel(m.id)} style={chip(m.id === claudeModel)}>{m.label}</div>
+            ))}
+          </div>
+          <div style={{ marginTop: 8, fontSize: 11, color: 'var(--ios-label3)' }}>
+            使用登入時輸入的 Anthropic Key · 串流逐字顯示 · 無速率限制
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginBottom: 7 }}>Gemini 模型（遇到 Load failed 時切換）</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {MODELS.map(m => (
+              <div key={m.id} onClick={() => setModel(m.id)} style={chip(m.id === model)}>{m.label}</div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
