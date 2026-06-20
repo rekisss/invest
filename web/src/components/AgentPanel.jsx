@@ -323,6 +323,7 @@ async function callFinMindAPI(input, token) {
 
 export default function AgentPanel({ apiKey, onClearKey }) {
   const [agentId, setAgentId] = useState('premarket')
+  const [showRoster, setShowRoster] = useState(true)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -342,9 +343,16 @@ export default function AgentPanel({ apiKey, onClearKey }) {
 
   function handleAgentSwitch(id) {
     setAgentId(id)
+    setShowRoster(false)
     setMessages([])
     setInput('')
     setShowFmInput(STOCK_AGENTS[id]?.useFinmind && !sessionStorage.getItem('fm_agent_token'))
+  }
+
+  function handleBackToRoster() {
+    setShowRoster(true)
+    setMessages([])
+    setInput('')
   }
 
   function autoResize(el) {
@@ -516,12 +524,19 @@ export default function AgentPanel({ apiKey, onClearKey }) {
       <div style={s.header}>
         <div style={s.headerLeft}>
           <span style={s.headerTitle}>台股 AI 助手</span>
-          <span style={s.agentBadge(agent.color)}>
-            {agent.emoji} {agent.label}
-          </span>
+          {!showRoster && (
+            <>
+              <span style={s.agentBadge(agent.color)}>
+                {agent.emoji} {agent.label}
+              </span>
+              <button style={{ ...s.keyBtn, fontSize: '12px', padding: '4px 10px' }} onClick={handleBackToRoster}>
+                ← 團隊
+              </button>
+            </>
+          )}
         </div>
         <div style={s.budgetBar}>
-          {agent.useFinmind && (
+          {!showRoster && agent.useFinmind && (
             <button
               style={{ ...s.keyBtn, color: finmindToken ? 'var(--green)' : 'var(--yellow)', borderColor: finmindToken ? 'var(--green)33' : 'var(--yellow)33' }}
               onClick={() => setShowFmInput(p => !p)}
@@ -543,7 +558,7 @@ export default function AgentPanel({ apiKey, onClearKey }) {
       </div>
 
       {/* FinMind Token Input */}
-      {agent.useFinmind && showFmInput && (
+      {!showRoster && agent.useFinmind && showFmInput && (
         <div style={{ padding: '10px 16px', background: 'var(--ios-bg3)', borderBottom: '0.5px solid var(--ios-sep)', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
           <span style={{ fontSize: 12, color: 'var(--ios-label2)', whiteSpace: 'nowrap' }}>📡 FinMind Token：</span>
           <input
@@ -571,6 +586,56 @@ export default function AgentPanel({ apiKey, onClearKey }) {
       )}
 
       {/* Body */}
+      {showRoster ? (
+        /* ── Team Roster ──────────────────────────────────────────────────────── */
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <div style={{ fontSize: '40px', marginBottom: '8px' }}>🤖</div>
+            <div style={{ fontSize: '17px', fontWeight: 700, color: 'var(--ios-label)', marginBottom: '4px' }}>AI 技術分析團隊</div>
+            <div style={{ fontSize: '13px', color: 'var(--ios-label2)' }}>選擇分析師開始對話</div>
+          </div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: window.innerWidth < 640 ? '1fr 1fr' : 'repeat(2, 1fr)',
+            gap: '12px',
+          }}>
+            {Object.values(STOCK_AGENTS).map(ag => (
+              <div
+                key={ag.id}
+                onClick={() => handleAgentSwitch(ag.id)}
+                style={{
+                  background: 'var(--ios-bg2)',
+                  border: `1px solid ${ag.color}33`,
+                  borderRadius: '16px',
+                  padding: '16px 14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  transition: 'border-color 0.15s',
+                }}
+              >
+                <div style={{ fontSize: '28px' }}>{ag.emoji}</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: ag.color }}>{ag.label}</div>
+                <div style={{ fontSize: '11px', color: 'var(--ios-label2)', lineHeight: 1.55, flex: 1 }}>{ag.description}</div>
+                <div style={{
+                  marginTop: '8px',
+                  padding: '6px 12px',
+                  borderRadius: '9999px',
+                  border: `1px solid ${ag.color}44`,
+                  background: ag.color + '18',
+                  color: ag.color,
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  textAlign: 'center',
+                }}>
+                  開始對話 →
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
       <div style={s.body}>
         {/* Sidebar — desktop only */}
         <div style={{ ...s.sidebar, display: window.innerWidth < 640 ? 'none' : 'flex' }}>
@@ -690,6 +755,7 @@ export default function AgentPanel({ apiKey, onClearKey }) {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

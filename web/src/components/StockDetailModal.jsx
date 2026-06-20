@@ -256,6 +256,47 @@ function toPolySegs(values, toXFn, toYFn) {
   return segments
 }
 
+// ── K-line pattern detection ─────────────────────────────────────────────────
+
+function detectCandlePattern(bars, i) {
+  if (i < 1) return null
+  const c = bars[i]
+  const p = bars[i - 1]
+  if (!c || !p || c.high == null || c.low == null || c.open == null) return null
+  const range = c.high - c.low
+  if (range < 0.001) return null
+  const body    = Math.abs(c.close - c.open)
+  const upper   = c.high - Math.max(c.close, c.open)
+  const lower   = Math.min(c.close, c.open) - c.low
+  const bullish = c.close >= c.open
+
+  if (body / range < 0.08)                               return { name: '十字星', type: 'neutral' }
+  if (lower > 2 * body && upper < body * 0.5 && bullish) return { name: '錘子線', type: 'bullish' }
+  if (lower > 2 * body && upper < body * 0.5 && !bullish) return { name: '吊頸線', type: 'bearish' }
+  if (upper > 2 * body && lower < body * 0.5 && !bullish) return { name: '流星線', type: 'bearish' }
+  if (upper > 2 * body && lower < body * 0.5 && bullish)  return { name: '倒錘子', type: 'bullish' }
+  if (p.open != null) {
+    const pBull = p.close > p.open
+    if (bullish && !pBull && body > Math.abs(p.close - p.open) * 0.9 && c.open < p.close && c.close > p.open)
+      return { name: '多頭吞噬', type: 'bullish' }
+    if (!bullish && pBull && body > Math.abs(p.close - p.open) * 0.9 && c.open > p.close && c.close < p.open)
+      return { name: '空頭吞噬', type: 'bearish' }
+  }
+  return null
+}
+
+// ── Fibonacci retracement levels ─────────────────────────────────────────────
+
+const FIB_LEVELS = [
+  { r: 0,     label: '0%',    color: 'rgba(255,69,58,0.75)' },
+  { r: 0.236, label: '23.6%', color: 'rgba(255,159,10,0.7)' },
+  { r: 0.382, label: '38.2%', color: 'rgba(255,214,10,0.8)' },
+  { r: 0.5,   label: '50%',   color: 'rgba(180,180,180,0.7)' },
+  { r: 0.618, label: '61.8%', color: 'rgba(255,214,10,0.8)' },
+  { r: 0.786, label: '78.6%', color: 'rgba(255,159,10,0.7)' },
+  { r: 1,     label: '100%',  color: 'rgba(48,209,88,0.75)' },
+]
+
 // ── Sub-chart panel (MACD / RSI / KD) ───────────────────────────────────────
 
 const CHART_W = 460
@@ -388,7 +429,7 @@ const CDP_LINE_DEFS = [
   { key: 'al',  color: 'rgba(48,209,88,0.95)',  sw: 1.2 },
 ]
 
-function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: propChartW }) {
+function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, onHoverIdx, chartW: propChartW }) {
   const [hovered, setHovered] = useState(null)
   const touchRef = useRef(null)
 
@@ -425,7 +466,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
 
   const getIdx = (clientX, svgEl) => {
     const rect = svgEl.getBoundingClientRect()
-    const svgX = (clientX - rect.left) / rect.width * W
+    const svgX = (clientX - rect.left) / rect.width * (W + rightExt)
     return Math.floor((svgX - PL) / slotW)
   }
 
@@ -480,10 +521,33 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
     segs: toPolySegs(cdpSeries.map(lv => lv?.[def.key] ?? null), toX, toY),
   })) : null
 
+  // Fibonacci retracement (auto high/low of visible bars)
+  const fibBands = showFib ? (() => {
+    const highs = bars.map(b => b.high ?? b.close ?? 0)
+    const lows  = bars.map(b => b.low  ?? b.close ?? 0)
+    const fibH = Math.max(...highs), fibL = Math.min(...lows)
+    const fibR = fibH - fibL || 1
+    return FIB_LEVELS.map(({ r, label, color }) => ({ price: fibH - r * fibR, label, color }))
+  })() : null
+
+  // Volume anomaly: 20-bar average
+  const vol20avg = bars.map((_, i) => {
+    if (i < 5) return 0
+    const w = bars.slice(Math.max(0, i - 20), i).map(b => b.volume ?? 0)
+    return w.reduce((a, b) => a + b, 0) / (w.length || 1)
+  })
+
+  // K-line patterns for each bar
+  const patterns = showPatterns ? bars.map((_, i) => detectCandlePattern(bars, i)) : null
+
+  // Right-axis extension: 36px when CDP or MA labels visible
+  const hasRightLabels = cdpSeries || (maLines && maLines.length > 0)
+  const rightExt = hasRightLabels ? 36 : 0
+
   return (
     <svg
-      viewBox={`0 0 ${W} ${H + PT + 18}`}
-      style={{ width: W, display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
+      viewBox={`0 0 ${W + rightExt} ${H + PT + 18}`}
+      style={{ width: W + rightExt, display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
@@ -514,7 +578,22 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
         ))
       )}
 
-      {/* Candles + volume */}
+      {/* Fibonacci retracement levels */}
+      {fibBands && fibBands.map(({ price, label, color }) => {
+        const y = toY(price)
+        if (y < PT || y > CH + PT) return null
+        return (
+          <g key={label}>
+            <line x1={PL} y1={y} x2={W - PR} y2={y} stroke={color} strokeWidth={0.7} strokeDasharray="5,3" />
+            <text x={PL + 4} y={y - 2} fontSize={7} fill={color} opacity={0.9}>{label}</text>
+            <text x={W - PR - 4} y={y - 2} fontSize={7} fill={color} opacity={0.9} textAnchor="end">
+              {price >= 100 ? price.toFixed(1) : price.toFixed(2)}
+            </text>
+          </g>
+        )
+      })}
+
+      {/* Candles + volume + anomaly badge */}
       {bars.map((d, i) => {
         const x = toX(i), color = candleColor(d.open ?? d.close, d.close)
         const bodyTop = toY(Math.max(d.open ?? d.close, d.close))
@@ -522,11 +601,15 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
         const bodyH = Math.max(bodyBot - bodyTop, 1)
         const volH = ((d.volume ?? 0) / maxVol) * VH
         const isHovered = hovered?.idx === i
+        const isVolSpike = vol20avg[i] > 0 && (d.volume ?? 0) > vol20avg[i] * 2
         return (
           <g key={i} opacity={hovered && !isHovered ? 0.45 : 1}>
             <line x1={x} y1={toY(d.high ?? d.close)} x2={x} y2={toY(d.low ?? d.close)} stroke={color} strokeWidth={isHovered ? 1.4 : 0.8} />
             <rect x={x - bW / 2} y={bodyTop} width={bW} height={bodyH} fill={color} stroke={isHovered ? '#fff' : 'none'} strokeWidth={0.5} />
-            <rect x={x - bW / 2} y={CH + GAP + PT + VH - volH} width={bW} height={volH} fill={color} opacity={isHovered ? 0.75 : 0.45} />
+            <rect x={x - bW / 2} y={CH + GAP + PT + VH - volH} width={bW} height={volH} fill={isVolSpike ? '#FFD60A' : color} opacity={isHovered ? 0.85 : isVolSpike ? 0.75 : 0.45} />
+            {isVolSpike && slotW > 7 && (
+              <text x={x} y={CH + GAP + PT + 9} fontSize={6} fill="#FFD60A" textAnchor="middle" fontWeight="bold">放量</text>
+            )}
           </g>
         )
       })}
@@ -543,6 +626,47 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
         <text key={i} x={toX(i)} y={H + PT + 12} fontSize={8.5} fill="#636366" textAnchor="middle">{label}</text>
       ))}
 
+      {/* CDP right-axis price labels (always visible when CDP is on) */}
+      {cdpSeries && bars.length > 0 && (() => {
+        const lastLv = cdpSeries[bars.length - 1]
+        if (!lastLv) return null
+        const CDP_AXIS = [
+          { v: lastLv.ah,  c: 'rgba(255,69,58,0.95)',  s: 'AH' },
+          { v: lastLv.nh,  c: 'rgba(255,159,10,0.95)', s: 'NH' },
+          { v: lastLv.cdp, c: 'rgba(255,214,10,0.95)', s: 'CDP' },
+          { v: lastLv.nl,  c: 'rgba(48,209,88,0.9)',   s: 'NL' },
+          { v: lastLv.al,  c: 'rgba(48,209,88,1)',      s: 'AL' },
+        ]
+        return CDP_AXIS.map(({ v, c, s }) => {
+          const y = toY(v)
+          if (y < PT || y > CH + PT) return null
+          const priceStr = v >= 100 ? v.toFixed(1) : v.toFixed(2)
+          return (
+            <g key={s}>
+              <line x1={W - PR} y1={y} x2={W - PR + 4} y2={y} stroke={c} strokeWidth={1.2} />
+              <rect x={W - PR + 5} y={y - 5.5} width={26} height={11} fill={c} rx={2} opacity={0.9} />
+              <text x={W - PR + 18} y={y + 3.5} fontSize={7} fill="#1C1C1E" fontWeight="bold" textAnchor="middle">{priceStr}</text>
+            </g>
+          )
+        })
+      })()}
+
+      {/* MA right-axis price labels (TradingView style) */}
+      {(maLines || []).map(ma => {
+        const lastVal = ma.values[bars.length - 1]
+        if (lastVal == null) return null
+        const y = toY(lastVal)
+        if (y < PT || y > CH + PT) return null
+        const priceStr = lastVal >= 100 ? lastVal.toFixed(0) : lastVal.toFixed(1)
+        return (
+          <g key={ma.label}>
+            <line x1={W - PR} y1={y} x2={W - PR + 4} y2={y} stroke={ma.color} strokeWidth={1.0} />
+            <rect x={W - PR + 5} y={y - 5.5} width={26} height={11} fill={ma.color} rx={2} opacity={0.85} />
+            <text x={W - PR + 18} y={y + 3.5} fontSize={7} fill="#1C1C1E" fontWeight="bold" textAnchor="middle">{priceStr}</text>
+          </g>
+        )
+      })}
+
       {/* Tooltip */}
       {hovered && (() => {
         const b = hovered.bar
@@ -552,6 +676,19 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
         const vol = b.volume != null
           ? (b.volume >= 1000000 ? `${(b.volume / 1000000).toFixed(1)}M` : `${(b.volume / 1000).toFixed(0)}K`)
           : '—'
+        // CDP levels and K-line pattern for hovered bar
+        const cdpLv = cdpSeries?.[hovered.idx] ?? null
+        const patInfo = patterns?.[hovered.idx] ?? null
+        const patOffset = (patInfo && !slimOnly) ? 16 : 0
+        const baseH = slimOnly ? 42 : tipH
+        const fullH = baseH + patOffset + (cdpLv ? 72 : 0)
+        const CDP_TIP = cdpLv ? [
+          { label: 'AH',  v: cdpLv.ah,  c: 'rgba(255,69,58,0.95)' },
+          { label: 'NH',  v: cdpLv.nh,  c: 'rgba(255,159,10,0.95)' },
+          { label: 'CDP', v: cdpLv.cdp, c: 'rgba(255,214,10,0.95)' },
+          { label: 'NL',  v: cdpLv.nl,  c: 'rgba(48,209,88,0.9)' },
+          { label: 'AL',  v: cdpLv.al,  c: 'rgba(48,209,88,1)' },
+        ] : []
         return (
           <g>
             <line x1={hovered.x} y1={PT} x2={hovered.x} y2={H + PT} stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.7} />
@@ -560,7 +697,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
             <text x={PL - 5} y={toY(b.close) + 4} fontSize={8} fill={closeColor} textAnchor="end" fontWeight="bold">
               {fmtP(b.close)}
             </text>
-            <rect x={tipX} y={tipY} width={tipW} height={slimOnly ? 42 : tipH} fill="#1C1C1E" rx={6} stroke="#3A3A3C" strokeWidth={0.8} />
+            <rect x={tipX} y={tipY} width={tipW} height={fullH} fill="#1C1C1E" rx={6} stroke="#3A3A3C" strokeWidth={0.8} />
             <text x={tipX + 7} y={tipY + 13} fontSize={9} fill="#8E8E93" fontWeight="bold">{b.time || ''}</text>
             <line x1={tipX + 4} y1={tipY + 17} x2={tipX + tipW - 4} y2={tipY + 17} stroke="#2C2C2E" strokeWidth={0.5} />
             {slimOnly ? (
@@ -571,6 +708,25 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
               <text x={tipX + 7} y={tipY + 56} fontSize={8.5} fill="#636366">低 <tspan fill="#30D158">{fmtP(b.low)}</tspan></text>
               <text x={tipX + 7} y={tipY + 69} fontSize={8.5} fill="#636366">收 <tspan fill={closeColor} fontWeight="bold">{fmtP(b.close)}</tspan></text>
               <text x={tipX + 7} y={tipY + 82} fontSize={8.5} fill="#636366">量 <tspan fill="#8E8E93">{vol}</tspan></text>
+            </>}
+            {patInfo && !slimOnly && (
+              <>
+                <line x1={tipX+4} y1={tipY+tipH} x2={tipX+tipW-4} y2={tipY+tipH} stroke="#2C2C2E" strokeWidth={0.5} />
+                <text x={tipX+7} y={tipY+tipH+11} fontSize={8} fill="#8E8E93">型態</text>
+                <text x={tipX+tipW-6} y={tipY+tipH+11} fontSize={8.5}
+                  fill={patInfo.type === 'bullish' ? '#30D158' : patInfo.type === 'bearish' ? '#FF453A' : '#8E8E93'}
+                  fontWeight="bold" textAnchor="end">{patInfo.name}</text>
+              </>
+            )}
+            {cdpLv && <>
+              <line x1={tipX+4} y1={tipY+baseH+patOffset+2} x2={tipX+tipW-4} y2={tipY+baseH+patOffset+2} stroke="#2C2C2E" strokeWidth={0.5} />
+              {CDP_TIP.map(({ label, v, c }, ri) => (
+                <g key={label}>
+                  <circle cx={tipX+10} cy={tipY+baseH+patOffset+12+ri*13} r={2.5} fill={c} />
+                  <text x={tipX+17} y={tipY+baseH+patOffset+16+ri*13} fontSize={8} fill="#636366">{label}</text>
+                  <text x={tipX+tipW-6} y={tipY+baseH+patOffset+16+ri*13} fontSize={8.5} fill={c} fontWeight="bold" textAnchor="end">{fmtP(v)}</text>
+                </g>
+              ))}
             </>}
           </g>
         )
@@ -713,6 +869,8 @@ const TOGGLE_DEFS = [
   { key: 'ma',   label: 'MA',   color: '#5AC8FA' },
   { key: 'bb',   label: 'BB',   color: '#0A84FF' },
   { key: 'cdp',  label: 'CDP',  color: '#FFD60A' },
+  { key: 'fib',  label: 'Fib',  color: '#FF9F0A' },
+  { key: 'pat',  label: '型態', color: '#BF5AF2' },
   { key: 'macd', label: 'MACD', color: '#FF9F0A' },
   { key: 'rsi',  label: 'RSI',  color: '#BF5AF2' },
   { key: 'kd',   label: 'KD',   color: '#30D158' },
@@ -842,7 +1000,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [chartInterval, setChartInterval] = useState(
     () => INTERVAL_LABELS.find(t => dataMap[t.id].length >= 2)?.id || '1d'
   )
-  const [active, setActive] = useState({ ma: true, bb: false, cdp: false, macd: true, rsi: true, kd: false, obv: false, adx: false, wr: false, cci: false, mfi: false })
+  const [active, setActive] = useState({ ma: true, bb: false, cdp: false, fib: false, pat: false, macd: true, rsi: true, kd: false, obv: false, adx: false, wr: false, cci: false, mfi: false })
   const [preset, setPreset] = useState('momentum')
   const [hoveredIdx, setHoveredIdx] = useState(null)
   const [barCount, setBarCount] = useState(250)
@@ -1061,6 +1219,8 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
             maLines={active.ma && indicators ? indicators.maLines : []}
             bbBands={active.bb && indicators ? indicators.bbBands : null}
             cdpSeries={active.cdp && indicators ? indicators.cdpSeries : null}
+            showFib={active.fib}
+            showPatterns={active.pat}
             onHoverIdx={setHoveredIdx}
             chartW={totalChartW}
           />
