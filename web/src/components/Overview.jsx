@@ -17,7 +17,11 @@ function useLiveMarket(mdt, urt) {
 
   useEffect(() => {
     if (!mdt && !urt) return
-    if (live && Date.now() - (live.ts || 0) < LIVE_TTL) return
+    // Check sessionStorage (not React state) so saveKeys()'s removeItem takes effect immediately
+    try {
+      const c = JSON.parse(sessionStorage.getItem(LIVE_CACHE_KEY) || 'null')
+      if (c && Date.now() - c.ts < LIVE_TTL) return
+    } catch {}
     let alive = true
     const go = async () => {
       const r = {}
@@ -66,9 +70,11 @@ function LiveMarketStrip() {
 
   const saveKeys = () => {
     const m = mdtInput.trim(), u = urtInput.trim()
-    if (m) { localStorage.setItem(MDT_STORE, m); setMdt(m) }
-    if (u) { localStorage.setItem(URT_STORE, u); setUrt(u) }
-    // clear cache so it re-fetches immediately
+    // Always set or remove — blank input clears a previously saved key
+    if (m) { localStorage.setItem(MDT_STORE, m) } else { localStorage.removeItem(MDT_STORE) }
+    if (u) { localStorage.setItem(URT_STORE, u) } else { localStorage.removeItem(URT_STORE) }
+    setMdt(m); setUrt(u)
+    // Clear sessionStorage cache so useLiveMarket re-fetches with new keys immediately
     try { sessionStorage.removeItem(LIVE_CACHE_KEY) } catch {}
     setShowSetup(false)
   }
