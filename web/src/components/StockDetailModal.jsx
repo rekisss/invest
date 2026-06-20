@@ -1649,11 +1649,12 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
         onClick={e => e.stopPropagation()}
         style={{
           width: 'min(460px, 100vw)',
-          height: '100vh',
+          height: '100dvh',
+          maxHeight: '100dvh',
           background: 'var(--ios-bg)',
           overflowY: 'auto',
           overflowX: 'hidden',
-          padding: '4px 14px 48px',
+          padding: '4px 14px calc(96px + env(safe-area-inset-bottom))',
           borderLeft: '0.5px solid var(--ios-sep)',
           borderRadius: '16px 0 0 16px',
           display: 'flex',
