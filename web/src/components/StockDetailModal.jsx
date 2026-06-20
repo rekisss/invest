@@ -854,8 +854,9 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const toggle = key => { setActive(prev => ({ ...prev, [key]: !prev[key] })); setPreset(null) }
   const applyPreset = p => { setActive(p.state); setPreset(p.id) }
 
-  const bars = (dataMap[chartInterval] || []).slice(-barCount)
-  const totalBarsAvail = (dataMap[chartInterval] || []).length
+  const _allBars = dataMap[chartInterval] || []
+  const bars = useMemo(() => _allBars.slice(-barCount), [_allBars, barCount])
+  const totalBarsAvail = _allBars.length
 
   const totalChartW = Math.max(CHART_W, bars.length * BAR_W + CHART_PL + CHART_PR)
 
@@ -903,33 +904,45 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
 
   const indicators = useMemo(() => {
     if (bars.length < 2) return null
-    const closes = bars.map(d => d.close)
+    // Use extra leading bars as warm-up so indicators are fully populated on the visible range
+    const WARMUP = 60
+    const warmBars = _allBars.slice(-(bars.length + WARMUP))
+    const off = warmBars.length - bars.length  // how many leading warm-up bars
+    const closes = warmBars.map(d => d.close)
+    const sl = arr => arr.slice(off)           // slice back to display range
+
     const bb = bollingerCalc(closes, 20, 2)
+    const { macdLine, signalLine, hist } = macdCalc(closes)
+    const kdResult = kdCalc(warmBars)
+    const obvWarm = obvCalc(warmBars)
+    const adxResult = adxCalc(warmBars)
+    const bbSl = sl(bb)
+
     return {
-      maLines: MA_LINES_DEF.map(m => ({ ...m, values: m.fn(closes) })),
+      maLines: MA_LINES_DEF.map(m => ({ ...m, values: sl(m.fn(closes)) })),
       bbBands: {
-        upper: bb.map(v => v?.upper ?? null),
-        mid:   bb.map(v => v?.mid   ?? null),
-        lower: bb.map(v => v?.lower ?? null),
+        upper: bbSl.map(v => v?.upper ?? null),
+        mid:   bbSl.map(v => v?.mid   ?? null),
+        lower: bbSl.map(v => v?.lower ?? null),
       },
-      macd: macdCalc(closes),
-      rsi: rsiCalc(closes),
-      kd: kdCalc(bars),
-      obv: (() => { const v = obvCalc(bars); return { values: v, ma: smaCalc(v, 20) } })(),
-      adx: adxCalc(bars),
-      wr: williamsRCalc(bars),
-      cci: cciCalc(bars),
-      mfi: mfiCalc(bars),
+      macd: { macdLine: sl(macdLine), signalLine: sl(signalLine), hist: sl(hist) },
+      rsi:  sl(rsiCalc(closes)),
+      kd:   { kArr: sl(kdResult.kArr), dArr: sl(kdResult.dArr) },
+      obv:  (() => { const v = sl(obvWarm); return { values: v, ma: smaCalc(v, 20) } })(),
+      adx:  { adxLine: sl(adxResult.adxLine), plusDI: sl(adxResult.plusDI), minusDI: sl(adxResult.minusDI) },
+      wr:   sl(williamsRCalc(warmBars)),
+      cci:  sl(cciCalc(warmBars)),
+      mfi:  sl(mfiCalc(warmBars)),
       cdpSeries: bars.map((_, i) => {
-        if (i === 0) return null
-        const p = bars[i - 1]
-        if (p.high == null || p.low == null || p.close == null) return null
+        // For index 0, use the last warm-up bar as "previous" so CDP connects from bar 0
+        const p = i === 0 ? (off > 0 ? warmBars[off - 1] : null) : bars[i - 1]
+        if (!p || p.high == null || p.low == null || p.close == null) return null
         const c = (p.high + p.low + p.close * 2) / 4
         const r = p.high - p.low
         return { ah: c + r, nh: 2 * c - p.low, cdp: c, nl: 2 * c - p.high, al: c - r }
       }),
     }
-  }, [bars])
+  }, [bars, _allBars])
 
   const unitLabel = { '1d': '個交易日', '1wk': '週', '1mo': '個月' }
 
