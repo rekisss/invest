@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import StockDetailModal from './StockDetailModal'
 
 const STORAGE_KEY = 'tw_portfolio_positions'
 
@@ -216,6 +217,8 @@ export default function Portfolio({ data }) {
   const [showChart, setShowChart] = useState(true)
   const [livePrices, setLivePrices] = useState({})   // { stockId: price } from Yahoo
   const [priceLoading, setPriceLoading] = useState(false)
+  const [selectedStock, setSelectedStock] = useState(null)
+  const historiesRef = useRef(null)  // lazy-loaded stock_histories.json cache
 
   // Fetch live prices from Yahoo whenever the set of held stocks changes.
   const posKey = Object.keys(positions).sort().join(',')
@@ -251,6 +254,47 @@ export default function Portfolio({ data }) {
   const handleDelete = id => {
     if (!window.confirm(`確定刪除 ${id} ${positions[id]?.name || ''} 持倉？`)) return
     const next = { ...positions }; delete next[id]; update(next)
+  }
+
+  // Open StockDetailModal with scan data + lazy-loaded price history
+  const openStockDetail = async (id) => {
+    const scan = getScanInfo(id, data)
+    const p = positions[id]
+    // Build base stock object from scan data + position data
+    const baseStock = {
+      stock_id: id,
+      name: p?.name || scan?.name || id,
+      close: livePrices[id] ?? scan?.close ?? null,
+      ...(scan || {}),
+    }
+    // Show modal immediately with whatever we have (chart section loads async)
+    setSelectedStock(baseStock)
+
+    // Lazy-load histories if not yet fetched
+    if (!historiesRef.current) {
+      try {
+        const base = import.meta.env.BASE_URL || '/'
+        const h = await fetch(`${base}stock_histories.json`).then(r => r.ok ? r.json() : null)
+        historiesRef.current = h || {}
+      } catch { historiesRef.current = {} }
+    }
+    const h = historiesRef.current
+    // Enrich with price history
+    const kline = h?.stocks?.[id]
+    const scanHist = h?.scan_stocks?.[id]
+    const dates = h?.dates || []
+    let priceHistory = null
+    if (kline?.c) {
+      priceHistory = dates.map((t, i) => kline.c[i] == null ? null : {
+        time: t, open: kline.o?.[i] ?? kline.c[i], high: kline.h?.[i] ?? kline.c[i],
+        low: kline.l?.[i] ?? kline.c[i], close: kline.c[i], volume: kline.v?.[i] ?? 0,
+      }).filter(Boolean)
+    } else if (Array.isArray(scanHist) && scanHist.length >= 2) {
+      priceHistory = scanHist.map(b => ({ time: b[0], open: b[1], high: b[2], low: b[3], close: b[4], volume: b[5] }))
+    }
+    if (priceHistory) {
+      setSelectedStock(prev => prev?.stock_id === id ? { ...prev, price_history: priceHistory } : prev)
+    }
   }
 
   // ── Computed entries ──────────────────────────────────────────────────────
@@ -405,12 +449,13 @@ export default function Portfolio({ data }) {
               </div>
             )}
 
-            {/* Title row */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+            {/* Title row — tap to open detail modal */}
+            <div onClick={() => openStockDetail(id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, cursor: 'pointer' }}>
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }} />
                 <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--ios-label)' }}>{id}</span>
                 <span style={{ fontSize: 13, color: 'var(--ios-label2)' }}>{p.name}</span>
+                <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>›</span>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 {pnlPct != null ? (
@@ -491,6 +536,7 @@ export default function Portfolio({ data }) {
             )}
 
             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+              <button onClick={() => openStockDetail(id)} style={{ fontSize: 11, color: '#FF9F0A', background: 'rgba(255,159,10,0.12)', border: 'none', borderRadius: 7, padding: '5px 14px', cursor: 'pointer', fontWeight: 600 }}>📈 K線&詳情</button>
               <button onClick={() => openEdit(id)} style={{ fontSize: 11, color: 'var(--ios-blue)', background: 'var(--ios-fill4)', border: 'none', borderRadius: 7, padding: '5px 14px', cursor: 'pointer' }}>編輯</button>
               <button onClick={() => handleDelete(id)} style={{ fontSize: 11, color: 'var(--ios-red)', background: 'var(--ios-fill4)', border: 'none', borderRadius: 7, padding: '5px 14px', cursor: 'pointer' }}>刪除</button>
             </div>
@@ -563,6 +609,16 @@ export default function Portfolio({ data }) {
           borderRadius: 12, padding: '13px', color: 'var(--ios-blue)', fontSize: 15, fontWeight: 600,
           cursor: 'pointer', marginTop: 6, letterSpacing: 0.2,
         }}>＋ 新增持倉</button>
+      )}
+
+      {/* ── Stock detail modal ───────────────────────── */}
+      {selectedStock && (
+        <StockDetailModal
+          stock={selectedStock}
+          notionInfo={null}
+          onClose={() => setSelectedStock(null)}
+          allScans={data?.scans}
+        />
       )}
     </div>
   )

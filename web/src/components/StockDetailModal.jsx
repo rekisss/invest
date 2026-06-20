@@ -86,12 +86,15 @@ function macdCalc(arr, fast = 12, slow = 26, sig = 9) {
 }
 
 function obvCalc(bars) {
+  // If all volumes are 0/missing, fall back to price-direction counting (unit volume)
+  const hasVol = bars.some(b => (b.volume || 0) > 0)
   const result = new Array(bars.length).fill(0)
   let obv = 0
   for (let i = 0; i < bars.length; i++) {
     if (i > 0) {
-      if (bars[i].close > bars[i - 1].close) obv += bars[i].volume
-      else if (bars[i].close < bars[i - 1].close) obv -= bars[i].volume
+      const vol = hasVol ? (bars[i].volume || 0) : 1
+      if (bars[i].close > bars[i - 1].close) obv += vol
+      else if (bars[i].close < bars[i - 1].close) obv -= vol
     }
     result[i] = obv
   }
@@ -256,6 +259,18 @@ function toPolySegs(values, toXFn, toYFn) {
   return segments
 }
 
+// ── K-line pattern descriptions ─────────────────────────────────────────────
+
+const PATTERN_DESC = {
+  '十字星':  { short: '多空猶豫', hint: '開收相近，趨勢可能轉折，需等下一根K棒確認方向' },
+  '錘子線':  { short: '底部反轉↑', hint: '長下影線代表空方試圖壓低但多方強力拉回，底部見到為強力多頭訊號' },
+  '吊頸線':  { short: '頂部警示↓', hint: '外形像錘子但出現在高位，暗示多頭力道衰竭，需謹慎' },
+  '流星線':  { short: '頂部反轉↓', hint: '長上影線代表多方嘗試拉高但遭空方壓回，頂部出現為強力空頭訊號' },
+  '倒錘子':  { short: '潛在反彈↑', hint: '長上影線出現在底部，代表多方開始嘗試反攻，需次日確認' },
+  '多頭吞噬': { short: '強力多頭↑', hint: '大紅棒完全包住前一根黑棒，力道強，常見於底部反轉起點' },
+  '空頭吞噬': { short: '強力空頭↓', hint: '大黑棒完全包住前一根紅棒，力道強，常見於頂部反轉起點' },
+}
+
 // ── K-line pattern detection ─────────────────────────────────────────────────
 
 function detectCandlePattern(bars, i) {
@@ -389,14 +404,14 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
       {[0, 0.5, 1].map(t => {
         const v = minV + t * range
         const y = PT + (1 - t) * (H - PT * 2)
-        const label = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : Math.abs(v) < 10 ? v.toFixed(1) : v.toFixed(0)
+        const lbl = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : Math.abs(v) < 10 ? v.toFixed(1) : v.toFixed(0)
         return (
-          <text key={t} x={CHART_PL - 3} y={y + 3.5} fontSize={7.5} fill="#48484A" textAnchor="end">{label}</text>
+          <text key={t} x={CHART_PL - 3} y={y + 3.5} fontSize={8} fill="#636366" textAnchor="end" opacity={0.85}>{lbl}</text>
         )
       })}
 
       {/* Chart label */}
-      <text x={CHART_PL + 3} y={PT + 9} fontSize={8} fill="#636366" fontWeight="bold">{label}</text>
+      <text x={CHART_PL + 3} y={PT + 9} fontSize={8.5} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">{label}</text>
 
       {/* Hover values */}
       {hoveredIdx != null && (lines || []).map((series, si) => {
@@ -679,7 +694,8 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
         // CDP levels and K-line pattern for hovered bar
         const cdpLv = cdpSeries?.[hovered.idx] ?? null
         const patInfo = patterns?.[hovered.idx] ?? null
-        const patOffset = (patInfo && !slimOnly) ? 16 : 0
+        const hasPD = patInfo && PATTERN_DESC[patInfo.name]
+        const patOffset = (patInfo && !slimOnly) ? (hasPD ? 26 : 16) : 0
         const baseH = slimOnly ? 42 : tipH
         const fullH = baseH + patOffset + (cdpLv ? 72 : 0)
         const CDP_TIP = cdpLv ? [
@@ -697,34 +713,45 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
             <text x={PL - 5} y={toY(b.close) + 4} fontSize={8} fill={closeColor} textAnchor="end" fontWeight="bold">
               {fmtP(b.close)}
             </text>
-            <rect x={tipX} y={tipY} width={tipW} height={fullH} fill="#1C1C1E" rx={6} stroke="#3A3A3C" strokeWidth={0.8} />
-            <text x={tipX + 7} y={tipY + 13} fontSize={9} fill="#8E8E93" fontWeight="bold">{b.time || ''}</text>
-            <line x1={tipX + 4} y1={tipY + 17} x2={tipX + tipW - 4} y2={tipY + 17} stroke="#2C2C2E" strokeWidth={0.5} />
+            <rect x={tipX} y={tipY} width={tipW} height={fullH} fill="#1C1C1E" rx={7} stroke="#3A3A3C" strokeWidth={0.8} />
+            <text x={tipX + 8} y={tipY + 13} fontSize={9} fill="#6E6E73" fontWeight="600" letterSpacing="0.3">{b.time || ''}</text>
+            <line x1={tipX + 5} y1={tipY + 17} x2={tipX + tipW - 5} y2={tipY + 17} stroke="#2C2C2E" strokeWidth={0.5} />
             {slimOnly ? (
-              <text x={tipX + 7} y={tipY + 32} fontSize={8.5} fill="#636366">收 <tspan fill={closeColor} fontWeight="bold">{fmtP(b.close)}</tspan></text>
-            ) : <>
-              <text x={tipX + 7} y={tipY + 30} fontSize={8.5} fill="#636366">開 <tspan fill="#EBEBF5">{fmtP(b.open)}</tspan></text>
-              <text x={tipX + 7} y={tipY + 43} fontSize={8.5} fill="#636366">高 <tspan fill="#FF453A">{fmtP(b.high)}</tspan></text>
-              <text x={tipX + 7} y={tipY + 56} fontSize={8.5} fill="#636366">低 <tspan fill="#30D158">{fmtP(b.low)}</tspan></text>
-              <text x={tipX + 7} y={tipY + 69} fontSize={8.5} fill="#636366">收 <tspan fill={closeColor} fontWeight="bold">{fmtP(b.close)}</tspan></text>
-              <text x={tipX + 7} y={tipY + 82} fontSize={8.5} fill="#636366">量 <tspan fill="#8E8E93">{vol}</tspan></text>
-            </>}
-            {patInfo && !slimOnly && (
               <>
-                <line x1={tipX+4} y1={tipY+tipH} x2={tipX+tipW-4} y2={tipY+tipH} stroke="#2C2C2E" strokeWidth={0.5} />
-                <text x={tipX+7} y={tipY+tipH+11} fontSize={8} fill="#8E8E93">型態</text>
-                <text x={tipX+tipW-6} y={tipY+tipH+11} fontSize={8.5}
-                  fill={patInfo.type === 'bullish' ? '#30D158' : patInfo.type === 'bearish' ? '#FF453A' : '#8E8E93'}
-                  fontWeight="bold" textAnchor="end">{patInfo.name}</text>
+                <text x={tipX + 8} y={tipY + 32} fontSize={8} fill="#48484A">收</text>
+                <text x={tipX + tipW - 6} y={tipY + 32} fontSize={9} fill={closeColor} fontWeight="700" textAnchor="end">{fmtP(b.close)}</text>
               </>
-            )}
+            ) : <>
+              <text x={tipX + 8} y={tipY + 30} fontSize={8} fill="#48484A">開</text>
+              <text x={tipX + tipW - 6} y={tipY + 30} fontSize={9} fill="#EBEBF5" fontWeight="600" textAnchor="end">{fmtP(b.open)}</text>
+              <text x={tipX + 8} y={tipY + 43} fontSize={8} fill="#48484A">高</text>
+              <text x={tipX + tipW - 6} y={tipY + 43} fontSize={9} fill="#FF453A" fontWeight="600" textAnchor="end">{fmtP(b.high)}</text>
+              <text x={tipX + 8} y={tipY + 56} fontSize={8} fill="#48484A">低</text>
+              <text x={tipX + tipW - 6} y={tipY + 56} fontSize={9} fill="#30D158" fontWeight="600" textAnchor="end">{fmtP(b.low)}</text>
+              <text x={tipX + 8} y={tipY + 69} fontSize={8} fill="#48484A">收</text>
+              <text x={tipX + tipW - 6} y={tipY + 69} fontSize={9} fill={closeColor} fontWeight="700" textAnchor="end">{fmtP(b.close)}</text>
+              <text x={tipX + 8} y={tipY + 82} fontSize={8} fill="#48484A">量</text>
+              <text x={tipX + tipW - 6} y={tipY + 82} fontSize={9} fill="#636366" fontWeight="600" textAnchor="end">{vol}</text>
+            </>}
+            {patInfo && !slimOnly && (() => {
+              const pd = PATTERN_DESC[patInfo.name]
+              const patColor = patInfo.type === 'bullish' ? '#30D158' : patInfo.type === 'bearish' ? '#FF453A' : '#8E8E93'
+              return (
+                <>
+                  <line x1={tipX+5} y1={tipY+tipH} x2={tipX+tipW-5} y2={tipY+tipH} stroke="#2C2C2E" strokeWidth={0.5} />
+                  <text x={tipX+8} y={tipY+tipH+11} fontSize={8} fill="#48484A" fontWeight="600">型態</text>
+                  <text x={tipX+tipW-6} y={tipY+tipH+11} fontSize={9} fill={patColor} fontWeight="700" textAnchor="end">{patInfo.name}</text>
+                  {pd && <text x={tipX+8} y={tipY+tipH+22} fontSize={7.5} fill={patColor} opacity={0.75}>{pd.short}</text>}
+                </>
+              )
+            })()}
             {cdpLv && <>
-              <line x1={tipX+4} y1={tipY+baseH+patOffset+2} x2={tipX+tipW-4} y2={tipY+baseH+patOffset+2} stroke="#2C2C2E" strokeWidth={0.5} />
+              <line x1={tipX+5} y1={tipY+baseH+patOffset+2} x2={tipX+tipW-5} y2={tipY+baseH+patOffset+2} stroke="#2C2C2E" strokeWidth={0.5} />
               {CDP_TIP.map(({ label, v, c }, ri) => (
                 <g key={label}>
-                  <circle cx={tipX+10} cy={tipY+baseH+patOffset+12+ri*13} r={2.5} fill={c} />
-                  <text x={tipX+17} y={tipY+baseH+patOffset+16+ri*13} fontSize={8} fill="#636366">{label}</text>
-                  <text x={tipX+tipW-6} y={tipY+baseH+patOffset+16+ri*13} fontSize={8.5} fill={c} fontWeight="bold" textAnchor="end">{fmtP(v)}</text>
+                  <rect x={tipX+7} y={tipY+baseH+patOffset+6+ri*13} width={16} height={10} fill={`${c}25`} rx={2} />
+                  <text x={tipX+15} y={tipY+baseH+patOffset+14+ri*13} fontSize={7.5} fill={c} fontWeight="700" textAnchor="middle">{label}</text>
+                  <text x={tipX+tipW-6} y={tipY+baseH+patOffset+14+ri*13} fontSize={9} fill={c} fontWeight="600" textAnchor="end">{fmtP(v)}</text>
                 </g>
               ))}
             </>}
@@ -791,54 +818,77 @@ function ChartValueStrip({ bars, indicators, active, hoveredIdx }) {
   const mfi   = indicators.mfi?.[i]
   const vn = (val, dec = 1) => val != null ? Number(val).toFixed(dec) : '—'
 
+  const Chip = ({ label, borderColor, children }) => (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      background: `${borderColor}18`, border: `0.5px solid ${borderColor}45`,
+      borderRadius: 7, padding: '2px 6px', flexShrink: 0, whiteSpace: 'nowrap',
+    }}>
+      <span style={{ fontSize: 9, color: '#636366', fontWeight: 600, letterSpacing: 0.2 }}>{label}</span>
+      {children}
+    </span>
+  )
+  const V = ({ v, c }) => <b style={{ fontSize: 10.5, color: c, fontWeight: 700 }}>{v}</b>
+
+  const hasAny = (active.rsi && rsi != null) || (active.macd && macdL != null) ||
+    (active.kd && k != null) || (active.adx && adx != null) || (active.wr && wr != null) ||
+    (active.cci && cci != null) || (active.mfi && mfi != null)
+  if (!hasAny) return null
+
   return (
     <div style={{
-      display: 'flex', gap: 10, padding: '5px 2px 5px', fontSize: 10.5,
-      flexWrap: 'wrap', alignItems: 'center', borderBottom: '0.5px solid var(--ios-sep)',
-      marginBottom: 1, minHeight: 26,
+      display: 'flex', gap: 4, padding: '4px 0 3px',
+      overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+      alignItems: 'center', borderBottom: '0.5px solid var(--ios-sep)',
+      marginBottom: 1, scrollbarWidth: 'none', msOverflowStyle: 'none',
     }}>
-      <span style={{ color: 'var(--ios-label3)', fontSize: 10, minWidth: 44, flexShrink: 0 }}>
+      <span style={{ fontSize: 9, color: '#48484A', minWidth: 34, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
         {hoveredIdx != null ? (bar.time ? bar.time.slice(5) : '') : '最新'}
       </span>
-      {active.rsi && rsi != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          RSI <b style={{ color: rsi > 70 ? '#FF453A' : rsi < 30 ? '#30D158' : '#BF5AF2' }}>{vn(rsi)}</b>
-        </span>
-      )}
+
+      {active.rsi && rsi != null && (() => {
+        const c = rsi > 70 ? '#FF453A' : rsi < 30 ? '#30D158' : '#BF5AF2'
+        return <Chip label="RSI" borderColor={c}><V v={vn(rsi)} c={c} /></Chip>
+      })()}
+
       {active.macd && macdL != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          MACD <b style={{ color: '#0A84FF' }}>{vn(macdL, 2)}</b>
-          {macdH != null && <> <b style={{ color: macdH >= 0 ? '#FF453A' : '#30D158' }}>({macdH >= 0 ? '+' : ''}{vn(macdH, 2)})</b></>}
-        </span>
+        <Chip label="MACD" borderColor="#0A84FF">
+          <V v={vn(macdL, 2)} c="#0A84FF" />
+          {macdH != null && <span style={{ fontSize: 9.5, color: macdH >= 0 ? '#FF453A' : '#30D158', fontWeight: 700, marginLeft: 1 }}>{macdH >= 0 ? '▲' : '▼'}{Math.abs(macdH) < 0.01 ? macdH.toFixed(3) : vn(macdH, 2)}</span>}
+        </Chip>
       )}
+
       {active.kd && k != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          K <b style={{ color: '#FF9F0A' }}>{vn(k)}</b>{' '}
-          D <b style={{ color: '#0A84FF' }}>{vn(d)}</b>
-        </span>
+        <Chip label="KD" borderColor="#FF9F0A">
+          <span style={{ fontSize: 9, color: '#636366' }}>K</span><V v={vn(k)} c="#FF9F0A" />
+          <span style={{ fontSize: 9, color: '#636366' }}>D</span><V v={vn(d)} c="#0A84FF" />
+        </Chip>
       )}
-      {active.adx && adx != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          ADX <b style={{ color: adx > 25 ? '#FF453A' : '#FF453A88' }}>{vn(adx)}</b>
-          {pdi != null && <> +DI<b style={{ color: '#30D158' }}>{vn(pdi)}</b></>}
-          {ndi != null && <> -DI<b style={{ color: '#FF6B35' }}>{vn(ndi)}</b></>}
-        </span>
-      )}
-      {active.wr && wr != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          W%R <b style={{ color: wr > -20 ? '#FF453A' : wr < -80 ? '#30D158' : '#FF6B35' }}>{vn(wr)}</b>
-        </span>
-      )}
-      {active.cci && cci != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          CCI <b style={{ color: cci > 100 ? '#FF453A' : cci < -100 ? '#30D158' : '#5E5CE6' }}>{vn(cci, 0)}</b>
-        </span>
-      )}
-      {active.mfi && mfi != null && (
-        <span style={{ color: 'var(--ios-label3)' }}>
-          MFI <b style={{ color: mfi > 80 ? '#FF453A' : mfi < 20 ? '#30D158' : '#FFD60A' }}>{vn(mfi)}</b>
-        </span>
-      )}
+
+      {active.adx && adx != null && (() => {
+        const c = adx > 25 ? '#FF453A' : '#FF6B35'
+        return (
+          <Chip label="ADX" borderColor={c}>
+            <V v={vn(adx)} c={c} />
+            {pdi != null && <><span style={{ fontSize: 9, color: '#30D158', fontWeight: 700 }}>+{vn(pdi, 0)}</span><span style={{ fontSize: 9, color: '#FF6B35', fontWeight: 700 }}>-{vn(ndi, 0)}</span></>}
+          </Chip>
+        )
+      })()}
+
+      {active.wr && wr != null && (() => {
+        const c = wr > -20 ? '#FF453A' : wr < -80 ? '#30D158' : '#FF6B35'
+        return <Chip label="W%R" borderColor={c}><V v={vn(wr)} c={c} /></Chip>
+      })()}
+
+      {active.cci && cci != null && (() => {
+        const c = cci > 100 ? '#FF453A' : cci < -100 ? '#30D158' : '#5E5CE6'
+        return <Chip label="CCI" borderColor={c}><V v={vn(cci, 0)} c={c} /></Chip>
+      })()}
+
+      {active.mfi && mfi != null && (() => {
+        const c = mfi > 80 ? '#FF453A' : mfi < 20 ? '#30D158' : '#FFD60A'
+        return <Chip label="MFI" borderColor={c}><V v={vn(mfi)} c={c} /></Chip>
+      })()}
     </div>
   )
 }
@@ -866,19 +916,19 @@ const STRATEGY_PRESETS = [
 ]
 
 const TOGGLE_DEFS = [
-  { key: 'ma',   label: 'MA',   color: '#5AC8FA' },
-  { key: 'bb',   label: 'BB',   color: '#0A84FF' },
-  { key: 'cdp',  label: 'CDP',  color: '#FFD60A' },
-  { key: 'fib',  label: 'Fib',  color: '#FF9F0A' },
-  { key: 'pat',  label: '型態', color: '#BF5AF2' },
-  { key: 'macd', label: 'MACD', color: '#FF9F0A' },
-  { key: 'rsi',  label: 'RSI',  color: '#BF5AF2' },
-  { key: 'kd',   label: 'KD',   color: '#30D158' },
-  { key: 'obv',  label: 'OBV',  color: '#64D2FF' },
-  { key: 'adx',  label: 'ADX',  color: '#FF453A' },
-  { key: 'wr',   label: 'W%R',  color: '#FF6B35' },
-  { key: 'cci',  label: 'CCI',  color: '#5E5CE6' },
-  { key: 'mfi',  label: 'MFI',  color: '#FFD60A' },
+  { key: 'ma',   label: 'MA',   color: '#5AC8FA', title: '移動平均線 (MA5/10/20/60)：追蹤趨勢方向，多頭排列=看漲' },
+  { key: 'bb',   label: 'BB',   color: '#0A84FF', title: '布林通道 (BB)：上軌壓力/下軌支撐，突破上軌=強勢，跌破下軌=弱勢' },
+  { key: 'cdp',  label: 'CDP',  color: '#FFD60A', title: '逆勢操作 (CDP)：AH/NH 為當日壓力，NL/AL 為當日支撐' },
+  { key: 'fib',  label: 'Fib',  color: '#FF9F0A', title: '費波那契回撤：0%高點/100%低點，38.2%/61.8%是常見支撐壓力' },
+  { key: 'pat',  label: '型態', color: '#BF5AF2', title: 'K 線型態：錘子/吞噬/十字星等反轉型態，滑動時顯示（開啟後見下方說明）' },
+  { key: 'macd', label: 'MACD', color: '#FF9F0A', title: 'MACD(12,26,9)：柱子翻紅=多頭動能增強，金叉(藍穿紅上)=買進訊號' },
+  { key: 'rsi',  label: 'RSI',  color: '#BF5AF2', title: 'RSI(14)：>70 超買警示，<30 超賣反彈機會，50 以上偏多' },
+  { key: 'kd',   label: 'KD',   color: '#30D158', title: 'KD(9)：低檔金叉(K穿D上)買進訊號，高檔死叉賣出訊號' },
+  { key: 'obv',  label: 'OBV',  color: '#64D2FF', title: 'OBV 能量潮：OBV 隨價上升=量價配合，OBV 背離=潛在反轉' },
+  { key: 'adx',  label: 'ADX',  color: '#FF453A', title: 'ADX/DMI(14)：ADX>25 趨勢強，+DI>-DI 多頭趨勢，反之空頭' },
+  { key: 'wr',   label: 'W%R',  color: '#FF6B35', title: 'Williams %R(14)：>-20 超買，<-80 超賣，由超賣回升=買進機會' },
+  { key: 'cci',  label: 'CCI',  color: '#5E5CE6', title: 'CCI(20)：>+100 超買，<-100 超賣，穿越±100 往往是趨勢啟動點' },
+  { key: 'mfi',  label: 'MFI',  color: '#FFD60A', title: 'MFI(14) 資金流量指標：>80 超買，<20 超賣，結合量能判斷主力動向' },
 ]
 
 // ── Strategy win-rate backtest (per-stock, on its own price history) ─────────
@@ -1199,7 +1249,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
       })()}
 
       {/* Top controls row */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 5, marginBottom: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         {/* Interval */}
         <div style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--ios-fill4)', borderRadius: 8 }}>
           {INTERVAL_LABELS.map(t => {
@@ -1251,14 +1301,29 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
             }}>{label}</button>
           ))}
         </div>
-        {/* Indicator toggles */}
-        {TOGGLE_DEFS.map(({ key, label, color }) => (
-          <button key={key} onClick={() => toggle(key)} style={{
-            background: active[key] ? `${color}20` : 'var(--ios-fill4)',
+      </div>
+
+      {/* Indicator toggles — two grouped rows */}
+      <div style={{ display: 'flex', gap: 3, marginBottom: 6, alignItems: 'center', overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+        <span style={{ fontSize: 8.5, color: '#48484A', fontWeight: 600, flexShrink: 0, marginRight: 1, letterSpacing: 0.3 }}>疊加</span>
+        {TOGGLE_DEFS.slice(0, 5).map(({ key, label, color, title }) => (
+          <button key={key} onClick={() => toggle(key)} title={title} style={{
+            background: active[key] ? `${color}22` : 'var(--ios-fill4)',
             color: active[key] ? color : 'var(--ios-label3)',
-            border: `0.5px solid ${active[key] ? color : 'transparent'}`,
-            borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600,
-            transition: 'all 0.15s',
+            border: `0.5px solid ${active[key] ? color + '80' : 'transparent'}`,
+            borderRadius: 6, padding: '3px 9px', fontSize: 11, cursor: 'pointer', fontWeight: active[key] ? 700 : 500,
+            transition: 'all 0.15s', flexShrink: 0,
+          }}>{label}</button>
+        ))}
+        <div style={{ width: 1, height: 14, background: 'var(--ios-sep)', flexShrink: 0, margin: '0 3px' }} />
+        <span style={{ fontSize: 8.5, color: '#48484A', fontWeight: 600, flexShrink: 0, marginRight: 1, letterSpacing: 0.3 }}>副圖</span>
+        {TOGGLE_DEFS.slice(5).map(({ key, label, color, title }) => (
+          <button key={key} onClick={() => toggle(key)} title={title} style={{
+            background: active[key] ? `${color}22` : 'var(--ios-fill4)',
+            color: active[key] ? color : 'var(--ios-label3)',
+            border: `0.5px solid ${active[key] ? color + '80' : 'transparent'}`,
+            borderRadius: 6, padding: '3px 9px', fontSize: 11, cursor: 'pointer', fontWeight: active[key] ? 700 : 500,
+            transition: 'all 0.15s', flexShrink: 0,
           }}>{label}</button>
         ))}
       </div>
@@ -1443,6 +1508,31 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         )}
       </div>
 
+      {/* K-line pattern legend — appears when pattern mode is on */}
+      {active.pat && (
+        <div style={{ margin: '8px 0 4px', padding: '10px 12px', background: 'rgba(28,28,30,0.92)', borderRadius: 10, border: '0.5px solid var(--ios-sep)' }}>
+          <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 7, fontWeight: 600, letterSpacing: 0.3 }}>K 線型態說明（滑動時浮現）</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 10px' }}>
+            {Object.entries(PATTERN_DESC).map(([name, { short, hint }]) => {
+              const type = name === '十字星' ? 'neutral' : (name.includes('多頭') || name.includes('錘子') || name.includes('倒錘')) ? 'bullish' : 'bearish'
+              const color = type === 'bullish' ? '#30D158' : type === 'bearish' ? '#FF453A' : '#8E8E93'
+              return (
+                <div key={name} title={hint} style={{ display: 'flex', flexDirection: 'column', gap: 1, cursor: 'help' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color }}>{name}</span>
+                    <span style={{ fontSize: 9, color, opacity: 0.8 }}>({short})</span>
+                  </div>
+                  <span style={{ fontSize: 9, color: 'var(--ios-label3)', lineHeight: 1.35 }}>{hint}</span>
+                </div>
+              )
+            })}
+          </div>
+          <div style={{ marginTop: 6, fontSize: 9, color: 'var(--ios-label3)', opacity: 0.7 }}>
+            💡 型態僅為輔助參考，需配合量能與趨勢確認，不宜單獨作為進出場依據
+          </div>
+        </div>
+      )}
+
       {/* Dynamic indicator value strip — updates with crosshair */}
       {bars.length >= 2 && indicators && (
         <ChartValueStrip bars={bars} indicators={indicators} active={active} hoveredIdx={hoveredIdx} />
@@ -1456,6 +1546,11 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
       />
 
       {/* Footer */}
+      {chartInterval !== '1d' && !priceHistoryWk && daily.length >= 2 && (
+        <div style={{ fontSize: 9.5, color: 'var(--ios-label3)', margin: '4px 0', padding: '5px 8px', background: 'rgba(255,159,10,0.08)', borderRadius: 6, border: '0.5px solid rgba(255,159,10,0.2)' }}>
+          ⚠️ {chartInterval === '1wk' ? '週線' : '月線'}由每日掃描紀錄重採樣，非連續交易日資料，指標值供趨勢參考（非精確量化）
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, flexWrap: 'wrap', gap: 6 }}>
         {bars.length >= 2 && <span style={{ fontSize: 10, color: 'var(--ios-label3)' }}>近 {bars.length} {unitLabel[chartInterval]}</span>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
