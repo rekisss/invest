@@ -380,6 +380,14 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
 
 // ── Candlestick chart ────────────────────────────────────────────────────────
 
+const CDP_LINE_DEFS = [
+  { key: 'ah',  color: 'rgba(255,69,58,0.85)',  sw: 1.2 },
+  { key: 'nh',  color: 'rgba(255,159,10,0.8)',  sw: 1.2 },
+  { key: 'cdp', color: 'rgba(255,214,10,0.92)', sw: 1.5 },
+  { key: 'nl',  color: 'rgba(48,209,88,0.8)',   sw: 1.2 },
+  { key: 'al',  color: 'rgba(48,209,88,0.95)',  sw: 1.2 },
+]
+
 function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: propChartW }) {
   const [hovered, setHovered] = useState(null)
   const touchRef = useRef(null)
@@ -391,8 +399,8 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
     const W = propChartW || Math.max(CHART_W, n * BAR_W + CHART_PL + CHART_PR)
     const CH = 200, VH = 45, GAP = 6, H = CH + GAP + VH
     const PL = CHART_PL, PR = CHART_PR, PT = 8
-    const maxP = Math.max(...bars.map(d => d.high ?? d.close ?? 0), ...(bbBands?.upper?.filter(Boolean) || []))
-    const minP = Math.min(...bars.map(d => d.low  ?? d.close ?? 0), ...(bbBands?.lower?.filter(Boolean) || []))
+    const maxP = Math.max(...bars.map(d => d.high ?? d.close ?? 0), ...(bbBands?.upper?.filter(Boolean) || []), ...(cdpSeries?.filter(Boolean).map(lv => lv.ah) || []))
+    const minP = Math.min(...bars.map(d => d.low  ?? d.close ?? 0), ...(bbBands?.lower?.filter(Boolean) || []), ...(cdpSeries?.filter(Boolean).map(lv => lv.al) || []))
     const pRange = (isNaN(maxP) || isNaN(minP) || maxP === minP) ? 1 : maxP - minP
     const maxVol = Math.max(...bars.map(d => d.volume ?? 0), 1)
     const slotW = (W - PL - PR) / n
@@ -405,7 +413,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
     const xStep = Math.max(1, Math.floor(n / 5))
     const xLabels = bars.map((d, i) => ({ i, label: d.time ? d.time.slice(5) : '' })).filter((_, i) => i % xStep === 0 || i === n - 1)
     return { bars, W, CH, VH, GAP, H, PL, PR, PT, maxVol, n, slotW, bW, toY, toX, gridLevels, xLabels }
-  }, [data, bbBands, propChartW])
+  }, [data, bbBands, cdpSeries, propChartW])
 
   if (!chart) return (
     <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
@@ -460,12 +468,17 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
   const tipX = hovered ? (hovered.x > W / 2 ? hovered.x - tipW - 6 : hovered.x + 8) : 0
   const tipY = PT + 4
 
-  // Build polyline segments for MA/BB
+  // Build polyline segments for MA/BB/CDP
   const bbSegs = bbBands ? {
     upper: toPolySegs(bbBands.upper, toX, toY),
     mid:   toPolySegs(bbBands.mid,   toX, toY),
     lower: toPolySegs(bbBands.lower, toX, toY),
   } : null
+
+  const cdpSegs = cdpSeries ? CDP_LINE_DEFS.map(def => ({
+    ...def,
+    segs: toPolySegs(cdpSeries.map(lv => lv?.[def.key] ?? null), toX, toY),
+  })) : null
 
   return (
     <svg
@@ -494,20 +507,12 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
         {bbSegs.lower.map((pts, i) => <polyline key={`bbl${i}`} points={pts} fill="none" stroke="rgba(10,132,255,0.45)" strokeWidth={0.8} strokeDasharray="4,3" />)}
       </>}
 
-      {/* CDP — per-bar segments (each bar uses previous bar's H/L/C) */}
-      {cdpSeries && cdpSeries.map((lv, i) => {
-        if (!lv) return null
-        const x1 = toX(i) - slotW / 2, x2 = toX(i) + slotW / 2
-        return (
-          <g key={`cdp${i}`}>
-            <line x1={x1} x2={x2} y1={toY(lv.ah)}  y2={toY(lv.ah)}  stroke="rgba(255,69,58,0.85)"  strokeWidth={1.2} />
-            <line x1={x1} x2={x2} y1={toY(lv.nh)}  y2={toY(lv.nh)}  stroke="rgba(255,159,10,0.8)"  strokeWidth={1.2} />
-            <line x1={x1} x2={x2} y1={toY(lv.cdp)} y2={toY(lv.cdp)} stroke="rgba(255,214,10,0.85)" strokeWidth={1.4} />
-            <line x1={x1} x2={x2} y1={toY(lv.nl)}  y2={toY(lv.nl)}  stroke="rgba(48,209,88,0.8)"   strokeWidth={1.2} />
-            <line x1={x1} x2={x2} y1={toY(lv.al)}  y2={toY(lv.al)}  stroke="rgba(48,209,88,0.95)"  strokeWidth={1.2} />
-          </g>
-        )
-      })}
+      {/* CDP — connected polylines */}
+      {cdpSegs && cdpSegs.map(({ key, color, sw, segs }) =>
+        segs.map((pts, si) => (
+          <polyline key={`cdp-${key}-${si}`} points={pts} fill="none" stroke={color} strokeWidth={sw} strokeLinejoin="round" />
+        ))
+      )}
 
       {/* Candles + volume */}
       {bars.map((d, i) => {
@@ -842,19 +847,59 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [hoveredIdx, setHoveredIdx] = useState(null)
   const [barCount, setBarCount] = useState(250)
   const scrollRef = useRef(null)
+  const pinchRef = useRef(null)
+  const barCountRef = useRef(250)
+  const maxBarsRef = useRef(0)
 
   const toggle = key => { setActive(prev => ({ ...prev, [key]: !prev[key] })); setPreset(null) }
   const applyPreset = p => { setActive(p.state); setPreset(p.id) }
 
   const bars = (dataMap[chartInterval] || []).slice(-barCount)
+  const totalBarsAvail = (dataMap[chartInterval] || []).length
 
   const totalChartW = Math.max(CHART_W, bars.length * BAR_W + CHART_PL + CHART_PR)
+
+  useEffect(() => { barCountRef.current = barCount }, [barCount])
+  useEffect(() => { maxBarsRef.current = totalBarsAvail }, [totalBarsAvail])
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollLeft = scrollRef.current.scrollWidth
     }
   }, [bars.length, chartInterval, barCount])
+
+  // Pinch-to-zoom: adjust barCount with 2-finger pinch
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onStart = (e) => {
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        pinchRef.current = { dist: Math.hypot(dx, dy), count: barCountRef.current }
+      } else {
+        pinchRef.current = null
+      }
+    }
+    const onMove = (e) => {
+      if (e.touches.length !== 2 || !pinchRef.current) return
+      e.preventDefault()
+      const dx = e.touches[0].clientX - e.touches[1].clientX
+      const dy = e.touches[0].clientY - e.touches[1].clientY
+      const scale = pinchRef.current.dist / Math.hypot(dx, dy)
+      const max = maxBarsRef.current || 9999
+      setBarCount(Math.round(Math.min(max, Math.max(20, pinchRef.current.count * scale))))
+    }
+    const onEnd = () => { pinchRef.current = null }
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchmove', onMove, { passive: false })
+    el.addEventListener('touchend', onEnd, { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onEnd)
+    }
+  }, [])
 
   const indicators = useMemo(() => {
     if (bars.length < 2) return null
@@ -938,9 +983,8 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
             { n: 250, label: '250' },
             { n: 9999, label: '全' },
           ].map(({ n, label }) => {
-            const total = (dataMap[chartInterval] || []).length
             const isActive = barCount === n
-            const avail = n === 9999 ? total >= 2 : total >= n
+            const avail = n === 9999 ? totalBarsAvail >= 2 : totalBarsAvail >= n
             return (
               <button key={n} onClick={() => avail && setBarCount(n)} title={`顯示最近 ${n === 9999 ? '全部' : n} 根 K 線`} style={{
                 background: isActive ? 'var(--ios-bg3)' : 'transparent',
@@ -951,6 +995,20 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
               }}>{label}</button>
             )
           })}
+        </div>
+        {/* Zoom +/- buttons */}
+        <div style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--ios-fill4)', borderRadius: 8 }}>
+          {[{ label: '－', dir: 1 }, { label: '＋', dir: -1 }].map(({ label, dir }) => (
+            <button key={label} onClick={() => {
+              const step = Math.max(10, Math.round(barCount * 0.25))
+              const max = totalBarsAvail || 9999
+              setBarCount(c => Math.min(max, Math.max(20, c + dir * step)))
+            }} title={dir > 0 ? '縮小（顯示更多K線）' : '放大（顯示更少K線）'} style={{
+              background: 'transparent', border: 'none', color: 'var(--ios-label2)',
+              borderRadius: 6, padding: '4px 10px', fontSize: 14, cursor: 'pointer',
+              fontWeight: 600, lineHeight: 1,
+            }}>{label}</button>
+          ))}
         </div>
         {/* Indicator toggles */}
         {TOGGLE_DEFS.map(({ key, label, color }) => (
