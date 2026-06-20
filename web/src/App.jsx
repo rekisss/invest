@@ -8,6 +8,7 @@ const PredictionPanel = lazy(() => import('./components/PredictionPanel.jsx'))
 const AgentPanel = lazy(() => import('./components/AgentPanel.jsx'))
 const QuotaPanel = lazy(() => import('./components/QuotaPanel.jsx'))
 const Portfolio = lazy(() => import('./components/Portfolio.jsx'))
+const GeminiStudio = lazy(() => import('./components/GeminiStudio.jsx'))
 
 const BASE = import.meta.env.BASE_URL || '/'
 
@@ -29,6 +30,7 @@ const TABS = [
   { key: 'portfolio',  label: '持倉', icon: '💼' },
   { key: 'news',       label: '新聞', icon: '📰' },
   { key: 'predict',    label: '預測', icon: '🔮' },
+  { key: 'studio',     label: '圓桌', icon: '🎯' },
   { key: 'quota',      label: '配額', icon: '📡' },
   { key: 'ai',         label: 'AI',   icon: '🤖' },
 ]
@@ -39,6 +41,7 @@ const TAB_TITLES = {
   portfolio: '持倉追蹤',
   news:      '市場新聞',
   predict:   '盤前預測',
+  studio:    'AI 圓桌研究室',
   quota:     '配額狀態',
   ai:        'AI 助手',
 }
@@ -173,6 +176,7 @@ export default function App() {
       case 'portfolio':  return <Portfolio data={data} />
       case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} />
       case 'predict':   return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />
+      case 'studio':    return <GeminiStudio data={data} />
       case 'quota':     return <QuotaPanel quota={data?.quota} generatedAt={data?.generated_at} />
       case 'ai':        return <AgentPanel
         apiKey={apiKey}
