@@ -176,7 +176,7 @@ export default function App() {
       case 'predict':   return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />
       case 'quota':     return <QuotaPanel quota={data?.quota} generatedAt={data?.generated_at} />
       case 'ai':        return apiKey
-        ? <AgentPanel apiKey={apiKey} onClearKey={() => { sessionStorage.removeItem('anthropic_key'); setApiKey('') }} />
+        ? <AgentPanel apiKey={apiKey} data={data} onClearKey={() => { sessionStorage.removeItem('anthropic_key'); setApiKey('') }} />
         : <ApiKeyInput onSave={key => { sessionStorage.setItem('anthropic_key', key); setApiKey(key) }} />
       default: return null
     }

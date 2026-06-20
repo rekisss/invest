@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 
 const STORAGE_KEY = 'tw_portfolio_positions'
 
@@ -9,16 +9,33 @@ function savePositions(p) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)) } catch {}
 }
 
-function getCurrentPrice(stockId, data) {
-  if (!data) return null
-  const all = [...(data.top_stocks || []), ...(data.filter_stocks || [])]
-  const m = all.find(s => String(s.stock_id) === String(stockId))
+// Find the most recent scan object that actually has stock rows.
+function latestScan(data) {
+  if (!data?.scans) return null
+  const dates = Object.keys(data.scans).sort().reverse()
+  for (const d of dates) {
+    const s = data.scans[d]
+    if (s && ((s.top_stocks && s.top_stocks.length) || (s.filter_stocks && s.filter_stocks.length))) return s
+  }
+  return null
+}
+
+// All searchable scan rows (top_stocks rich + filter_stocks slim), latest scan + aggregate.
+function scanRows(data) {
+  const s = latestScan(data)
+  return [
+    ...(data?.aggregateLatest?.top_stocks || []),
+    ...(s?.top_stocks || []),
+    ...(s?.filter_stocks || []),
+  ]
+}
+
+function getScanClose(stockId, data) {
+  const m = scanRows(data).find(s => String(s.stock_id) === String(stockId))
   return m?.close ?? null
 }
 function getScanInfo(stockId, data) {
-  if (!data) return null
-  const all = [...(data.top_stocks || []), ...(data.filter_stocks || [])]
-  return all.find(s => String(s.stock_id) === String(stockId)) ?? null
+  return scanRows(data).find(s => String(s.stock_id) === String(stockId)) ?? null
 }
 
 function fmt(v, d = 2) { return v == null || isNaN(v) ? '—' : Number(v).toFixed(d) }
@@ -118,6 +135,26 @@ function CostAvgCalc({ buyPrice, qty }) {
   )
 }
 
+// Fetch latest price from Yahoo Finance for a Taiwan stock.
+// Tries .TW (上市) then .TWO (上櫃). Returns last close or null.
+async function fetchYahooPrice(stockId) {
+  const suffixes = isOTC(stockId) ? ['.TWO', '.TW'] : ['.TW', '.TWO']
+  for (const sfx of suffixes) {
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${stockId}${sfx}?range=5d&interval=1d`
+      const r = await fetch(url)
+      if (!r.ok) continue
+      const j = await r.json()
+      const res = j?.chart?.result?.[0]
+      const closes = (res?.indicators?.quote?.[0]?.close || []).filter(v => v != null)
+      const live = res?.meta?.regularMarketPrice
+      const last = live ?? (closes.length ? closes[closes.length - 1] : null)
+      if (last != null && last > 0) return Math.round(last * 100) / 100
+    } catch { /* try next suffix */ }
+  }
+  return null
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function Portfolio({ data }) {
   const [positions, setPositions] = useState(loadPositions)
@@ -126,6 +163,26 @@ export default function Portfolio({ data }) {
   const [form, setForm]           = useState(EMPTY_FORM)
   const [sortBy, setSortBy]       = useState('pnlPct')
   const [showChart, setShowChart] = useState(true)
+  const [livePrices, setLivePrices] = useState({})   // { stockId: price } from Yahoo
+  const [priceLoading, setPriceLoading] = useState(false)
+
+  // Fetch live prices from Yahoo whenever the set of held stocks changes.
+  const posKey = Object.keys(positions).sort().join(',')
+  useEffect(() => {
+    const ids = Object.keys(positions)
+    if (ids.length === 0) { setLivePrices({}); return }
+    let cancelled = false
+    setPriceLoading(true)
+    Promise.all(ids.map(async id => [id, await fetchYahooPrice(id)]))
+      .then(pairs => {
+        if (cancelled) return
+        const next = {}
+        for (const [id, px] of pairs) if (px != null) next[id] = px
+        setLivePrices(next)
+      })
+      .finally(() => { if (!cancelled) setPriceLoading(false) })
+    return () => { cancelled = true }
+  }, [posKey])
 
   const update = p => { setPositions(p); savePositions(p) }
   const openAdd = () => { setForm(EMPTY_FORM); setEditId(null); setShowForm(true) }
@@ -147,7 +204,7 @@ export default function Portfolio({ data }) {
 
   // ── Computed entries ──────────────────────────────────────────────────────
   const entries = useMemo(() => Object.entries(positions).map(([id, p], i) => {
-    const curPrice  = getCurrentPrice(id, data)
+    const curPrice  = livePrices[id] ?? getScanClose(id, data)
     const scan      = getScanInfo(id, data)
     const pnlPct    = curPrice ? (curPrice - p.buyPrice) / p.buyPrice * 100 : null
     const pnlAmt    = curPrice ? (curPrice - p.buyPrice) * p.qty : null
@@ -159,7 +216,7 @@ export default function Portfolio({ data }) {
     const stopLoss  = p.buyPrice * 0.92
     const takePrft  = p.buyPrice * 1.15
     return { id, p, curPrice, scan, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft, color: PALETTE[i % PALETTE.length] }
-  }), [positions, data])
+  }), [positions, data, livePrices])
 
   const sorted = useMemo(() => [...entries].sort((a, b) => {
     if (sortBy === 'pnlPct') return (b.pnlPct ?? -Infinity) - (a.pnlPct ?? -Infinity)
@@ -218,7 +275,11 @@ export default function Portfolio({ data }) {
               </div>
               <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginTop: 4 }}>
                 成本 {fmtNum(Math.round(totalCost))}｜市值 {fmtNum(Math.round(totalValue))}
-                {priceCount < entries.length && <span style={{ color: 'var(--ios-yellow)', marginLeft: 6 }}>{entries.length - priceCount} 檔無報價</span>}
+                {priceCount < entries.length && (
+                  <span style={{ color: 'var(--ios-yellow)', marginLeft: 6 }}>
+                    {priceLoading ? '報價載入中…' : `${entries.length - priceCount} 檔無報價`}
+                  </span>
+                )}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -306,7 +367,7 @@ export default function Portfolio({ data }) {
                     <div style={{ fontSize: 11, color: pnlColor }}>{pnlAmt >= 0 ? '+' : ''}{fmtNum(Math.round(pnlAmt))} 元</div>
                   </>
                 ) : (
-                  <div style={{ fontSize: 11, color: 'var(--ios-label4)' }}>無即時報價</div>
+                  <div style={{ fontSize: 11, color: 'var(--ios-label4)' }}>{priceLoading ? '報價載入中…' : '無即時報價'}</div>
                 )}
               </div>
             </div>
