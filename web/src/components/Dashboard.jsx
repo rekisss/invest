@@ -1579,12 +1579,14 @@ export default function Dashboard({ data, error }) {
   // Falls back gracefully to the legacy close-only format ({ stocks: { id: [closes] } }).
   const [slimHistories, setSlimHistories] = useState(null)
   const [historyDates, setHistoryDates] = useState(null)
+  const [scanHistories, setScanHistories] = useState(null)
   useEffect(() => {
     fetch(`${BASE}stock_histories.json`, { cache: 'no-cache' })
       .then(r => r.ok ? r.json() : null)
       .then(h => {
         if (h?.stocks) setSlimHistories(h.stocks)
         if (Array.isArray(h?.dates)) setHistoryDates(h.dates)
+        if (h?.scan_stocks) setScanHistories(h.scan_stocks)
       })
       .catch(() => {})
   }, [])
@@ -1661,11 +1663,24 @@ export default function Dashboard({ data, error }) {
       for (const s of stocks) richMap[s.stock_id] = s
       return slim.map(s => richMap[s.stock_id] || s)
     })()
-    if (!slimHistories) return base
+    if (!slimHistories && !scanHistories) return base
     return base.map(s => {
       if (s.price_history) return s  // already has rich history (top_stocks)
-      const rec = slimHistories[s.stock_id]
-      if (!rec) return s
+      const rec = slimHistories?.[s.stock_id]
+      if (!rec) {
+        // scan_stocks: compact [date, o, h, l, c, v] tuples — extended history for
+        // non-klineMap stocks so weekly/monthly charts have enough bars for MACD warmup
+        const scanRec = scanHistories?.[s.stock_id]
+        if (Array.isArray(scanRec) && scanRec.length >= 2) {
+          return {
+            ...s,
+            price_history: scanRec.map(b => ({
+              time: b[0], open: b[1], high: b[2], low: b[3], close: b[4], volume: b[5],
+            })),
+          }
+        }
+        return s
+      }
       // Legacy close-only format: array of closes
       if (Array.isArray(rec)) {
         if (rec.length < 2) return s
@@ -1685,7 +1700,7 @@ export default function Dashboard({ data, error }) {
       if (bars.length < 2) return s
       return { ...s, price_history: bars }
     })
-  }, [scan.filter_stocks, stocks, slimHistories, historyDates])
+  }, [scan.filter_stocks, stocks, slimHistories, historyDates, scanHistories])
 
   const entryStocks = allScanStocks.filter(s => s.entry_signal)
   const globalMaxScore = Math.max(...stocks.map(s => s.entry_score || 0), 1)

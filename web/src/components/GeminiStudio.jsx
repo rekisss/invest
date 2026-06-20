@@ -1,17 +1,16 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 
-// ── Gemini free-tier multi-agent roundtable ──────────────────────────────────
+// ── Claude-powered multi-agent roundtable ────────────────────────────────────
 // Four analysts discuss a stock using scan data + system-computed technical
 // reference levels. Concise mode: each analyst max 80 chars per point,
 // no preamble, no filler. Auto-run keeps the discussion going continuously.
 
-const GEMINI_KEY_STORAGE = 'gemini_api_key'
-const GEMINI_MODEL_STORAGE = 'gemini_model'
-const MODELS = [
-  { id: 'gemini-2.0-flash',      label: 'Gemini 2.0 Flash（推薦）' },
-  { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash' },
-  { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite' },
-  { id: 'gemini-1.5-flash',      label: 'Gemini 1.5 Flash（舊版）' },
+const ANTHROPIC_KEY_STORAGE = 'anthropic_key'   // shared with main ApiKeyInput
+const CLAUDE_MODEL_STORAGE = 'claude_roundtable_model'
+
+const CLAUDE_MODELS = [
+  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku（快 · ~$0.025/場）' },
+  { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet（深度 · ~$0.09/場）' },
 ]
 
 const ANALYSTS = [
@@ -31,6 +30,12 @@ const ANALYSTS = [
     id: 'risk', name: '風控長', emoji: '🛡️', color: '#f85149',
     persona: `台股風控長，最後發言。裁決：建議進場 / 觀察 / 迴避其中之一。必須用【技術參考位】的數字給出進場區、停損價、目標一/二、風報比。敢否定樂觀派。`,
   },
+]
+
+const QUICK_QUESTIONS = [
+  '停損該設在哪裡？', '何時是最佳出場時機？', '三大法人方向一致嗎？',
+  '適合多大倉位比例？', '短線還是波段操作？', '目前最大的風險是？',
+  '近期有哪些催化劑？', '與同類股相比強弱如何？',
 ]
 
 const s = {
@@ -68,12 +73,12 @@ const s = {
   inputArea: { borderTop: '0.5px solid var(--ios-sep)', padding: '10px 14px 14px', background: 'var(--ios-bg2)', flexShrink: 0 },
 }
 
-function geminiKey() { return sessionStorage.getItem(GEMINI_KEY_STORAGE) || '' }
-function savedModel() { return localStorage.getItem(GEMINI_MODEL_STORAGE) || MODELS[0].id }
-const sleep = ms => new Promise(r => setTimeout(r, ms))
+function anthropicKey() { return sessionStorage.getItem(ANTHROPIC_KEY_STORAGE) || '' }
+function savedClaudeModel() { return localStorage.getItem(CLAUDE_MODEL_STORAGE) || CLAUDE_MODELS[0].id }
 const r2 = v => (v == null || isNaN(v) ? null : Math.round(v * 100) / 100)
 
 // ── Discussion history (localStorage) ────────────────────────────────────────
+// Keep legacy key names to preserve users' existing saved discussions.
 const HISTORY_STORAGE = 'gemini_discussion_history'
 const SESSION_STATE_KEY = 'gemini_session_state'  // survives page refresh (sessionStorage)
 
@@ -114,37 +119,56 @@ function fmtTime(ts) {
   } catch { return '' }
 }
 
-async function callGemini(apiKey, model, systemPrompt, userPrompt, onRetry) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        generationConfig: { maxOutputTokens: 280, temperature: 0.8 },
-      }),
-    })
-    if (resp.status === 429) {
-      const err = await resp.json().catch(() => ({}))
-      const msg = err?.error?.message || ''
-      const ri = err?.error?.details?.find(d => (d['@type'] || '').includes('RetryInfo'))
-      let delay = ri?.retryDelay ? parseFloat(ri.retryDelay) : 0
-      if (!delay) { const m = msg.match(/retry in ([\d.]+)/i); if (m) delay = parseFloat(m[1]) }
-      delay = Math.min(Math.max(delay || 5, 2), 45)
-      if (attempt < 2) { onRetry?.(Math.ceil(delay)); await sleep(delay * 1000); continue }
-      throw new Error(`免費額度暫時用盡（${model}）。請稍候約 ${Math.ceil(delay)} 秒再試，或在設定切換模型。`)
-    }
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}))
-      throw new Error(err?.error?.message || `HTTP ${resp.status}`)
-    }
-    const j = await resp.json()
-    const text = j?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || ''
-    if (!text) throw new Error('Gemini 無回應（可能觸發安全過濾）')
-    return text.trim()
+// ── Claude streaming API ─────────────────────────────────────────────────────
+async function callClaude(apiKey, model, systemPrompt, userPrompt, onChunk) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-allow-browser': 'true',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 350,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+      stream: true,
+    }),
+  })
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}))
+    const msg = err?.error?.message || `HTTP ${resp.status}`
+    if (resp.status === 401) throw new Error('Anthropic API Key 無效，請重新整理頁面重新輸入')
+    if (resp.status === 529 || resp.status === 503) throw new Error('Claude 服務暫時繁忙，請稍後再試')
+    throw new Error(msg)
   }
+  const reader = resp.body.getReader()
+  const decoder = new TextDecoder()
+  let text = ''
+  let buf = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    const lines = buf.split('\n')
+    buf = lines.pop()
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const raw = line.slice(6).trim()
+      if (!raw || raw === '[DONE]') continue
+      try {
+        const j = JSON.parse(raw)
+        if (j.type === 'content_block_delta' && j.delta?.type === 'text_delta') {
+          text += j.delta.text
+          onChunk?.(text)
+        }
+      } catch { /* ignore malformed SSE */ }
+    }
+  }
+  if (!text) throw new Error('Claude 無回應（可能觸發安全過濾）')
+  return text.trim()
 }
 
 // ── Stock resolution + technical level computation ───────────────────────────
@@ -215,16 +239,43 @@ function fmtLevels(lv) {
   return L.join('\n')
 }
 
-function buildBrief(resolved, levels, market) {
+// Find news headlines relevant to the stock (by id, name keywords, or sector)
+function findNewsForStock(stockId, name, industry, news) {
+  if (!Array.isArray(news) || !news.length) return []
+  const terms = [
+    stockId,
+    ...(name?.match(/[一-龥]{2,4}/g) || []),
+    (industry || '').split(/[/\s]/)[0] || '',
+  ].filter(t => t && t.length >= 2)
+  return news
+    .filter(n => terms.some(t => (n.title || '').includes(t) || (n.summary || '').includes(t)))
+    .slice(0, 2)
+    .map(n => n.title || '')
+    .filter(Boolean)
+}
+
+// Parse 風控長's last message for a verdict keyword
+function parseVerdict(messages) {
+  const riskMsgs = messages.filter(m => m.role === 'analyst' && m.analyst?.id === 'risk' && !m.error && !m.streaming)
+  if (!riskMsgs.length) return null
+  const txt = riskMsgs[riskMsgs.length - 1].content || ''
+  if (/建議進場|可以進場|適合買進|進場訊號|值得買/.test(txt)) return { verdict: '建議進場', color: '#30d158', emoji: '✅' }
+  if (/建議迴避|暫時迴避|避開|不建議|風險過高|先回避/.test(txt)) return { verdict: '建議迴避', color: '#f85149', emoji: '🚫' }
+  if (/建議觀察|先觀察|觀望|等待確認|觀察等待/.test(txt)) return { verdict: '建議觀察', color: '#ff9f0a', emoji: '👀' }
+  return null
+}
+
+function buildBrief(resolved, levels, market, news) {
   if (!resolved) return ''
   const r = resolved.row || {}
   const f = (v, suf = '') => (v == null || isNaN(v) ? '—' : `${v}${suf}`)
   const lines = [`【標的】${resolved.stock_id} ${resolved.name || '(名稱未知)'} ${r.industry_category || ''}`.trim()]
   if (resolved.isRich) {
     lines.push(`進場分數 ${f(Math.round(r.entry_score || 0))}${r.grade ? ` 評級${r.grade}` : ''}${r.entry_signal ? ' ✅入榜' : ''}`)
-    lines.push(`RSI ${f(r.rsi14 && r.rsi14.toFixed(0))} | ADX ${f(r.adx14 && r.adx14.toFixed(0))} | 量比 ${f(r.volume_ratio && r.volume_ratio.toFixed(1), 'x')}`)
+    lines.push(`RSI ${f(r.rsi14 && r.rsi14.toFixed(0))} | ADX ${f(r.adx14 && r.adx14.toFixed(0))} | 量比 ${f(r.volume_ratio && r.volume_ratio.toFixed(1), 'x')} | BB位置 ${r.bb_pct_b != null ? (r.bb_pct_b * 100).toFixed(0) + '%' : '—'}`)
     lines.push(`F-Score ${f(r.f_score)}/9 | 月營收YoY ${f(r.revenue_yoy && r.revenue_yoy.toFixed(1), '%')}`)
-    lines.push(`外資連買 ${f(r.foreign_buy_streak)}日 | 投信連買 ${f(r.invest_trust_streak)}日 | 融資5日變化 ${f(r.margin_change_5d && r.margin_change_5d.toFixed(1), '%')}`)
+    lines.push(`外資連買 ${f(r.foreign_buy_streak)}日 | 投信連買 ${f(r.invest_trust_streak)}日 | 自營連買 ${f(r.dealer_buy_streak)}日`)
+    lines.push(`融資5日變化 ${f(r.margin_change_5d && r.margin_change_5d.toFixed(1), '%')} | 相對大盤5日 ${r.relative_strength_5d != null ? (r.relative_strength_5d * 100).toFixed(1) + '%' : '—'}`)
     if (r.entry_reason) lines.push(`系統入場理由：${r.entry_reason}`)
   } else {
     lines.push(`收盤 ${f(r.close)} | RSI ${f(r.rsi14 && r.rsi14.toFixed(0))} | 評級 ${r.grade || '—'}`)
@@ -233,13 +284,15 @@ function buildBrief(resolved, levels, market) {
   if (market) {
     lines.push(`\n【大盤】XGBoost上漲機率 ${market.prob != null ? Math.round(market.prob * 100) + '%' : '—'} | VIX ${f(market.vix)} | 外資期貨 ${market.futures != null ? market.futures.toLocaleString() + '口' : '—'}`)
   }
+  const newsHeadlines = findNewsForStock(resolved.stock_id, resolved.name, r.industry_category, news)
+  if (newsHeadlines.length) lines.push(`\n【近期相關新聞】\n${newsHeadlines.map(h => `・${h}`).join('\n')}`)
   return lines.join('\n')
 }
 
 export default function GeminiStudio({ data }) {
-  const [apiKey, setApiKey] = useState(geminiKey)
+  const [apiKey, setApiKey] = useState(anthropicKey)
   const [keyInput, setKeyInput] = useState('')
-  const [model, setModel] = useState(savedModel)
+  const [claudeModel, setClaudeModel] = useState(savedClaudeModel)
   const [showSettings, setShowSettings] = useState(false)
   const [stockInput, setStockInput] = useState('')
   const [customTopic, setCustomTopic] = useState('')
@@ -270,9 +323,10 @@ export default function GeminiStudio({ data }) {
   const lastAccRef = useRef([])   // latest acc after each round
   const countdownRef = useRef(null)
   const sessionIdRef = useRef(null)
+  const claudeModelRef = useRef(claudeModel)
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
-  useEffect(() => { localStorage.setItem(GEMINI_MODEL_STORAGE, model) }, [model])
+  useEffect(() => { localStorage.setItem(CLAUDE_MODEL_STORAGE, claudeModel); claudeModelRef.current = claudeModel }, [claudeModel])
   useEffect(() => { autoRunRef.current = autoRun }, [autoRun])
   // Persist in-progress session to sessionStorage so it survives page refreshes
   useEffect(() => {
@@ -302,12 +356,13 @@ export default function GeminiStudio({ data }) {
   const typedId = (stockInput.match(/\d{4,6}/) || [])[0] || ''
   const resolved = typedId ? resolveStock(typedId, data) : null
   const levels = resolved?.isRich ? computeLevels(resolved.row) : null
-  const brief = buildBrief(resolved, levels, market)
+  const brief = buildBrief(resolved, levels, market, data?.news)
+  const verdict = useMemo(() => parseVerdict(messages), [messages])
   const topic = resolved
     ? `針對 ${resolved.stock_id} ${resolved.name || ''} 的進場決策`.trim()
     : customTopic.trim()
 
-  const saveKey = () => { const k = keyInput.trim(); if (k) { sessionStorage.setItem(GEMINI_KEY_STORAGE, k); setApiKey(k) } }
+  const saveKey = () => { const k = keyInput.trim(); if (k) { sessionStorage.setItem(ANTHROPIC_KEY_STORAGE, k); setApiKey(k) } }
 
   const transcriptText = (msgs) => msgs.map(m =>
     m.role === 'user' ? `【使用者插話】${m.content}` : `【${m.analyst.name}】${m.content}`
@@ -340,7 +395,8 @@ export default function GeminiStudio({ data }) {
   }
 
   const runRoundInternal = useCallback(async (priorMessages, userNote) => {
-    if (!apiKey) return
+    const curAnthKey = sessionStorage.getItem(ANTHROPIC_KEY_STORAGE) || ''
+    if (!curAnthKey) return
     setRunning(true); setRetryNote(''); setCountdown(0)
     if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null }
     let acc = [...priorMessages]
@@ -368,12 +424,14 @@ export default function GeminiStudio({ data }) {
       ].join('\n')
 
       try {
-        const text = await callGemini(apiKey, model, sys, prompt, secs => setRetryNote(`額度限流，${secs}秒後自動重試…`))
+        const text = await callClaude(curAnthKey, claudeModelRef.current, sys, prompt, partial => {
+          setMessages(prev => prev.map(m => m.id === pid
+            ? { id: pid, role: 'analyst', analyst, content: partial, streaming: true } : m))
+        })
         setRetryNote('')
         const msg = { id: pid, role: 'analyst', analyst, content: text }
         acc.push(msg)
         setMessages(prev => prev.map(m => m.id === pid ? msg : m))
-        if (ai < ANALYSTS.length - 1) await sleep(900)
       } catch (e) {
         setMessages(prev => prev.map(m => m.id === pid ? { id: pid, role: 'analyst', analyst, error: e.message } : m))
         setRunning(false); setRetryNote(''); setAutoRun(false)
@@ -405,7 +463,7 @@ export default function GeminiStudio({ data }) {
     }
 
     if (autoRunRef.current) scheduleAutoRound(acc)
-  }, [apiKey, model, topic, brief, typedId, scheduleAutoRound])
+  }, [topic, brief, typedId, scheduleAutoRound])
 
   const runRound = useCallback((priorMessages, userNote) => {
     return runRoundInternal(priorMessages, userNote)
@@ -440,7 +498,7 @@ export default function GeminiStudio({ data }) {
     }
   }
 
-  // ── No key yet ──────────────────────────────────────────────────────────────
+  // ── No Anthropic key yet ─────────────────────────────────────────────────────
   if (!apiKey) {
     return (
       <div style={s.root}>
@@ -451,11 +509,11 @@ export default function GeminiStudio({ data }) {
             <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--ios-label)' }}>AI 圓桌研究室</div>
             <div style={{ fontSize: 13, color: 'var(--ios-label2)', marginTop: 6, lineHeight: 1.6 }}>
               四位 AI 分析師用掃描資料 + 系統計算技術位即時討論一支股票。<br />
-              由 Google Gemini 驅動，<b style={{ color: 'var(--ios-green)' }}>完全免費</b>。
+              由 <b style={{ color: 'var(--ios-blue)' }}>Claude</b> 串流驅動，逐字顯示。
             </div>
           </div>
-          <div style={s.label}>Gemini API Key</div>
-          <input style={s.input} type="password" value={keyInput} placeholder="貼上你的 Gemini API Key"
+          <div style={s.label}>Anthropic API Key</div>
+          <input style={s.input} type="password" value={keyInput} placeholder="貼上你的 Anthropic API Key（sk-ant-...）"
             onChange={e => setKeyInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveKey()} />
           <button onClick={saveKey} disabled={!keyInput.trim()} style={{
             width: '100%', marginTop: 12, padding: '11px', borderRadius: 10, border: 'none',
@@ -463,11 +521,12 @@ export default function GeminiStudio({ data }) {
             color: keyInput.trim() ? '#fff' : 'var(--ios-label3)', fontSize: 15, fontWeight: 700,
             cursor: keyInput.trim() ? 'pointer' : 'default',
           }}>開始使用</button>
-          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{
+          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" style={{
             display: 'block', textAlign: 'center', marginTop: 14, fontSize: 13, color: 'var(--ios-blue)',
-          }}>→ 免費取得 Gemini API Key（Google AI Studio）</a>
+          }}>→ 取得 Anthropic API Key（Console）</a>
           <div style={{ marginTop: 16, fontSize: 11, color: 'var(--ios-label3)', lineHeight: 1.6, textAlign: 'center' }}>
-            Key 僅存於本分頁（sessionStorage），不上傳、不留存
+            Key 僅存於本分頁（sessionStorage），不上傳、不留存<br />
+            一場討論約 $0.025（&lt; 1 TWD）
           </div>
         </div>
       </div>
@@ -537,9 +596,8 @@ export default function GeminiStudio({ data }) {
     return (
       <div style={s.root}>
         <Header onSettings={() => setShowSettings(v => !v)}
-          onHistory={history.length ? () => setView('history') : null}
-          onClearKey={() => { sessionStorage.removeItem(GEMINI_KEY_STORAGE); setApiKey('') }} />
-        {showSettings && <ModelPicker model={model} setModel={setModel} />}
+          onHistory={history.length ? () => setView('history') : null} />
+        {showSettings && <ModelPicker claudeModel={claudeModel} setClaudeModel={setClaudeModel} />}
         <div style={s.setup}>
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
             <div style={{ fontSize: 34 }}>🎯</div>
@@ -607,7 +665,7 @@ export default function GeminiStudio({ data }) {
       <Header title={topic} onReset={() => { cancelAutoRun(); setMessages([]); setRound(0) }}
         onHistory={history.length ? () => setView('history') : null}
         onSettings={() => setShowSettings(v => !v)} />
-      {showSettings && <ModelPicker model={model} setModel={setModel} />}
+      {showSettings && <ModelPicker claudeModel={claudeModel} setClaudeModel={setClaudeModel} />}
 
       {/* Messages */}
       <div style={s.msgs}>
@@ -640,7 +698,14 @@ export default function GeminiStudio({ data }) {
               width: '100%', padding: '7px 14px', background: 'none', border: 'none',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
             }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.4 }}>📋 討論重點摘要</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.4 }}>📋 討論重點摘要</span>
+              {verdict && !showSummary && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: verdict.color, background: verdict.color + '22', padding: '2px 8px', borderRadius: 9999, border: `1px solid ${verdict.color}55` }}>
+                  {verdict.emoji} {verdict.verdict}
+                </span>
+              )}
+            </div>
             <span style={{ fontSize: 11, color: 'var(--ios-label3)' }}>{showSummary ? '▲' : '▼'}</span>
           </button>
           {showSummary && (
@@ -653,6 +718,21 @@ export default function GeminiStudio({ data }) {
                   </span>
                 </div>
               ))}
+              {verdict && (
+                <div style={{ marginTop: 4, padding: '6px 10px', borderRadius: 8, background: verdict.color + '18', border: `1px solid ${verdict.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: verdict.color }}>{verdict.emoji} 風控裁決：{verdict.verdict}</span>
+                  <button
+                    onClick={() => {
+                      const txt = `圓桌討論：${topic}\n\n` + messages.filter(m => !m.streaming && !m.error).map(m =>
+                        m.role === 'user' ? `【你】${m.content}` : `【${m.analyst.name}】\n${m.content}`
+                      ).join('\n\n')
+                      navigator.clipboard?.writeText(txt).catch(() => {})
+                    }}
+                    style={{ fontSize: 11, color: 'var(--ios-label3)', background: 'var(--ios-fill4)', border: 'none', borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
+                    📋 複製
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -695,6 +775,21 @@ export default function GeminiStudio({ data }) {
           </div>
         )}
 
+        {/* Quick question chips */}
+        {!running && round > 0 && !countdown && (
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 }}>
+            {QUICK_QUESTIONS.map(q => (
+              <div key={q} onClick={() => setUserInput(q)}
+                style={{ padding: '4px 10px', borderRadius: 9999, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
+                  background: userInput === q ? 'rgba(10,132,255,0.18)' : 'var(--ios-fill4)',
+                  color: userInput === q ? 'var(--ios-blue)' : 'var(--ios-label3)',
+                  border: `0.5px solid ${userInput === q ? 'var(--ios-blue)' : 'var(--ios-sep)'}` }}>
+                {q}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* User input row */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <textarea value={userInput} onChange={e => setUserInput(e.target.value)}
@@ -709,26 +804,30 @@ export default function GeminiStudio({ data }) {
           }}>{running ? '⏳' : '插話'}</button>
         </div>
         <div style={{ fontSize: 10.5, color: 'var(--ios-label3)', marginTop: 6, textAlign: 'center' }}>
-          🆓 Gemini 免費驅動 · Enter 插話 · Shift+Enter 換行
+          ✨ Claude 串流驅動 · Enter 插話 · Shift+Enter 換行
         </div>
       </div>
     </div>
   )
 }
 
-function ModelPicker({ model, setModel }) {
+function ModelPicker({ claudeModel, setClaudeModel }) {
+  const chip = (active) => ({
+    padding: '6px 11px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+    border: `1px solid ${active ? 'var(--ios-blue)' : 'var(--ios-sep)'}`,
+    background: active ? 'rgba(10,132,255,0.18)' : 'var(--ios-fill4)',
+    color: active ? 'var(--ios-blue)' : 'var(--ios-label2)', fontWeight: active ? 700 : 400,
+  })
   return (
-    <div style={{ padding: '10px 16px', background: 'var(--ios-bg3)', borderBottom: '0.5px solid var(--ios-sep)', flexShrink: 0 }}>
-      <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginBottom: 6 }}>遇到「額度用盡 limit: 0」時可切換模型：</div>
+    <div style={{ padding: '12px 16px', background: 'var(--ios-bg3)', borderBottom: '0.5px solid var(--ios-sep)', flexShrink: 0 }}>
+      <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginBottom: 7 }}>Claude 模型</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {MODELS.map(m => (
-          <div key={m.id} onClick={() => setModel(m.id)} style={{
-            padding: '6px 11px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
-            border: `1px solid ${m.id === model ? 'var(--ios-blue)' : 'var(--ios-sep)'}`,
-            background: m.id === model ? 'rgba(10,132,255,0.18)' : 'var(--ios-fill4)',
-            color: m.id === model ? 'var(--ios-blue)' : 'var(--ios-label2)', fontWeight: m.id === model ? 700 : 400,
-          }}>{m.label}</div>
+        {CLAUDE_MODELS.map(m => (
+          <div key={m.id} onClick={() => setClaudeModel(m.id)} style={chip(m.id === claudeModel)}>{m.label}</div>
         ))}
+      </div>
+      <div style={{ marginTop: 8, fontSize: 11, color: 'var(--ios-label3)' }}>
+        串流逐字顯示 · 無速率限制 · 一場約 $0.025
       </div>
     </div>
   )
