@@ -1238,8 +1238,40 @@ for (const [stockId, recent] of Object.entries(perStockRecent)) {
   if (filled < 2) continue
   historiesStocks[stockId] = { o, h, l, c, v }
 }
-writeFileSync(HISTORIES_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates: historiesDates, stocks: historiesStocks }), 'utf-8')
-console.log(`stock_histories.json written (${Object.keys(historiesStocks).length} stocks, ${historiesDates.length} bars, ${(readFileSync(HISTORIES_FILE).length / 1024).toFixed(0)} KB)`)
+
+// Build extended scan price history for ALL scanned stocks not in klineMap.
+// Uses all available scan dates (not just the display dates limit of MAX_DATES) so the
+// frontend has enough daily bars for MACD/RSI warmup on weekly/monthly indicator charts.
+// Format: compact [date, open, high, low, close, volume] tuples per stock.
+const scanStocksHistory = {}
+const allScanDatesAsc = Object.keys(dateMap).sort()  // ascending = oldest first
+for (const d of allScanDatesAsc) {
+  const seen = new Set()
+  for (const row of (dateMap[d] || [])) {
+    const sid = row.stock_id
+    if (seen.has(sid)) continue
+    seen.add(sid)
+    if (klineMap[sid]) continue  // klineMap has richer OHLCV data, skip
+    const c = toNum(row.close)
+    if (c <= 0 || c > 100000) continue
+    if (!scanStocksHistory[sid]) scanStocksHistory[sid] = []
+    if (scanStocksHistory[sid].length < 250) {
+      scanStocksHistory[sid].push([
+        d,
+        Math.round((toNum(row.open) || c) * 100) / 100,
+        Math.round((toNum(row.high) || c) * 100) / 100,
+        Math.round((toNum(row.low) || c) * 100) / 100,
+        Math.round(c * 100) / 100,
+        Math.round(toNum(row.volume) || 0),
+      ])
+    }
+  }
+}
+const scanStocksFiltered = Object.fromEntries(
+  Object.entries(scanStocksHistory).filter(([, bars]) => bars.length >= 10)
+)
+writeFileSync(HISTORIES_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates: historiesDates, stocks: historiesStocks, scan_stocks: scanStocksFiltered }), 'utf-8')
+console.log(`stock_histories.json written (${Object.keys(historiesStocks).length} kline + ${Object.keys(scanStocksFiltered).length} scan stocks, ${historiesDates.length} kline bars, ${(readFileSync(HISTORIES_FILE).length / 1024).toFixed(0)} KB)`)
 
 let prediction = readPrediction()
 const predictionHistory = readPredictionHistory()
