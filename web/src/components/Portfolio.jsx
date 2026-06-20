@@ -42,7 +42,51 @@ function getScanClose(stockId, data) {
   return m?.close ?? null
 }
 function getScanInfo(stockId, data) {
-  return scanRows(data).find(s => String(s.stock_id) === String(stockId)) ?? null
+  // Prefer the richest matching row (top_stocks ~120 fields, filter_stocks ~25)
+  const matches = scanRows(data).filter(s => String(s.stock_id) === String(stockId))
+  if (!matches.length) return null
+  return matches.sort((a, b) => Object.keys(b).length - Object.keys(a).length)[0]
+}
+
+// Compute grounded stop-loss / take-profit from the scan row's technical data.
+// Falls back to fixed percentages when no rich data is available.
+function computeTargets(buyPrice, scan) {
+  const atr  = scan?.atr14
+  const h20  = scan?.close_20d_high
+  const l10  = scan?.close_10d_low
+
+  // ── Stop-loss ──
+  let stopLoss, stopBasis
+  if (atr != null && atr > 0) {
+    const atrStop = buyPrice - 2 * atr
+    if (l10 != null && l10 < buyPrice && l10 > atrStop) {
+      stopLoss = l10; stopBasis = `10日低點支撐 ${fmt(l10, 1)}`
+    } else {
+      stopLoss = atrStop; stopBasis = `買價 −2×ATR(${fmt(atr, 1)})`
+    }
+  } else {
+    stopLoss = buyPrice * 0.92; stopBasis = '買價 −8%（無技術資料，固定值）'
+  }
+
+  // ── Take-profit ──
+  let takePrft, tpBasis
+  if (h20 != null && l10 != null && h20 > l10) {
+    if (h20 > buyPrice * 1.02) {
+      takePrft = h20; tpBasis = `20日高點壓力 ${fmt(h20, 1)}`
+    } else {
+      // measured-move: break 20-day high, project +0.5× swing range
+      takePrft = h20 + 0.5 * (h20 - l10)
+      tpBasis = `量度目標（20日高 +½波段）`
+    }
+  } else if (atr != null && atr > 0) {
+    takePrft = buyPrice + 3 * atr; tpBasis = `買價 +3×ATR(${fmt(atr, 1)})`
+  } else {
+    takePrft = buyPrice * 1.15; tpBasis = '買價 +15%（無技術資料，固定值）'
+  }
+
+  const rr = (buyPrice - stopLoss > 0) ? (takePrft - buyPrice) / (buyPrice - stopLoss) : null
+  const grounded = atr != null && atr > 0
+  return { stopLoss, stopBasis, takePrft, tpBasis, rr, grounded }
 }
 
 function fmt(v, d = 2) { return v == null || isNaN(v) ? '—' : Number(v).toFixed(d) }
@@ -220,9 +264,10 @@ export default function Portfolio({ data }) {
     const buyDate   = p.buyDate ? new Date(p.buyDate) : null
     const daysHeld  = buyDate ? Math.max(0, Math.floor((Date.now() - buyDate) / 86400000)) : null
     const annReturn = (pnlPct != null && daysHeld != null && daysHeld >= 7) ? pnlPct / daysHeld * 365 : null
-    const stopLoss  = p.buyPrice * 0.92
-    const takePrft  = p.buyPrice * 1.15
-    return { id, p, curPrice, scan, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft, color: PALETTE[i % PALETTE.length] }
+    const tg        = computeTargets(p.buyPrice, scan)
+    const stopLoss  = tg.stopLoss
+    const takePrft  = tg.takePrft
+    return { id, p, curPrice, scan, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft, targets: tg, color: PALETTE[i % PALETTE.length] }
   }), [positions, data, livePrices])
 
   const sorted = useMemo(() => [...entries].sort((a, b) => {
@@ -338,7 +383,7 @@ export default function Portfolio({ data }) {
       )}
 
       {/* ── Position cards ───────────────────────────── */}
-      {sorted.map(({ id, p, curPrice, scan, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft, color }, idx) => {
+      {sorted.map(({ id, p, curPrice, scan, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft, targets, color }, idx) => {
         const pnlColor   = pnlPct == null ? 'var(--ios-label)' : pnlPct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)'
         const nearStop   = curPrice != null && curPrice <= stopLoss * 1.02
         const nearTarget = curPrice != null && curPrice >= takePrft * 0.98
@@ -401,18 +446,34 @@ export default function Portfolio({ data }) {
                   年化 {annReturn >= 0 ? '+' : ''}{fmt(annReturn, 1)}%
                 </span>
               )}
-              <span style={{ background: 'rgba(255,59,48,0.07)', color: 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5 }}>
+              <span title={targets?.stopBasis} style={{ background: 'rgba(255,59,48,0.07)', color: 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5 }}>
                 停損 {fmt(stopLoss)}
               </span>
-              <span style={{ background: 'rgba(255,149,0,0.07)', color: 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5 }}>
+              <span title={targets?.tpBasis} style={{ background: 'rgba(255,149,0,0.07)', color: 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5 }}>
                 目標 {fmt(takePrft)}
               </span>
+              {targets?.rr != null && (
+                <span style={{ background: targets.rr >= 2 ? 'rgba(48,209,88,0.12)' : 'rgba(142,142,147,0.12)', color: targets.rr >= 2 ? 'var(--ios-green)' : 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
+                  風報比 {fmt(targets.rr, 1)}
+                </span>
+              )}
               {totalValue > 0 && (
                 <span style={{ background: `${color}18`, color, padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
                   占比 {(curVal / totalValue * 100).toFixed(1)}%
                 </span>
               )}
             </div>
+
+            {/* Stop/target basis — explains where these numbers come from */}
+            {targets && (
+              <div style={{ fontSize: 9.5, color: 'var(--ios-label4)', lineHeight: 1.5, marginBottom: 6, padding: '5px 8px', background: 'var(--ios-fill4)', borderRadius: 6 }}>
+                <span style={{ color: targets.grounded ? 'var(--ios-green)' : 'var(--ios-label3)' }}>
+                  {targets.grounded ? '📐 依技術指標計算' : '📐 依固定百分比'}
+                </span>
+                <span style={{ marginLeft: 6 }}>停損依據：{targets.stopBasis}</span>
+                <span style={{ marginLeft: 6 }}>目標依據：{targets.tpBasis}</span>
+              </div>
+            )}
 
             {/* P&L bar */}
             {pnlPct != null && (
@@ -456,9 +517,30 @@ export default function Portfolio({ data }) {
               <input
                 type={f.type || 'text'} value={form[f.key]} disabled={f.disabled} placeholder={f.ph}
                 inputMode={f.type === 'number' ? 'decimal' : undefined}
-                onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                onChange={e => {
+                  const val = e.target.value
+                  if (f.key === 'stock_id') {
+                    // Auto-fill name from scan data when the typed id matches a known stock
+                    const info = getScanInfo(val.trim(), data)
+                    const px = info?.close
+                    setForm(prev => ({
+                      ...prev,
+                      stock_id: val,
+                      name: info?.name || prev.name,
+                      // pre-fill buy price with latest close if user hasn't entered one yet
+                      buyPrice: prev.buyPrice || (px != null ? String(px) : ''),
+                    }))
+                  } else {
+                    setForm(prev => ({ ...prev, [f.key]: val }))
+                  }
+                }}
                 style={{ ...inputStyle, background: f.disabled ? 'var(--ios-fill4)' : 'var(--ios-fill3)', color: f.disabled ? 'var(--ios-label3)' : 'var(--ios-label)' }}
               />
+              {f.key === 'stock_id' && !editId && form.stock_id.trim() && (
+                <div style={{ fontSize: 10.5, marginTop: 4, color: form.name ? 'var(--ios-green)' : 'var(--ios-label4)' }}>
+                  {form.name ? `✓ ${form.name}` : '查無掃描資料（仍可手動輸入名稱）'}
+                </div>
+              )}
             </div>
           ))}
 

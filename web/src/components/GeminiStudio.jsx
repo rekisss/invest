@@ -73,6 +73,46 @@ function savedModel() { return localStorage.getItem(GEMINI_MODEL_STORAGE) || MOD
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const r2 = v => (v == null || isNaN(v) ? null : Math.round(v * 100) / 100)
 
+// ── Discussion history (localStorage) ────────────────────────────────────────
+const HISTORY_STORAGE = 'gemini_discussion_history'
+
+// Build a per-analyst summary: each analyst's latest first bullet.
+function summarize(msgs) {
+  const last = {}
+  for (const m of msgs) {
+    if (m.role === 'analyst' && m.content && !m.error && !m.streaming) last[m.analyst.id] = m
+  }
+  return ANALYSTS
+    .filter(a => last[a.id])
+    .map(a => {
+      const c = last[a.id].content
+      const point = (c.split('\n').find(l => l.trim()) || c).replace(/^[・\-•\s]+/, '').trim().slice(0, 60)
+      return { id: a.id, name: a.name, emoji: a.emoji, color: a.color, point }
+    })
+    .filter(x => x.point)
+}
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_STORAGE) || '[]') } catch { return [] }
+}
+function saveHistoryRecord(rec) {
+  try {
+    const all = loadHistory().filter(r => r.id !== rec.id)
+    all.unshift(rec)
+    localStorage.setItem(HISTORY_STORAGE, JSON.stringify(all.slice(0, 30)))
+  } catch { /* quota — ignore */ }
+}
+function deleteHistoryRecord(id) {
+  try {
+    localStorage.setItem(HISTORY_STORAGE, JSON.stringify(loadHistory().filter(r => r.id !== id)))
+  } catch { /* ignore */ }
+}
+function fmtTime(ts) {
+  try {
+    return new Intl.DateTimeFormat('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ts))
+  } catch { return '' }
+}
+
 async function callGemini(apiKey, model, systemPrompt, userPrompt, onRetry) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -210,11 +250,15 @@ export default function GeminiStudio({ data }) {
   const [autoRun, setAutoRun] = useState(false)
   const [countdown, setCountdown] = useState(0)
   const [showSummary, setShowSummary] = useState(true)
+  const [view, setView] = useState('chat')      // 'chat' | 'history'
+  const [history, setHistory] = useState(loadHistory)
+  const [openRec, setOpenRec] = useState(null)  // expanded history record id
 
   const endRef = useRef(null)
   const autoRunRef = useRef(false)
   const lastAccRef = useRef([])   // latest acc after each round
   const countdownRef = useRef(null)
+  const sessionIdRef = useRef(null)
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
   useEffect(() => { localStorage.setItem(GEMINI_MODEL_STORAGE, model) }, [model])
@@ -251,21 +295,8 @@ export default function GeminiStudio({ data }) {
     m.role === 'user' ? `【使用者插話】${m.content}` : `【${m.analyst.name}】${m.content}`
   ).join('\n\n')
 
-  // Summary: last message from each analyst, first sentence
-  const summary = useMemo(() => {
-    if (!messages.length) return []
-    const last = {}
-    for (const m of messages) {
-      if (m.role === 'analyst' && m.content && !m.error && !m.streaming) last[m.analyst.id] = m
-    }
-    return ANALYSTS
-      .filter(a => last[a.id])
-      .map(a => ({
-        analyst: a,
-        point: last[a.id].content.split(/[。！？\n]/)[0]?.trim().slice(0, 55) || '',
-      }))
-      .filter(x => x.point)
-  }, [messages])
+  // Summary: each analyst's latest first bullet
+  const summary = useMemo(() => summarize(messages), [messages])
 
   // Schedule next auto-round
   const scheduleAutoRound = useCallback((acc) => {
@@ -336,8 +367,27 @@ export default function GeminiStudio({ data }) {
     setRound(r => r + 1)
     setRunning(false)
 
+    // Persist this discussion to history (upsert by session id)
+    if (sessionIdRef.current) {
+      const clean = acc.filter(m => !m.streaming && !m.error)
+      const rec = {
+        id: sessionIdRef.current,
+        topic, stockId: typedId, time: Date.now(),
+        summary: summarize(acc),
+        messages: clean.map(m => ({
+          role: m.role,
+          name: m.analyst?.name || '使用者',
+          emoji: m.analyst?.emoji || '🙋',
+          color: m.analyst?.color || '#0a84ff',
+          content: m.content,
+        })),
+      }
+      saveHistoryRecord(rec)
+      setHistory(loadHistory())
+    }
+
     if (autoRunRef.current) scheduleAutoRound(acc)
-  }, [apiKey, model, topic, brief, scheduleAutoRound])
+  }, [apiKey, model, topic, brief, typedId, scheduleAutoRound])
 
   const runRound = useCallback((priorMessages, userNote) => {
     return runRoundInternal(priorMessages, userNote)
@@ -345,6 +395,7 @@ export default function GeminiStudio({ data }) {
 
   const start = () => {
     if (!topic) return
+    sessionIdRef.current = `${Date.now()}-${typedId || 'topic'}`
     setMessages([]); setRound(0); setAutoRun(false)
     runRoundInternal([], null)
   }
@@ -404,11 +455,70 @@ export default function GeminiStudio({ data }) {
     )
   }
 
+  // ── History view ──────────────────────────────────────────────────────────────
+  if (view === 'history') {
+    return (
+      <div style={s.root}>
+        <Header title="📜 討論紀錄" onReset={() => setView('chat')} resetLabel="← 返回" />
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', WebkitOverflowScrolling: 'touch' }}>
+          {history.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ios-label3)' }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
+              <div style={{ fontSize: 14 }}>尚無討論紀錄</div>
+              <div style={{ fontSize: 12, marginTop: 6 }}>每次圓桌討論結束後會自動存檔於此</div>
+            </div>
+          ) : history.map(rec => {
+            const expanded = openRec === rec.id
+            return (
+              <div key={rec.id} style={{ background: 'var(--ios-bg2)', borderRadius: 12, padding: '12px 14px', marginBottom: 10, boxShadow: 'var(--shadow-card)' }}>
+                <div onClick={() => setOpenRec(expanded ? null : rec.id)} style={{ cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ios-label)', flex: 1 }}>{rec.topic}</span>
+                    <span style={{ fontSize: 11, color: 'var(--ios-label3)', flexShrink: 0 }}>{fmtTime(rec.time)}</span>
+                  </div>
+                  {/* Summary points */}
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {(rec.summary || []).map(item => (
+                      <div key={item.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                        <span style={{ fontSize: 12, flexShrink: 0 }}>{item.emoji}</span>
+                        <span style={{ fontSize: 12, color: 'var(--ios-label2)', flex: 1, lineHeight: 1.4 }}>
+                          <b style={{ color: item.color }}>{item.name}：</b>{item.point}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 11, color: 'var(--ios-blue)' }}>
+                    {expanded ? '▲ 收合全文' : '▼ 展開完整對話'}
+                  </div>
+                </div>
+                {expanded && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '0.5px solid var(--ios-sep)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {(rec.messages || []).map((m, i) => (
+                      <div key={i}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: m.color, marginBottom: 2 }}>{m.emoji} {m.name}</div>
+                        <div style={{ fontSize: 13, color: 'var(--ios-label)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{m.content}</div>
+                      </div>
+                    ))}
+                    <button onClick={() => { deleteHistoryRecord(rec.id); setHistory(loadHistory()); setOpenRec(null) }}
+                      style={{ alignSelf: 'flex-end', marginTop: 4, fontSize: 11, color: 'var(--ios-red)', background: 'var(--ios-fill4)', border: 'none', borderRadius: 7, padding: '5px 14px', cursor: 'pointer' }}>
+                      刪除此紀錄
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   // ── Setup screen ──────────────────────────────────────────────────────────────
   if (messages.length === 0 && !running) {
     return (
       <div style={s.root}>
         <Header onSettings={() => setShowSettings(v => !v)}
+          onHistory={history.length ? () => setView('history') : null}
           onClearKey={() => { sessionStorage.removeItem(GEMINI_KEY_STORAGE); setApiKey('') }} />
         {showSettings && <ModelPicker model={model} setModel={setModel} />}
         <div style={s.setup}>
@@ -476,6 +586,7 @@ export default function GeminiStudio({ data }) {
   return (
     <div style={s.root}>
       <Header title={topic} onReset={() => { cancelAutoRun(); setMessages([]); setRound(0) }}
+        onHistory={history.length ? () => setView('history') : null}
         onSettings={() => setShowSettings(v => !v)} />
       {showSettings && <ModelPicker model={model} setModel={setModel} />}
 
@@ -515,11 +626,11 @@ export default function GeminiStudio({ data }) {
           </button>
           {showSummary && (
             <div style={{ padding: '0 14px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {summary.map(({ analyst, point }) => (
-                <div key={analyst.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: 13, flexShrink: 0 }}>{analyst.emoji}</span>
+              {summary.map(item => (
+                <div key={item.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 13, flexShrink: 0 }}>{item.emoji}</span>
                   <span style={{ fontSize: 12, color: 'var(--ios-label2)', flex: 1, lineHeight: 1.4 }}>
-                    <b style={{ color: analyst.color }}>{analyst.name}：</b>{point}
+                    <b style={{ color: item.color }}>{item.name}：</b>{item.point}
                   </span>
                 </div>
               ))}
@@ -604,7 +715,7 @@ function ModelPicker({ model, setModel }) {
   )
 }
 
-function Header({ title, onReset, onSettings, onClearKey }) {
+function Header({ title, onReset, resetLabel, onHistory, onSettings, onClearKey }) {
   const btn = { background: 'var(--ios-fill4)', border: '0.5px solid var(--ios-sep)', borderRadius: 9999, padding: '4px 11px', color: 'var(--ios-label2)', fontSize: 12, cursor: 'pointer', flexShrink: 0 }
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: '0.5px solid var(--ios-sep)', background: 'var(--ios-bg2)', flexShrink: 0, gap: 10 }}>
@@ -612,7 +723,8 @@ function Header({ title, onReset, onSettings, onClearKey }) {
         {title ? title : '🎯 圓桌研究室'}
       </span>
       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-        {onReset && <button onClick={onReset} style={btn}>新主題</button>}
+        {onReset && <button onClick={onReset} style={btn}>{resetLabel || '新主題'}</button>}
+        {onHistory && <button onClick={onHistory} style={btn} title="討論紀錄">📜</button>}
         {onSettings && <button onClick={onSettings} style={btn}>⚙️</button>}
         {onClearKey && <button onClick={onClearKey} style={btn}>🔑</button>}
       </div>
