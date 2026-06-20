@@ -33,6 +33,12 @@ const ANALYSTS = [
   },
 ]
 
+const QUICK_QUESTIONS = [
+  '停損該設在哪裡？', '何時是最佳出場時機？', '三大法人方向一致嗎？',
+  '適合多大倉位比例？', '短線還是波段操作？', '目前最大的風險是？',
+  '近期有哪些催化劑？', '與同類股相比強弱如何？',
+]
+
 const s = {
   root: { display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--ios-bg)' },
   setup: { flex: 1, overflowY: 'auto', padding: '18px 16px', WebkitOverflowScrolling: 'touch' },
@@ -215,16 +221,43 @@ function fmtLevels(lv) {
   return L.join('\n')
 }
 
-function buildBrief(resolved, levels, market) {
+// Find news headlines relevant to the stock (by id, name keywords, or sector)
+function findNewsForStock(stockId, name, industry, news) {
+  if (!Array.isArray(news) || !news.length) return []
+  const terms = [
+    stockId,
+    ...(name?.match(/[一-龥]{2,4}/g) || []),
+    (industry || '').split(/[/\s]/)[0] || '',
+  ].filter(t => t && t.length >= 2)
+  return news
+    .filter(n => terms.some(t => (n.title || '').includes(t) || (n.summary || '').includes(t)))
+    .slice(0, 2)
+    .map(n => n.title || '')
+    .filter(Boolean)
+}
+
+// Parse 風控長's last message for a verdict keyword
+function parseVerdict(messages) {
+  const riskMsgs = messages.filter(m => m.role === 'analyst' && m.analyst?.id === 'risk' && !m.error && !m.streaming)
+  if (!riskMsgs.length) return null
+  const txt = riskMsgs[riskMsgs.length - 1].content || ''
+  if (/建議進場|可以進場|適合買進|進場訊號|值得買/.test(txt)) return { verdict: '建議進場', color: '#30d158', emoji: '✅' }
+  if (/建議迴避|暫時迴避|避開|不建議|風險過高|先回避/.test(txt)) return { verdict: '建議迴避', color: '#f85149', emoji: '🚫' }
+  if (/建議觀察|先觀察|觀望|等待確認|觀察等待/.test(txt)) return { verdict: '建議觀察', color: '#ff9f0a', emoji: '👀' }
+  return null
+}
+
+function buildBrief(resolved, levels, market, news) {
   if (!resolved) return ''
   const r = resolved.row || {}
   const f = (v, suf = '') => (v == null || isNaN(v) ? '—' : `${v}${suf}`)
   const lines = [`【標的】${resolved.stock_id} ${resolved.name || '(名稱未知)'} ${r.industry_category || ''}`.trim()]
   if (resolved.isRich) {
     lines.push(`進場分數 ${f(Math.round(r.entry_score || 0))}${r.grade ? ` 評級${r.grade}` : ''}${r.entry_signal ? ' ✅入榜' : ''}`)
-    lines.push(`RSI ${f(r.rsi14 && r.rsi14.toFixed(0))} | ADX ${f(r.adx14 && r.adx14.toFixed(0))} | 量比 ${f(r.volume_ratio && r.volume_ratio.toFixed(1), 'x')}`)
+    lines.push(`RSI ${f(r.rsi14 && r.rsi14.toFixed(0))} | ADX ${f(r.adx14 && r.adx14.toFixed(0))} | 量比 ${f(r.volume_ratio && r.volume_ratio.toFixed(1), 'x')} | BB位置 ${r.bb_pct_b != null ? (r.bb_pct_b * 100).toFixed(0) + '%' : '—'}`)
     lines.push(`F-Score ${f(r.f_score)}/9 | 月營收YoY ${f(r.revenue_yoy && r.revenue_yoy.toFixed(1), '%')}`)
-    lines.push(`外資連買 ${f(r.foreign_buy_streak)}日 | 投信連買 ${f(r.invest_trust_streak)}日 | 融資5日變化 ${f(r.margin_change_5d && r.margin_change_5d.toFixed(1), '%')}`)
+    lines.push(`外資連買 ${f(r.foreign_buy_streak)}日 | 投信連買 ${f(r.invest_trust_streak)}日 | 自營連買 ${f(r.dealer_buy_streak)}日`)
+    lines.push(`融資5日變化 ${f(r.margin_change_5d && r.margin_change_5d.toFixed(1), '%')} | 相對大盤5日 ${r.relative_strength_5d != null ? (r.relative_strength_5d * 100).toFixed(1) + '%' : '—'}`)
     if (r.entry_reason) lines.push(`系統入場理由：${r.entry_reason}`)
   } else {
     lines.push(`收盤 ${f(r.close)} | RSI ${f(r.rsi14 && r.rsi14.toFixed(0))} | 評級 ${r.grade || '—'}`)
@@ -233,6 +266,8 @@ function buildBrief(resolved, levels, market) {
   if (market) {
     lines.push(`\n【大盤】XGBoost上漲機率 ${market.prob != null ? Math.round(market.prob * 100) + '%' : '—'} | VIX ${f(market.vix)} | 外資期貨 ${market.futures != null ? market.futures.toLocaleString() + '口' : '—'}`)
   }
+  const newsHeadlines = findNewsForStock(resolved.stock_id, resolved.name, r.industry_category, news)
+  if (newsHeadlines.length) lines.push(`\n【近期相關新聞】\n${newsHeadlines.map(h => `・${h}`).join('\n')}`)
   return lines.join('\n')
 }
 
@@ -302,7 +337,8 @@ export default function GeminiStudio({ data }) {
   const typedId = (stockInput.match(/\d{4,6}/) || [])[0] || ''
   const resolved = typedId ? resolveStock(typedId, data) : null
   const levels = resolved?.isRich ? computeLevels(resolved.row) : null
-  const brief = buildBrief(resolved, levels, market)
+  const brief = buildBrief(resolved, levels, market, data?.news)
+  const verdict = useMemo(() => parseVerdict(messages), [messages])
   const topic = resolved
     ? `針對 ${resolved.stock_id} ${resolved.name || ''} 的進場決策`.trim()
     : customTopic.trim()
@@ -640,7 +676,14 @@ export default function GeminiStudio({ data }) {
               width: '100%', padding: '7px 14px', background: 'none', border: 'none',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
             }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.4 }}>📋 討論重點摘要</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.4 }}>📋 討論重點摘要</span>
+              {verdict && !showSummary && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: verdict.color, background: verdict.color + '22', padding: '2px 8px', borderRadius: 9999, border: `1px solid ${verdict.color}55` }}>
+                  {verdict.emoji} {verdict.verdict}
+                </span>
+              )}
+            </div>
             <span style={{ fontSize: 11, color: 'var(--ios-label3)' }}>{showSummary ? '▲' : '▼'}</span>
           </button>
           {showSummary && (
@@ -653,6 +696,21 @@ export default function GeminiStudio({ data }) {
                   </span>
                 </div>
               ))}
+              {verdict && (
+                <div style={{ marginTop: 4, padding: '6px 10px', borderRadius: 8, background: verdict.color + '18', border: `1px solid ${verdict.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: verdict.color }}>{verdict.emoji} 風控裁決：{verdict.verdict}</span>
+                  <button
+                    onClick={() => {
+                      const txt = `圓桌討論：${topic}\n\n` + messages.filter(m => !m.streaming && !m.error).map(m =>
+                        m.role === 'user' ? `【你】${m.content}` : `【${m.analyst.name}】\n${m.content}`
+                      ).join('\n\n')
+                      navigator.clipboard?.writeText(txt).catch(() => {})
+                    }}
+                    style={{ fontSize: 11, color: 'var(--ios-label3)', background: 'var(--ios-fill4)', border: 'none', borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}>
+                    📋 複製
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -692,6 +750,21 @@ export default function GeminiStudio({ data }) {
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {/* Quick question chips */}
+        {!running && round > 0 && !countdown && (
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 }}>
+            {QUICK_QUESTIONS.map(q => (
+              <div key={q} onClick={() => setUserInput(q)}
+                style={{ padding: '4px 10px', borderRadius: 9999, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
+                  background: userInput === q ? 'rgba(10,132,255,0.18)' : 'var(--ios-fill4)',
+                  color: userInput === q ? 'var(--ios-blue)' : 'var(--ios-label3)',
+                  border: `0.5px solid ${userInput === q ? 'var(--ios-blue)' : 'var(--ios-sep)'}` }}>
+                {q}
+              </div>
+            ))}
           </div>
         )}
 
