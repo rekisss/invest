@@ -75,6 +75,7 @@ const r2 = v => (v == null || isNaN(v) ? null : Math.round(v * 100) / 100)
 
 // ── Discussion history (localStorage) ────────────────────────────────────────
 const HISTORY_STORAGE = 'gemini_discussion_history'
+const SESSION_STATE_KEY = 'gemini_session_state'  // survives page refresh (sessionStorage)
 
 // Build a per-analyst summary: each analyst's latest first bullet.
 function summarize(msgs) {
@@ -242,9 +243,19 @@ export default function GeminiStudio({ data }) {
   const [showSettings, setShowSettings] = useState(false)
   const [stockInput, setStockInput] = useState('')
   const [customTopic, setCustomTopic] = useState('')
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState(() => {
+    try {
+      const s = JSON.parse(sessionStorage.getItem(SESSION_STATE_KEY) || 'null')
+      return Array.isArray(s?.messages) ? s.messages.filter(m => !m.streaming) : []
+    } catch { return [] }
+  })
   const [running, setRunning] = useState(false)
-  const [round, setRound] = useState(0)
+  const [round, setRound] = useState(() => {
+    try {
+      const s = JSON.parse(sessionStorage.getItem(SESSION_STATE_KEY) || 'null')
+      return s?.round ?? 0
+    } catch { return 0 }
+  })
   const [retryNote, setRetryNote] = useState('')
   const [userInput, setUserInput] = useState('')
   const [autoRun, setAutoRun] = useState(false)
@@ -263,6 +274,13 @@ export default function GeminiStudio({ data }) {
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
   useEffect(() => { localStorage.setItem(GEMINI_MODEL_STORAGE, model) }, [model])
   useEffect(() => { autoRunRef.current = autoRun }, [autoRun])
+  // Persist in-progress session to sessionStorage so it survives page refreshes
+  useEffect(() => {
+    try {
+      if (messages.length > 0) sessionStorage.setItem(SESSION_STATE_KEY, JSON.stringify({ messages, round }))
+      else sessionStorage.removeItem(SESSION_STATE_KEY)
+    } catch { /* quota */ }
+  }, [messages, round])
 
   // Read localStorage prefill from StockDetailModal's 🎯 button
   useEffect(() => {
@@ -396,6 +414,7 @@ export default function GeminiStudio({ data }) {
   const start = () => {
     if (!topic) return
     sessionIdRef.current = `${Date.now()}-${typedId || 'topic'}`
+    sessionStorage.removeItem(SESSION_STATE_KEY)
     setMessages([]); setRound(0); setAutoRun(false)
     runRoundInternal([], null)
   }

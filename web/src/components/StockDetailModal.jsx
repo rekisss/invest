@@ -1073,28 +1073,22 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
     // period bar to the last daily value within that period. This eliminates the warm-up gap
     // (MACD needs 35+ bars; daily gives thousands).
     if (chartInterval !== '1d' && daily.length >= 2 && bars[0]?.time) {
-      const unit = chartInterval === '1wk' ? 'week' : 'month'
-
-      // period-key → index of the LAST daily bar within that period
-      const periodToIdx = {}
-      for (let i = 0; i < daily.length; i++) {
-        const b = daily[i]
-        if (!b.time) continue
-        let key
-        if (unit === 'week') {
-          const d = new Date(b.time)
-          const dow = d.getUTCDay()
-          const mon = new Date(d)
-          mon.setUTCDate(d.getUTCDate() - (dow === 0 ? 6 : dow - 1))
-          key = mon.toISOString().slice(0, 10)
-        } else {
-          key = b.time.slice(0, 7) + '-01'
+      // Two-pointer: for each period bar, find the last daily bar within [bar.time, nextBar.time).
+      // Works regardless of what date pre-built weekly/monthly bars use as their time key.
+      const remap = arr => {
+        let di = 0
+        const result = new Array(bars.length).fill(null)
+        for (let bi = 0; bi < bars.length; bi++) {
+          const nextTime = bi + 1 < bars.length ? bars[bi + 1].time : '9999-12-31'
+          let lastDi = -1
+          while (di < daily.length && daily[di].time < nextTime) {
+            if (daily[di].time >= bars[bi].time) lastDi = di
+            di++
+          }
+          result[bi] = lastDi >= 0 ? arr[lastDi] : null
         }
-        periodToIdx[key] = i
+        return result
       }
-
-      // Lift a flat daily array onto the bars array using the period mapping
-      const remap = arr => bars.map(b => { const i = periodToIdx[b.time]; return i != null ? arr[i] : null })
 
       // Compute oscillators on full daily data (warm-up is free)
       const dc = daily.map(d => d.close)
@@ -1718,8 +1712,8 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
         onClick={e => e.stopPropagation()}
         style={{
           width: 'min(460px, 100vw)',
-          height: '100dvh',
-          maxHeight: '100dvh',
+          height: '100%',
+          maxHeight: '100%',
           background: 'var(--ios-bg)',
           overflowY: 'auto',
           overflowX: 'hidden',
@@ -2146,8 +2140,8 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
             ⚠️ 資料品質警示：此股票部分指標資料不完整，評分參考性較低
           </div>
         )}
-        {/* Bottom spacer — ensures last card clears the tab bar + iOS home indicator */}
-        <div style={{ height: 'calc(120px + env(safe-area-inset-bottom))', flexShrink: 0 }} />
+        {/* Bottom spacer — fixed 200px so content always scrolls fully clear of any UI chrome */}
+        <div style={{ height: 200, flexShrink: 0 }} />
       </div>
     </div>
     </>
