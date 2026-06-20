@@ -316,7 +316,7 @@ const FIB_LEVELS = [
 
 const CHART_W = 460
 const CHART_PL = 42
-const CHART_PR = 6
+const CHART_PR = 38   // wide enough for right-axis price badge (26px) + margin
 const BAR_W = 5  // fixed pixels per candle for scrollable chart
 
 function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHoverIdx, yFixed, chartW: propChartW }) {
@@ -380,7 +380,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
         <g key={i}>
           <line x1={CHART_PL} y1={toY(b.value)} x2={W - CHART_PR} y2={toY(b.value)}
             stroke={b.color || '#48484A'} strokeWidth={0.5} strokeDasharray="4,3" opacity={0.65} />
-          <text x={W - CHART_PR + 3} y={toY(b.value) + 3.5} fontSize={7} fill={b.color || '#48484A'} opacity={0.85}>{b.label ?? b.value}</text>
+          <text x={W - CHART_PR + 2} y={toY(b.value) + 3.5} fontSize={7.5} fill={b.color || '#636366'} opacity={0.9} textAnchor="start">{b.label ?? b.value}</text>
         </g>
       ))}
 
@@ -410,16 +410,18 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
         )
       })}
 
-      {/* Chart label */}
-      <text x={CHART_PL + 3} y={PT + 9} fontSize={8.5} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">{label}</text>
+      {/* Chart label — hidden while crosshair is active to avoid overlap with hover values */}
+      {hoveredIdx == null && (
+        <text x={CHART_PL + 3} y={PT + 9} fontSize={8.5} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">{label}</text>
+      )}
 
-      {/* Hover values */}
+      {/* Hover values — replace label when crosshair is active */}
       {hoveredIdx != null && (lines || []).map((series, si) => {
         const v = series.values[hoveredIdx]
         if (v == null) return null
         const disp = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1)
         return (
-          <text key={si} x={CHART_PL + 36 + si * 58} y={PT + 9} fontSize={8} fill={series.color}>
+          <text key={si} x={CHART_PL + 3 + si * 62} y={PT + 9} fontSize={8} fill={series.color} fontWeight="600">
             {series.label}:{disp}
           </text>
         )
