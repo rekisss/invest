@@ -1,4 +1,186 @@
-import { useState, useMemo, memo } from 'react'
+import { useState, useMemo, memo, useEffect } from 'react'
+
+/* ── Live Market Constants ───────────────────────────────────────── */
+const LIVE_CACHE_KEY = 'live_mkt_v1'
+const LIVE_TTL = 15 * 60 * 1000
+const MDT_STORE = 'mkt_data_token'
+const URT_STORE = 'unirate_api_key'
+
+function useLiveMarket(mdt, urt) {
+  const [live, setLive] = useState(() => {
+    try {
+      const c = JSON.parse(sessionStorage.getItem(LIVE_CACHE_KEY) || 'null')
+      if (c && Date.now() - c.ts < LIVE_TTL) return c
+    } catch {}
+    return null
+  })
+
+  useEffect(() => {
+    if (!mdt && !urt) return
+    // Check sessionStorage (not React state) so saveKeys()'s removeItem takes effect immediately
+    try {
+      const c = JSON.parse(sessionStorage.getItem(LIVE_CACHE_KEY) || 'null')
+      if (c && Date.now() - c.ts < LIVE_TTL) return
+    } catch {}
+    let alive = true
+    const go = async () => {
+      const r = {}
+      if (mdt) {
+        try {
+          const res = await fetch(
+            `https://api.marketdata.app/v1/indices/quotes/SPX,SOX,NDX/?token=${mdt}`,
+            { headers: { Accept: 'application/json' } }
+          )
+          const d = await res.json()
+          if (d.s === 'ok' && Array.isArray(d.symbol)) {
+            d.symbol.forEach((sym, i) => {
+              r[sym.toUpperCase()] = { price: d.last?.[i] ?? null, chg: d.changepct?.[i] ?? null }
+            })
+          }
+        } catch {}
+      }
+      if (urt) {
+        try {
+          const res = await fetch(`https://api.unirateapi.com/api/rates?api_key=${urt}&currency=USD`)
+          const d = await res.json()
+          if (d?.rates?.TWD) r.USDTWD = d.rates.TWD
+        } catch {}
+      }
+      if (!alive) return
+      const out = { ...r, ts: Date.now() }
+      try { sessionStorage.setItem(LIVE_CACHE_KEY, JSON.stringify(out)) } catch {}
+      setLive(out)
+    }
+    go()
+    return () => { alive = false }
+  }, [mdt, urt])
+
+  return live
+}
+
+/* ── Live Market Strip ───────────────────────────────────────────── */
+function LiveMarketStrip() {
+  const [mdt, setMdt] = useState(() => localStorage.getItem(MDT_STORE) || '')
+  const [urt, setUrt] = useState(() => localStorage.getItem(URT_STORE) || '')
+  const [showSetup, setShowSetup] = useState(false)
+  const [mdtInput, setMdtInput] = useState('')
+  const [urtInput, setUrtInput] = useState('')
+
+  const live = useLiveMarket(mdt, urt)
+
+  const saveKeys = () => {
+    const m = mdtInput.trim(), u = urtInput.trim()
+    // Always set or remove — blank input clears a previously saved key
+    if (m) { localStorage.setItem(MDT_STORE, m) } else { localStorage.removeItem(MDT_STORE) }
+    if (u) { localStorage.setItem(URT_STORE, u) } else { localStorage.removeItem(URT_STORE) }
+    setMdt(m); setUrt(u)
+    // Clear sessionStorage cache so useLiveMarket re-fetches with new keys immediately
+    try { sessionStorage.removeItem(LIVE_CACHE_KEY) } catch {}
+    setShowSetup(false)
+  }
+
+  const chgColor = v => v == null ? 'rgba(255,255,255,0.40)'
+    : v > 0 ? '#30D158' : v < 0 ? '#FF453A' : '#FF9F0A'
+  const fmtChg = v => v == null ? '—' : `${v > 0 ? '+' : ''}${(v * 100).toFixed(2)}%`
+
+  const keysSet = mdt || urt
+  const hasData = live && (live.SPX || live.SOX || live.NDX || live.USDTWD)
+
+  // Setup panel
+  if (showSetup) {
+    return (
+      <div className="glass-panel" style={{ padding: '12px 14px' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>即時市場 · 設定</div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.40)', marginBottom: 10, lineHeight: 1.6 }}>
+          輸入 API Key 後可顯示即時 SPX/SOX/NASDAQ 及 USD/TWD 匯率（15分鐘快取）。
+        </div>
+        {[
+          { label: 'Market Data Token (SPX/SOX/NDX)', val: mdtInput, set: setMdtInput, ph: '貼上 marketdata.app token' },
+          { label: 'UniRate API Key (USD/TWD)', val: urtInput, set: setUrtInput, ph: '貼上 unirateapi.com key' },
+        ].map(f => (
+          <div key={f.label} style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.30)', marginBottom: 4 }}>{f.label}</div>
+            <input
+              style={{ width: '100%', boxSizing: 'border-box', background: '#0D1522', border: '1px solid #1E293B', borderRadius: 8, padding: '8px 10px', color: '#FFF', fontSize: 12, fontFamily: 'monospace', outline: 'none' }}
+              type="password"
+              placeholder={f.ph}
+              value={f.val}
+              onChange={e => f.set(e.target.value)}
+            />
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+          <button onClick={saveKeys} style={{ flex: 1, background: '#0A84FF', color: '#FFF', border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>儲存</button>
+          <button onClick={() => setShowSetup(false)} style={{ flex: 1, background: '#1E293B', color: 'rgba(255,255,255,0.6)', border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 13, cursor: 'pointer' }}>取消</button>
+        </div>
+      </div>
+    )
+  }
+
+  // No keys configured yet
+  if (!keysSet) {
+    return (
+      <div className="glass-panel" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.30)' }}>即時市場（未設定）</span>
+        <button onClick={() => setShowSetup(true)} style={{ background: 'rgba(10,132,255,0.15)', color: '#0A84FF', border: '1px solid rgba(10,132,255,0.3)', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>⚙ 設定</button>
+      </div>
+    )
+  }
+
+  // Keys set but no data yet (loading or error)
+  if (!hasData) {
+    return (
+      <div className="glass-panel" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>即時市場載入中…</span>
+        <button onClick={() => setShowSetup(true)} style={{ background: 'transparent', color: 'rgba(255,255,255,0.25)', border: 'none', fontSize: 14, cursor: 'pointer', padding: '2px 6px' }}>⚙</button>
+      </div>
+    )
+  }
+
+  const items = [
+    live.SPX && { label: 'S&P 500', val: live.SPX.chg },
+    live.SOX && { label: 'SOX',     val: live.SOX.chg },
+    live.NDX && { label: 'NASDAQ',  val: live.NDX.chg },
+  ].filter(Boolean)
+
+  const now = new Date(live.ts)
+  const timeStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`
+
+  return (
+    <div className="glass-panel" style={{ padding: '10px 14px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8 }}>即時市場</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.22)', fontFamily: 'monospace' }}>更新 {timeStr}</span>
+          <button onClick={() => setShowSetup(true)} style={{ background: 'transparent', color: 'rgba(255,255,255,0.22)', border: 'none', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}>⚙</button>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 0 }}>
+        {items.map((it, idx) => (
+          <div key={it.label} style={{
+            flex: '1 1 0',
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            padding: '4px 6px',
+            borderRight: (idx < items.length - 1 || live.USDTWD) ? '1px solid #1E293B' : 'none',
+          }}>
+            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginBottom: 2 }}>{it.label}</span>
+            <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'monospace', color: chgColor(it.val) }}>
+              {fmtChg(it.val)}
+            </span>
+          </div>
+        ))}
+        {live.USDTWD && (
+          <div style={{ flex: '1 1 0', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 6px' }}>
+            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginBottom: 2 }}>USD/TWD</span>
+            <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'monospace', color: '#0A84FF' }}>
+              {Number(live.USDTWD).toFixed(2)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 /* ── SVG Direction Gauge ─────────────────────────────────────────── */
 const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
@@ -409,6 +591,9 @@ export default function Overview({ data, error }) {
               </div>
           }
         </div>
+
+        {/* Live Market Strip: real-time SPX/SOX/NDX + USD/TWD */}
+        <LiveMarketStrip />
 
         {/* Row 2: US Market + Risk Signals */}
         <MarketSignalsCard marketData={marketData} />
