@@ -175,6 +175,7 @@ export default function App() {
     }).format(d)
   })()
 
+  // GeminiStudio is rendered separately (always-mounted) so discussions survive tab switches.
   const tabContent = (() => {
     if (loading) return null
     switch (tab) {
@@ -182,10 +183,10 @@ export default function App() {
       case 'dashboard':  return <Dashboard data={data} error={error} />
       case 'portfolio':  return <Portfolio data={data} />
       case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} />
-      case 'predict':   return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />
-      case 'studio':    return <GeminiStudio data={data} />
-      case 'quota':     return <QuotaPanel quota={data?.quota} generatedAt={data?.generated_at} />
-      case 'ai':        return <AgentPanel
+      case 'predict':    return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />
+      case 'studio':     return null  // rendered always-mounted below
+      case 'quota':      return <QuotaPanel quota={data?.quota} generatedAt={data?.generated_at} />
+      case 'ai':         return <AgentPanel
         apiKey={apiKey}
         data={data}
         onSaveKey={key => { sessionStorage.setItem('anthropic_key', key); setApiKey(key) }}
@@ -259,8 +260,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Animated panel wrapper — re-mounts on tab change to trigger animation */}
-        {!loading && (
+        {/* Animated panel — all tabs except studio */}
+        {!loading && tab !== 'studio' && (
           <div
             key={tab}
             style={{
@@ -275,6 +276,27 @@ export default function App() {
               </div>
             }>
               {tabContent}
+            </Suspense>
+          </div>
+        )}
+
+        {/* GeminiStudio — always mounted once data loads; hidden via display:none when inactive
+            so in-progress API calls and discussion state survive tab switches */}
+        {!loading && (
+          <div
+            style={{
+              flex: 1, overflow: 'hidden', display: tab === 'studio' ? 'flex' : 'none',
+              flexDirection: 'column',
+              animation: tab === 'studio' ? panelAnim : 'none',
+            }}
+            onAnimationEnd={tab === 'studio' ? () => setSlideDir(null) : undefined}
+          >
+            <Suspense fallback={
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                <div style={{ width: 28, height: 28, border: '3px solid var(--ios-fill3)', borderTop: '3px solid var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              </div>
+            }>
+              <GeminiStudio data={data} />
             </Suspense>
           </div>
         )}

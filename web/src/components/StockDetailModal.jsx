@@ -1068,12 +1068,83 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
 
   const indicators = useMemo(() => {
     if (bars.length < 2) return null
-    // Use ALL available bars as warm-up so indicators converge on the visible range.
-    // This is critical for weekly/monthly where there are few resampled bars.
+
+    // For weekly/monthly: compute oscillators on the full daily series, then remap each
+    // period bar to the last daily value within that period. This eliminates the warm-up gap
+    // (MACD needs 35+ bars; daily gives thousands).
+    if (chartInterval !== '1d' && daily.length >= 2 && bars[0]?.time) {
+      const unit = chartInterval === '1wk' ? 'week' : 'month'
+
+      // period-key → index of the LAST daily bar within that period
+      const periodToIdx = {}
+      for (let i = 0; i < daily.length; i++) {
+        const b = daily[i]
+        if (!b.time) continue
+        let key
+        if (unit === 'week') {
+          const d = new Date(b.time)
+          const dow = d.getUTCDay()
+          const mon = new Date(d)
+          mon.setUTCDate(d.getUTCDate() - (dow === 0 ? 6 : dow - 1))
+          key = mon.toISOString().slice(0, 10)
+        } else {
+          key = b.time.slice(0, 7) + '-01'
+        }
+        periodToIdx[key] = i
+      }
+
+      // Lift a flat daily array onto the bars array using the period mapping
+      const remap = arr => bars.map(b => { const i = periodToIdx[b.time]; return i != null ? arr[i] : null })
+
+      // Compute oscillators on full daily data (warm-up is free)
+      const dc = daily.map(d => d.close)
+      const dBB   = bollingerCalc(dc, 20, 2)
+      const dMACD = macdCalc(dc)
+      const dRSI  = rsiCalc(dc)
+      const dKD   = kdCalc(daily)
+      const dOBV  = obvCalc(daily)
+      const dADX  = adxCalc(daily)
+      const dWR   = williamsRCalc(daily)
+      const dCCI  = cciCalc(daily)
+      const dMFI  = mfiCalc(daily)
+
+      // MA/EMA on resampled closes — use full available resampled history as warmup
+      const allRC = _allBars.map(d => d.close)
+      const maOff = _allBars.length - bars.length
+      const slMA  = arr => arr.slice(maOff)
+
+      const remOBV = remap(dOBV)
+
+      return {
+        maLines: MA_LINES_DEF.map(m => ({ ...m, values: slMA(m.fn(allRC)) })),
+        bbBands: {
+          upper: remap(dBB.map(v => v?.upper ?? null)),
+          mid:   remap(dBB.map(v => v?.mid   ?? null)),
+          lower: remap(dBB.map(v => v?.lower ?? null)),
+        },
+        macd: { macdLine: remap(dMACD.macdLine), signalLine: remap(dMACD.signalLine), hist: remap(dMACD.hist) },
+        rsi:  remap(dRSI),
+        kd:   { kArr: remap(dKD.kArr), dArr: remap(dKD.dArr) },
+        obv:  { values: remOBV, ma: smaCalc(remOBV, 20) },
+        adx:  { adxLine: remap(dADX.adxLine), plusDI: remap(dADX.plusDI), minusDI: remap(dADX.minusDI) },
+        wr:   remap(dWR),
+        cci:  remap(dCCI),
+        mfi:  remap(dMFI),
+        cdpSeries: bars.map((_, i) => {
+          const p = i === 0 ? null : bars[i - 1]
+          if (!p || p.high == null || p.low == null || p.close == null) return null
+          const c = (p.high + p.low + p.close * 2) / 4
+          const r = p.high - p.low
+          return { ah: c + r, nh: 2 * c - p.low, cdp: c, nl: 2 * c - p.high, al: c - r }
+        }),
+      }
+    }
+
+    // Daily view: use ALL available bars as warm-up so indicators converge from bar 0.
     const warmBars = _allBars
-    const off = warmBars.length - bars.length  // how many leading warm-up bars
+    const off = warmBars.length - bars.length
     const closes = warmBars.map(d => d.close)
-    const sl = arr => arr.slice(off)           // slice back to display range
+    const sl = arr => arr.slice(off)
 
     const bb = bollingerCalc(closes, 20, 2)
     const { macdLine, signalLine, hist } = macdCalc(closes)
@@ -1098,7 +1169,6 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
       cci:  sl(cciCalc(warmBars)),
       mfi:  sl(mfiCalc(warmBars)),
       cdpSeries: bars.map((_, i) => {
-        // For index 0, use the last warm-up bar as "previous" so CDP connects from bar 0
         const p = i === 0 ? (off > 0 ? warmBars[off - 1] : null) : bars[i - 1]
         if (!p || p.high == null || p.low == null || p.close == null) return null
         const c = (p.high + p.low + p.close * 2) / 4
@@ -1106,7 +1176,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         return { ah: c + r, nh: 2 * c - p.low, cdp: c, nl: 2 * c - p.high, al: c - r }
       }),
     }
-  }, [bars, _allBars])
+  }, [bars, _allBars, chartInterval, daily])
 
   const unitLabel = { '1d': '個交易日', '1wk': '週', '1mo': '個月' }
 
@@ -1653,7 +1723,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
           background: 'var(--ios-bg)',
           overflowY: 'auto',
           overflowX: 'hidden',
-          padding: '4px 14px calc(96px + env(safe-area-inset-bottom))',
+          padding: '4px 14px 0',
           borderLeft: '0.5px solid var(--ios-sep)',
           borderRadius: '16px 0 0 16px',
           display: 'flex',
@@ -2076,8 +2146,8 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
             ⚠️ 資料品質警示：此股票部分指標資料不完整，評分參考性較低
           </div>
         )}
-        {/* Bottom spacer — ensures last card is always fully visible on mobile */}
-        <div style={{ height: 48, flexShrink: 0 }} />
+        {/* Bottom spacer — ensures last card clears the tab bar + iOS home indicator */}
+        <div style={{ height: 'calc(120px + env(safe-area-inset-bottom))', flexShrink: 0 }} />
       </div>
     </div>
     </>
