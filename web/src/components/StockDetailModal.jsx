@@ -380,7 +380,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
 
 // ── Candlestick chart ────────────────────────────────────────────────────────
 
-function CandleSVG({ data, maLines, bbBands, cdpLevels, onHoverIdx, chartW: propChartW }) {
+function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: propChartW }) {
   const [hovered, setHovered] = useState(null)
   const touchRef = useRef(null)
 
@@ -391,7 +391,6 @@ function CandleSVG({ data, maLines, bbBands, cdpLevels, onHoverIdx, chartW: prop
     const W = propChartW || Math.max(CHART_W, n * BAR_W + CHART_PL + CHART_PR)
     const CH = 200, VH = 45, GAP = 6, H = CH + GAP + VH
     const PL = CHART_PL, PR = CHART_PR, PT = 8
-    // CDP not included in Y range — avoids distorting the scale on long-uptrend charts
     const maxP = Math.max(...bars.map(d => d.high ?? d.close ?? 0), ...(bbBands?.upper?.filter(Boolean) || []))
     const minP = Math.min(...bars.map(d => d.low  ?? d.close ?? 0), ...(bbBands?.lower?.filter(Boolean) || []))
     const pRange = (isNaN(maxP) || isNaN(minP) || maxP === minP) ? 1 : maxP - minP
@@ -406,7 +405,7 @@ function CandleSVG({ data, maLines, bbBands, cdpLevels, onHoverIdx, chartW: prop
     const xStep = Math.max(1, Math.floor(n / 5))
     const xLabels = bars.map((d, i) => ({ i, label: d.time ? d.time.slice(5) : '' })).filter((_, i) => i % xStep === 0 || i === n - 1)
     return { bars, W, CH, VH, GAP, H, PL, PR, PT, maxVol, n, slotW, bW, toY, toX, gridLevels, xLabels }
-  }, [data, bbBands, cdpLevels, propChartW])
+  }, [data, bbBands, propChartW])
 
   if (!chart) return (
     <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
@@ -495,27 +494,20 @@ function CandleSVG({ data, maLines, bbBands, cdpLevels, onHoverIdx, chartW: prop
         {bbSegs.lower.map((pts, i) => <polyline key={`bbl${i}`} points={pts} fill="none" stroke="rgba(10,132,255,0.45)" strokeWidth={0.8} strokeDasharray="4,3" />)}
       </>}
 
-      {/* CDP 逆勢操作系統 — drawn only at the right edge so they don't pollute historical bars */}
-      {cdpLevels && (() => {
-        const lineStart = Math.max(PL, toX(n - 1) - 40)
-        const lineEnd   = W - PR
-        const labelX    = lineEnd - 1
-        return [
-          { key: 'ah',  price: cdpLevels.ah,  color: 'rgba(255,69,58,0.85)',  dash: '5,3', label: 'AH' },
-          { key: 'nh',  price: cdpLevels.nh,  color: 'rgba(255,159,10,0.8)',  dash: '4,3', label: 'NH' },
-          { key: 'cdp', price: cdpLevels.cdp, color: 'rgba(255,214,10,0.85)', dash: '6,2', label: 'CDP' },
-          { key: 'nl',  price: cdpLevels.nl,  color: 'rgba(48,209,88,0.8)',   dash: '4,3', label: 'NL' },
-          { key: 'al',  price: cdpLevels.al,  color: 'rgba(48,209,88,0.9)',   dash: '5,3', label: 'AL' },
-        ].filter(({ price }) => price >= minP && price <= maxP * 1.02).map(({ key, price, color, dash, label }) => {
-          const y = toY(price)
-          return (
-            <g key={key}>
-              <line x1={lineStart} y1={y} x2={lineEnd} y2={y} stroke={color} strokeWidth={1} strokeDasharray={dash} />
-              <text x={labelX} y={y - 2} fontSize={7} fill={color} textAnchor="end">{label} {price}</text>
-            </g>
-          )
-        })
-      })()}
+      {/* CDP — per-bar segments (each bar uses previous bar's H/L/C) */}
+      {cdpSeries && cdpSeries.map((lv, i) => {
+        if (!lv) return null
+        const x1 = toX(i) - slotW / 2, x2 = toX(i) + slotW / 2
+        return (
+          <g key={`cdp${i}`}>
+            <line x1={x1} x2={x2} y1={toY(lv.ah)}  y2={toY(lv.ah)}  stroke="rgba(255,69,58,0.85)"  strokeWidth={1.2} />
+            <line x1={x1} x2={x2} y1={toY(lv.nh)}  y2={toY(lv.nh)}  stroke="rgba(255,159,10,0.8)"  strokeWidth={1.2} />
+            <line x1={x1} x2={x2} y1={toY(lv.cdp)} y2={toY(lv.cdp)} stroke="rgba(255,214,10,0.85)" strokeWidth={1.4} />
+            <line x1={x1} x2={x2} y1={toY(lv.nl)}  y2={toY(lv.nl)}  stroke="rgba(48,209,88,0.8)"   strokeWidth={1.2} />
+            <line x1={x1} x2={x2} y1={toY(lv.al)}  y2={toY(lv.al)}  stroke="rgba(48,209,88,0.95)"  strokeWidth={1.2} />
+          </g>
+        )
+      })}
 
       {/* Candles + volume */}
       {bars.map((d, i) => {
@@ -715,6 +707,7 @@ const STRATEGY_PRESETS = [
 const TOGGLE_DEFS = [
   { key: 'ma',   label: 'MA',   color: '#5AC8FA' },
   { key: 'bb',   label: 'BB',   color: '#0A84FF' },
+  { key: 'cdp',  label: 'CDP',  color: '#FFD60A' },
   { key: 'macd', label: 'MACD', color: '#FF9F0A' },
   { key: 'rsi',  label: 'RSI',  color: '#BF5AF2' },
   { key: 'kd',   label: 'KD',   color: '#30D158' },
@@ -844,7 +837,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [chartInterval, setChartInterval] = useState(
     () => INTERVAL_LABELS.find(t => dataMap[t.id].length >= 2)?.id || '1d'
   )
-  const [active, setActive] = useState({ ma: true, bb: false, macd: true, rsi: true, kd: false, obv: false, adx: false, wr: false, cci: false, mfi: false })
+  const [active, setActive] = useState({ ma: true, bb: false, cdp: false, macd: true, rsi: true, kd: false, obv: false, adx: false, wr: false, cci: false, mfi: false })
   const [preset, setPreset] = useState('momentum')
   const [hoveredIdx, setHoveredIdx] = useState(null)
   const [barCount, setBarCount] = useState(250)
@@ -854,7 +847,6 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const applyPreset = p => { setActive(p.state); setPreset(p.id) }
 
   const bars = (dataMap[chartInterval] || []).slice(-barCount)
-  const cdpLevels = useMemo(() => cdpCalc(daily), [daily])
 
   const totalChartW = Math.max(CHART_W, bars.length * BAR_W + CHART_PL + CHART_PR)
 
@@ -883,6 +875,14 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
       wr: williamsRCalc(bars),
       cci: cciCalc(bars),
       mfi: mfiCalc(bars),
+      cdpSeries: bars.map((_, i) => {
+        if (i === 0) return null
+        const p = bars[i - 1]
+        if (p.high == null || p.low == null || p.close == null) return null
+        const c = (p.high + p.low + p.close * 2) / 4
+        const r = p.high - p.low
+        return { ah: c + r, nh: 2 * c - p.low, cdp: c, nl: 2 * c - p.high, al: c - r }
+      }),
     }
   }, [bars])
 
@@ -971,6 +971,13 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
             <span key={m.label} style={{ fontSize: 10, color: m.color, fontWeight: 600 }}>— {m.label}</span>
           ))}
           {active.bb && <span style={{ fontSize: 10, color: 'rgba(10,132,255,0.7)', fontWeight: 600 }}>— BB(20)</span>}
+          {active.cdp && <span style={{ fontSize: 10, fontWeight: 600, display: 'flex', gap: 6 }}>
+            <span style={{ color: 'rgba(255,69,58,0.9)' }}>AH</span>
+            <span style={{ color: 'rgba(255,159,10,0.9)' }}>NH</span>
+            <span style={{ color: 'rgba(255,214,10,0.95)' }}>CDP</span>
+            <span style={{ color: 'rgba(48,209,88,0.9)' }}>NL</span>
+            <span style={{ color: 'rgba(48,209,88,1)' }}>AL</span>
+          </span>}
         </div>
       )}
 
@@ -982,7 +989,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
             data={bars}
             maLines={active.ma && indicators ? indicators.maLines : []}
             bbBands={active.bb && indicators ? indicators.bbBands : null}
-            cdpLevels={cdpLevels}
+            cdpSeries={active.cdp && indicators ? indicators.cdpSeries : null}
             onHoverIdx={setHoveredIdx}
             chartW={totalChartW}
           />
