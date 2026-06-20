@@ -1,5 +1,8 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
+import gsap from 'gsap'
+import { useGSAP } from '@gsap/react'
+gsap.registerPlugin(useGSAP)
 
 const PAGE_SIZE = 50
 
@@ -160,6 +163,19 @@ function ScoreCell({ score, entry_signal }) {
 }
 
 function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {} }) {
+  const containerRef = useRef(null)
+
+  useGSAP(() => {
+    gsap.from('.score-bar-fill', {
+      scaleX: 0,
+      transformOrigin: 'left center',
+      duration: 0.55,
+      stagger: { amount: 0.5, from: 'start' },
+      ease: 'power3.out',
+      delay: 0.1,
+    })
+  }, { scope: containerRef, dependencies: [stocks.length] })
+
   if (!stocks || stocks.length === 0) {
     return (
       <div style={{ padding: '40px 20px', textAlign: 'center' }}>
@@ -172,7 +188,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
   const maxScore = globalMaxScore || Math.max(...stocks.map(s => s.entry_score || 0), 1)
 
   return (
-    <div style={{ margin: '0 12px 16px' }}>
+    <div ref={containerRef} style={{ margin: '0 12px 16px' }}>
       <div className="glass-panel" style={{ overflow: 'hidden' }}>
         {stocks.map((s, idx) => {
           const normScore = Math.min(Math.round((s.entry_score || 0) / maxScore * 100), 99)
@@ -278,7 +294,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
               {/* Row 2: Score bar + score + sparkline + price */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <div style={{ flex: 1, height: 4, background: 'var(--ios-fill2)', borderRadius: 9999, overflow: 'hidden' }}>
-                  <div style={{
+                  <div className="score-bar-fill" style={{
                     height: '100%', width: `${normScore}%`,
                     background: `linear-gradient(90deg,${scoreColor}60,${scoreColor})`,
                     borderRadius: 9999,

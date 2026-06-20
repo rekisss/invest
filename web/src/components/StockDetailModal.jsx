@@ -1,4 +1,7 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
+import gsap from 'gsap'
+import { useGSAP } from '@gsap/react'
+gsap.registerPlugin(useGSAP)
 
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
 const pct = (v) => (v == null || isNaN(v) ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
@@ -1757,7 +1760,20 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
   const [swipeX, setSwipeX]   = useState(0)
   const [closing, setClosing] = useState(false)
   const swipeRef = useRef(null)
+  const scoreRef = useRef(null)
   useEffect(() => { setSwipeX(0); setClosing(false) }, [stock?.stock_id])
+
+  useGSAP(() => {
+    if (!scoreRef.current || !stock?.entry_score) return
+    const obj = { val: 0 }
+    gsap.to(obj, {
+      val: stock.entry_score,
+      duration: 0.75,
+      ease: 'power3.out',
+      delay: 0.15,
+      onUpdate() { if (scoreRef.current) scoreRef.current.textContent = Math.round(obj.val) },
+    })
+  }, { dependencies: [stock?.stock_id] })
 
   if (!stock) return null
   const s = stock
@@ -1945,7 +1961,10 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
 
         {/* 評分 */}
         <Section title="入場評分">
-          <Row label="入場分數" value={s.entry_score} valueStyle={{ color: scoreColor, fontSize: 16 }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '0.5px solid var(--ios-sep)' }}>
+            <span style={{ color: 'var(--ios-label2)', fontSize: 13 }}>入場分數</span>
+            <span ref={scoreRef} style={{ color: scoreColor, fontSize: 16, fontWeight: 600 }}>0</span>
+          </div>
           {s.score_pct > 0 && (
             <Row label="市場百分位" value={`前 ${Math.max(1, (100 - s.score_pct).toFixed(0))}%`} valueStyle={{ color: s.score_pct >= 95 ? '#FFD60A' : s.score_pct >= 85 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
           )}
