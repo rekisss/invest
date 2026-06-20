@@ -482,8 +482,8 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
 
   return (
     <svg
-      viewBox={`0 0 ${W} ${H + PT + 18}`}
-      style={{ width: W, display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
+      viewBox={`0 0 ${W + (cdpSeries ? 32 : 0)} ${H + PT + 18}`}
+      style={{ width: W + (cdpSeries ? 32 : 0), display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
@@ -543,6 +543,31 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
         <text key={i} x={toX(i)} y={H + PT + 12} fontSize={8.5} fill="#636366" textAnchor="middle">{label}</text>
       ))}
 
+      {/* CDP right-axis price labels (always visible when CDP is on) */}
+      {cdpSeries && bars.length > 0 && (() => {
+        const lastLv = cdpSeries[bars.length - 1]
+        if (!lastLv) return null
+        const CDP_AXIS = [
+          { v: lastLv.ah,  c: 'rgba(255,69,58,0.95)',  s: 'AH' },
+          { v: lastLv.nh,  c: 'rgba(255,159,10,0.95)', s: 'NH' },
+          { v: lastLv.cdp, c: 'rgba(255,214,10,0.95)', s: 'CDP' },
+          { v: lastLv.nl,  c: 'rgba(48,209,88,0.9)',   s: 'NL' },
+          { v: lastLv.al,  c: 'rgba(48,209,88,1)',      s: 'AL' },
+        ]
+        return CDP_AXIS.map(({ v, c, s }) => {
+          const y = toY(v)
+          if (y < PT || y > CH + PT) return null
+          const priceStr = v >= 100 ? v.toFixed(1) : v.toFixed(2)
+          return (
+            <g key={s}>
+              <line x1={W - PR} y1={y} x2={W - PR + 4} y2={y} stroke={c} strokeWidth={1.2} />
+              <rect x={W - PR + 5} y={y - 5.5} width={26} height={11} fill={c} rx={2} opacity={0.9} />
+              <text x={W - PR + 18} y={y + 3.5} fontSize={7} fill="#1C1C1E" fontWeight="bold" textAnchor="middle">{priceStr}</text>
+            </g>
+          )
+        })
+      })()}
+
       {/* Tooltip */}
       {hovered && (() => {
         const b = hovered.bar
@@ -552,6 +577,17 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
         const vol = b.volume != null
           ? (b.volume >= 1000000 ? `${(b.volume / 1000000).toFixed(1)}M` : `${(b.volume / 1000).toFixed(0)}K`)
           : '—'
+        // CDP levels for hovered bar
+        const cdpLv = cdpSeries?.[hovered.idx] ?? null
+        const baseH = slimOnly ? 42 : tipH
+        const fullH = baseH + (cdpLv ? 72 : 0)
+        const CDP_TIP = cdpLv ? [
+          { label: 'AH',  v: cdpLv.ah,  c: 'rgba(255,69,58,0.95)' },
+          { label: 'NH',  v: cdpLv.nh,  c: 'rgba(255,159,10,0.95)' },
+          { label: 'CDP', v: cdpLv.cdp, c: 'rgba(255,214,10,0.95)' },
+          { label: 'NL',  v: cdpLv.nl,  c: 'rgba(48,209,88,0.9)' },
+          { label: 'AL',  v: cdpLv.al,  c: 'rgba(48,209,88,1)' },
+        ] : []
         return (
           <g>
             <line x1={hovered.x} y1={PT} x2={hovered.x} y2={H + PT} stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.7} />
@@ -560,7 +596,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
             <text x={PL - 5} y={toY(b.close) + 4} fontSize={8} fill={closeColor} textAnchor="end" fontWeight="bold">
               {fmtP(b.close)}
             </text>
-            <rect x={tipX} y={tipY} width={tipW} height={slimOnly ? 42 : tipH} fill="#1C1C1E" rx={6} stroke="#3A3A3C" strokeWidth={0.8} />
+            <rect x={tipX} y={tipY} width={tipW} height={fullH} fill="#1C1C1E" rx={6} stroke="#3A3A3C" strokeWidth={0.8} />
             <text x={tipX + 7} y={tipY + 13} fontSize={9} fill="#8E8E93" fontWeight="bold">{b.time || ''}</text>
             <line x1={tipX + 4} y1={tipY + 17} x2={tipX + tipW - 4} y2={tipY + 17} stroke="#2C2C2E" strokeWidth={0.5} />
             {slimOnly ? (
@@ -571,6 +607,16 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, onHoverIdx, chartW: prop
               <text x={tipX + 7} y={tipY + 56} fontSize={8.5} fill="#636366">低 <tspan fill="#30D158">{fmtP(b.low)}</tspan></text>
               <text x={tipX + 7} y={tipY + 69} fontSize={8.5} fill="#636366">收 <tspan fill={closeColor} fontWeight="bold">{fmtP(b.close)}</tspan></text>
               <text x={tipX + 7} y={tipY + 82} fontSize={8.5} fill="#636366">量 <tspan fill="#8E8E93">{vol}</tspan></text>
+            </>}
+            {cdpLv && <>
+              <line x1={tipX+4} y1={tipY+baseH+2} x2={tipX+tipW-4} y2={tipY+baseH+2} stroke="#2C2C2E" strokeWidth={0.5} />
+              {CDP_TIP.map(({ label, v, c }, ri) => (
+                <g key={label}>
+                  <circle cx={tipX+10} cy={tipY+baseH+12+ri*13} r={2.5} fill={c} />
+                  <text x={tipX+17} y={tipY+baseH+16+ri*13} fontSize={8} fill="#636366">{label}</text>
+                  <text x={tipX+tipW-6} y={tipY+baseH+16+ri*13} fontSize={8.5} fill={c} fontWeight="bold" textAnchor="end">{fmtP(v)}</text>
+                </g>
+              ))}
             </>}
           </g>
         )
