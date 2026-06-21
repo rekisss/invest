@@ -1417,27 +1417,33 @@ const dataQuality = {
 }
 console.log(`Data quality: fresh=${dataQuality.is_fresh}, days_behind=${daysBehind}, valid_ratio=${dataQuality.top_valid_ratio}%, inst_ratio=${instRatio}%`)
 
-// ── Supplement 法人 data from TWSE T86 when scan ran before data was published ─
-if (institutionalOk === false && latestDataDate && isFresh) {
+// ── Supplement 法人 data from TWSE T86 ───────────────────────────────────────
+// Always run when fresh, filling only gaps (don't overwrite existing scan data).
+// This catches the common case where coverage is partial (e.g. 60%) but not zero.
+if (latestDataDate && isFresh) {
   const dateStr = latestDataDate.replace(/-/g, '')
-  console.log(`法人資料不足 — 嘗試從 TWSE T86 補抓 (${dateStr})...`)
+  console.log(`嘗試從 TWSE T86 補抓法人資料 (${dateStr}, 目前 inst_ratio=${instRatio}%)...`)
   const twseData = await fetchTWSEInstitutional(dateStr)
   if (twseData) {
     let merged = 0
     for (const stock of topStocks) {
       const inst = twseData[stock.stock_id]
       if (!inst) continue
-      if (inst.foreign_net !== 0)      { stock.foreign_net      = inst.foreign_net;      merged++ }
-      if (inst.invest_trust_net !== 0) { stock.invest_trust_net = inst.invest_trust_net }
-      if (inst.dealer_net !== 0)       { stock.dealer_net       = inst.dealer_net }
+      // Only fill gaps — don't overwrite non-zero scan data
+      const missingForeign = (stock.foreign_net || 0) === 0 && inst.foreign_net !== 0
+      const missingTrust   = (stock.invest_trust_net || 0) === 0 && inst.invest_trust_net !== 0
+      const missingDealer  = (stock.dealer_net || 0) === 0 && inst.dealer_net !== 0
+      if (missingForeign) { stock.foreign_net      = inst.foreign_net;      merged++ }
+      if (missingTrust)   { stock.invest_trust_net = inst.invest_trust_net }
+      if (missingDealer)  { stock.dealer_net       = inst.dealer_net }
     }
     const newInstCount = topStocks.filter(s =>
       (s.foreign_net || 0) !== 0 || (s.invest_trust_net || 0) !== 0
     ).length
     dataQuality.institutional_ok    = newInstCount >= Math.max(5, Math.floor(totalTop * 0.15))
     dataQuality.institutional_ratio = totalTop > 0 ? Math.round(newInstCount / totalTop * 100) : null
-    dataQuality.institutional_source = 'twse_t86'
-    console.log(`  TWSE T86 補抓完成：${merged} 支補入，inst_ratio=${dataQuality.institutional_ratio}%`)
+    if (merged > 0) dataQuality.institutional_source = 'twse_t86'
+    console.log(`  TWSE T86 補抓完成：${merged} 支填補，inst_ratio=${dataQuality.institutional_ratio}%`)
   } else {
     console.log('  TWSE T86 無資料（可能盤後尚未公布或非交易日）')
   }

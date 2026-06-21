@@ -1,8 +1,8 @@
 name: K線資料更新
 
 on:
-  schedule:
-    - cron: '30 12 * * 2-6'   # 20:30 CST 週二~週六（收盤後）
+  # schedule:
+  #   - cron: '30 12 * * 2-6'   # 已停用，改由外部 cron 手動觸發
   workflow_dispatch:
 
 permissions:

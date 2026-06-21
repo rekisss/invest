@@ -1,0 +1,36 @@
+# Taiwan Stock Market Automation Crontab
+# All times are CST (UTC+8). If your server is UTC, subtract 8 hours.
+#
+# Setup:
+#   1. export GH_TOKEN=your_github_personal_access_token
+#      (or add it to /etc/environment or ~/.bashrc)
+#   2. chmod +x /path/to/scripts/trigger-workflow.sh
+#   3. crontab -e  →  paste the lines below
+#
+# Required GitHub token scopes: repo → Actions (Read and Write)
+
+TRIGGER="/path/to/invest/scripts/trigger-workflow.sh"
+GH_TOKEN="your_github_token_here"
+
+# ── 盤前預測 ── 08:00 CST 週一~五
+0 8 * * 1-5  GH_TOKEN=$GH_TOKEN $TRIGGER premarket_predict.yml
+
+# ── 全市場掃描 Wave 1 ── 18:30 CST 週一~五
+# (Wave 2 + 全市場彙整 自動接續，不需另外設定)
+30 18 * * 1-5  GH_TOKEN=$GH_TOKEN $TRIGGER full_market_scan.yml
+
+# ── K線資料更新 ── 20:30 CST 週一~五
+30 20 * * 1-5  GH_TOKEN=$GH_TOKEN $TRIGGER kline-fetch.yml
+
+# ── Deploy to GitHub Pages ── 21:00 CST 週一~五
+0 21 * * 1-5  GH_TOKEN=$GH_TOKEN $TRIGGER deploy-pages.yml
+
+# ── 更新新聞語料庫 ── 每6小時（06:00 / 12:00 / 18:00 / 00:00）全週
+0 0,6,12,18 * * *  GH_TOKEN=$GH_TOKEN $TRIGGER news-corpus.yml
+
+# ── 如果你的 server 時區是 UTC，改用以下時間（CST - 8h）──
+# 盤前預測      → 0 0 * * 1-5
+# 全市場掃描    → 30 10 * * 1-5
+# K線更新       → 30 12 * * 1-5
+# Deploy        → 0 13 * * 1-5
+# 新聞語料庫    → 0 16,22,4,10 * * *

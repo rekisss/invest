@@ -1,8 +1,8 @@
 name: 更新新聞語料庫
 
 on:
-  schedule:
-    - cron: '0 */3 * * *'   # 每3小時一次 UTC（台灣 00:00/03:00/06:00/09:00/12:00/15:00/18:00/21:00）
+  # schedule:
+  #   - cron: '0 */3 * * *'   # 已停用，改由外部 cron 手動觸發
   workflow_dispatch:
 
 permissions:

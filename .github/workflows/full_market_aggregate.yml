@@ -9,9 +9,8 @@ on:
   workflow_run:
     workflows: ["全盤掃描2（橫截面信號 + F-Score 補抓）"]
     types: [completed]
-  # 排程保底：週二~週六 20:15 CST（UTC+8）= 12:15 UTC，確保掃描已完成
-  schedule:
-    - cron: '15 12 * * 2-6'
+  # schedule:
+  #   - cron: '15 12 * * 2-6'   # 已停用，改由外部 cron 手動觸發
   workflow_dispatch:
 
 env:
