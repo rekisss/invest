@@ -43,3 +43,6 @@ jobs:
           python -c "import strategy; print('strategy OK')"
           python -c "import notifier; print('notifier OK')"
           python -c "import main; print('main OK')"
+
+      - name: Run pytest suite
+        run: pip install pytest && python -m pytest tests/ -q --tb=short
