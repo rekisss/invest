@@ -82,7 +82,7 @@ function LiveMarketStrip() {
     setShowSetup(false)
   }
 
-  const chgColor = v => v == null ? 'rgba(255,255,255,0.40)'
+  const chgColor = v => v == null ? 'var(--ios-label3)'
     : v > 0 ? '#30D158' : v < 0 ? '#FF453A' : '#FF9F0A'
   const fmtChg = v => v == null ? '—' : `${v > 0 ? '+' : ''}${(v * 100).toFixed(2)}%`
 
@@ -93,8 +93,8 @@ function LiveMarketStrip() {
   if (showSetup) {
     return (
       <div className="glass-panel" style={{ padding: '12px 14px' }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>即時市場 · 設定</div>
-        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.40)', marginBottom: 10, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>即時市場 · 設定</div>
+        <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginBottom: 10, lineHeight: 1.6 }}>
           輸入 API Key 後可顯示即時 SPX/SOX/NASDAQ 及 USD/TWD 匯率（15分鐘快取）。
         </div>
         {[
@@ -102,9 +102,9 @@ function LiveMarketStrip() {
           { label: 'UniRate API Key (USD/TWD)', val: urtInput, set: setUrtInput, ph: '貼上 unirateapi.com key' },
         ].map(f => (
           <div key={f.label} style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.30)', marginBottom: 4 }}>{f.label}</div>
+            <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 4 }}>{f.label}</div>
             <input
-              style={{ width: '100%', boxSizing: 'border-box', background: '#0D1522', border: '1px solid #1E293B', borderRadius: 8, padding: '8px 10px', color: '#FFF', fontSize: 12, fontFamily: 'monospace', outline: 'none' }}
+              style={{ width: '100%', boxSizing: 'border-box', background: 'var(--ios-fill3)', border: '1px solid var(--ios-sep)', borderRadius: 8, padding: '8px 10px', color: 'var(--ios-label)', fontSize: 12, fontFamily: 'monospace', outline: 'none' }}
               type="password"
               placeholder={f.ph}
               value={f.val}
@@ -113,8 +113,8 @@ function LiveMarketStrip() {
           </div>
         ))}
         <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-          <button onClick={saveKeys} style={{ flex: 1, background: '#0A84FF', color: '#FFF', border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>儲存</button>
-          <button onClick={() => setShowSetup(false)} style={{ flex: 1, background: '#1E293B', color: 'rgba(255,255,255,0.6)', border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 13, cursor: 'pointer' }}>取消</button>
+          <button onClick={saveKeys} style={{ flex: 1, background: '#0A84FF', color: 'var(--ios-label)', border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>儲存</button>
+          <button onClick={() => setShowSetup(false)} style={{ flex: 1, background: 'var(--ios-fill2)', color: 'var(--ios-label2)', border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 13, cursor: 'pointer' }}>取消</button>
         </div>
       </div>
     )
@@ -124,7 +124,7 @@ function LiveMarketStrip() {
   if (!keysSet) {
     return (
       <div className="glass-panel" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.30)' }}>即時市場（未設定）</span>
+        <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>即時市場（未設定）</span>
         <button onClick={() => setShowSetup(true)} style={{ background: 'rgba(10,132,255,0.15)', color: '#0A84FF', border: '1px solid rgba(10,132,255,0.3)', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>⚙ 設定</button>
       </div>
     )
@@ -134,8 +134,8 @@ function LiveMarketStrip() {
   if (!hasData) {
     return (
       <div className="glass-panel" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>即時市場載入中…</span>
-        <button onClick={() => setShowSetup(true)} style={{ background: 'transparent', color: 'rgba(255,255,255,0.25)', border: 'none', fontSize: 14, cursor: 'pointer', padding: '2px 6px' }}>⚙</button>
+        <span style={{ fontSize: 12, color: 'var(--ios-label4)' }}>即時市場載入中…</span>
+        <button onClick={() => setShowSetup(true)} style={{ background: 'transparent', color: 'var(--ios-label4)', border: 'none', fontSize: 14, cursor: 'pointer', padding: '2px 6px' }}>⚙</button>
       </div>
     )
   }
@@ -152,10 +152,10 @@ function LiveMarketStrip() {
   return (
     <div className="glass-panel" style={{ padding: '10px 14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8 }}>即時市場</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', textTransform: 'uppercase', letterSpacing: 0.8 }}>即時市場</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.22)', fontFamily: 'monospace' }}>更新 {timeStr}</span>
-          <button onClick={() => setShowSetup(true)} style={{ background: 'transparent', color: 'rgba(255,255,255,0.22)', border: 'none', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}>⚙</button>
+          <span style={{ fontSize: 9, color: 'var(--ios-label4)', fontFamily: 'monospace' }}>更新 {timeStr}</span>
+          <button onClick={() => setShowSetup(true)} style={{ background: 'transparent', color: 'var(--ios-label4)', border: 'none', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}>⚙</button>
         </div>
       </div>
       <div style={{ display: 'flex', gap: 0 }}>
@@ -164,9 +164,9 @@ function LiveMarketStrip() {
             flex: '1 1 0',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             padding: '4px 6px',
-            borderRight: (idx < items.length - 1 || live.USDTWD) ? '1px solid #1E293B' : 'none',
+            borderRight: (idx < items.length - 1 || live.USDTWD) ? '1px solid var(--ios-sep)' : 'none',
           }}>
-            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginBottom: 2 }}>{it.label}</span>
+            <span style={{ fontSize: 9, color: 'var(--ios-label3)', marginBottom: 2 }}>{it.label}</span>
             <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'monospace', color: chgColor(it.val) }}>
               {fmtChg(it.val)}
             </span>
@@ -174,7 +174,7 @@ function LiveMarketStrip() {
         ))}
         {live.USDTWD && (
           <div style={{ flex: '1 1 0', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4px 6px' }}>
-            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginBottom: 2 }}>USD/TWD</span>
+            <span style={{ fontSize: 9, color: 'var(--ios-label3)', marginBottom: 2 }}>USD/TWD</span>
             <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'monospace', color: '#0A84FF' }}>
               {Number(live.USDTWD).toFixed(2)}
             </span>
@@ -224,20 +224,20 @@ const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
 
   return (
     <div className="glass-panel" style={{ flex: 1, padding: '12px 12px 10px', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>大盤方向</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>大盤方向</div>
       {/* viewBox height 96 → 100: prevents the confidence% text (baseline y≈94) from being clipped */}
       <svg viewBox="0 0 160 100" style={{ width: '100%', display: 'block' }}>
         {/* glow */}
         <path ref={glowRef} d={`M ${cx - r},${cy} A ${r},${r} 0 0,1 ${nx},${ny}`} stroke={color} strokeWidth="18" fill="none" strokeLinecap="round" opacity="0.12" />
         {/* track */}
-        <path d={`M ${cx - r},${cy} A ${r},${r} 0 0,1 ${cx + r},${cy}`} stroke="#1E293B" strokeWidth="9" fill="none" strokeLinecap="round" />
+        <path d={`M ${cx - r},${cy} A ${r},${r} 0 0,1 ${cx + r},${cy}`} style={{ stroke: 'var(--ios-fill2)' }} strokeWidth="9" fill="none" strokeLinecap="round" />
         {/* value arc — animated */}
         <path ref={arcRef} d={`M ${cx - r},${cy} A ${r},${r} 0 0,1 ${nx},${ny}`} stroke={color} strokeWidth="9" fill="none" strokeLinecap="round" />
         {/* needle */}
-        <line x1={cx} y1={cy} x2={nx2} y2={ny2} stroke="#F8FAFC" strokeWidth="2" strokeLinecap="round" />
+        <line x1={cx} y1={cy} x2={nx2} y2={ny2} style={{ stroke: 'var(--ios-label)' }} strokeWidth="2" strokeLinecap="round" />
         {/* center dot */}
         <circle cx={cx} cy={cy} r="5" fill={color} />
-        <circle cx={cx} cy={cy} r="2.5" fill="#F8FAFC" />
+        <circle cx={cx} cy={cy} r="2.5" style={{ fill: 'var(--ios-label)' }} />
         {/* side labels */}
         <text x={cx - r - 3} y={cy + 14} textAnchor="middle" fontSize="9" fill="#EF4444" fontWeight="700">空</text>
         <text x={cx + r + 3} y={cy + 14} textAnchor="middle" fontSize="9" fill="#22C55E" fontWeight="700">多</text>
@@ -249,7 +249,7 @@ const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
           {isBull ? '偏多 ↑' : isBear ? '偏空 ↓' : '中性 →'}
         </span>
         {winRate != null && winRate > 0 && (
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.50)', marginTop: 3 }}>
+          <div style={{ fontSize: 11, color: 'var(--ios-label2)', marginTop: 3 }}>
             勝率 ~{winRate > 1 ? Math.round(winRate) : Math.round(winRate * 100)}%
           </div>
         )}
@@ -290,17 +290,17 @@ function RiskCard({ risk, marketData, calendarRisk }) {
 
   return (
     <div className="glass-panel" style={{ flex: 1, padding: '12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8 }}>今日風險</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', textTransform: 'uppercase', letterSpacing: 0.8 }}>今日風險</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ padding: '4px 10px', borderRadius: 8, background: cfg.bg, fontSize: 13, fontWeight: 800, color: cfg.color, whiteSpace: 'nowrap' }}>{cfg.label}</div>
-        <div style={{ flex: 1, height: 4, background: '#1E293B', borderRadius: 9999 }}>
+        <div style={{ flex: 1, height: 4, background: 'var(--ios-fill2)', borderRadius: 9999 }}>
           <div ref={riskBarRef} style={{ height: '100%', width: `${Math.round(score * 100)}%`, background: cfg.color, borderRadius: 9999 }} />
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         {rows.map(([label, val, color]) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.50)' }}>{label}</span>
+            <span style={{ fontSize: 11, color: 'var(--ios-label2)' }}>{label}</span>
             <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color }}>{val}</span>
           </div>
         ))}
@@ -319,7 +319,7 @@ function MarketSignalsCard({ marketData }) {
     const sign = n > 0 ? '+' : ''
     return `${sign}${(n * 100).toFixed(digits)}%`
   }
-  const color = v => v == null ? 'rgba(255,255,255,0.30)' : v > 0 ? '#30D158' : v < 0 ? '#FF453A' : '#FF9F0A'
+  const color = v => v == null ? 'var(--ios-label3)' : v > 0 ? '#30D158' : v < 0 ? '#FF453A' : '#FF9F0A'
 
   const usRows = [
     { label: 'S&P500', val: marketData.sp500_ret, fmt: fmt(marketData.sp500_ret) },
@@ -338,25 +338,25 @@ function MarketSignalsCard({ marketData }) {
 
   return (
     <div className="glass-panel" style={{ padding: '12px 14px' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>美股夜盤 · 籌碼</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>美股夜盤 · 籌碼</div>
       <div style={{ display: 'flex', gap: 10 }}>
         {usRows.length > 0 && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginBottom: 2 }}>美股</div>
+            <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginBottom: 2 }}>美股</div>
             {usRows.map(r => (
               <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.50)' }}>{r.label}</span>
+                <span style={{ fontSize: 11, color: 'var(--ios-label2)' }}>{r.label}</span>
                 <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: color(r.val) }}>{r.fmt}</span>
               </div>
             ))}
           </div>
         )}
         {riskRows.length > 0 && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, borderLeft: '1px solid #1E293B', paddingLeft: 12 }}>
-            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginBottom: 2 }}>風險情緒</div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, borderLeft: '1px solid var(--ios-sep)', paddingLeft: 12 }}>
+            <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginBottom: 2 }}>風險情緒</div>
             {riskRows.map(r => (
               <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.50)' }}>{r.label}</span>
+                <span style={{ fontSize: 11, color: 'var(--ios-label2)' }}>{r.label}</span>
                 <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: color(r.val) }}>{r.fmt}</span>
               </div>
             ))}
@@ -377,14 +377,14 @@ function ScenarioBlock({ scenario, prob }) {
 
   return (
     <div className="glass-panel" style={{ padding: '14px 16px', borderLeft: `3px solid ${accentColor}` }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>今日劇本</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>今日劇本</div>
       {scenario.market_type && (
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.50)', marginBottom: 8 }}>
-          市場類型：<span style={{ color: '#FFFFFF', fontWeight: 600 }}>{scenario.market_type}</span>
+        <div style={{ fontSize: 12, color: 'var(--ios-label2)', marginBottom: 8 }}>
+          市場類型：<span style={{ color: 'var(--ios-label)', fontWeight: 600 }}>{scenario.market_type}</span>
         </div>
       )}
       {scenario.main_scenario && (
-        <div style={{ fontSize: 14, color: '#FFFFFF', lineHeight: 1.65, marginBottom: 10 }}>{scenario.main_scenario}</div>
+        <div style={{ fontSize: 14, color: 'var(--ios-label)', lineHeight: 1.65, marginBottom: 10 }}>{scenario.main_scenario}</div>
       )}
       {scenario.best_strategy && (
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(10,132,255,0.14)', borderRadius: 8, padding: '6px 12px', fontSize: 13, color: '#0A84FF', fontWeight: 600, marginBottom: scenario.forbidden_actions?.length ? 10 : 0 }}>
@@ -410,7 +410,7 @@ const GRADE_COLOR = { A: '#FFD60A', B: '#30D158', C: '#FF9F0A', D: '#64748B', X:
 function StockMiniRow({ stock, rank, maxScore, isLast }) {
   const normScore = Math.min(Math.round((stock.entry_score || 0) / maxScore * 100), 99)
   const isEntry = stock.entry_signal
-  const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : 'rgba(255,255,255,0.50)'
+  const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : 'var(--ios-label2)'
   const grade = stock.grade || ''
 
   const techDots = [
@@ -520,11 +520,11 @@ function RiskFactors({ factors }) {
   if (!items.length) return null
   return (
     <div className="glass-panel" style={{ padding: '14px 16px' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>風險因子</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>風險因子</div>
       {items.map((text, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: i < items.length - 1 ? 7 : 0 }}>
           <span style={{ color: '#FF453A', flexShrink: 0, fontSize: 12 }}>✓</span>
-          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.50)', lineHeight: 1.55 }}>{text}</span>
+          <span style={{ fontSize: 13, color: 'var(--ios-label2)', lineHeight: 1.55 }}>{text}</span>
         </div>
       ))}
     </div>
@@ -546,22 +546,22 @@ function WatchlistAlerts({ stocks }) {
 
   return (
     <div className="glass-panel" style={{ overflow: 'hidden' }}>
-      <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid #1E293B' }}>
+      <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid var(--ios-sep)' }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: '#FFD60A' }}>⭐ 自選股警示</span>
       </div>
       {entries.map(s => (
-        <div key={s.stock_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '0.5px solid #1E293B' }}>
+        <div key={s.stock_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '0.5px solid var(--ios-sep)' }}>
           <span style={{ fontSize: 11, background: 'rgba(48,209,88,0.15)', color: '#30D158', borderRadius: 6, padding: '2px 7px', fontWeight: 700, flexShrink: 0 }}>進場</span>
           <span style={{ fontFamily: 'monospace', color: '#0A84FF', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{s.stock_id}</span>
-          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', flex: 1 }}>{s.name}</span>
+          <span style={{ fontSize: 13, color: 'var(--ios-label)', flex: 1 }}>{s.name}</span>
           <span style={{ fontSize: 12, color: '#30D158', fontFamily: 'monospace' }}>{s.entry_score}</span>
         </div>
       ))}
       {risky.map(s => (
-        <div key={s.stock_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '0.5px solid #1E293B' }}>
+        <div key={s.stock_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '0.5px solid var(--ios-sep)' }}>
           <span style={{ fontSize: 11, background: 'rgba(255,69,58,0.15)', color: '#FF453A', borderRadius: 6, padding: '2px 7px', fontWeight: 700, flexShrink: 0 }}>跌幅</span>
           <span style={{ fontFamily: 'monospace', color: '#0A84FF', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{s.stock_id}</span>
-          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', flex: 1 }}>{s.name}</span>
+          <span style={{ fontSize: 13, color: 'var(--ios-label)', flex: 1 }}>{s.name}</span>
           <span style={{ fontSize: 12, color: '#FF453A', fontFamily: 'monospace' }}>{((s.day_return || 0) * 100).toFixed(2)}%</span>
         </div>
       ))}
@@ -575,11 +575,11 @@ function AIBriefing({ scan, entryCount, totalStocks }) {
   if (!aiText) return null
   return (
     <div className="glass-panel" style={{ overflow: 'hidden' }}>
-      <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid #1E293B', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid var(--ios-sep)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: '#BF5AF2' }}>🤖 今日 AI 分析</span>
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>進場 {entryCount} / {totalStocks} 支</span>
+        <span style={{ fontSize: 11, color: 'var(--ios-label3)' }}>進場 {entryCount} / {totalStocks} 支</span>
       </div>
-      <div style={{ padding: '10px 14px 12px', fontSize: 13, color: 'rgba(255,255,255,0.70)', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
+      <div style={{ padding: '10px 14px 12px', fontSize: 13, color: 'var(--ios-label)', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
         {aiText.slice(0, 500)}{aiText.length > 500 ? '…' : ''}
       </div>
     </div>
@@ -598,17 +598,17 @@ export default function Overview({ data, error }) {
 
   if (error && !data) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10, color: 'rgba(255,255,255,0.50)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10, color: 'var(--ios-label2)' }}>
         <div style={{ fontSize: 36 }}>⚠️</div>
         <div style={{ fontSize: 15, color: '#FF453A' }}>資料載入失敗</div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>{error}</div>
+        <div style={{ fontSize: 12, color: 'var(--ios-label3)', fontFamily: 'monospace' }}>{error}</div>
       </div>
     )
   }
 
   if (!data) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10, color: 'rgba(255,255,255,0.50)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10, color: 'var(--ios-label2)' }}>
         <div style={{ fontSize: 36 }}>📡</div>
         <div style={{ fontSize: 15 }}>載入市場資料中…</div>
       </div>
@@ -634,7 +634,7 @@ export default function Overview({ data, error }) {
           {(risk || marketData || calendarRisk)
             ? <RiskCard risk={risk} marketData={marketData} calendarRisk={calendarRisk} />
             : <div className="glass-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>暫無風險資料</span>
+                <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>暫無風險資料</span>
               </div>
           }
         </div>
