@@ -1584,6 +1584,8 @@ export default function Dashboard({ data, error }) {
   const maxCollapseHeightRef = useRef(null)
   const scrollRafRef = useRef(null)
   const COLLAPSE_RANGE = 90 // px of scroll → fully collapsed
+  const listScrollRef = useRef(null)   // ref to the scrollable list div
+  const headerTouchRef = useRef(null)  // tracks touch forwarding from header → list
 
   // Measure once on mount and whenever content-affecting filters change
   useLayoutEffect(() => {
@@ -1864,6 +1866,26 @@ export default function Dashboard({ data, error }) {
     { id: 'heatmap',   label: `🌡 族群` },
   ]
 
+  // Forward vertical swipes that START in the header down to the scrollable list.
+  // iOS only triggers native scroll when touch begins inside the overflow element.
+  const handleHeaderTouchStart = (e) => {
+    headerTouchRef.current = { y0: e.touches[0].clientY, lastY: e.touches[0].clientY, forwarding: false }
+  }
+  const handleHeaderTouchMove = (e) => {
+    const s = headerTouchRef.current
+    if (!s) return
+    const y = e.touches[0].clientY
+    if (!s.forwarding) {
+      if (Math.abs(s.y0 - y) < 5) return
+      s.forwarding = true
+    }
+    const dy = s.lastY - y  // positive → finger moved up → scrollTop increases
+    s.lastY = y
+    const list = listScrollRef.current
+    if (list) list.scrollTop += dy
+  }
+  const handleHeaderTouchEnd = () => { headerTouchRef.current = null }
+
   // Intercept horizontal right-swipe: when page > 0 go prev-page; when modal open,
   // prevent the App-level tab switch (the modal's own drag handler closes it).
   const dashSwipeRef = useRef(null)
@@ -1904,14 +1926,18 @@ export default function Dashboard({ data, error }) {
     >
 
       {/* ── Controls Header ──────────────────────────────────────── */}
-      <div style={{
-        padding: '8px 16px 12px',
-        background: 'linear-gradient(180deg, rgba(28,28,30,0.90) 0%, var(--ios-bg) 100%)',
-        borderBottom: '0.5px solid var(--ios-sep)',
-        flexShrink: 0,
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-      }}>
+      <div
+        onTouchStart={handleHeaderTouchStart}
+        onTouchMove={handleHeaderTouchMove}
+        onTouchEnd={handleHeaderTouchEnd}
+        style={{
+          padding: '8px 16px 12px',
+          background: 'linear-gradient(180deg, rgba(28,28,30,0.90) 0%, var(--ios-bg) 100%)',
+          borderBottom: '0.5px solid var(--ios-sep)',
+          flexShrink: 0,
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+        }}>
         {/* Date selector + download row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <select
@@ -2234,7 +2260,7 @@ export default function Dashboard({ data, error }) {
       </div>
 
       {/* ── Scrollable Content ───────────────────────────────────── */}
-      <div onScroll={handleListScroll} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <div ref={listScrollRef} onScroll={handleListScroll} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
 
         {/* Market summary banner */}
         {pred && (() => {
