@@ -225,10 +225,17 @@ export default function Portfolio({ data }) {
   const containerRef = useRef(null)
 
   useGSAP(() => {
-    gsap.from('.pnl-bar-fill', {
+    const el = containerRef.current
+    if (!el) return
+    const tw = gsap.from('.pnl-bar-fill', {
       scaleX: 0, transformOrigin: 'left center', duration: 0.6,
-      stagger: { amount: 0.4, from: 'start' }, ease: 'power2.out', delay: 0.2,
+      stagger: { amount: 0.4, from: 'start' }, ease: 'power2.out', paused: true,
     })
+    const io = new IntersectionObserver((es) => {
+      if (es[0].isIntersecting) { tw.play(); io.disconnect() }
+    }, { threshold: 0.12 })
+    io.observe(el)
+    return () => io.disconnect()
   }, { scope: containerRef, dependencies: [Object.keys(positions).join(',')] })
 
   // Fetch live prices from Yahoo whenever the set of held stocks changes.

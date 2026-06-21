@@ -166,14 +166,21 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
   const containerRef = useRef(null)
 
   useGSAP(() => {
-    gsap.from('.score-bar-fill', {
+    const el = containerRef.current
+    if (!el) return
+    const tw = gsap.from('.score-bar-fill', {
       scaleX: 0,
       transformOrigin: 'left center',
       duration: 0.6,
       stagger: { amount: 0.55, from: 'start' },
       ease: 'power3.out',
-      delay: 0.35,
+      paused: true,
     })
+    const io = new IntersectionObserver((es) => {
+      if (es[0].isIntersecting) { tw.play(); io.disconnect() }
+    }, { threshold: 0.12 })
+    io.observe(el)
+    return () => io.disconnect()
   }, { scope: containerRef, dependencies: [stocks.length] })
 
   if (!stocks || stocks.length === 0) {

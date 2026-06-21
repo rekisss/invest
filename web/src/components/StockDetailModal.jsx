@@ -413,22 +413,23 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
         )
       })}
 
-      {/* Chart label — hidden while crosshair is active to avoid overlap with hover values */}
-      {hoveredIdx == null && (
-        <text x={CHART_PL + 3} y={PT + 9} fontSize={8.5} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">{label}</text>
-      )}
+      {/* Persistent chart label (always shown top-left) */}
+      <text x={CHART_PL + 3} y={PT + 9} fontSize={8.5} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">{label}</text>
 
-      {/* Hover values — replace label when crosshair is active */}
-      {hoveredIdx != null && (lines || []).map((series, si) => {
-        const v = series.values[hoveredIdx]
-        if (v == null) return null
-        const disp = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1)
-        return (
-          <text key={si} x={CHART_PL + 3 + si * 62} y={PT + 9} fontSize={8} fill={series.color} fontWeight="600">
-            {series.label}:{disp}
-          </text>
-        )
-      })}
+      {/* Hover values — placed after the label so the annotation stays visible */}
+      {hoveredIdx != null && (() => {
+        const labelW = (label?.length || 0) * 5.4 + 12
+        return (lines || []).map((series, si) => {
+          const v = series.values[hoveredIdx]
+          if (v == null) return null
+          const disp = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1)
+          return (
+            <text key={si} x={CHART_PL + 3 + labelW + si * 58} y={PT + 9} fontSize={8} fill={series.color} fontWeight="600">
+              {series.label}:{disp}
+            </text>
+          )
+        })
+      })()}
 
       {/* Crosshair */}
       {hoveredIdx != null && hoveredIdx >= 0 && hoveredIdx < n && (
@@ -449,7 +450,7 @@ const CDP_LINE_DEFS = [
   { key: 'al',  color: 'rgba(48,209,88,0.95)',  sw: 1.2 },
 ]
 
-function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, onHoverIdx, chartW: propChartW }) {
+function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, onHoverIdx, hoveredIdx: extHoverIdx, label, chartW: propChartW }) {
   const [hovered, setHovered] = useState(null)
   const touchRef = useRef(null)
 
@@ -525,8 +526,16 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     setHovered(null); onHoverIdx?.(null)
   }
 
+  // Effective hover: prefer this chart's own pointer; otherwise mirror the
+  // shared crosshair index coming from a linked sub-chart (bidirectional sync).
+  const effHover = hovered || (
+    extHoverIdx != null && extHoverIdx >= 0 && extHoverIdx < bars.length
+      ? { idx: extHoverIdx, bar: bars[extHoverIdx], x: toX(extHoverIdx) }
+      : null
+  )
+
   const tipW = 118, tipH = 94
-  const tipX = hovered ? (hovered.x > W / 2 ? hovered.x - tipW - 6 : hovered.x + 8) : 0
+  const tipX = effHover ? (effHover.x > W / 2 ? effHover.x - tipW - 6 : effHover.x + 8) : 0
   const tipY = PT + 4
 
   // Build polyline segments for MA/BB/CDP
@@ -687,9 +696,14 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
         )
       })}
 
+      {/* Persistent chart label (top-left) — shows hovered date when crosshair active */}
+      <text x={PL + 3} y={PT + 8} fontSize={9} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">
+        {label || 'K線'}{effHover?.bar?.time ? `  ${effHover.bar.time.slice(5)}` : ''}
+      </text>
+
       {/* Tooltip */}
-      {hovered && (() => {
-        const b = hovered.bar
+      {effHover && (() => {
+        const b = effHover.bar
         const closeColor = candleColor(b.open, b.close)
         const slimOnly = b.open == null  // slim stock — only close is available
         const fmtP = v => v != null ? v.toFixed(v >= 100 ? 1 : 2) : '—'
@@ -697,8 +711,8 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
           ? (b.volume >= 1000000 ? `${(b.volume / 1000000).toFixed(1)}M` : `${(b.volume / 1000).toFixed(0)}K`)
           : '—'
         // CDP levels and K-line pattern for hovered bar
-        const cdpLv = cdpSeries?.[hovered.idx] ?? null
-        const patInfo = patterns?.[hovered.idx] ?? null
+        const cdpLv = cdpSeries?.[effHover.idx] ?? null
+        const patInfo = patterns?.[effHover.idx] ?? null
         const hasPD = patInfo && PATTERN_DESC[patInfo.name]
         const patOffset = (patInfo && !slimOnly) ? (hasPD ? 26 : 16) : 0
         const baseH = slimOnly ? 42 : tipH
@@ -712,7 +726,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
         ] : []
         return (
           <g>
-            <line x1={hovered.x} y1={PT} x2={hovered.x} y2={H + PT} stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.7} />
+            <line x1={effHover.x} y1={PT} x2={effHover.x} y2={H + PT} stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.7} />
             <line x1={PL} y1={toY(b.close)} x2={W - PR} y2={toY(b.close)} stroke="#0A84FF" strokeWidth={0.4} strokeDasharray="2,3" opacity={0.5} />
             <rect x={0} y={toY(b.close) - 7} width={PL - 2} height={13} fill="#1C1C1E" rx={2} />
             <text x={PL - 5} y={toY(b.close) + 4} fontSize={8} fill={closeColor} textAnchor="end" fontWeight="bold">
@@ -1370,6 +1384,8 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
             showFib={active.fib}
             showPatterns={active.pat}
             onHoverIdx={setHoveredIdx}
+            hoveredIdx={hoveredIdx}
+            label={`K線 · ${INTERVAL_LABELS.find(t => t.id === chartInterval)?.label || ''}`}
             chartW={totalChartW}
           />
         ) : (

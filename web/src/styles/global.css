@@ -118,6 +118,9 @@
 /* ── Base Reset ───────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; width: 100%; }
+/* Lock to the dynamic viewport so the layout doesn't jump as iOS Safari's
+   address bar collapses/expands (keeps the whole-page proportions stable). */
+@supports (height: 100dvh) { html, body, #root { height: 100dvh; } }
 html, body { overflow: hidden; }
 
 body {
