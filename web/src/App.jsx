@@ -35,7 +35,7 @@ const TAB_TITLES = {
 }
 
 export default function App() {
-  const [tabIdx, setTabIdx] = useState(0)
+  const [tabIdx, setTabIdx] = useState(2)  // 持倉 as default tab
   const [apiKey, setApiKey] = useState(() => sessionStorage.getItem('anthropic_key') || '')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)

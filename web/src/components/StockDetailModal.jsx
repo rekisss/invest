@@ -359,8 +359,13 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
     if (onLock) {
       subTouchRef.current.lpTimer = setTimeout(() => {
         if (!subTouchRef.current || subTouchRef.current.moved) return
-        const idx = idxFromX(subTouchRef.current.startX, subTouchRef.current.svgEl)
-        if (idx != null) { subTouchRef.current.didLock = true; onLock(idx); onHoverIdx?.(idx) }
+        subTouchRef.current.didLock = true
+        if (locked) {
+          onLock(null); onHoverIdx?.(null)
+        } else {
+          const idx = idxFromX(subTouchRef.current.startX, subTouchRef.current.svgEl)
+          if (idx != null) { onLock(idx); onHoverIdx?.(idx) }
+        }
       }, 420)
     }
   }
@@ -378,11 +383,8 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
   const handleTouchEnd = () => {
     const ref = subTouchRef.current
     subTouchRef.current = null
-    if (ref) {
-      clearTimeout(ref.lpTimer)
-      if (!ref.moved && !ref.didLock && locked && onLock) onLock(null)
-    }
-    onHoverIdx?.(null)
+    if (ref) clearTimeout(ref.lpTimer)
+    if (!locked) onHoverIdx?.(null)
   }
 
   const accentColor = lines?.[0]?.color || (histSeries ? '#FF453A' : '#8E8E93')
@@ -611,11 +613,12 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     if (onLock) {
       touchRef.current.lpTimer = setTimeout(() => {
         if (!touchRef.current || touchRef.current.moved) return
-        const idx = getIdx(touchRef.current.startX, touchRef.current.svgEl)
-        if (idx >= 0 && idx < bars.length) {
-          touchRef.current.didLock = true
-          onLock(idx)
-          setBar(idx, touchRef.current.svgEl)
+        touchRef.current.didLock = true
+        if (locked) {
+          onLock(null); setHovered(null); onHoverIdx?.(null)
+        } else {
+          const idx = getIdx(touchRef.current.startX, touchRef.current.svgEl)
+          if (idx >= 0 && idx < bars.length) { onLock(idx); setBar(idx, touchRef.current.svgEl) }
         }
       }, 420)
     }
@@ -631,18 +634,14 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
       touchRef.current.active = true
       setBar(getIdx(t.clientX, touchRef.current.svgEl))
     } else if (dy > 8 && !touchRef.current.active) {
-      setHovered(null); onHoverIdx?.(null)
+      if (!locked) { setHovered(null); onHoverIdx?.(null) }
     }
   }
   const handleTouchEnd = () => {
     const ref = touchRef.current
     touchRef.current = null
-    if (ref) {
-      clearTimeout(ref.lpTimer)
-      // Short tap (no drag, no long-press) while a lock is active → clear lock.
-      if (!ref.moved && !ref.didLock && locked && onLock) onLock(null)
-    }
-    setHovered(null); onHoverIdx?.(null)
+    if (ref) clearTimeout(ref.lpTimer)
+    if (!locked) { setHovered(null); onHoverIdx?.(null) }
   }
 
   // Effective hover: prefer this chart's own pointer; otherwise mirror the

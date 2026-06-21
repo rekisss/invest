@@ -1941,7 +1941,6 @@ export default function Dashboard({ data, error }) {
         style={{
           padding: '8px 16px 12px',
           background: 'linear-gradient(180deg, var(--ios-bg2) 0%, var(--ios-bg) 100%)',
-          borderBottom: '0.5px solid var(--ios-sep)',
           flexShrink: 0,
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
