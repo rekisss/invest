@@ -532,6 +532,26 @@ export default function Portfolio({ data }) {
               <ScanBadge scan={scan} />
             </div>
 
+            {/* Feature 3: 持倉加倉提醒 — bullish signal but price >= 5% below cost */}
+            {(() => {
+              const price = curPrice ?? scan?.close ?? null
+              if (!price || !scan?.entry_signal) return null
+              const dropPct = (p.buyPrice - price) / p.buyPrice * 100
+              if (dropPct < 5) return null
+              return (
+                <div style={{
+                  marginBottom: 8, padding: '7px 10px',
+                  background: 'rgba(10,132,255,0.08)',
+                  border: '0.5px solid rgba(10,132,255,0.35)',
+                  borderRadius: 8,
+                  fontSize: 11, color: 'var(--ios-blue)', fontWeight: 600,
+                  lineHeight: 1.55,
+                }}>
+                  ⬇ 跌破成本 {dropPct.toFixed(1)}%，訊號仍看多 — 可考慮分批加倉
+                </div>
+              )
+            })()}
+
             {/* Stats grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px 8px', fontSize: 11, color: 'var(--ios-label3)', marginBottom: 6 }}>
               <div>買入 <b style={{ color: 'var(--ios-label)' }}>{p.buyPrice}</b></div>

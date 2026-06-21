@@ -2528,6 +2528,8 @@ export default function Dashboard({ data, error }) {
         notionInfo={selectedStock ? notionMap[selectedStock.stock_id] : null}
         onClose={() => setSelectedStock(null)}
         allScans={data?.scans}
+        compareHistories={slimHistories}
+        historyDates={historyDates}
       />
     </div>
   )

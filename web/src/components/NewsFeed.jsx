@@ -35,6 +35,75 @@ const KEYWORD_RULES = [
 
 const STOCK_CODE_RE = /\b([2-9]\d{3})\b/g
 
+// ── Feature 6: News keyword highlight ────────────────────────────────────────
+const HIGHLIGHT_RULES = [
+  { pattern: /漲停/g,            color: 'var(--ios-red)' },
+  { pattern: /跌停/g,            color: 'var(--ios-green)' },
+  { pattern: /外資/g,            color: 'var(--ios-yellow)' },
+  { pattern: /AI|NVIDIA|輝達/g,  color: 'var(--ios-purple)' },
+]
+
+function highlightTitle(title, tags = [], customRules = []) {
+  if (!title) return title
+  // Build a list of (start, end, color) spans
+  const spans = []
+
+  // Stock codes
+  const scRe = /\b([2-9]\d{3})\b/g
+  let m
+  while ((m = scRe.exec(title)) !== null) {
+    const n = parseInt(m[1], 10)
+    if (n >= 2020 && n <= 2035) continue // skip years
+    spans.push({ start: m.index, end: m.index + m[0].length, color: 'var(--ios-blue)', text: m[0] })
+  }
+
+  // Built-in keyword rules
+  for (const { pattern, color } of HIGHLIGHT_RULES) {
+    const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g')
+    re.lastIndex = 0
+    while ((m = re.exec(title)) !== null) {
+      spans.push({ start: m.index, end: m.index + m[0].length, color, text: m[0] })
+    }
+  }
+
+  // Tag-matched keyword rules from KEYWORD_RULES + customRules
+  const allRules = [...KEYWORD_RULES, ...customRules]
+  for (const rule of allRules) {
+    if (!tags.includes(rule.tag)) continue
+    for (const pat of rule.patterns) {
+      const idx = title.indexOf(pat)
+      if (idx !== -1) {
+        spans.push({ start: idx, end: idx + pat.length, color: rule.color, text: pat })
+      }
+    }
+  }
+
+  if (spans.length === 0) return title
+
+  // Sort spans by start, deduplicate (first wins)
+  spans.sort((a, b) => a.start - b.start || b.end - a.end)
+  const merged = []
+  let cursor = 0
+  for (const sp of spans) {
+    if (sp.start < cursor) continue // skip overlapping
+    merged.push(sp)
+    cursor = sp.end
+  }
+
+  // Build React nodes
+  const nodes = []
+  let pos = 0
+  for (const sp of merged) {
+    if (sp.start > pos) nodes.push(title.slice(pos, sp.start))
+    nodes.push(
+      <span key={sp.start} style={{ color: sp.color, fontWeight: 700 }}>{sp.text}</span>
+    )
+    pos = sp.end
+  }
+  if (pos < title.length) nodes.push(title.slice(pos))
+  return nodes
+}
+
 const QUERIES = [
   { q: '台灣股市 大盤 指數 when:1d' },
   { q: '台積電 2330 TSMC when:1d' },
@@ -650,7 +719,7 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
                 animation: 'newBlink 1.5s ease-in-out 3',
               }}>NEW</span>
             )}
-            <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.5, color: 'var(--ios-label)', letterSpacing: '-0.1px' }}>{item.title}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.5, color: 'var(--ios-label)', letterSpacing: '-0.1px' }}>{highlightTitle(item.title, item.tags || [], customRules)}</div>
           </div>
           <div style={{ display: 'flex', gap: 5, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             <SentimentBadge sentiment={sentiment} />
