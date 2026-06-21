@@ -718,6 +718,13 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
             {isVolSpike && slotW > 7 && (
               <text x={x} y={CH + GAP + PT + 9} fontSize={6} fill="#FFD60A" textAnchor="middle" fontWeight="bold">放量</text>
             )}
+            {/* Feature 2: Volume warning — orange triangle above spike bar */}
+            {isVolSpike && (
+              <polygon
+                points={`${x},${CH + GAP + PT + VH - volH - 6} ${x - 4},${CH + GAP + PT + VH - volH - 1} ${x + 4},${CH + GAP + PT + VH - volH - 1}`}
+                fill="#FF9F0A" opacity={0.9}
+              />
+            )}
           </g>
         )
       })}
