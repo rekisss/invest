@@ -385,10 +385,13 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
     onHoverIdx?.(null)
   }
 
+  const accentColor = lines?.[0]?.color || (histSeries ? '#FF453A' : '#8E8E93')
+  const badgeW = Math.max(24, (label?.length || 0) * 5.2 + 10)
+
   return (
     <svg
       viewBox={`0 0 ${W} ${H + PT + 4}`}
-      style={{ width: W, display: 'block', background: 'rgba(20,20,22,0.85)', borderTop: '0.5px solid #2C2C2E', marginTop: 2, touchAction: 'pan-y' }}
+      style={{ width: W, display: 'block', background: 'var(--ios-bg2)', borderTop: '0.5px solid var(--ios-sep)', marginTop: 2, touchAction: 'pan-y' }}
       onMouseMove={e => handleMove(e.clientX, e.currentTarget)}
       onMouseLeave={() => onHoverIdx?.(null)}
       onTouchStart={handleTouchStart}
@@ -426,22 +429,28 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
         const y = PT + (1 - t) * (H - PT * 2)
         const lbl = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : Math.abs(v) < 10 ? v.toFixed(1) : v.toFixed(0)
         return (
-          <text key={t} x={CHART_PL - 3} y={y + 3.5} fontSize={8} fill="#636366" textAnchor="end" opacity={0.85}>{lbl}</text>
+          <text key={t} x={CHART_PL - 3} y={y + 3.5} fontSize={8} style={{ fill: 'var(--ios-label3)' }} textAnchor="end" opacity={0.85}>{lbl}</text>
         )
       })}
 
-      {/* Persistent chart label (always shown top-left) */}
-      <text x={CHART_PL + 3} y={PT + 9} fontSize={8.5} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">{label}</text>
+      {/* Indicator label badge (top-left): colored pill with accent bar */}
+      <g>
+        <rect x={CHART_PL + 1} y={PT} width={badgeW} height={14} rx={3}
+          fill={accentColor} fillOpacity={0.13} />
+        <rect x={CHART_PL + 1} y={PT} width={2.5} height={14} rx={1.5}
+          fill={accentColor} fillOpacity={0.9} />
+        <text x={CHART_PL + 7} y={PT + 9.5} fontSize={8} fill={accentColor} fontWeight="700" letterSpacing="0.3">{label}</text>
+      </g>
 
-      {/* Hover values — placed after the label so the annotation stays visible */}
+      {/* Hover values — offset right of the badge */}
       {hoveredIdx != null && (() => {
-        const labelW = (label?.length || 0) * 5.4 + 12
+        const labelW = badgeW + 6
         return (lines || []).map((series, si) => {
           const v = series.values[hoveredIdx]
           if (v == null) return null
           const disp = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1)
           return (
-            <text key={si} x={CHART_PL + 3 + labelW + si * 58} y={PT + 9} fontSize={8} fill={series.color} fontWeight="600">
+            <text key={si} x={CHART_PL + 3 + labelW + si * 58} y={PT + 9.5} fontSize={8} fill={series.color} fontWeight="600">
               {series.label}:{disp}
             </text>
           )
@@ -623,8 +632,8 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
       {/* Grid */}
       {gridLevels.map(({ y, price }, j) => (
         <g key={j}>
-          <line x1={PL} y1={y} x2={W - 6} y2={y} stroke="#2C2C2E" strokeWidth={0.5} />
-          <text x={PL - 3} y={y + 3.5} fontSize={8.5} fill="#636366" textAnchor="end">
+          <line x1={PL} y1={y} x2={W - 6} y2={y} stroke="rgba(128,128,128,0.18)" strokeWidth={0.5} />
+          <text x={PL - 3} y={y + 3.5} fontSize={8.5} style={{ fill: 'var(--ios-label3)' }} textAnchor="end">
             {price >= 100 ? price.toFixed(0) : price.toFixed(1)}
           </text>
         </g>
@@ -689,7 +698,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
 
       {/* X-axis labels */}
       {xLabels.map(({ i, label }) => (
-        <text key={i} x={toX(i)} y={H + PT + 12} fontSize={8.5} fill="#636366" textAnchor="middle">{label}</text>
+        <text key={i} x={toX(i)} y={H + PT + 12} fontSize={8.5} style={{ fill: 'var(--ios-label3)' }} textAnchor="middle">{label}</text>
       ))}
 
       {/* CDP right-axis price labels (always visible when CDP is on) */}
@@ -734,7 +743,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
       })}
 
       {/* Persistent chart label (top-left) — shows hovered date when crosshair active */}
-      <text x={PL + 3} y={PT + 8} fontSize={9} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">
+      <text x={PL + 3} y={PT + 8} fontSize={9} style={{ fill: 'var(--ios-label3)' }} fontWeight="700" letterSpacing="0.3">
         {label || 'K線'}{effHover?.bar?.time ? `  ${effHover.bar.time.slice(5)}` : ''}
       </text>
 
@@ -1613,7 +1622,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
 
       {/* K-line pattern legend — appears when pattern mode is on */}
       {active.pat && (
-        <div style={{ margin: '8px 0 4px', padding: '10px 12px', background: 'rgba(28,28,30,0.92)', borderRadius: 10, border: '0.5px solid var(--ios-sep)' }}>
+        <div style={{ margin: '8px 0 4px', padding: '10px 12px', background: 'var(--ios-bg2)', borderRadius: 10, border: '0.5px solid var(--ios-sep)' }}>
           <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 7, fontWeight: 600, letterSpacing: 0.3 }}>K 線型態說明（滑動時浮現）</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 10px' }}>
             {Object.entries(PATTERN_DESC).map(([name, { short, hint }]) => {
@@ -2296,7 +2305,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
               && !s.foreign_net && !s.invest_trust_net && !s.dealer_net
             if (noInst) return (
               <div style={{ padding: '6px 0', fontSize: 11, color: 'var(--ios-label3)', fontStyle: 'italic' }}>
-                本期無三大法人買賣超資料
+                法人資料每日盤後 16:00–18:00 由 TWSE 公布，20:15 自動彙整更新
               </div>
             )
             const fmtNet = (v) => v == null || v === 0 ? '—' : `${v > 0 ? '+' : ''}${fmt(v, 0)}`

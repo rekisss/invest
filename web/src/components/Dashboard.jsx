@@ -447,7 +447,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     return (
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 2 }}>
                         {labels.map(l => (
-                          <span key={l} style={{ fontSize: 9, color: 'var(--ios-label3)', background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>{l}</span>
+                          <span key={l} style={{ fontSize: 9, color: 'var(--ios-label3)', background: 'var(--ios-fill)', border: '0.5px solid var(--ios-sep)', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>{l}</span>
                         ))}
                       </div>
                     )
@@ -920,7 +920,7 @@ function OutcomeStatsPanel({ outcomeStats }) {
       background: 'var(--ios-bg2)',
       borderRadius: 16, padding: '14px 16px',
       boxShadow: 'var(--shadow-card)',
-      border: '0.5px solid rgba(255,255,255,0.06)',
+      border: '0.5px solid var(--ios-sep)',
     }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
         📊 系統勝率驗證（5日後實際表現）
@@ -934,7 +934,7 @@ function OutcomeStatsPanel({ outcomeStats }) {
           const wr_color = !enough ? 'var(--ios-label3)' : wr >= 55 ? 'var(--ios-green)' : wr >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)'
           return (
             <div key={g} style={{
-              flex: 1, background: 'rgba(255,255,255,0.03)',
+              flex: 1, background: 'var(--ios-fill4)',
               borderRadius: 12, padding: '10px 8px', textAlign: 'center',
               border: `0.5px solid ${gStyle.border}`,
             }}>
@@ -986,7 +986,7 @@ function StrategyAccuracyPanel({ accuracy }) {
       background: 'var(--ios-bg2)',
       borderRadius: 16, padding: '14px 16px',
       boxShadow: 'var(--shadow-card)',
-      border: '0.5px solid rgba(255,255,255,0.06)',
+      border: '0.5px solid var(--ios-sep)',
     }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
         🎯 評分預測力驗證（高分股 vs 全市場）
@@ -1002,7 +1002,7 @@ function StrategyAccuracyPanel({ accuracy }) {
           {horizons.map(h => {
             const c = cell(accuracy[r.key]?.[`d${h}`])
             return (
-              <div key={h} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 9, padding: '6px 4px', textAlign: 'center' }}>
+              <div key={h} style={{ background: 'var(--ios-fill4)', borderRadius: 9, padding: '6px 4px', textAlign: 'center' }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: c.color, fontFamily: 'var(--font-mono)', lineHeight: 1 }}>{c.wr}</div>
                 {c.ret != null && (
                   <div style={{ fontSize: 9, color: c.ret >= 0 ? 'var(--ios-green)' : 'var(--ios-red)', marginTop: 2 }}>
@@ -1053,7 +1053,7 @@ function DataQualityPanel({ dq }) {
       label: '法人資料',
       ok: dq.institutional_ok !== false,
       detail: dq.institutional_ok === false
-        ? `三大法人尚未公布（僅 ${dq.institutional_ratio ?? 0}% 有資料）· 排名暫以技術面為主`
+        ? `三大法人尚未公布（僅 ${dq.institutional_ratio ?? 0}% 有資料）· 盤後 18:00 後自動補齊，排名暫以技術面為主`
         : dq.institutional_ratio != null
           ? `外資／投信資料完整（${dq.institutional_ratio}%）`
           : '無法人資料',
@@ -1214,7 +1214,7 @@ function DateComparisonPanel({ scan, prevScan }) {
   const headerColor = overallDelta > 0 ? '#30D158' : overallDelta < 0 ? '#FF453A' : 'var(--ios-label3)'
 
   return (
-    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '12px 14px', boxShadow: 'var(--shadow-card)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '12px 14px', boxShadow: 'var(--shadow-card)', border: '0.5px solid var(--ios-sep)' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: headerColor, letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 8 }}>
         🔀 今日 vs 前日
       </div>
@@ -1272,7 +1272,7 @@ function MarketBreadthBar({ stocks }) {
   if (allZero) return null
 
   return (
-    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '12px 14px', boxShadow: 'var(--shadow-card)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '12px 14px', boxShadow: 'var(--shadow-card)', border: '0.5px solid var(--ios-sep)' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
         📡 市場廣度（前 {stocks.length} 名）
       </div>
@@ -1322,7 +1322,7 @@ function InstitutionalLeaderboard({ stocks, onSelect }) {
   )
 
   return (
-    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '14px 16px', boxShadow: 'var(--shadow-card)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '14px 16px', boxShadow: 'var(--shadow-card)', border: '0.5px solid var(--ios-sep)' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
         🏦 法人籌碼集中排行（連買強度）
       </div>
@@ -1382,7 +1382,7 @@ function SectorRotationTracker({ scans, dates }) {
   if (!data) return null
 
   return (
-    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '14px 16px', boxShadow: 'var(--shadow-card)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '14px 16px', boxShadow: 'var(--shadow-card)', border: '0.5px solid var(--ios-sep)' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
         🔄 產業輪動追蹤（近 {data.span} 個交易日入榜家數）
       </div>
@@ -1445,7 +1445,7 @@ function BacktestSimulator({ accuracy }) {
   })
 
   return (
-    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '14px 16px', boxShadow: 'var(--shadow-card)', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+    <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '14px 16px', boxShadow: 'var(--shadow-card)', border: '0.5px solid var(--ios-sep)' }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
         🧪 策略回測試算
       </div>
@@ -1464,17 +1464,17 @@ function BacktestSimulator({ accuracy }) {
       ) : (
         <>
           <div style={{ display: 'flex', gap: 8 }}>
-            <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '10px 6px', textAlign: 'center' }}>
+            <div style={{ flex: 1, background: 'var(--ios-fill4)', borderRadius: 10, padding: '10px 6px', textAlign: 'center' }}>
               <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 4 }}>平均報酬</div>
               <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-mono)', color: avg >= 0 ? 'var(--ios-green)' : 'var(--ios-red)', lineHeight: 1 }}>
                 {avg >= 0 ? '+' : ''}{avg}%
               </div>
             </div>
-            <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '10px 6px', textAlign: 'center' }}>
+            <div style={{ flex: 1, background: 'var(--ios-fill4)', borderRadius: 10, padding: '10px 6px', textAlign: 'center' }}>
               <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 4 }}>勝率</div>
               <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-mono)', color: wr >= 55 ? 'var(--ios-green)' : wr >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)', lineHeight: 1 }}>{wr}%</div>
             </div>
-            <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '10px 6px', textAlign: 'center' }}>
+            <div style={{ flex: 1, background: 'var(--ios-fill4)', borderRadius: 10, padding: '10px 6px', textAlign: 'center' }}>
               <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 4 }}>超額報酬</div>
               <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-mono)', color: edge == null ? 'var(--ios-label3)' : edge >= 0 ? 'var(--ios-green)' : 'var(--ios-red)', lineHeight: 1 }}>
                 {edge == null ? '—' : `${edge >= 0 ? '+' : ''}${edge.toFixed(2)}%`}
@@ -1932,7 +1932,7 @@ export default function Dashboard({ data, error }) {
         onTouchEnd={handleHeaderTouchEnd}
         style={{
           padding: '8px 16px 12px',
-          background: 'linear-gradient(180deg, rgba(28,28,30,0.90) 0%, var(--ios-bg) 100%)',
+          background: 'linear-gradient(180deg, var(--ios-bg2) 0%, var(--ios-bg) 100%)',
           borderBottom: '0.5px solid var(--ios-sep)',
           flexShrink: 0,
           backdropFilter: 'blur(20px)',
@@ -2058,8 +2058,8 @@ export default function Dashboard({ data, error }) {
                 return (
                   <button key={g} onClick={() => g !== 'X' && toggleGrade(g)} style={{
                     fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 9999,
-                    background: isActive ? gs.bg : 'rgba(255,255,255,0.04)',
-                    color: gs.color, border: `0.5px solid ${isActive ? gs.border : 'rgba(255,255,255,0.08)'}`,
+                    background: isActive ? gs.bg : 'var(--ios-bg3)',
+                    color: gs.color, border: `0.5px solid ${isActive ? gs.border : 'var(--ios-sep)'}`,
                     cursor: g !== 'X' ? 'pointer' : 'default', flexShrink: 0,
                     transition: 'all 0.15s',
                   }}>{g} {n}</button>
@@ -2151,7 +2151,7 @@ export default function Dashboard({ data, error }) {
                 <button key={g} onClick={() => toggleGrade(g)} style={{
                   flexShrink: 0, fontSize: 11, fontWeight: 800,
                   padding: '3px 9px', borderRadius: 9999, cursor: 'pointer',
-                  border: `1px solid ${isActive ? gs.border : 'rgba(255,255,255,0.08)'}`,
+                  border: `1px solid ${isActive ? gs.border : 'var(--ios-sep)'}`,
                   background: isActive ? gs.bg : 'var(--ios-bg3)',
                   color: isActive ? gs.color : 'var(--ios-label3)',
                   transition: 'all 0.15s',
@@ -2180,7 +2180,7 @@ export default function Dashboard({ data, error }) {
                   style={{
                     flexShrink: 0, fontSize: 11, fontWeight: 600,
                     padding: '4px 10px', borderRadius: 9999, cursor: 'pointer',
-                    border: isActive ? '1px solid var(--ios-green)' : '1px solid rgba(255,255,255,0.1)',
+                    border: isActive ? '1px solid var(--ios-green)' : '1px solid var(--ios-sep)',
                     background: isActive ? 'rgba(48,209,88,0.15)' : 'var(--ios-bg3)',
                     color: isActive ? 'var(--ios-green)' : 'var(--ios-label3)',
                     transition: 'all 0.15s',
@@ -2224,7 +2224,7 @@ export default function Dashboard({ data, error }) {
                 }} style={{
                   flexShrink: 0, fontSize: 10, fontWeight: 700,
                   padding: '3px 9px', borderRadius: 9999, cursor: 'pointer',
-                  border: `1px solid ${isActive ? preset.color : 'rgba(255,255,255,0.1)'}`,
+                  border: `1px solid ${isActive ? preset.color : 'var(--ios-sep)'}`,
                   background: isActive ? `${preset.color}22` : 'var(--ios-bg3)',
                   color: isActive ? preset.color : 'var(--ios-label3)',
                   transition: 'all 0.15s',
@@ -2244,7 +2244,7 @@ export default function Dashboard({ data, error }) {
                 <button key={sec} onClick={() => setActiveSector(isActive ? null : sec)} style={{
                   flexShrink: 0, fontSize: 10, fontWeight: 600,
                   padding: '3px 8px', borderRadius: 9999, cursor: 'pointer',
-                  border: isActive ? '1px solid rgba(10,132,255,0.6)' : '1px solid rgba(255,255,255,0.08)',
+                  border: isActive ? '1px solid rgba(10,132,255,0.6)' : '1px solid var(--ios-sep)',
                   background: isActive ? 'rgba(10,132,255,0.18)' : 'var(--ios-bg3)',
                   color: isActive ? 'var(--ios-blue)' : 'var(--ios-label3)',
                   transition: 'all 0.15s',
@@ -2372,7 +2372,7 @@ export default function Dashboard({ data, error }) {
         {data.dataQuality?.institutional_ok === false && !scan.is_partial && (
           <div style={{ margin: '8px 16px 0', padding: '8px 12px', background: 'rgba(255,159,10,0.08)', borderRadius: 10, borderLeft: '3px solid var(--ios-orange)' }}>
             <span style={{ fontSize: 12.5, color: 'var(--ios-orange)' }}>
-              ⚠ 三大法人資料尚未公布（盤後約 15:00 後更新），目前排名暫以技術面為主，外資／投信加分未計入，分數與名次會在法人資料更新後重排
+              ⚠ 三大法人資料尚未公布（盤後 16:00–18:00 TWSE 更新後自動補入），目前排名暫以技術面為主，外資／投信加分未計入，分數與名次將在每日 20:15 彙整後重排
             </span>
           </div>
         )}
@@ -2446,7 +2446,7 @@ export default function Dashboard({ data, error }) {
               <button
                 onClick={() => setShowAllFiltered(true)}
                 style={{
-                  background: 'var(--ios-bg3)', border: '0.5px solid rgba(255,255,255,0.12)',
+                  background: 'var(--ios-bg3)', border: '0.5px solid var(--ios-sep)',
                   color: 'var(--ios-label2)', borderRadius: 12, padding: '8px 20px',
                   fontSize: 13, cursor: 'pointer', width: '100%',
                 }}
