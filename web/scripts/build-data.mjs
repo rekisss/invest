@@ -985,6 +985,35 @@ async function fetchKLineData(stockIds, primaryToken, fallbackToken) {
   return klineMap
 }
 
+// ── TWSE T86 institutional supplement ────────────────────────────────────────
+// Fetches 三大法人買賣超 from TWSE public API when scan data is missing it.
+// Returns { stock_id: { foreign_net, invest_trust_net, dealer_net } } or null.
+async function fetchTWSEInstitutional(dateYYYYMMDD) {
+  const url = `https://www.twse.com.tw/rwd/zh/fund/T86?response=json&date=${dateYYYYMMDD}&selectType=ALLBUT0999`
+  try {
+    const body = await fetchUrl(url, 12000)
+    const json = JSON.parse(body)
+    if (json.stat !== 'OK' || !Array.isArray(json.data) || json.data.length < 10) return null
+    const result = {}
+    for (const row of json.data) {
+      const sid = (row[0] || '').trim().replace(/\s/g, '')
+      if (!sid || !/^\d{4,6}$/.test(sid)) continue
+      // TWSE T86 columns: [代號, 名稱, 外資買, 外資賣, 外資差, 投信買, 投信賣, 投信差, 自營差(自), 自營差(避), 自營差, 合計]
+      // Values in 股 (shares) → divide by 1000 to get 張
+      const toZhang = v => { const n = parseInt((v || '').replace(/,/g, ''), 10); return isNaN(n) ? 0 : Math.round(n / 1000) }
+      result[sid] = {
+        foreign_net:       toZhang(row[4]),
+        invest_trust_net:  toZhang(row[7]),
+        dealer_net:        toZhang(row[10]),
+      }
+    }
+    return Object.keys(result).length > 100 ? result : null
+  } catch (e) {
+    console.warn(`  TWSE T86 fetch failed: ${e.message}`)
+    return null
+  }
+}
+
 // ── Last scan execution date (from _attempted_ filenames) ────────────────────
 function getLastScanExecDate() {
   if (!existsSync(SCAN_DIR)) return null
@@ -1387,6 +1416,32 @@ const dataQuality = {
   build_time: new Date().toISOString(),
 }
 console.log(`Data quality: fresh=${dataQuality.is_fresh}, days_behind=${daysBehind}, valid_ratio=${dataQuality.top_valid_ratio}%, inst_ratio=${instRatio}%`)
+
+// ── Supplement 法人 data from TWSE T86 when scan ran before data was published ─
+if (institutionalOk === false && latestDataDate && isFresh) {
+  const dateStr = latestDataDate.replace(/-/g, '')
+  console.log(`法人資料不足 — 嘗試從 TWSE T86 補抓 (${dateStr})...`)
+  const twseData = await fetchTWSEInstitutional(dateStr)
+  if (twseData) {
+    let merged = 0
+    for (const stock of topStocks) {
+      const inst = twseData[stock.stock_id]
+      if (!inst) continue
+      if (inst.foreign_net !== 0)      { stock.foreign_net      = inst.foreign_net;      merged++ }
+      if (inst.invest_trust_net !== 0) { stock.invest_trust_net = inst.invest_trust_net }
+      if (inst.dealer_net !== 0)       { stock.dealer_net       = inst.dealer_net }
+    }
+    const newInstCount = topStocks.filter(s =>
+      (s.foreign_net || 0) !== 0 || (s.invest_trust_net || 0) !== 0
+    ).length
+    dataQuality.institutional_ok    = newInstCount >= Math.max(5, Math.floor(totalTop * 0.15))
+    dataQuality.institutional_ratio = totalTop > 0 ? Math.round(newInstCount / totalTop * 100) : null
+    dataQuality.institutional_source = 'twse_t86'
+    console.log(`  TWSE T86 補抓完成：${merged} 支補入，inst_ratio=${dataQuality.institutional_ratio}%`)
+  } else {
+    console.log('  TWSE T86 無資料（可能盤後尚未公布或非交易日）')
+  }
+}
 
 writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
