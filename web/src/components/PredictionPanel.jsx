@@ -43,71 +43,132 @@ function ProbBar({ prob }) {
   )
 }
 
-// Probability trend sparkline across recent prediction history
-// Overlays actual market direction (next entry's night_change as proxy).
+// Probability trend chart — redesigned with gradient area + animated line drawing.
 function ProbTrend({ history }) {
+  const lineRef = useRef(null)
+
   const pts = useMemo(() => {
     const sorted = [...(history || [])]
       .filter(h => h.xgb_prob_up != null && h.date)
       .sort((a, b) => a.date.localeCompare(b.date))
     const recent = sorted.slice(-20)
     return recent.map((h, i) => {
-      // actual direction proxy: next entry's night_change reflects what happened
-      // after the trading day this prediction was made for (futures overnight session)
       const nextH = sorted[sorted.length - recent.length + i + 1]
       const nc = nextH?.market_data?.night_change
       const actual = nc != null ? (nc > 20 ? 1 : nc < -20 ? -1 : 0) : null
       return { date: h.date, p: h.xgb_prob_up, actual }
     })
   }, [history])
+
+  useGSAP(() => {
+    const el = lineRef.current
+    if (!el) return
+    const len = el.getTotalLength()
+    gsap.set(el, { strokeDasharray: len, strokeDashoffset: len })
+    const tw = gsap.to(el, { strokeDashoffset: 0, duration: 1.4, ease: 'power2.out', paused: true, delay: 0.15 })
+    const io = new IntersectionObserver(es => {
+      if (es[0].isIntersecting) { tw.play(); io.disconnect() }
+    }, { threshold: 0.2 })
+    io.observe(el)
+    return () => io.disconnect()
+  }, { dependencies: [pts.length] })
+
   if (pts.length < 3) return null
 
-  const w = 300, h = 60, padY = 8
+  const W = 300, H = 88, PX = 8, PY = 12
   const ps = pts.map(d => d.p)
-  const lo = Math.min(...ps, 0.45), hi = Math.max(...ps, 0.55)
+  const lo = Math.min(...ps, 0.42), hi = Math.max(...ps, 0.58)
   const range = (hi - lo) || 1
-  const xs = i => (i / (pts.length - 1)) * w
-  const ys = p => padY + (1 - (p - lo) / range) * (h - padY * 2)
-  const line = pts.map((d, i) => `${xs(i).toFixed(1)},${ys(d.p).toFixed(1)}`).join(' ')
+  const n = pts.length - 1
+  const xs = i => PX + (i / n) * (W - PX * 2)
+  const ys = p => PY + (1 - (p - lo) / range) * (H - PY * 2 - 6)
+
+  const linePts = pts.map((d, i) => `${xs(i).toFixed(1)},${ys(d.p).toFixed(1)}`)
+  const linePath = `M ${linePts[0]} ` + linePts.slice(1).map(p => `L ${p}`).join(' ')
+  const areaPath = linePath +
+    ` L ${xs(n).toFixed(1)},${H - 4} L ${xs(0).toFixed(1)},${H - 4} Z`
+
   const last = pts[pts.length - 1]
   const lastPct = Math.round(last.p * 100)
-  const lastColor = lastPct >= 60 ? 'var(--ios-green)' : lastPct <= 40 ? 'var(--ios-red)' : 'var(--ios-yellow)'
+  const lastColor = lastPct >= 60 ? '#30D158' : lastPct <= 40 ? '#FF453A' : '#FF9F0A'
   const y50 = (lo <= 0.5 && hi >= 0.5) ? ys(0.5) : null
   const hasActual = pts.some(d => d.actual !== null)
+  const gradId = 'ptGrad'
 
   return (
-    <Card title="預測機率走勢 vs 實際走向">
-      <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', overflow: 'visible' }}>
+    <Card title="機率走勢 vs 實際方向">
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible', marginBottom: 4 }}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor={lastColor} stopOpacity="0.22" />
+            <stop offset="100%" stopColor={lastColor} stopOpacity="0.01" />
+          </linearGradient>
+          <filter id="ptGlow">
+            <feGaussianBlur stdDeviation="1.5" result="blur" />
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+
+        {/* 50% reference line */}
         {y50 != null && (
-          <line x1={0} y1={y50} x2={w} y2={y50} stroke="var(--ios-label3)" strokeWidth="0.5" strokeDasharray="3,3" opacity="0.5" />
+          <line x1={PX} y1={y50} x2={W - PX} y2={y50}
+            stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeDasharray="4,4" />
         )}
-        <polyline points={line} fill="none" stroke={lastColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+        {y50 != null && (
+          <text x={PX + 2} y={y50 - 3} fontSize="8" fill="rgba(255,255,255,0.22)" fontWeight="600">50%</text>
+        )}
+
+        {/* Gradient area fill */}
+        <path d={areaPath} fill={`url(#${gradId})`} />
+
+        {/* Main trend line — animated */}
+        <path ref={lineRef} d={linePath}
+          fill="none" stroke={lastColor} strokeWidth="2.2"
+          strokeLinecap="round" strokeLinejoin="round"
+          filter="url(#ptGlow)" opacity="0.9" />
+
+        {/* Outcome dots */}
         {pts.map((d, i) => {
           const isLast = i === pts.length - 1
-          // Dot color: actual=1→green, actual=-1→red, actual=0→gray, null→default
-          const dotFill = d.actual === 1 ? '#30D158'
+          const cx = xs(i).toFixed(1), cy = ys(d.p).toFixed(1)
+          const dotColor = d.actual === 1 ? '#30D158'
             : d.actual === -1 ? '#FF453A'
-            : isLast ? lastColor : 'var(--ios-label3)'
-          const dotR = isLast ? 3.5 : d.actual !== null ? 3 : 1.8
+            : isLast ? lastColor : 'rgba(255,255,255,0.28)'
+          const r = isLast ? 4 : d.actual !== null ? 3.5 : 2
           return (
-            <circle key={d.date} cx={xs(i).toFixed(1)} cy={ys(d.p).toFixed(1)} r={dotR}
-              fill={dotFill}
-              stroke={d.actual !== null && !isLast ? 'rgba(0,0,0,0.4)' : 'none'}
-              strokeWidth={1} />
+            <g key={d.date}>
+              {isLast && <circle cx={cx} cy={cy} r="7" fill={lastColor} opacity="0.15" />}
+              <circle cx={cx} cy={cy} r={r} fill={dotColor}
+                stroke={d.actual !== null && !isLast ? 'rgba(0,0,0,0.5)' : 'none'}
+                strokeWidth="1" />
+            </g>
           )
         })}
-        <text x={xs(pts.length - 1)} y={ys(last.p) - 7} textAnchor="end" fontSize="10" fill={lastColor} fontWeight="700">{lastPct}%</text>
+
+        {/* Latest value label */}
+        <rect x={xs(n) - 22} y={ys(last.p) - 17} width="26" height="14" rx="4"
+          fill={lastColor} opacity="0.18" />
+        <text x={xs(n) - 9} y={ys(last.p) - 7} textAnchor="middle"
+          fontSize="9.5" fill={lastColor} fontWeight="800">{lastPct}%</text>
       </svg>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ios-label3)', marginTop: 4 }}>
+
+      {/* Date range + 50% label */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ios-label4)', marginBottom: 6 }}>
         <span>{pts[0].date.slice(5)}</span>
-        {y50 != null && <span>虛線 = 50%</span>}
+        {y50 != null && <span style={{ color: 'rgba(255,255,255,0.2)' }}>— 50%</span>}
         <span>{last.date.slice(5)}</span>
       </div>
+
+      {/* Outcome legend */}
       {hasActual && (
-        <div style={{ display: 'flex', gap: 10, marginTop: 6, fontSize: 10, color: 'var(--ios-label3)', flexWrap: 'wrap' }}>
-          <span style={{ color: '#30D158', fontWeight: 700 }}>● 實際上漲</span>
-          <span style={{ color: '#FF453A', fontWeight: 700 }}>● 實際下跌</span>
-          <span style={{ color: 'var(--ios-label4)' }}>（隔日夜盤 ±20點估算）</span>
+        <div style={{ display: 'flex', gap: 12, fontSize: 11, flexWrap: 'wrap', padding: '7px 10px', background: 'var(--ios-fill3)', borderRadius: 10 }}>
+          <span style={{ color: '#30D158', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#30D158"/></svg>實際上漲
+          </span>
+          <span style={{ color: '#FF453A', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#FF453A"/></svg>實際下跌
+          </span>
+          <span style={{ color: 'var(--ios-label4)', fontSize: 10, marginLeft: 'auto' }}>夜盤 ±20點估算</span>
         </div>
       )}
     </Card>
