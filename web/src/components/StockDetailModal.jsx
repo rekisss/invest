@@ -447,19 +447,47 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
         <text x={CHART_PL + 8} y={PT + 11} fontSize={9.5} fill={accentColor} fontWeight="800" letterSpacing="0.4">{label}</text>
       </g>
 
-      {/* Hover values — offset right of the badge */}
+      {/* Floating tooltip popup on hover */}
       {hoveredIdx != null && (() => {
-        const labelW = badgeW + 8
-        return (lines || []).map((series, si) => {
-          const v = series.values[hoveredIdx]
-          if (v == null) return null
-          const disp = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1)
-          return (
-            <text key={si} x={CHART_PL + 3 + labelW + si * 60} y={PT + 11} fontSize={9} fill={series.color} fontWeight="600">
-              {series.label}:{disp}
-            </text>
-          )
-        })
+        const fmtV = v => {
+          const a = Math.abs(v)
+          if (a >= 1e6) return `${(v / 1e6).toFixed(1)}M`
+          if (a >= 1e3) return `${(v / 1e3).toFixed(0)}K`
+          if (a < 0.01) return v.toFixed(3)
+          if (a < 1)    return v.toFixed(2)
+          if (a < 10)   return v.toFixed(1)
+          return v.toFixed(0)
+        }
+        const histV = histSeries?.values[hoveredIdx]
+        const lineRows = (lines || []).filter(s => s.values[hoveredIdx] != null)
+        const rows = [
+          ...(histV != null ? [{ label: 'Hist', value: histV, color: histV >= 0 ? '#FF453A' : '#30D158' }] : []),
+          ...lineRows.map(s => ({ label: s.label, value: s.values[hoveredIdx], color: s.color })),
+        ]
+        if (rows.length === 0) return null
+        const ttW = 76
+        const rowH = 12
+        const ttH = rows.length * rowH + 10
+        const cx = toX(hoveredIdx)
+        const ttX = Math.min(
+          Math.max(cx > W / 2 ? cx - ttW - 5 : cx + 5, CHART_PL),
+          W - CHART_PR - ttW
+        )
+        const ttY = PT + 2
+        return (
+          <g>
+            <rect x={ttX} y={ttY} width={ttW} height={ttH} rx={5} strokeWidth={0.5}
+              style={{ fill: 'var(--ios-bg3)', stroke: 'var(--ios-sep)' }} />
+            {rows.map((r, i) => (
+              <g key={i}>
+                <text x={ttX + 5} y={ttY + 9 + i * rowH} fontSize={8} fontWeight="500"
+                  style={{ fill: 'var(--ios-label3)' }}>{r.label}</text>
+                <text x={ttX + ttW - 4} y={ttY + 9 + i * rowH} fontSize={8.5} fontWeight="700"
+                  fill={r.color} textAnchor="end">{fmtV(r.value)}</text>
+              </g>
+            ))}
+          </g>
+        )
       })()}
 
       {/* Crosshair */}
@@ -810,44 +838,44 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
           <g>
             <line x1={effHover.x} y1={PT} x2={effHover.x} y2={H + PT} stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.7} />
             <line x1={PL} y1={toY(b.close)} x2={W - PR} y2={toY(b.close)} stroke="#0A84FF" strokeWidth={0.4} strokeDasharray="2,3" opacity={0.5} />
-            <rect x={0} y={toY(b.close) - 7} width={PL - 2} height={13} fill="#1C1C1E" rx={2} />
+            <rect x={0} y={toY(b.close) - 7} width={PL - 2} height={13} rx={2} style={{ fill: 'var(--ios-bg3)' }} />
             <text x={PL - 5} y={toY(b.close) + 4} fontSize={8} fill={closeColor} textAnchor="end" fontWeight="bold">
               {fmtP(b.close)}
             </text>
-            <rect x={tipX} y={tipY} width={tipW} height={fullH} fill="#1C1C1E" rx={7} stroke="#3A3A3C" strokeWidth={0.8} />
-            <text x={tipX + 8} y={tipY + 13} fontSize={9} fill="#6E6E73" fontWeight="600" letterSpacing="0.3">{b.time || ''}</text>
-            <line x1={tipX + 5} y1={tipY + 17} x2={tipX + tipW - 5} y2={tipY + 17} stroke="#2C2C2E" strokeWidth={0.5} />
+            <rect x={tipX} y={tipY} width={tipW} height={fullH} rx={7} strokeWidth={0.8} style={{ fill: 'var(--ios-bg3)', stroke: 'var(--ios-sep)' }} />
+            <text x={tipX + 8} y={tipY + 13} fontSize={9} fontWeight="600" letterSpacing="0.3" style={{ fill: 'var(--ios-label3)' }}>{b.time || ''}</text>
+            <line x1={tipX + 5} y1={tipY + 17} x2={tipX + tipW - 5} y2={tipY + 17} strokeWidth={0.5} style={{ stroke: 'var(--ios-sep)' }} />
             {slimOnly ? (
               <>
-                <text x={tipX + 8} y={tipY + 32} fontSize={8} fill="#48484A">收</text>
+                <text x={tipX + 8} y={tipY + 32} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>收</text>
                 <text x={tipX + tipW - 6} y={tipY + 32} fontSize={9} fill={closeColor} fontWeight="700" textAnchor="end">{fmtP(b.close)}</text>
               </>
             ) : <>
-              <text x={tipX + 8} y={tipY + 30} fontSize={8} fill="#48484A">開</text>
-              <text x={tipX + tipW - 6} y={tipY + 30} fontSize={9} fill="#EBEBF5" fontWeight="600" textAnchor="end">{fmtP(b.open)}</text>
-              <text x={tipX + 8} y={tipY + 43} fontSize={8} fill="#48484A">高</text>
+              <text x={tipX + 8} y={tipY + 30} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>開</text>
+              <text x={tipX + tipW - 6} y={tipY + 30} fontSize={9} fontWeight="600" textAnchor="end" style={{ fill: 'var(--ios-label)' }}>{fmtP(b.open)}</text>
+              <text x={tipX + 8} y={tipY + 43} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>高</text>
               <text x={tipX + tipW - 6} y={tipY + 43} fontSize={9} fill="#FF453A" fontWeight="600" textAnchor="end">{fmtP(b.high)}</text>
-              <text x={tipX + 8} y={tipY + 56} fontSize={8} fill="#48484A">低</text>
+              <text x={tipX + 8} y={tipY + 56} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>低</text>
               <text x={tipX + tipW - 6} y={tipY + 56} fontSize={9} fill="#30D158" fontWeight="600" textAnchor="end">{fmtP(b.low)}</text>
-              <text x={tipX + 8} y={tipY + 69} fontSize={8} fill="#48484A">收</text>
+              <text x={tipX + 8} y={tipY + 69} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>收</text>
               <text x={tipX + tipW - 6} y={tipY + 69} fontSize={9} fill={closeColor} fontWeight="700" textAnchor="end">{fmtP(b.close)}</text>
-              <text x={tipX + 8} y={tipY + 82} fontSize={8} fill="#48484A">量</text>
-              <text x={tipX + tipW - 6} y={tipY + 82} fontSize={9} fill="#636366" fontWeight="600" textAnchor="end">{vol}</text>
+              <text x={tipX + 8} y={tipY + 82} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>量</text>
+              <text x={tipX + tipW - 6} y={tipY + 82} fontSize={9} fontWeight="600" textAnchor="end" style={{ fill: 'var(--ios-label2)' }}>{vol}</text>
             </>}
             {patInfo && !slimOnly && (() => {
               const pd = PATTERN_DESC[patInfo.name]
               const patColor = patInfo.type === 'bullish' ? '#30D158' : patInfo.type === 'bearish' ? '#FF453A' : '#8E8E93'
               return (
                 <>
-                  <line x1={tipX+5} y1={tipY+tipH} x2={tipX+tipW-5} y2={tipY+tipH} stroke="#2C2C2E" strokeWidth={0.5} />
-                  <text x={tipX+8} y={tipY+tipH+11} fontSize={8} fill="#48484A" fontWeight="600">型態</text>
+                  <line x1={tipX+5} y1={tipY+tipH} x2={tipX+tipW-5} y2={tipY+tipH} strokeWidth={0.5} style={{ stroke: 'var(--ios-sep)' }} />
+                  <text x={tipX+8} y={tipY+tipH+11} fontSize={8} fontWeight="600" style={{ fill: 'var(--ios-label3)' }}>型態</text>
                   <text x={tipX+tipW-6} y={tipY+tipH+11} fontSize={9} fill={patColor} fontWeight="700" textAnchor="end">{patInfo.name}</text>
                   {pd && <text x={tipX+8} y={tipY+tipH+22} fontSize={7.5} fill={patColor} opacity={0.75}>{pd.short}</text>}
                 </>
               )
             })()}
             {cdpLv && <>
-              <line x1={tipX+5} y1={tipY+baseH+patOffset+2} x2={tipX+tipW-5} y2={tipY+baseH+patOffset+2} stroke="#2C2C2E" strokeWidth={0.5} />
+              <line x1={tipX+5} y1={tipY+baseH+patOffset+2} x2={tipX+tipW-5} y2={tipY+baseH+patOffset+2} strokeWidth={0.5} style={{ stroke: 'var(--ios-sep)' }} />
               {CDP_TIP.map(({ label, v, c }, ri) => (
                 <g key={label}>
                   <rect x={tipX+7} y={tipY+baseH+patOffset+6+ri*13} width={16} height={10} fill={`${c}25`} rx={2} />

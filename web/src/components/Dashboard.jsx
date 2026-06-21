@@ -1588,7 +1588,7 @@ export default function Dashboard({ data, error }) {
   const headerInnerRef = useRef(null)
   const maxCollapseHeightRef = useRef(null)
   const scrollRafRef = useRef(null)
-  const COLLAPSE_RANGE = 90 // px of scroll → fully collapsed
+  const COLLAPSE_RANGE = 55 // px of scroll → fully collapsed
   const listScrollRef = useRef(null)   // ref to the scrollable list div
   const headerTouchRef = useRef(null)  // tracks touch forwarding from header → list
 

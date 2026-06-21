@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import Overview from './components/Overview.jsx'
 
 // Lazy-load non-landing tabs so the initial bundle only contains Overview
@@ -11,18 +11,6 @@ const Portfolio = lazy(() => import('./components/Portfolio.jsx'))
 const GeminiStudio = lazy(() => import('./components/GeminiStudio.jsx'))
 
 const BASE = import.meta.env.BASE_URL || '/'
-
-// Returns true if the touch target is inside a horizontally scrollable element
-// that actually has overflowing content — skip page-swipe in that case
-function startsOnHScrollable(target, root) {
-  let el = target
-  while (el && el !== root) {
-    const { overflowX } = window.getComputedStyle(el)
-    if ((overflowX === 'auto' || overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 4) return true
-    el = el.parentElement
-  }
-  return false
-}
 
 const TABS = [
   { key: 'overview',   label: '總覽', icon: '⚡' },
@@ -69,12 +57,7 @@ export default function App() {
   const themeIcon = theme === 'dark' ? '🌙' : '☀️'
   const themeLabel = theme === 'dark' ? '深色' : '淺色'
 
-  // Swipe state
-  const [swipeOffset, setSwipeOffset] = useState(0)
-  const [snapBack, setSnapBack] = useState(false)
   const [slideDir, setSlideDir] = useState(null) // 'left' | 'right'
-  const touchRef = useRef(null)
-  const contentRef = useRef(null)
 
   const tab = TABS[tabIdx].key
 
@@ -106,78 +89,6 @@ export default function App() {
     if (newIdx === tabIdx) return
     setSlideDir(newIdx > tabIdx ? 'right' : 'left')
     setTabIdx(newIdx)
-  }
-
-  function onTouchStart(e) {
-    // Don't intercept touches that begin on a horizontally scrollable element
-    if (startsOnHScrollable(e.target, contentRef.current)) {
-      touchRef.current = null
-      return
-    }
-    touchRef.current = {
-      x0: e.touches[0].clientX,
-      y0: e.touches[0].clientY,
-      t0: Date.now(),
-      horiz: null,
-    }
-    setSnapBack(false)
-  }
-
-  function onTouchMove(e) {
-    if (!touchRef.current) return
-    const dx = e.touches[0].clientX - touchRef.current.x0
-    const dy = e.touches[0].clientY - touchRef.current.y0
-
-    // Determine direction on first significant movement
-    if (touchRef.current.horiz === null) {
-      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
-        touchRef.current.horiz = Math.abs(dx) >= Math.abs(dy)
-      }
-      return
-    }
-
-    if (!touchRef.current.horiz) return // vertical scroll — don't intercept
-
-    e.preventDefault() // block page scroll during horizontal swipe
-
-    // Rubber band at first/last tab
-    let offset = dx
-    if ((dx > 0 && tabIdx === 0) || (dx < 0 && tabIdx === TABS.length - 1)) {
-      offset = dx * 0.15
-    }
-    setSwipeOffset(offset)
-  }
-
-  function onTouchEnd() {
-    if (!touchRef.current) return
-    if (!touchRef.current.horiz) {
-      touchRef.current = null
-      return
-    }
-
-    const W = contentRef.current?.offsetWidth || window.innerWidth
-    const elapsed = Math.max(Date.now() - touchRef.current.t0, 1)
-    const vel = swipeOffset / elapsed // px/ms
-
-    const goNext = swipeOffset < -(W * 0.28) || vel < -0.4
-    const goPrev = swipeOffset >  (W * 0.28) || vel >  0.4
-
-    if (goNext && tabIdx < TABS.length - 1) {
-      setSlideDir('right')
-      setTabIdx(tabIdx + 1)
-      setSwipeOffset(0) // instant reset; slide-in handles the visual
-      setSnapBack(false)
-    } else if (goPrev && tabIdx > 0) {
-      setSlideDir('left')
-      setTabIdx(tabIdx - 1)
-      setSwipeOffset(0)
-      setSnapBack(false)
-    } else {
-      setSnapBack(true)   // animate rubber-band back
-      setSwipeOffset(0)
-    }
-
-    touchRef.current = null
   }
 
   const formattedTime = (() => {
@@ -281,18 +192,10 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── Content (swipeable) ──────────────────────────────────── */}
+      {/* ── Content ──────────────────────────────────────────────── */}
       <div
-        ref={contentRef}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onTouchCancel={onTouchEnd}
         style={{
           flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-          transform: `translateX(${swipeOffset}px)`,
-          transition: snapBack ? 'transform 0.32s cubic-bezier(0.22,1,0.36,1)' : 'none',
-          willChange: 'transform',
         }}
       >
         {loading && (
