@@ -55,24 +55,19 @@ export default function App() {
   const [error, setError] = useState(null)
   const [refreshCount, setRefreshCount] = useState(0)
   const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem('theme_pref') || 'auto' } catch { return 'auto' }
+    try { return localStorage.getItem('theme_pref') || 'dark' } catch { return 'dark' }
   })
 
   useEffect(() => {
     try {
-      if (theme === 'auto') {
-        delete document.documentElement.dataset.theme
-        localStorage.removeItem('theme_pref')
-      } else {
-        document.documentElement.dataset.theme = theme
-        localStorage.setItem('theme_pref', theme)
-      }
+      document.documentElement.dataset.theme = theme
+      localStorage.setItem('theme_pref', theme)
     } catch { /* ignore */ }
   }, [theme])
 
-  const cycleTheme = () => setTheme(t => (t === 'auto' ? 'dark' : t === 'dark' ? 'light' : 'auto'))
-  const themeIcon = theme === 'auto' ? '🌗' : theme === 'dark' ? '🌙' : '☀️'
-  const themeLabel = theme === 'auto' ? '自動' : theme === 'dark' ? '深色' : '淺色'
+  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark')
+  const themeIcon = theme === 'dark' ? '🌙' : '☀️'
+  const themeLabel = theme === 'dark' ? '深色' : '淺色'
 
   // Swipe state
   const [swipeOffset, setSwipeOffset] = useState(0)
@@ -246,8 +241,8 @@ export default function App() {
       <div className="ios-nav">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 88 }}>
           <button
-            onClick={cycleTheme}
-            title={`主題：${themeLabel}`}
+            onClick={toggleTheme}
+            title={`切換至${theme === 'dark' ? '淺色' : '深色'}模式`}
             style={{
               background: 'var(--ios-fill2)', border: '0.5px solid var(--ios-sep)',
               borderRadius: 9999, width: 28, height: 28, fontSize: 14,
@@ -275,7 +270,7 @@ export default function App() {
           style={{
             fontFamily: 'var(--font-display)',
             fontSize: 32, fontWeight: 700, letterSpacing: '-0.6px', lineHeight: 1.32, paddingBottom: 1,
-            background: 'linear-gradient(95deg, #FFFFFF 0%, #C9D6FF 42%, #BF5AF2 100%)',
+            background: 'var(--title-gradient)',
             WebkitBackgroundClip: 'text', backgroundClip: 'text',
             WebkitTextFillColor: 'transparent', color: 'transparent',
             textShadow: '0 0 28px rgba(120,140,255,0.18)',

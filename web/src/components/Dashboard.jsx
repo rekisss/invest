@@ -162,26 +162,29 @@ function ScoreCell({ score, entry_signal }) {
   )
 }
 
-function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {} }) {
-  const containerRef = useRef(null)
-
+// ── Per-element animated score bar (each bar watches itself, fires when visible) ──
+function AnimatedScoreBar({ normScore, scoreColor }) {
+  const barRef = useRef(null)
   useGSAP(() => {
-    const el = containerRef.current
+    const el = barRef.current
     if (!el) return
-    const tw = gsap.from('.score-bar-fill', {
-      scaleX: 0,
-      transformOrigin: 'left center',
-      duration: 0.6,
-      stagger: { amount: 0.55, from: 'start' },
-      ease: 'power3.out',
-      paused: true,
-    })
-    const io = new IntersectionObserver((es) => {
+    const tw = gsap.from(el, { scaleX: 0, transformOrigin: 'left center', duration: 0.55, ease: 'power3.out', paused: true })
+    const io = new IntersectionObserver(es => {
       if (es[0].isIntersecting) { tw.play(); io.disconnect() }
-    }, { threshold: 0.12 })
+    }, { threshold: 0.3, rootMargin: '0px 0px -10px 0px' })
     io.observe(el)
     return () => io.disconnect()
-  }, { scope: containerRef, dependencies: [stocks.length] })
+  }, { dependencies: [normScore] })
+  return (
+    <div ref={barRef} style={{
+      height: '100%', width: `${normScore}%`,
+      background: `linear-gradient(90deg,${scoreColor}60,${scoreColor})`,
+      borderRadius: 9999,
+    }} />
+  )
+}
+
+function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {} }) {
 
   if (!stocks || stocks.length === 0) {
     return (
@@ -195,7 +198,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
   const maxScore = globalMaxScore || Math.max(...stocks.map(s => s.entry_score || 0), 1)
 
   return (
-    <div ref={containerRef} style={{ margin: '0 12px 16px' }}>
+    <div style={{ margin: '0 12px 16px' }}>
       <div className="glass-panel" style={{ overflow: 'hidden' }}>
         {stocks.map((s, idx) => {
           const normScore = Math.min(Math.round((s.entry_score || 0) / maxScore * 100), 99)
@@ -301,12 +304,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
               {/* Row 2: Score bar + score + sparkline + price */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <div style={{ flex: 1, height: 4, background: 'var(--ios-fill2)', borderRadius: 9999, overflow: 'hidden' }}>
-                  <div className="score-bar-fill" style={{
-                    height: '100%', width: `${normScore}%`,
-                    background: `linear-gradient(90deg,${scoreColor}60,${scoreColor})`,
-                    borderRadius: 9999,
-                    transition: 'width 0.7s cubic-bezier(0.34,1.56,0.64,1)',
-                  }} />
+                  <AnimatedScoreBar normScore={normScore} scoreColor={scoreColor} />
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 700, color: scoreColor, fontFamily: 'var(--font-mono)', minWidth: 24, textAlign: 'right' }}>{normScore}</span>
                 {scoreDelta != null && Math.abs(scoreDelta) >= 30 && (

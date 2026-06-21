@@ -5,8 +5,8 @@ import './styles/global.css'
 
 // Pre-apply saved theme before first paint to avoid flash
 try {
-  const tp = localStorage.getItem('theme_pref')
-  if (tp === 'light' || tp === 'dark') document.documentElement.dataset.theme = tp
+  const tp = localStorage.getItem('theme_pref') || 'dark'
+  document.documentElement.dataset.theme = tp
 } catch { /* ignore */ }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
