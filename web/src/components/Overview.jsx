@@ -1,4 +1,7 @@
-import { useState, useMemo, memo, useEffect } from 'react'
+import { useState, useMemo, memo, useEffect, useRef } from 'react'
+import gsap from 'gsap'
+import { useGSAP } from '@gsap/react'
+gsap.registerPlugin(useGSAP)
 
 /* ── Live Market Constants ───────────────────────────────────────── */
 const LIVE_CACHE_KEY = 'live_mkt_v1'
@@ -189,27 +192,47 @@ const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
     const isBull = pct >= 55, isBear = pct <= 45
     const color = isBull ? '#30D158' : isBear ? '#FF453A' : '#FF9F0A'
     const confidence = isBull ? pct : isBear ? (100 - pct) : 50
-    const cx = 80, cy = 72, r = 58
+    const cx = 80, cy = 68, r = 56
     const ang = ((-180 + pct * 1.8) * Math.PI) / 180
     return {
       pct, isBull, isBear, color, confidence, cx, cy, r,
       nx:  (cx + r * Math.cos(ang)).toFixed(2),
       ny:  (cy + r * Math.sin(ang)).toFixed(2),
-      nx2: (cx + (r - 16) * Math.cos(ang)).toFixed(2),
-      ny2: (cy + (r - 16) * Math.sin(ang)).toFixed(2),
+      nx2: (cx + (r - 14) * Math.cos(ang)).toFixed(2),
+      ny2: (cy + (r - 14) * Math.sin(ang)).toFixed(2),
     }
   }, [prob])
+
+  const glowRef = useRef(null)
+  const arcRef  = useRef(null)
+
+  useGSAP(() => {
+    const arc  = arcRef.current
+    const glow = glowRef.current
+    if (!arc) return
+    const len = arc.getTotalLength()
+    gsap.set([arc, glow], { strokeDasharray: len, strokeDashoffset: len })
+    const tl = gsap.timeline({ paused: true })
+    tl.to(glow, { strokeDashoffset: 0, duration: 1.1, ease: 'power3.out' }, 0)
+    tl.to(arc,  { strokeDashoffset: 0, duration: 1.0, ease: 'power3.out' }, 0.05)
+    const io = new IntersectionObserver(es => {
+      if (es[0].isIntersecting) { tl.play(); io.disconnect() }
+    }, { threshold: 0.2 })
+    io.observe(arc)
+    return () => io.disconnect()
+  }, { dependencies: [pct] })
 
   return (
     <div className="glass-panel" style={{ flex: 1, padding: '12px 12px 10px', display: 'flex', flexDirection: 'column' }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>大盤方向</div>
-      <svg viewBox="0 0 160 96" style={{ width: '100%', display: 'block' }}>
+      {/* viewBox height 96 → 100: prevents the confidence% text (baseline y≈94) from being clipped */}
+      <svg viewBox="0 0 160 100" style={{ width: '100%', display: 'block' }}>
         {/* glow */}
-        <path d={`M ${cx - r},${cy} A ${r},${r} 0 0,1 ${nx},${ny}`} stroke={color} strokeWidth="18" fill="none" strokeLinecap="round" opacity="0.12" />
+        <path ref={glowRef} d={`M ${cx - r},${cy} A ${r},${r} 0 0,1 ${nx},${ny}`} stroke={color} strokeWidth="18" fill="none" strokeLinecap="round" opacity="0.12" />
         {/* track */}
         <path d={`M ${cx - r},${cy} A ${r},${r} 0 0,1 ${cx + r},${cy}`} stroke="#1E293B" strokeWidth="9" fill="none" strokeLinecap="round" />
-        {/* value arc */}
-        <path d={`M ${cx - r},${cy} A ${r},${r} 0 0,1 ${nx},${ny}`} stroke={color} strokeWidth="9" fill="none" strokeLinecap="round" />
+        {/* value arc — animated */}
+        <path ref={arcRef} d={`M ${cx - r},${cy} A ${r},${r} 0 0,1 ${nx},${ny}`} stroke={color} strokeWidth="9" fill="none" strokeLinecap="round" />
         {/* needle */}
         <line x1={cx} y1={cy} x2={nx2} y2={ny2} stroke="#F8FAFC" strokeWidth="2" strokeLinecap="round" />
         {/* center dot */}
@@ -218,10 +241,10 @@ const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
         {/* side labels */}
         <text x={cx - r - 3} y={cy + 14} textAnchor="middle" fontSize="9" fill="#EF4444" fontWeight="700">空</text>
         <text x={cx + r + 3} y={cy + 14} textAnchor="middle" fontSize="9" fill="#22C55E" fontWeight="700">多</text>
-        {/* big % */}
+        {/* big % — baseline at y=94, safely within the 100px viewBox */}
         <text x={cx} y={cy + 26} textAnchor="middle" fontSize="20" fontWeight="800" fill={color} fontFamily="monospace">{confidence}%</text>
       </svg>
-      <div style={{ textAlign: 'center', marginTop: -2 }}>
+      <div style={{ textAlign: 'center', marginTop: 0 }}>
         <span style={{ fontSize: 16, fontWeight: 800, color, letterSpacing: '-0.3px' }}>
           {isBull ? '偏多 ↑' : isBear ? '偏空 ↓' : '中性 →'}
         </span>
@@ -253,13 +276,25 @@ function RiskCard({ risk, marketData, calendarRisk }) {
     marketData?.night_change != null && ['夜盤', `${marketData.night_change > 0 ? '+' : ''}${Math.round(marketData.night_change)}`, marketData.night_change > 0 ? '#30D158' : '#FF453A'],
   ].filter(Boolean)
 
+  const riskBarRef = useRef(null)
+  useGSAP(() => {
+    const el = riskBarRef.current
+    if (!el) return
+    const tw = gsap.from(el, { scaleX: 0, transformOrigin: 'left center', duration: 0.8, ease: 'power3.out', paused: true })
+    const io = new IntersectionObserver(es => {
+      if (es[0].isIntersecting) { tw.play(); io.disconnect() }
+    }, { threshold: 0.2 })
+    io.observe(el)
+    return () => io.disconnect()
+  }, { dependencies: [score] })
+
   return (
     <div className="glass-panel" style={{ flex: 1, padding: '12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8 }}>今日風險</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ padding: '4px 10px', borderRadius: 8, background: cfg.bg, fontSize: 13, fontWeight: 800, color: cfg.color, whiteSpace: 'nowrap' }}>{cfg.label}</div>
         <div style={{ flex: 1, height: 4, background: '#1E293B', borderRadius: 9999 }}>
-          <div style={{ height: '100%', width: `${Math.round(score * 100)}%`, background: cfg.color, borderRadius: 9999 }} />
+          <div ref={riskBarRef} style={{ height: '100%', width: `${Math.round(score * 100)}%`, background: cfg.color, borderRadius: 9999 }} />
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -394,6 +429,18 @@ function StockMiniRow({ stock, rank, maxScore, isLast }) {
     (stock.invest_trust_streak || 0) >= 2,
   ].filter(Boolean).length
 
+  const scoreBarRef = useRef(null)
+  useGSAP(() => {
+    const el = scoreBarRef.current
+    if (!el) return
+    const tw = gsap.from(el, { scaleX: 0, transformOrigin: 'left center', duration: 0.65, ease: 'power2.out', paused: true })
+    const io = new IntersectionObserver(es => {
+      if (es[0].isIntersecting) { tw.play(); io.disconnect() }
+    }, { threshold: 0.2 })
+    io.observe(el)
+    return () => io.disconnect()
+  }, { dependencies: [normScore] })
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderBottom: isLast ? 'none' : '1px solid #1E293B', background: isEntry ? 'rgba(34,197,94,0.04)' : 'transparent' }}>
       <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.22)', fontFamily: 'monospace', minWidth: 18, textAlign: 'right' }}>{rank}</div>
@@ -404,7 +451,7 @@ function StockMiniRow({ stock, rank, maxScore, isLast }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
           <div style={{ flex: 1, height: 3, background: '#1E293B', borderRadius: 9999 }}>
-            <div style={{ height: '100%', width: `${normScore}%`, background: `linear-gradient(90deg,${scoreColor}70,${scoreColor})`, borderRadius: 9999 }} />
+            <div ref={scoreBarRef} style={{ height: '100%', width: `${normScore}%`, background: `linear-gradient(90deg,${scoreColor}70,${scoreColor})`, borderRadius: 9999 }} />
           </div>
           <span style={{ fontSize: 11, color: scoreColor, fontWeight: 700, minWidth: 22, textAlign: 'right', fontFamily: 'monospace' }}>{normScore}</span>
         </div>
