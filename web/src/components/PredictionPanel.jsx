@@ -14,12 +14,20 @@ function ProbBar({ prob }) {
   const numRef = useRef(null)
   const barRef = useRef(null)
   useGSAP(() => {
+    const barEl = barRef.current
+    if (!barEl) return
     const obj = { val: 0 }
-    gsap.to(obj, {
-      val: pct, duration: 0.9, ease: 'power3.out', delay: 0.3,
+    const tl = gsap.timeline({ paused: true })
+    tl.to(obj, {
+      val: pct, duration: 0.9, ease: 'power3.out',
       onUpdate() { if (numRef.current) numRef.current.textContent = Math.round(obj.val) + '%' },
-    })
-    gsap.from(barRef.current, { scaleX: 0, transformOrigin: 'left center', duration: 0.9, ease: 'power3.out', delay: 0.35 })
+    }, 0)
+    tl.from(barEl, { scaleX: 0, transformOrigin: 'left center', duration: 0.9, ease: 'power3.out' }, 0)
+    const io = new IntersectionObserver((es) => {
+      if (es[0].isIntersecting) { tl.play(); io.disconnect() }
+    }, { threshold: 0.2 })
+    io.observe(barEl)
+    return () => io.disconnect()
   }, { dependencies: [pct] })
   return (
     <div>
@@ -166,11 +174,17 @@ function CalibrationPanel({ history }) {
   }, [history])
 
   useGSAP(() => {
-    if (!containerRef.current) return
-    gsap.from('.calib-bar-fill', {
+    const el = containerRef.current
+    if (!el) return
+    const tw = gsap.from('.calib-bar-fill', {
       scaleX: 0, transformOrigin: 'left center', duration: 0.6,
-      stagger: 0.09, ease: 'power2.out', delay: 0.1,
+      stagger: 0.09, ease: 'power2.out', paused: true,
     })
+    const io = new IntersectionObserver((es) => {
+      if (es[0].isIntersecting) { tw.play(); io.disconnect() }
+    }, { threshold: 0.2 })
+    io.observe(el)
+    return () => io.disconnect()
   }, { scope: containerRef, dependencies: [bands.length] })
 
   if (bands.length < 2) return null
@@ -438,8 +452,17 @@ export default function PredictionPanel({ prediction, history = [] }) {
   const riskBarRef = useRef(null)
   const bullBearRef = useRef(null)
   useGSAP(() => {
-    if (riskBarRef.current) gsap.from(riskBarRef.current, { scaleX: 0, transformOrigin: 'left center', duration: 0.7, ease: 'power3.out', delay: 0.2 })
-    if (bullBearRef.current) gsap.from(bullBearRef.current, { scaleX: 0, transformOrigin: 'left center', duration: 0.7, ease: 'power3.out', delay: 0.2 })
+    const arm = (el) => {
+      if (!el) return null
+      const tw = gsap.from(el, { scaleX: 0, transformOrigin: 'left center', duration: 0.7, ease: 'power3.out', paused: true })
+      const io = new IntersectionObserver((es) => {
+        if (es[0].isIntersecting) { tw.play(); io.disconnect() }
+      }, { threshold: 0.25 })
+      io.observe(el)
+      return io
+    }
+    const ios = [arm(riskBarRef.current), arm(bullBearRef.current)].filter(Boolean)
+    return () => ios.forEach(io => io.disconnect())
   }, { dependencies: [date] })
   const [histPage, setHistPage] = useState(0)
   const histTotalPages = Math.ceil(history.length / HIST_PAGE_SIZE)

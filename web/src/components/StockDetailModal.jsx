@@ -322,7 +322,7 @@ const CHART_PL = 42
 const CHART_PR = 38   // wide enough for right-axis price badge (26px) + margin
 const BAR_W = 5  // fixed pixels per candle for scrollable chart
 
-function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHoverIdx, yFixed, chartW: propChartW }) {
+function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHoverIdx, onLock, locked, yFixed, chartW: propChartW }) {
   const subTouchRef = useRef(null)
   const H = 72, PT = 6
   const n = bars.length
@@ -344,29 +344,46 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
 
   const bW = Math.max(slotW * 0.6, 1)
 
-  const handleMove = (clientX, svgEl) => {
-    if (!onHoverIdx) return
+  const idxFromX = (clientX, svgEl) => {
     const rect = svgEl.getBoundingClientRect()
     const svgX = (clientX - rect.left) / rect.width * W
     const idx = Math.floor((svgX - CHART_PL) / slotW)
-    onHoverIdx(idx >= 0 && idx < n ? idx : null)
+    return idx >= 0 && idx < n ? idx : null
   }
+  const handleMove = (clientX, svgEl) => { if (onHoverIdx) onHoverIdx(idxFromX(clientX, svgEl)) }
 
   const handleTouchStart = (e) => {
+    if (e.touches.length !== 1) { if (subTouchRef.current) clearTimeout(subTouchRef.current.lpTimer); subTouchRef.current = null; return }
     const t = e.touches[0]
-    subTouchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget }
+    subTouchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget, moved: false, didLock: false }
+    if (onLock) {
+      subTouchRef.current.lpTimer = setTimeout(() => {
+        if (!subTouchRef.current || subTouchRef.current.moved) return
+        const idx = idxFromX(subTouchRef.current.startX, subTouchRef.current.svgEl)
+        if (idx != null) { subTouchRef.current.didLock = true; onLock(idx); onHoverIdx?.(idx) }
+      }, 420)
+    }
   }
   const handleTouchMove = (e) => {
     if (!subTouchRef.current) return
     const t = e.touches[0]
     const dx = Math.abs(t.clientX - subTouchRef.current.startX)
     const dy = Math.abs(t.clientY - subTouchRef.current.startY)
+    if (dx > 6 || dy > 6) { subTouchRef.current.moved = true; clearTimeout(subTouchRef.current.lpTimer) }
     if (dx > dy && dx > 5) {
       e.stopPropagation()
       handleMove(t.clientX, subTouchRef.current.svgEl)
     }
   }
-  const handleTouchEnd = () => { subTouchRef.current = null; onHoverIdx?.(null) }
+  const handleTouchEnd = () => {
+    const ref = subTouchRef.current
+    subTouchRef.current = null
+    if (ref) {
+      clearTimeout(ref.lpTimer)
+      if (!ref.moved && !ref.didLock && locked && onLock) onLock(null)
+    }
+    onHoverIdx?.(null)
+  }
 
   return (
     <svg
@@ -413,22 +430,23 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
         )
       })}
 
-      {/* Chart label — hidden while crosshair is active to avoid overlap with hover values */}
-      {hoveredIdx == null && (
-        <text x={CHART_PL + 3} y={PT + 9} fontSize={8.5} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">{label}</text>
-      )}
+      {/* Persistent chart label (always shown top-left) */}
+      <text x={CHART_PL + 3} y={PT + 9} fontSize={8.5} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">{label}</text>
 
-      {/* Hover values — replace label when crosshair is active */}
-      {hoveredIdx != null && (lines || []).map((series, si) => {
-        const v = series.values[hoveredIdx]
-        if (v == null) return null
-        const disp = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1)
-        return (
-          <text key={si} x={CHART_PL + 3 + si * 62} y={PT + 9} fontSize={8} fill={series.color} fontWeight="600">
-            {series.label}:{disp}
-          </text>
-        )
-      })}
+      {/* Hover values — placed after the label so the annotation stays visible */}
+      {hoveredIdx != null && (() => {
+        const labelW = (label?.length || 0) * 5.4 + 12
+        return (lines || []).map((series, si) => {
+          const v = series.values[hoveredIdx]
+          if (v == null) return null
+          const disp = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1)
+          return (
+            <text key={si} x={CHART_PL + 3 + labelW + si * 58} y={PT + 9} fontSize={8} fill={series.color} fontWeight="600">
+              {series.label}:{disp}
+            </text>
+          )
+        })
+      })()}
 
       {/* Crosshair */}
       {hoveredIdx != null && hoveredIdx >= 0 && hoveredIdx < n && (
@@ -449,7 +467,7 @@ const CDP_LINE_DEFS = [
   { key: 'al',  color: 'rgba(48,209,88,0.95)',  sw: 1.2 },
 ]
 
-function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, onHoverIdx, chartW: propChartW }) {
+function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, onHoverIdx, hoveredIdx: extHoverIdx, onLock, locked, label, chartW: propChartW }) {
   const [hovered, setHovered] = useState(null)
   const touchRef = useRef(null)
 
@@ -504,14 +522,28 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
   const handleMouseLeave = () => { setHovered(null); onHoverIdx?.(null) }
 
   const handleTouchStart = (e) => {
+    if (e.touches.length !== 1) { if (touchRef.current) clearTimeout(touchRef.current.lpTimer); touchRef.current = null; return }
     const t = e.touches[0]
-    touchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget, active: false }
+    const svgEl = e.currentTarget
+    touchRef.current = { startX: t.clientX, startY: t.clientY, svgEl, active: false, moved: false, didLock: false }
+    if (onLock) {
+      touchRef.current.lpTimer = setTimeout(() => {
+        if (!touchRef.current || touchRef.current.moved) return
+        const idx = getIdx(touchRef.current.startX, touchRef.current.svgEl)
+        if (idx >= 0 && idx < bars.length) {
+          touchRef.current.didLock = true
+          onLock(idx)
+          setBar(idx, touchRef.current.svgEl)
+        }
+      }, 420)
+    }
   }
   const handleTouchMove = (e) => {
     if (!touchRef.current) return
     const t = e.touches[0]
     const dx = Math.abs(t.clientX - touchRef.current.startX)
     const dy = Math.abs(t.clientY - touchRef.current.startY)
+    if (dx > 6 || dy > 6) { touchRef.current.moved = true; clearTimeout(touchRef.current.lpTimer) }
     if (dx > dy && dx > 5) {
       e.stopPropagation()
       touchRef.current.active = true
@@ -521,12 +553,26 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     }
   }
   const handleTouchEnd = () => {
+    const ref = touchRef.current
     touchRef.current = null
+    if (ref) {
+      clearTimeout(ref.lpTimer)
+      // Short tap (no drag, no long-press) while a lock is active → clear lock.
+      if (!ref.moved && !ref.didLock && locked && onLock) onLock(null)
+    }
     setHovered(null); onHoverIdx?.(null)
   }
 
+  // Effective hover: prefer this chart's own pointer; otherwise mirror the
+  // shared crosshair index coming from a linked sub-chart (bidirectional sync).
+  const effHover = hovered || (
+    extHoverIdx != null && extHoverIdx >= 0 && extHoverIdx < bars.length
+      ? { idx: extHoverIdx, bar: bars[extHoverIdx], x: toX(extHoverIdx) }
+      : null
+  )
+
   const tipW = 118, tipH = 94
-  const tipX = hovered ? (hovered.x > W / 2 ? hovered.x - tipW - 6 : hovered.x + 8) : 0
+  const tipX = effHover ? (effHover.x > W / 2 ? effHover.x - tipW - 6 : effHover.x + 8) : 0
   const tipY = PT + 4
 
   // Build polyline segments for MA/BB/CDP
@@ -687,9 +733,14 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
         )
       })}
 
+      {/* Persistent chart label (top-left) — shows hovered date when crosshair active */}
+      <text x={PL + 3} y={PT + 8} fontSize={9} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">
+        {label || 'K線'}{effHover?.bar?.time ? `  ${effHover.bar.time.slice(5)}` : ''}
+      </text>
+
       {/* Tooltip */}
-      {hovered && (() => {
-        const b = hovered.bar
+      {effHover && (() => {
+        const b = effHover.bar
         const closeColor = candleColor(b.open, b.close)
         const slimOnly = b.open == null  // slim stock — only close is available
         const fmtP = v => v != null ? v.toFixed(v >= 100 ? 1 : 2) : '—'
@@ -697,8 +748,8 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
           ? (b.volume >= 1000000 ? `${(b.volume / 1000000).toFixed(1)}M` : `${(b.volume / 1000).toFixed(0)}K`)
           : '—'
         // CDP levels and K-line pattern for hovered bar
-        const cdpLv = cdpSeries?.[hovered.idx] ?? null
-        const patInfo = patterns?.[hovered.idx] ?? null
+        const cdpLv = cdpSeries?.[effHover.idx] ?? null
+        const patInfo = patterns?.[effHover.idx] ?? null
         const hasPD = patInfo && PATTERN_DESC[patInfo.name]
         const patOffset = (patInfo && !slimOnly) ? (hasPD ? 26 : 16) : 0
         const baseH = slimOnly ? 42 : tipH
@@ -712,7 +763,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
         ] : []
         return (
           <g>
-            <line x1={hovered.x} y1={PT} x2={hovered.x} y2={H + PT} stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.7} />
+            <line x1={effHover.x} y1={PT} x2={effHover.x} y2={H + PT} stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.7} />
             <line x1={PL} y1={toY(b.close)} x2={W - PR} y2={toY(b.close)} stroke="#0A84FF" strokeWidth={0.4} strokeDasharray="2,3" opacity={0.5} />
             <rect x={0} y={toY(b.close) - 7} width={PL - 2} height={13} fill="#1C1C1E" rx={2} />
             <text x={PL - 5} y={toY(b.close) + 4} fontSize={8} fill={closeColor} textAnchor="end" fontWeight="bold">
@@ -1066,7 +1117,14 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [active, setActive] = useState({ ma: true, bb: false, cdp: false, fib: false, pat: false, macd: true, rsi: true, kd: false, obv: false, adx: false, wr: false, cci: false, mfi: false })
   const [preset, setPreset] = useState('momentum')
   const [hoveredIdx, setHoveredIdx] = useState(null)
+  const [lockedIdx, setLockedIdx] = useState(null)
   const [barCount, setBarCount] = useState(250)
+
+  // Long-press locks the crosshair: after the finger lifts, the crosshair +
+  // detail stay pinned to that bar. Live drag (hoveredIdx) overrides it; tapping
+  // an empty spot clears the lock.
+  const displayIdx = hoveredIdx != null ? hoveredIdx : lockedIdx
+  const handleLock = useCallback((idx) => setLockedIdx(idx), [])
   const scrollRef = useRef(null)
   const pinchRef = useRef(null)
   const barCountRef = useRef(250)
@@ -1076,6 +1134,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   useEffect(() => {
     const defaults = { '1wk': 60, '1mo': 24 }
     setBarCount(defaults[chartInterval] || 250)
+    setLockedIdx(null)
   }, [chartInterval])
 
   const toggle = key => { setActive(prev => ({ ...prev, [key]: !prev[key] })); setPreset(null) }
@@ -1358,6 +1417,17 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         </div>
       )}
 
+      {/* Lock status hint */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4, minHeight: 14 }}>
+        {lockedIdx != null ? (
+          <span style={{ fontSize: 9.5, color: '#FFD60A', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+            🔒 已鎖定 {bars[lockedIdx]?.time ? bars[lockedIdx].time.slice(5) : ''} · 點圖表空白處解除
+          </span>
+        ) : (
+          <span style={{ fontSize: 9, color: 'var(--ios-label4)', opacity: 0.7 }}>長按圖表可鎖定十字線 · 雙指縮放 · 左右滑看更早</span>
+        )}
+      </div>
+
       {/* Scrollable chart area — all SVG charts share one horizontal scroll container */}
       <div ref={scrollRef} style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', borderRadius: 10, marginBottom: 2 }}>
         {/* Main candlestick chart */}
@@ -1370,6 +1440,10 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
             showFib={active.fib}
             showPatterns={active.pat}
             onHoverIdx={setHoveredIdx}
+            hoveredIdx={displayIdx}
+            onLock={handleLock}
+            locked={lockedIdx != null}
+            label={`K線 · ${INTERVAL_LABELS.find(t => t.id === chartInterval)?.label || ''}`}
             chartW={totalChartW}
           />
         ) : (
@@ -1389,8 +1463,10 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
               { color: '#FF453A', label: 'Signal', values: indicators.macd.signalLine, width: 1 },
             ]}
             hBands={[{ value: 0, color: '#48484A', label: '' }]}
-            hoveredIdx={hoveredIdx}
+            hoveredIdx={displayIdx}
             onHoverIdx={setHoveredIdx}
+            onLock={handleLock}
+            locked={lockedIdx != null}
             chartW={totalChartW}
           />
         )}
@@ -1406,8 +1482,10 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
               { value: 50, color: '#48484A', label: '50' },
               { value: 30, color: '#30D158', label: '30' },
             ]}
-            hoveredIdx={hoveredIdx}
+            hoveredIdx={displayIdx}
             onHoverIdx={setHoveredIdx}
+            onLock={handleLock}
+            locked={lockedIdx != null}
             yFixed={[0, 100]}
             chartW={totalChartW}
           />
@@ -1426,8 +1504,10 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
               { value: 80, color: '#FF453A', label: '80' },
               { value: 20, color: '#30D158', label: '20' },
             ]}
-            hoveredIdx={hoveredIdx}
+            hoveredIdx={displayIdx}
             onHoverIdx={setHoveredIdx}
+            onLock={handleLock}
+            locked={lockedIdx != null}
             yFixed={[0, 100]}
             chartW={totalChartW}
           />
@@ -1443,8 +1523,10 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
               { color: '#FF9F0A', label: 'MA20', values: indicators.obv.ma, width: 1, opacity: 0.7 },
             ]}
             hBands={[{ value: 0, color: '#48484A', label: '' }]}
-            hoveredIdx={hoveredIdx}
+            hoveredIdx={displayIdx}
             onHoverIdx={setHoveredIdx}
+            onLock={handleLock}
+            locked={lockedIdx != null}
             chartW={totalChartW}
           />
         )}
@@ -1460,8 +1542,10 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
               { color: '#FF6B35', label: '-DI',  values: indicators.adx.minusDI,  width: 1,   opacity: 0.85 },
             ]}
             hBands={[{ value: 25, color: '#FFD60A', label: '25' }]}
-            hoveredIdx={hoveredIdx}
+            hoveredIdx={displayIdx}
             onHoverIdx={setHoveredIdx}
+            onLock={handleLock}
+            locked={lockedIdx != null}
             yFixed={[0, 60]}
             chartW={totalChartW}
           />
@@ -1478,8 +1562,10 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
               { value: -50, color: '#48484A', label: '-50' },
               { value: -80, color: '#30D158', label: '-80' },
             ]}
-            hoveredIdx={hoveredIdx}
+            hoveredIdx={displayIdx}
             onHoverIdx={setHoveredIdx}
+            onLock={handleLock}
+            locked={lockedIdx != null}
             yFixed={[-100, 0]}
             chartW={totalChartW}
           />
@@ -1496,8 +1582,10 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
               { value: 0,    color: '#48484A', label: '0' },
               { value: -100, color: '#30D158', label: '-100' },
             ]}
-            hoveredIdx={hoveredIdx}
+            hoveredIdx={displayIdx}
             onHoverIdx={setHoveredIdx}
+            onLock={handleLock}
+            locked={lockedIdx != null}
             chartW={totalChartW}
           />
         )}
@@ -1513,8 +1601,10 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
               { value: 50, color: '#48484A', label: '50' },
               { value: 20, color: '#30D158', label: '20' },
             ]}
-            hoveredIdx={hoveredIdx}
+            hoveredIdx={displayIdx}
             onHoverIdx={setHoveredIdx}
+            onLock={handleLock}
+            locked={lockedIdx != null}
             yFixed={[0, 100]}
             chartW={totalChartW}
           />
@@ -1548,7 +1638,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
 
       {/* Dynamic indicator value strip — updates with crosshair */}
       {bars.length >= 2 && indicators && (
-        <ChartValueStrip bars={bars} indicators={indicators} active={active} hoveredIdx={hoveredIdx} />
+        <ChartValueStrip bars={bars} indicators={indicators} active={active} hoveredIdx={displayIdx} />
       )}
 
       {/* Strategy win-rate backtest */}

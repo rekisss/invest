@@ -233,8 +233,8 @@ export default function App() {
       </div>
 
       {/* ── Large Title ──────────────────────────────────────────── */}
-      <div style={{ padding: '8px 20px 4px', background: 'var(--ios-bg)', flexShrink: 0 }}>
-        <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-0.3px', color: 'var(--ios-label)', lineHeight: 1.2 }}>
+      <div style={{ padding: '8px 20px 10px', background: 'var(--ios-bg)', flexShrink: 0 }}>
+        <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.4px', color: 'var(--ios-label)', lineHeight: 1.32, paddingBottom: 1 }}>
           {TAB_TITLES[tab]}
         </div>
       </div>
