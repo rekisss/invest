@@ -391,7 +391,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
   return (
     <svg
       viewBox={`0 0 ${W} ${H + PT + 4}`}
-      style={{ width: W, display: 'block', background: 'var(--ios-bg2)', borderTop: '0.5px solid var(--ios-sep)', marginTop: 2, touchAction: 'pan-y' }}
+      style={{ width: W, display: 'block', background: 'var(--ios-bg2)', borderTop: '0.5px solid var(--ios-sep)', marginTop: 2, touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
       onMouseMove={e => handleMove(e.clientX, e.currentTarget)}
       onMouseLeave={() => onHoverIdx?.(null)}
       onTouchStart={handleTouchStart}
@@ -427,7 +427,11 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
       {[0, 0.5, 1].map(t => {
         const v = minV + t * range
         const y = PT + (1 - t) * (H - PT * 2)
-        const lbl = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : Math.abs(v) < 10 ? v.toFixed(1) : v.toFixed(0)
+        const absV = Math.abs(v)
+        const lbl = absV >= 1e9 ? `${v < 0 ? '-' : ''}${(absV / 1e9).toFixed(1)}B`
+          : absV >= 1e6 ? `${v < 0 ? '-' : ''}${(absV / 1e6).toFixed(1)}M`
+          : absV >= 1e3 ? `${v < 0 ? '-' : ''}${(absV / 1e3).toFixed(0)}K`
+          : absV < 0.01 ? v.toFixed(3) : absV < 1 ? v.toFixed(2) : absV < 10 ? v.toFixed(1) : v.toFixed(0)
         return (
           <text key={t} x={CHART_PL - 3} y={y + 3.5} fontSize={8} style={{ fill: 'var(--ios-label3)' }} textAnchor="end" opacity={0.85}>{lbl}</text>
         )
@@ -623,7 +627,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
   return (
     <svg
       viewBox={`0 0 ${W + rightExt} ${H + PT + 18}`}
-      style={{ width: W + rightExt, display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
+      style={{ width: W + rightExt, display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
@@ -996,11 +1000,11 @@ const MA_LINES_DEF = [
   { label: 'MA5',   color: '#5AC8FA', fn: c => smaCalc(c, 5),  },
   { label: 'MA10',  color: '#FF9F0A', fn: c => smaCalc(c, 10), },
   { label: 'EMA20', color: '#BF5AF2', fn: c => emaCalc(c, 20), },
-  { label: 'EMA60', color: '#FFD60A', fn: c => emaCalc(c, 60), },
+  { label: 'MA60',  color: '#FFD60A', fn: c => emaCalc(c, 60), },
 ]
 
 const STRATEGY_PRESETS = [
-  { id: 'all',        label: '全部', color: '#FFFFFF', desc: '同時顯示全部 10 項指標，一覽無遺',
+  { id: 'all',        label: '全部', color: '#8E8E93', desc: '同時顯示全部 10 項指標，一覽無遺',
     state: { ma: true,  bb: true,  macd: true,  rsi: true,  kd: true,  obv: true,  adx: true,  wr: true,  cci: true,  mfi: true  } },
   { id: 'momentum',   label: '動能', color: '#FF9F0A', desc: 'MACD 翻紅 + RSI 站上 50 才進場，追強勢續攻',
     state: { ma: true,  bb: false, macd: true,  rsi: true,  kd: false, obv: false, adx: false, wr: false, cci: false, mfi: false } },

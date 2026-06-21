@@ -455,10 +455,12 @@ export default function Portfolio({ data }) {
           {[['pnlPct', '報酬率'], ['daysHeld', '持有天數'], ['cost', '成本']].map(([key, label]) => (
             <button key={key} onClick={() => setSortBy(key)} style={{
               background: sortBy === key ? 'var(--ios-blue)' : 'var(--ios-fill4)',
-              color: sortBy === key ? '#fff' : 'var(--ios-label3)',
-              border: 'none', borderRadius: 8, padding: '5px 12px', fontSize: 11,
-              cursor: 'pointer', fontWeight: sortBy === key ? 700 : 400, transition: 'all 0.15s',
-            }}>{label}</button>
+              color: sortBy === key ? '#fff' : 'var(--ios-label2)',
+              border: `1.5px solid ${sortBy === key ? 'var(--ios-blue)' : 'transparent'}`,
+              borderRadius: 8, padding: '5px 12px', fontSize: 11,
+              cursor: 'pointer', fontWeight: sortBy === key ? 700 : 500, transition: 'all 0.18s',
+              boxShadow: sortBy === key ? '0 2px 8px rgba(10,132,255,0.25)' : 'none',
+            }}>{sortBy === key ? `↓ ${label}` : label}</button>
           ))}
         </div>
       )}
