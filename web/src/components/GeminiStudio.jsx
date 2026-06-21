@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 
 // ── Claude-powered multi-agent roundtable ────────────────────────────────────
-// Four analysts discuss a stock using scan data + system-computed technical
-// reference levels. Concise mode: each analyst max 80 chars per point,
-// no preamble, no filler. Auto-run keeps the discussion going continuously.
+// Six roles discuss a stock using scan data + system-computed technical levels:
+// a data auditor opens (round 1 only), then tech/fundamental/chip analysts, a
+// devil's-advocate, and a risk officer who delivers the verdict. Round 1 is the
+// opening; later rounds are cross-examination (must challenge, not agree).
+// Hard anti-fabrication rules (see RULES) keep the model from inventing prices
+// or metrics that aren't actually in the data.
 
 const ANTHROPIC_KEY_STORAGE = 'anthropic_key'   // shared with main ApiKeyInput
 const CLAUDE_MODEL_STORAGE = 'claude_roundtable_model'
@@ -13,22 +16,40 @@ const CLAUDE_MODELS = [
   { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet（深度 · ~$0.09/場）' },
 ]
 
+// Shared rules injected into every analyst's system prompt. The anti-fabrication
+// rules are the core fix: most stocks only carry close+RSI (no MA/ATR/highs), so
+// without these guards the model invents support/resistance/外資持股率/EPS etc.
+const RULES = [
+  '語言：繁體中文。',
+  '鐵則一：只能引用【資料稽核】與【技術參考位】中「實際出現且有值」的數字；其餘一律不得編造。',
+  '鐵則二：標示「缺」或【資料】未提供的指標（外資持股率、EPS、毛利率、產能利用率、MACD…）必須明說「資料未提供」，嚴禁憑記憶或猜測填入數字。',
+  '鐵則三：價格唯一基準是收盤價。支撐/壓力/停損/目標若資料未提供，不得自行給出價位，只能說「需更多資料」。',
+]
+
 const ANALYSTS = [
   {
+    id: 'audit', name: '資料稽核員', emoji: '🔍', color: '#5ac8fa', firstOnly: true,
+    persona: `資料稽核員，第一個發言。逐項核對【資料稽核】：有值的覆述關鍵數字，標「缺」的明確點名。最後一行給「資料充足度：足夠 / 技術位不足 / 嚴重不足」並提醒後續發言不得編造缺漏數據。`,
+  },
+  {
     id: 'tech', name: '技術派', emoji: '📈', color: '#0a84ff',
-    persona: `台股技術分析師。只引用 RSI/ADX/MACD/均線/量能的實際數字。`,
+    persona: `台股技術分析師。只引用【資料】中實際的 RSI/ADX/量比/均線數字；缺的就說「資料未提供」，禁止用「萎靡/徘徊」等模糊形容詞代替數字，禁止編造價位。`,
   },
   {
     id: 'fund', name: '基本面派', emoji: '💰', color: '#30d158',
-    persona: `台股基本面分析師。只看 F-Score、月營收 YoY、產業地位，數字說話。`,
+    persona: `台股基本面分析師。只引用【資料】中的 F-Score、月營收YoY。EPS/毛利率/產能利用率若未提供，必須標「資料未提供」，不得引用記憶中的舊數字。`,
   },
   {
     id: 'chip', name: '籌碼派', emoji: '🌐', color: '#ff9f0a',
-    persona: `台股籌碼分析師。只看三大法人連買天數、融資5日變化、外資持股。`,
+    persona: `台股籌碼分析師。只引用【資料】中的三大法人連買天數、融資5日變化。鐵律：融資「增加」＝散戶槓桿升高（不等於認賠）；融資「減少+股價跌」才是認賠/斷頭。外資持股率未提供時不得編造。`,
+  },
+  {
+    id: 'contra', name: '反方派', emoji: '😈', color: '#bf5af2',
+    persona: `魔鬼代言人。專挑技術/基本/籌碼三派的漏洞：數據引用錯、與【資料】不符、過度解讀、邏輯跳躍、風報比算錯。至少點名一個具體錯誤，嚴禁附和。`,
   },
   {
     id: 'risk', name: '風控長', emoji: '🛡️', color: '#f85149',
-    persona: `台股風控長，最後發言。裁決：建議進場 / 觀察 / 迴避其中之一。必須用【技術參考位】的數字給出進場區、停損價、目標一/二、風報比。敢否定樂觀派。`,
+    persona: `台股風控長，最後裁決。風報比一律採用【技術參考位】已算好的數值，不得自行重算。先輸出三劇本（續攻/整理/轉弱：各自觸發條件→操作），再給信心分數0-100。裁決四選一：建議進場 / 建議觀察 / 建議迴避 / 資料不足（若稽核員判定不足則必選此項）。`,
   },
 ]
 
@@ -143,14 +164,14 @@ async function fetchClaude(headers, body) {
   })
 }
 
-async function callClaude(apiKey, model, systemPrompt, userPrompt, onChunk) {
+async function callClaude(apiKey, model, systemPrompt, userPrompt, onChunk, maxTokens = 350) {
   const HEADERS = {
     'Content-Type': 'application/json',
     'x-api-key': apiKey,
     'anthropic-version': '2023-06-01',
     'anthropic-dangerous-direct-browser-access': 'true',
   }
-  const BODY = { model, max_tokens: 350, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }
+  const BODY = { model, max_tokens: maxTokens, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }
 
   // Desktop: try streaming first for typewriter effect
   if (!isIOS && typeof ReadableStream !== 'undefined') {
@@ -265,8 +286,48 @@ function fmtLevels(lv) {
   const tg = []
   if (lv.target1 != null) tg.push(`目標1 ${lv.target1}`)
   if (lv.target2 != null) tg.push(`目標2 ${lv.target2}`)
-  if (tg.length) L.push(`目標價：${tg.join(' / ')}${lv.rr != null ? ` | 風報比≈${lv.rr}` : ''}`)
+  if (tg.length) L.push(`目標價：${tg.join(' / ')}`)
+  // Spell out the risk/reward arithmetic so the model can't miscompute it.
+  const stop = lv.atrStop ?? lv.swingStop
+  if (lv.target1 != null && stop != null && lv.close != null) {
+    const risk = r2(lv.close - stop), reward = r2(lv.target1 - lv.close)
+    if (risk > 0 && reward != null) {
+      L.push(`風報比計算（請直接採用此結果）：風險=收盤${lv.close}−停損${stop}=${risk}；報酬=目標1 ${lv.target1}−收盤${lv.close}=${reward}；風報比=${reward}÷${risk}=${r2(reward / risk)}`)
+    }
+  }
   return L.join('\n')
+}
+
+// Data-audit summary: every key field with its value or 「缺」. Drives the
+// 資料稽核員's brief and the anti-fabrication guardrails.
+function buildAudit(resolved, levels) {
+  if (!resolved) return null
+  const r = resolved.row || {}
+  const ok = v => v != null && !isNaN(v)
+  const rows = [
+    ['收盤價', ok(r.close) ? r.close : null],
+    ['RSI(14)', ok(r.rsi14) ? r.rsi14.toFixed(1) : null],
+    ['ADX(14)', ok(r.adx14) ? r.adx14.toFixed(1) : null],
+    ['量比(/20日均量)', ok(r.volume_ratio) ? r.volume_ratio.toFixed(2) + 'x' : null],
+    ['EMA20 / EMA60', (ok(r.ema20) || ok(r.ema60)) ? `${ok(r.ema20) ? r.ema20 : '—'} / ${ok(r.ema60) ? r.ema60 : '—'}` : null],
+    ['20日高 / 10日低', (ok(r.close_20d_high) || ok(r.close_10d_low)) ? `${ok(r.close_20d_high) ? r.close_20d_high : '—'} / ${ok(r.close_10d_low) ? r.close_10d_low : '—'}` : null],
+    ['ATR(14)', ok(r.atr14) ? r.atr14 : null],
+    ['F-Score', ok(r.f_score) ? r.f_score + '/9' : null],
+    ['月營收YoY', ok(r.revenue_yoy) ? r.revenue_yoy.toFixed(1) + '%' : null],
+    ['外資/投信/自營連買', (ok(r.foreign_buy_streak) || ok(r.invest_trust_streak) || ok(r.dealer_buy_streak)) ? `${r.foreign_buy_streak ?? '—'} / ${r.invest_trust_streak ?? '—'} / ${r.dealer_buy_streak ?? '—'} 日` : null],
+    ['融資5日變化', ok(r.margin_change_5d) ? r.margin_change_5d.toFixed(1) + '%' : null],
+  ]
+  const text = rows.map(([k, v]) => `${k}：${v == null ? '缺' : v}`).join('\n')
+  const hasLevels = !!(levels && (levels.supports?.length || levels.resistances?.length))
+  const insufficient = !ok(r.close)
+  return {
+    text, hasLevels, insufficient,
+    note: insufficient
+      ? '⚠️ 連收盤價都缺，資料嚴重不足，禁止給任何買賣建議與價位。'
+      : !hasLevels
+        ? '⚠️ 僅有收盤價與部分指標，缺均線/高低點 → 無法計算支撐/壓力/停損/目標，後續嚴禁自行編造這些價位。'
+        : null,
+  }
 }
 
 // Find news headlines relevant to the stock (by id, name keywords, or sector)
@@ -289,28 +350,30 @@ function parseVerdict(messages) {
   const riskMsgs = messages.filter(m => m.role === 'analyst' && m.analyst?.id === 'risk' && !m.error && !m.streaming)
   if (!riskMsgs.length) return null
   const txt = riskMsgs[riskMsgs.length - 1].content || ''
+  if (/資料不足|數據不足|資訊不足|無法判斷|不足以(判斷|決策)/.test(txt)) return { verdict: '資料不足', color: '#8e8e93', emoji: '❓' }
   if (/建議進場|可以進場|適合買進|進場訊號|值得買/.test(txt)) return { verdict: '建議進場', color: '#30d158', emoji: '✅' }
   if (/建議迴避|暫時迴避|避開|不建議|風險過高|先回避/.test(txt)) return { verdict: '建議迴避', color: '#f85149', emoji: '🚫' }
   if (/建議觀察|先觀察|觀望|等待確認|觀察等待/.test(txt)) return { verdict: '建議觀察', color: '#ff9f0a', emoji: '👀' }
   return null
 }
 
-function buildBrief(resolved, levels, market, news) {
+function buildBrief(resolved, levels, market, news, audit) {
   if (!resolved) return ''
   const r = resolved.row || {}
   const f = (v, suf = '') => (v == null || isNaN(v) ? '—' : `${v}${suf}`)
   const lines = [`【標的】${resolved.stock_id} ${resolved.name || '(名稱未知)'} ${r.industry_category || ''}`.trim()]
-  if (resolved.isRich) {
-    lines.push(`進場分數 ${f(Math.round(r.entry_score || 0))}${r.grade ? ` 評級${r.grade}` : ''}${r.entry_signal ? ' ✅入榜' : ''}`)
-    lines.push(`RSI ${f(r.rsi14 && r.rsi14.toFixed(0))} | ADX ${f(r.adx14 && r.adx14.toFixed(0))} | 量比 ${f(r.volume_ratio && r.volume_ratio.toFixed(1), 'x')} | BB位置 ${r.bb_pct_b != null ? (r.bb_pct_b * 100).toFixed(0) + '%' : '—'}`)
-    lines.push(`F-Score ${f(r.f_score)}/9 | 月營收YoY ${f(r.revenue_yoy && r.revenue_yoy.toFixed(1), '%')}`)
-    lines.push(`外資連買 ${f(r.foreign_buy_streak)}日 | 投信連買 ${f(r.invest_trust_streak)}日 | 自營連買 ${f(r.dealer_buy_streak)}日`)
-    lines.push(`融資5日變化 ${f(r.margin_change_5d && r.margin_change_5d.toFixed(1), '%')} | 相對大盤5日 ${r.relative_strength_5d != null ? (r.relative_strength_5d * 100).toFixed(1) + '%' : '—'}`)
-    if (r.entry_reason) lines.push(`系統入場理由：${r.entry_reason}`)
-  } else {
-    lines.push(`收盤 ${f(r.close)} | RSI ${f(r.rsi14 && r.rsi14.toFixed(0))} | 評級 ${r.grade || '—'}`)
+  // Data audit first — the canonical list of what's actually available.
+  if (audit?.text) {
+    lines.push(`\n【資料稽核（只能引用有值欄位，標「缺」者嚴禁編造）】\n${audit.text}`)
+    if (audit.note) lines.push(audit.note)
   }
-  if (levels) lines.push(`\n【技術參考位（依此數值發言，不得自行編造）】\n${fmtLevels(levels)}`)
+  // Scan-derived signals — only when present.
+  if (r.entry_score != null) lines.push(`\n進場分數 ${f(Math.round(r.entry_score))}${r.grade ? ` 評級${r.grade}` : ''}${r.entry_signal ? ' ✅入榜' : ''}`)
+  if (r.relative_strength_5d != null) lines.push(`相對大盤5日 ${(r.relative_strength_5d * 100).toFixed(1)}%`)
+  if (r.entry_reason) lines.push(`系統入場理由：${r.entry_reason}`)
+  if (levels && (levels.fib || levels.supports?.length || levels.resistances?.length || levels.target1 != null)) {
+    lines.push(`\n【技術參考位（依此數值發言，缺漏者不得自行編造）】\n${fmtLevels(levels)}`)
+  }
   if (market) {
     lines.push(`\n【大盤】XGBoost上漲機率 ${market.prob != null ? Math.round(market.prob * 100) + '%' : '—'} | VIX ${f(market.vix)} | 外資期貨 ${market.futures != null ? market.futures.toLocaleString() + '口' : '—'}`)
   }
@@ -385,8 +448,9 @@ export default function GeminiStudio({ data }) {
 
   const typedId = (stockInput.match(/\d{4,6}/) || [])[0] || ''
   const resolved = typedId ? resolveStock(typedId, data) : null
-  const levels = resolved?.isRich ? computeLevels(resolved.row) : null
-  const brief = buildBrief(resolved, levels, market, data?.news)
+  const levels = resolved ? computeLevels(resolved.row) : null
+  const audit = resolved ? buildAudit(resolved, levels) : null
+  const brief = buildBrief(resolved, levels, market, data?.news, audit)
   const verdict = useMemo(() => parseVerdict(messages), [messages])
   const topic = resolved
     ? `針對 ${resolved.stock_id} ${resolved.name || ''} 的進場決策`.trim()
@@ -433,18 +497,27 @@ export default function GeminiStudio({ data }) {
     if (userNote) acc.push({ role: 'user', content: userNote })
     setMessages(acc)
 
-    for (let ai = 0; ai < ANALYSTS.length; ai++) {
-      const analyst = ANALYSTS[ai]
+    // First round runs the data auditor; later rounds skip it and become
+    // cross-examination instead of repeated opening statements.
+    const isFirstRound = !priorMessages.some(m => m.role === 'analyst')
+    const roster = ANALYSTS.filter(a => !a.firstOnly || isFirstRound)
+
+    for (let ai = 0; ai < roster.length; ai++) {
+      const analyst = roster[ai]
       const pid = `${analyst.id}-${Date.now()}-${Math.random()}`
       setMessages(prev => [...prev, { id: pid, role: 'analyst', analyst, content: '', streaming: true }])
 
-      // Tight system prompt: no preamble, get to the point, cite actual numbers
-      const sys = [
-        analyst.persona,
-        '語言：繁體中文。',
-        '格式：最多3條，每條20字以內，用「・」開頭，不說前言不廢話，直接切重點。',
-        '可點名反駁前位。引用【技術參考位】的實際價位，不得自行捏造數字。',
-      ].join('\n')
+      const fmt = analyst.id === 'audit'
+        ? '格式：逐欄列出有值/缺漏的關鍵數字（每行一項），最後一行寫「資料充足度：…」。'
+        : analyst.id === 'risk'
+          ? '格式：先列三劇本（續攻/整理/轉弱，各一行：觸發條件→操作），再一行「信心 X/100」，最後一行「裁決：建議進場/建議觀察/建議迴避/資料不足」。'
+          : '格式：最多3條，每條25字內，「・」開頭，無前言廢話，直接切重點。'
+
+      const roundLine = analyst.id === 'audit' ? ''
+        : isFirstRound ? '本輪為初判：提出你的立場與數據依據。'
+          : '本輪為交叉質詢：必須針對前面至少一位的具體論點提出反駁或補強，禁止只說「同意」或重複附和。'
+
+      const sys = [analyst.persona, ...RULES, fmt, roundLine].filter(Boolean).join('\n')
 
       const prompt = [
         `圓桌主題：${topic}`,
@@ -453,11 +526,13 @@ export default function GeminiStudio({ data }) {
         `\n現在輪到你（${analyst.name}）。`,
       ].join('\n')
 
+      const maxTokens = (analyst.id === 'audit' || analyst.id === 'risk') ? 600 : 350
+
       try {
         const text = await callClaude(curAnthKey, claudeModelRef.current, sys, prompt, partial => {
           setMessages(prev => prev.map(m => m.id === pid
             ? { id: pid, role: 'analyst', analyst, content: partial, streaming: true } : m))
-        })
+        }, maxTokens)
         setRetryNote('')
         const msg = { id: pid, role: 'analyst', analyst, content: text }
         acc.push(msg)
@@ -538,8 +613,8 @@ export default function GeminiStudio({ data }) {
             <div style={{ fontSize: 40, marginBottom: 8 }}>🎯</div>
             <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--ios-label)' }}>AI 圓桌研究室</div>
             <div style={{ fontSize: 13, color: 'var(--ios-label2)', marginTop: 6, lineHeight: 1.6 }}>
-              四位 AI 分析師用掃描資料 + 系統計算技術位即時討論一支股票。<br />
-              由 <b style={{ color: 'var(--ios-blue)' }}>Claude</b> 串流驅動，逐字顯示。
+              六位 AI 角色（含資料稽核員與反方派）用掃描資料 + 系統技術位討論一支股票。<br />
+              先稽核資料、再交叉質詢、由風控長裁決。由 <b style={{ color: 'var(--ios-blue)' }}>Claude</b> 串流驅動。
             </div>
           </div>
           <div style={s.label}>Anthropic API Key</div>
@@ -632,10 +707,10 @@ export default function GeminiStudio({ data }) {
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
             <div style={{ fontSize: 34 }}>🎯</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--ios-label)', marginTop: 4 }}>AI 圓桌研究室</div>
-            <div style={{ fontSize: 12.5, color: 'var(--ios-label2)', marginTop: 4 }}>輸入股號，四位分析師依系統技術位開會討論</div>
+            <div style={{ fontSize: 12.5, color: 'var(--ios-label2)', marginTop: 4 }}>輸入股號，先稽核資料再六方交叉質詢</div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
             {ANALYSTS.map(a => (
               <div key={a.id} style={{ textAlign: 'center' }}>
                 <div style={s.avatar(a.color, 'analyst')}>{a.emoji}</div>
