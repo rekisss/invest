@@ -63,14 +63,18 @@ function ProbTrend({ history }) {
   useGSAP(() => {
     const el = lineRef.current
     if (!el) return
-    const len = el.getTotalLength()
-    gsap.set(el, { strokeDasharray: len, strokeDashoffset: len })
-    const tw = gsap.to(el, { strokeDashoffset: 0, duration: 1.4, ease: 'power2.out', paused: true, delay: 0.15 })
-    const io = new IntersectionObserver(es => {
-      if (es[0].isIntersecting) { tw.play(); io.disconnect() }
-    }, { threshold: 0.2 })
-    io.observe(el)
-    return () => io.disconnect()
+    let io = null
+    const raf = requestAnimationFrame(() => {
+      const len = el.getTotalLength()
+      if (!len) return
+      gsap.set(el, { strokeDasharray: len, strokeDashoffset: len })
+      const tw = gsap.to(el, { strokeDashoffset: 0, duration: 1.4, ease: 'power2.out', paused: true, delay: 0.15 })
+      io = new IntersectionObserver(es => {
+        if (es[0].isIntersecting) { tw.play(); io.disconnect() }
+      }, { threshold: 0.2 })
+      io.observe(el)
+    })
+    return () => { cancelAnimationFrame(raf); io?.disconnect() }
   }, { dependencies: [pts.length] })
 
   if (pts.length < 3) return null
@@ -112,10 +116,10 @@ function ProbTrend({ history }) {
         {/* 50% reference line */}
         {y50 != null && (
           <line x1={PX} y1={y50} x2={W - PX} y2={y50}
-            stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeDasharray="4,4" />
+            stroke="var(--ios-sep)" strokeWidth="1" strokeDasharray="4,4" />
         )}
         {y50 != null && (
-          <text x={PX + 2} y={y50 - 3} fontSize="8" fill="rgba(255,255,255,0.22)" fontWeight="600">50%</text>
+          <text x={PX + 2} y={y50 - 3} fontSize="8" fill="var(--ios-label4)" fontWeight="600">50%</text>
         )}
 
         {/* Gradient area fill */}
@@ -133,7 +137,7 @@ function ProbTrend({ history }) {
           const cx = xs(i).toFixed(1), cy = ys(d.p).toFixed(1)
           const dotColor = d.actual === 1 ? '#30D158'
             : d.actual === -1 ? '#FF453A'
-            : isLast ? lastColor : 'rgba(255,255,255,0.28)'
+            : isLast ? lastColor : 'var(--ios-label4)'
           const r = isLast ? 4 : d.actual !== null ? 3.5 : 2
           return (
             <g key={d.date}>
@@ -155,7 +159,7 @@ function ProbTrend({ history }) {
       {/* Date range + 50% label */}
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ios-label4)', marginBottom: 6 }}>
         <span>{pts[0].date.slice(5)}</span>
-        {y50 != null && <span style={{ color: 'rgba(255,255,255,0.2)' }}>— 50%</span>}
+        {y50 != null && <span style={{ color: 'var(--ios-label4)' }}>— 50%</span>}
         <span>{last.date.slice(5)}</span>
       </div>
 

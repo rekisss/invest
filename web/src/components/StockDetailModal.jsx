@@ -391,7 +391,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
   return (
     <svg
       viewBox={`0 0 ${W} ${H + PT + 4}`}
-      style={{ width: W, display: 'block', background: 'var(--ios-bg2)', borderTop: '0.5px solid var(--ios-sep)', marginTop: 2, touchAction: 'pan-y' }}
+      style={{ width: W, display: 'block', background: 'var(--ios-bg2)', borderTop: '0.5px solid var(--ios-sep)', marginTop: 2, touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
       onMouseMove={e => handleMove(e.clientX, e.currentTarget)}
       onMouseLeave={() => onHoverIdx?.(null)}
       onTouchStart={handleTouchStart}
@@ -427,7 +427,11 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
       {[0, 0.5, 1].map(t => {
         const v = minV + t * range
         const y = PT + (1 - t) * (H - PT * 2)
-        const lbl = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : Math.abs(v) < 10 ? v.toFixed(1) : v.toFixed(0)
+        const absV = Math.abs(v)
+        const lbl = absV >= 1e9 ? `${v < 0 ? '-' : ''}${(absV / 1e9).toFixed(1)}B`
+          : absV >= 1e6 ? `${v < 0 ? '-' : ''}${(absV / 1e6).toFixed(1)}M`
+          : absV >= 1e3 ? `${v < 0 ? '-' : ''}${(absV / 1e3).toFixed(0)}K`
+          : absV < 0.01 ? v.toFixed(3) : absV < 1 ? v.toFixed(2) : absV < 10 ? v.toFixed(1) : v.toFixed(0)
         return (
           <text key={t} x={CHART_PL - 3} y={y + 3.5} fontSize={8} style={{ fill: 'var(--ios-label3)' }} textAnchor="end" opacity={0.85}>{lbl}</text>
         )
@@ -443,19 +447,47 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
         <text x={CHART_PL + 8} y={PT + 11} fontSize={9.5} fill={accentColor} fontWeight="800" letterSpacing="0.4">{label}</text>
       </g>
 
-      {/* Hover values — offset right of the badge */}
+      {/* Floating tooltip popup on hover */}
       {hoveredIdx != null && (() => {
-        const labelW = badgeW + 8
-        return (lines || []).map((series, si) => {
-          const v = series.values[hoveredIdx]
-          if (v == null) return null
-          const disp = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1)
-          return (
-            <text key={si} x={CHART_PL + 3 + labelW + si * 60} y={PT + 11} fontSize={9} fill={series.color} fontWeight="600">
-              {series.label}:{disp}
-            </text>
-          )
-        })
+        const fmtV = v => {
+          const a = Math.abs(v)
+          if (a >= 1e6) return `${(v / 1e6).toFixed(1)}M`
+          if (a >= 1e3) return `${(v / 1e3).toFixed(0)}K`
+          if (a < 0.01) return v.toFixed(3)
+          if (a < 1)    return v.toFixed(2)
+          if (a < 10)   return v.toFixed(1)
+          return v.toFixed(0)
+        }
+        const histV = histSeries?.values[hoveredIdx]
+        const lineRows = (lines || []).filter(s => s.values[hoveredIdx] != null)
+        const rows = [
+          ...(histV != null ? [{ label: 'Hist', value: histV, color: histV >= 0 ? '#FF453A' : '#30D158' }] : []),
+          ...lineRows.map(s => ({ label: s.label, value: s.values[hoveredIdx], color: s.color })),
+        ]
+        if (rows.length === 0) return null
+        const ttW = 76
+        const rowH = 12
+        const ttH = rows.length * rowH + 10
+        const cx = toX(hoveredIdx)
+        const ttX = Math.min(
+          Math.max(cx > W / 2 ? cx - ttW - 5 : cx + 5, CHART_PL),
+          W - CHART_PR - ttW
+        )
+        const ttY = PT + 2
+        return (
+          <g>
+            <rect x={ttX} y={ttY} width={ttW} height={ttH} rx={5} strokeWidth={0.5}
+              style={{ fill: 'var(--ios-bg3)', stroke: 'var(--ios-sep)' }} />
+            {rows.map((r, i) => (
+              <g key={i}>
+                <text x={ttX + 5} y={ttY + 9 + i * rowH} fontSize={8} fontWeight="500"
+                  style={{ fill: 'var(--ios-label3)' }}>{r.label}</text>
+                <text x={ttX + ttW - 4} y={ttY + 9 + i * rowH} fontSize={8.5} fontWeight="700"
+                  fill={r.color} textAnchor="end">{fmtV(r.value)}</text>
+              </g>
+            ))}
+          </g>
+        )
       })()}
 
       {/* Crosshair */}
@@ -623,7 +655,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
   return (
     <svg
       viewBox={`0 0 ${W + rightExt} ${H + PT + 18}`}
-      style={{ width: W + rightExt, display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none' }}
+      style={{ width: W + rightExt, display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
@@ -806,44 +838,44 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
           <g>
             <line x1={effHover.x} y1={PT} x2={effHover.x} y2={H + PT} stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="3,3" opacity={0.7} />
             <line x1={PL} y1={toY(b.close)} x2={W - PR} y2={toY(b.close)} stroke="#0A84FF" strokeWidth={0.4} strokeDasharray="2,3" opacity={0.5} />
-            <rect x={0} y={toY(b.close) - 7} width={PL - 2} height={13} fill="#1C1C1E" rx={2} />
+            <rect x={0} y={toY(b.close) - 7} width={PL - 2} height={13} rx={2} style={{ fill: 'var(--ios-bg3)' }} />
             <text x={PL - 5} y={toY(b.close) + 4} fontSize={8} fill={closeColor} textAnchor="end" fontWeight="bold">
               {fmtP(b.close)}
             </text>
-            <rect x={tipX} y={tipY} width={tipW} height={fullH} fill="#1C1C1E" rx={7} stroke="#3A3A3C" strokeWidth={0.8} />
-            <text x={tipX + 8} y={tipY + 13} fontSize={9} fill="#6E6E73" fontWeight="600" letterSpacing="0.3">{b.time || ''}</text>
-            <line x1={tipX + 5} y1={tipY + 17} x2={tipX + tipW - 5} y2={tipY + 17} stroke="#2C2C2E" strokeWidth={0.5} />
+            <rect x={tipX} y={tipY} width={tipW} height={fullH} rx={7} strokeWidth={0.8} style={{ fill: 'var(--ios-bg3)', stroke: 'var(--ios-sep)' }} />
+            <text x={tipX + 8} y={tipY + 13} fontSize={9} fontWeight="600" letterSpacing="0.3" style={{ fill: 'var(--ios-label3)' }}>{b.time || ''}</text>
+            <line x1={tipX + 5} y1={tipY + 17} x2={tipX + tipW - 5} y2={tipY + 17} strokeWidth={0.5} style={{ stroke: 'var(--ios-sep)' }} />
             {slimOnly ? (
               <>
-                <text x={tipX + 8} y={tipY + 32} fontSize={8} fill="#48484A">收</text>
+                <text x={tipX + 8} y={tipY + 32} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>收</text>
                 <text x={tipX + tipW - 6} y={tipY + 32} fontSize={9} fill={closeColor} fontWeight="700" textAnchor="end">{fmtP(b.close)}</text>
               </>
             ) : <>
-              <text x={tipX + 8} y={tipY + 30} fontSize={8} fill="#48484A">開</text>
-              <text x={tipX + tipW - 6} y={tipY + 30} fontSize={9} fill="#EBEBF5" fontWeight="600" textAnchor="end">{fmtP(b.open)}</text>
-              <text x={tipX + 8} y={tipY + 43} fontSize={8} fill="#48484A">高</text>
+              <text x={tipX + 8} y={tipY + 30} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>開</text>
+              <text x={tipX + tipW - 6} y={tipY + 30} fontSize={9} fontWeight="600" textAnchor="end" style={{ fill: 'var(--ios-label)' }}>{fmtP(b.open)}</text>
+              <text x={tipX + 8} y={tipY + 43} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>高</text>
               <text x={tipX + tipW - 6} y={tipY + 43} fontSize={9} fill="#FF453A" fontWeight="600" textAnchor="end">{fmtP(b.high)}</text>
-              <text x={tipX + 8} y={tipY + 56} fontSize={8} fill="#48484A">低</text>
+              <text x={tipX + 8} y={tipY + 56} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>低</text>
               <text x={tipX + tipW - 6} y={tipY + 56} fontSize={9} fill="#30D158" fontWeight="600" textAnchor="end">{fmtP(b.low)}</text>
-              <text x={tipX + 8} y={tipY + 69} fontSize={8} fill="#48484A">收</text>
+              <text x={tipX + 8} y={tipY + 69} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>收</text>
               <text x={tipX + tipW - 6} y={tipY + 69} fontSize={9} fill={closeColor} fontWeight="700" textAnchor="end">{fmtP(b.close)}</text>
-              <text x={tipX + 8} y={tipY + 82} fontSize={8} fill="#48484A">量</text>
-              <text x={tipX + tipW - 6} y={tipY + 82} fontSize={9} fill="#636366" fontWeight="600" textAnchor="end">{vol}</text>
+              <text x={tipX + 8} y={tipY + 82} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>量</text>
+              <text x={tipX + tipW - 6} y={tipY + 82} fontSize={9} fontWeight="600" textAnchor="end" style={{ fill: 'var(--ios-label2)' }}>{vol}</text>
             </>}
             {patInfo && !slimOnly && (() => {
               const pd = PATTERN_DESC[patInfo.name]
               const patColor = patInfo.type === 'bullish' ? '#30D158' : patInfo.type === 'bearish' ? '#FF453A' : '#8E8E93'
               return (
                 <>
-                  <line x1={tipX+5} y1={tipY+tipH} x2={tipX+tipW-5} y2={tipY+tipH} stroke="#2C2C2E" strokeWidth={0.5} />
-                  <text x={tipX+8} y={tipY+tipH+11} fontSize={8} fill="#48484A" fontWeight="600">型態</text>
+                  <line x1={tipX+5} y1={tipY+tipH} x2={tipX+tipW-5} y2={tipY+tipH} strokeWidth={0.5} style={{ stroke: 'var(--ios-sep)' }} />
+                  <text x={tipX+8} y={tipY+tipH+11} fontSize={8} fontWeight="600" style={{ fill: 'var(--ios-label3)' }}>型態</text>
                   <text x={tipX+tipW-6} y={tipY+tipH+11} fontSize={9} fill={patColor} fontWeight="700" textAnchor="end">{patInfo.name}</text>
                   {pd && <text x={tipX+8} y={tipY+tipH+22} fontSize={7.5} fill={patColor} opacity={0.75}>{pd.short}</text>}
                 </>
               )
             })()}
             {cdpLv && <>
-              <line x1={tipX+5} y1={tipY+baseH+patOffset+2} x2={tipX+tipW-5} y2={tipY+baseH+patOffset+2} stroke="#2C2C2E" strokeWidth={0.5} />
+              <line x1={tipX+5} y1={tipY+baseH+patOffset+2} x2={tipX+tipW-5} y2={tipY+baseH+patOffset+2} strokeWidth={0.5} style={{ stroke: 'var(--ios-sep)' }} />
               {CDP_TIP.map(({ label, v, c }, ri) => (
                 <g key={label}>
                   <rect x={tipX+7} y={tipY+baseH+patOffset+6+ri*13} width={16} height={10} fill={`${c}25`} rx={2} />
@@ -996,11 +1028,11 @@ const MA_LINES_DEF = [
   { label: 'MA5',   color: '#5AC8FA', fn: c => smaCalc(c, 5),  },
   { label: 'MA10',  color: '#FF9F0A', fn: c => smaCalc(c, 10), },
   { label: 'EMA20', color: '#BF5AF2', fn: c => emaCalc(c, 20), },
-  { label: 'EMA60', color: '#FFD60A', fn: c => emaCalc(c, 60), },
+  { label: 'MA60',  color: '#FFD60A', fn: c => emaCalc(c, 60), },
 ]
 
 const STRATEGY_PRESETS = [
-  { id: 'all',        label: '全部', color: '#FFFFFF', desc: '同時顯示全部 10 項指標，一覽無遺',
+  { id: 'all',        label: '全部', color: '#8E8E93', desc: '同時顯示全部 10 項指標，一覽無遺',
     state: { ma: true,  bb: true,  macd: true,  rsi: true,  kd: true,  obv: true,  adx: true,  wr: true,  cci: true,  mfi: true  } },
   { id: 'momentum',   label: '動能', color: '#FF9F0A', desc: 'MACD 翻紅 + RSI 站上 50 才進場，追強勢續攻',
     state: { ma: true,  bb: false, macd: true,  rsi: true,  kd: false, obv: false, adx: false, wr: false, cci: false, mfi: false } },
@@ -1143,6 +1175,8 @@ function StrategyBacktestPanel({ bars, onPick, activeId }) {
   )
 }
 
+const PARAM_DEFAULTS = { rsiPeriod: 14, kdN: 9, kdM: 3, macdFast: 12, macdSlow: 26, macdSig: 9, bbPeriod: 20, bbMult: 2.0 }
+
 function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const cnyesUrl = `https://www.cnyes.com/twstock/${stockId}`
   const wantgooUrl = `https://www.wantgoo.com/stock/${stockId}`
@@ -1160,6 +1194,20 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [hoveredIdx, setHoveredIdx] = useState(null)
   const [lockedIdx, setLockedIdx] = useState(null)
   const [barCount, setBarCount] = useState(250)
+  const [params, setParams] = useState(() => {
+    try { return { ...PARAM_DEFAULTS, ...JSON.parse(localStorage.getItem('indicatorParams') || '{}') } }
+    catch { return PARAM_DEFAULTS }
+  })
+  const updateParam = (key, raw) => {
+    const val = parseFloat(raw)
+    if (isNaN(val) || val <= 0) return
+    setParams(prev => {
+      const next = { ...prev, [key]: key === 'bbMult' ? val : Math.round(val) }
+      try { localStorage.setItem('indicatorParams', JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+  const [showParams, setShowParams] = useState(false)
 
   // Long-press locks the crosshair: after the finger lifts, the crosshair +
   // detail stay pinned to that bar. Live drag (hoveredIdx) overrides it; tapping
@@ -1303,9 +1351,9 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
     const closes = warmBars.map(d => d.close)
     const sl = arr => arr.slice(off)
 
-    const bb = bollingerCalc(closes, 20, 2)
-    const { macdLine, signalLine, hist } = macdCalc(closes)
-    const kdResult = kdCalc(warmBars)
+    const bb = bollingerCalc(closes, params.bbPeriod, params.bbMult)
+    const { macdLine, signalLine, hist } = macdCalc(closes, params.macdFast, params.macdSlow, params.macdSig)
+    const kdResult = kdCalc(warmBars, params.kdN, params.kdM)
     const obvWarm = obvCalc(warmBars)
     const adxResult = adxCalc(warmBars)
     const bbSl = sl(bb)
@@ -1318,7 +1366,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         lower: bbSl.map(v => v?.lower ?? null),
       },
       macd: { macdLine: sl(macdLine), signalLine: sl(signalLine), hist: sl(hist) },
-      rsi:  sl(rsiCalc(closes)),
+      rsi:  sl(rsiCalc(closes, params.rsiPeriod)),
       kd:   { kArr: sl(kdResult.kArr), dArr: sl(kdResult.dArr) },
       obv:  (() => { const v = sl(obvWarm); return { values: v, ma: smaCalc(v, 20) } })(),
       adx:  { adxLine: sl(adxResult.adxLine), plusDI: sl(adxResult.plusDI), minusDI: sl(adxResult.minusDI) },
@@ -1333,12 +1381,49 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         return { ah: c + r, nh: 2 * c - p.low, cdp: c, nl: 2 * c - p.high, al: c - r }
       }),
     }
-  }, [bars, _allBars, chartInterval, daily])
+  }, [bars, _allBars, chartInterval, daily, params])
 
   const unitLabel = { '1d': '個交易日', '1wk': '週', '1mo': '個月' }
 
   return (
     <div>
+      {/* Indicator param settings */}
+      <div style={{ marginBottom: 6 }}>
+        <button onClick={() => setShowParams(v => !v)} style={{
+          fontSize: 10, color: showParams ? 'var(--ios-blue)' : 'var(--ios-label3)',
+          background: showParams ? 'rgba(10,132,255,0.1)' : 'var(--ios-fill4)',
+          border: 'none', borderRadius: 6, padding: '3px 9px', cursor: 'pointer',
+          fontWeight: showParams ? 700 : 400, transition: 'all 0.15s',
+        }}>⚙ 指標係數</button>
+        {showParams && (
+          <div style={{ marginTop: 6, padding: '10px 12px', background: 'var(--ios-bg2)', borderRadius: 10, border: '0.5px solid var(--ios-sep)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px 16px' }}>
+              {[
+                ['RSI 週期', 'rsiPeriod', params.rsiPeriod],
+                ['KD 週期 (N)', 'kdN', params.kdN],
+                ['KD 平滑 (M)', 'kdM', params.kdM],
+                ['MACD 快線', 'macdFast', params.macdFast],
+                ['MACD 慢線', 'macdSlow', params.macdSlow],
+                ['MACD 信號', 'macdSig', params.macdSig],
+                ['BB 週期', 'bbPeriod', params.bbPeriod],
+                ['BB 倍數', 'bbMult', params.bbMult],
+              ].map(([lbl, key, val]) => (
+                <label key={key} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 9, color: 'var(--ios-label3)', fontWeight: 600 }}>{lbl}</span>
+                  <input type="number" defaultValue={val} min={1} step={key === 'bbMult' ? 0.1 : 1}
+                    onBlur={e => updateParam(key, e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && updateParam(key, e.target.value)}
+                    style={{ width: '100%', padding: '4px 6px', fontSize: 12, borderRadius: 6, border: '0.5px solid var(--ios-sep)', background: 'var(--ios-fill4)', color: 'var(--ios-label)', outline: 'none', boxSizing: 'border-box' }} />
+                </label>
+              ))}
+            </div>
+            <div style={{ marginTop: 8, display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+              <button onClick={() => { setParams(PARAM_DEFAULTS); try { localStorage.setItem('indicatorParams', JSON.stringify(PARAM_DEFAULTS)) } catch {} }} style={{ fontSize: 10, color: 'var(--ios-label3)', background: 'var(--ios-fill4)', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>重設預設值</button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Strategy preset row */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 6, alignItems: 'center' }}>
         <span style={{ fontSize: 10, color: 'var(--ios-label3)', marginRight: 2, flexShrink: 0 }}>策略</span>
@@ -1497,7 +1582,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         {active.macd && indicators && bars.length >= 26 && (
           <SubChartSVG
             bars={bars}
-            label="MACD(12,26,9)"
+            label={`MACD(${params.macdFast},${params.macdSlow},${params.macdSig})`}
             histSeries={{ values: indicators.macd.hist }}
             lines={[
               { color: '#0A84FF', label: 'MACD', values: indicators.macd.macdLine, width: 1 },
@@ -1516,7 +1601,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         {active.rsi && indicators && bars.length >= 15 && (
           <SubChartSVG
             bars={bars}
-            label="RSI(14)"
+            label={`RSI(${params.rsiPeriod})`}
             lines={[{ color: '#BF5AF2', label: 'RSI', values: indicators.rsi, width: 1.2 }]}
             hBands={[
               { value: 70, color: '#FF453A', label: '70' },
@@ -1536,7 +1621,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         {active.kd && indicators && bars.length >= 9 && (
           <SubChartSVG
             bars={bars}
-            label="KD(9,3)"
+            label={`KD(${params.kdN},${params.kdM})`}
             lines={[
               { color: '#FF9F0A', label: 'K', values: indicators.kd.kArr, width: 1 },
               { color: '#0A84FF', label: 'D', values: indicators.kd.dArr, width: 1 },

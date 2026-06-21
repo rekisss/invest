@@ -1588,7 +1588,7 @@ export default function Dashboard({ data, error }) {
   const headerInnerRef = useRef(null)
   const maxCollapseHeightRef = useRef(null)
   const scrollRafRef = useRef(null)
-  const COLLAPSE_RANGE = 90 // px of scroll → fully collapsed
+  const COLLAPSE_RANGE = 55 // px of scroll → fully collapsed
   const listScrollRef = useRef(null)   // ref to the scrollable list div
   const headerTouchRef = useRef(null)  // tracks touch forwarding from header → list
 
@@ -1629,6 +1629,7 @@ export default function Dashboard({ data, error }) {
     scrollRafRef.current = requestAnimationFrame(() => {
       const el = headerInnerRef.current
       if (!el) return
+      const outer = el.parentElement
       if (scrollTop <= 2) {
         // Back at top — re-measure in case content changed
         el.style.height = 'auto'
@@ -1637,6 +1638,7 @@ export default function Dashboard({ data, error }) {
         el.style.height = h + 'px'
         el.style.opacity = '1'
         el.style.pointerEvents = 'auto'
+        if (outer) outer.style.paddingBottom = '12px'
         return
       }
       if (maxCollapseHeightRef.current == null) {
@@ -1644,8 +1646,9 @@ export default function Dashboard({ data, error }) {
       }
       const progress = Math.min(1, scrollTop / COLLAPSE_RANGE)
       el.style.height = `${maxCollapseHeightRef.current * (1 - progress)}px`
-      el.style.opacity = `${Math.max(0, 1 - progress * 1.5)}`
+      el.style.opacity = `${Math.max(0, 1 - progress * 1.8)}`
       el.style.pointerEvents = progress > 0.9 ? 'none' : 'auto'
+      if (outer) outer.style.paddingBottom = `${Math.round(12 * (1 - progress))}px`
     })
   }
   const [activeSignals, setActiveSignals] = useState(new Set())

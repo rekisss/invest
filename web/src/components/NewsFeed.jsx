@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
 
 const CUSTOM_RULES_KEY = 'news_custom_rules'
 const CUSTOM_COLORS = ['#58a6ff', '#3fb950', '#ffa657', '#f85149', '#bc8cff', '#f9c74f', '#79c0ff', '#56d364']
@@ -766,11 +766,17 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
   const [filter, setFilter] = useState('all')
   const [sentimentFilter, setSentimentFilter] = useState('all') // 'all' | 'bull' | 'bear'
   const [tagsExpanded, setTagsExpanded] = useState(false)
-  const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const [customRules, setCustomRules] = useState(loadCustomRules)
   const [showCustomPanel, setShowCustomPanel] = useState(false)
   const [nowTs, setNowTs] = useState(Date.now())
   const clockRef = useRef(null)
+
+  // Scroll-collapse refs (same pattern as Dashboard.jsx)
+  const newsHeaderInnerRef = useRef(null)
+  const newsMaxCollapseHeightRef = useRef(null)
+  const newsScrollRafRef = useRef(null)
+  const newsListRef = useRef(null)
+  const NEWS_COLLAPSE_RANGE = 55
 
   // Tick every 30 s so "N 分前更新" label stays current
   useEffect(() => {
@@ -821,6 +827,47 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
     })
   }, [staticNews])
 
+  // Measure header height on mount and when filter/tags change
+  useLayoutEffect(() => {
+    const el = newsHeaderInnerRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    const h = el.scrollHeight
+    newsMaxCollapseHeightRef.current = h
+    el.style.height = h + 'px'
+  }, [filter, tagsExpanded, showCustomPanel])
+
+  // RAF cleanup
+  useEffect(() => () => { if (newsScrollRafRef.current) cancelAnimationFrame(newsScrollRafRef.current) }, [])
+
+  const handleNewsScroll = (e) => {
+    const scrollTop = e.currentTarget.scrollTop
+    if (newsScrollRafRef.current) cancelAnimationFrame(newsScrollRafRef.current)
+    newsScrollRafRef.current = requestAnimationFrame(() => {
+      const el = newsHeaderInnerRef.current
+      if (!el) return
+      const outer = el.parentElement
+      if (scrollTop <= 2) {
+        el.style.height = 'auto'
+        const h = el.scrollHeight
+        newsMaxCollapseHeightRef.current = h
+        el.style.height = h + 'px'
+        el.style.opacity = '1'
+        el.style.pointerEvents = 'auto'
+        if (outer) outer.style.paddingBottom = '0px'
+        return
+      }
+      if (newsMaxCollapseHeightRef.current == null) {
+        newsMaxCollapseHeightRef.current = el.scrollHeight
+      }
+      const progress = Math.min(1, scrollTop / NEWS_COLLAPSE_RANGE)
+      el.style.height = `${newsMaxCollapseHeightRef.current * (1 - progress)}px`
+      el.style.opacity = `${Math.max(0, 1 - progress * 1.8)}`
+      el.style.pointerEvents = progress > 0.9 ? 'none' : 'auto'
+      if (outer) outer.style.paddingBottom = `${Math.round(8 * (1 - progress))}px`
+    })
+  }
+
   // Re-tag news whenever customRules changes
   const news = useMemo(() =>
     rawNews.map(item => ({ ...item, tags: detectTags(item.title, item.summary, customRules) })),
@@ -857,23 +904,10 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <style>{`@keyframes newBlink{0%,100%{opacity:1}50%{opacity:0.35}}`}</style>
 
-      {/* Collapsible header area */}
-      <div>
-        {/* Collapse toggle button */}
-        <button
-          onClick={() => setHeaderCollapsed(c => !c)}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            gap: 4, padding: '4px 0', fontSize: 10, fontWeight: 600,
-            color: 'var(--ios-label3)', background: 'transparent', border: 'none',
-            cursor: 'pointer', letterSpacing: 0.5,
-          }}
-        >
-          {headerCollapsed ? '▼ 展開篩選' : '▲ 收起篩選'}
-        </button>
-
-        {/* Collapsible body */}
-        {!headerCollapsed && (
+      {/* Collapsible header area — collapses as user scrolls down */}
+      <div style={{ flexShrink: 0 }}>
+        {/* Collapsible body — height animated by handleNewsScroll */}
+        <div ref={newsHeaderInnerRef} style={{ overflow: 'hidden' }}>
           <>
             {/* Trending bar */}
             {news.length > 0 && (
@@ -995,9 +1029,9 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
             )
           })}
         </div>
-          </div>
-        </>
-        )}
+        </div>
+          </>
+        </div>
       </div>
 
       {/* Custom category panel */}
@@ -1010,7 +1044,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
       )}
 
       {/* News list */}
-      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <div ref={newsListRef} onScroll={handleNewsScroll} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {filter !== 'all' && (
           <div style={{ padding: '6px 16px 2px', fontSize: 11, color: 'var(--ios-label3)' }}>
             篩選中 · {filtered.length} 則
