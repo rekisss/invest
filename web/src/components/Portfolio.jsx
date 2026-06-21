@@ -107,27 +107,55 @@ const inputStyle = {
 // ── Donut chart ───────────────────────────────────────────────────────────────
 function DonutChart({ slices }) {
   const total = slices.reduce((s, x) => s + x.value, 0)
+  const svgRef = useRef(null)
+
+  useGSAP(() => {
+    const el = svgRef.current
+    if (!el) return
+    const arcs = el.querySelectorAll('.donut-arc')
+    arcs.forEach(arc => {
+      const len = arc.getTotalLength()
+      gsap.set(arc, { strokeDasharray: len, strokeDashoffset: len })
+      gsap.to(arc, { strokeDashoffset: 0, duration: 0.85, ease: 'power2.out', delay: 0.08 })
+    })
+  }, { dependencies: [total, slices.length] })
+
   if (total === 0 || slices.length < 2) return null
-  const R = 52, cx = 64, cy = 64, stroke = 22
+
+  const cx = 64, cy = 64, R = 50, stroke = 16
+  const gap = 0.06 // radians of gap between segments
   let angle = -Math.PI / 2
-  const paths = slices.map((s, i) => {
+  const paths = slices.map(s => {
     const pct = s.value / total
-    const span = pct * 2 * Math.PI
-    const x1 = cx + R * Math.cos(angle)
-    const y1 = cy + R * Math.sin(angle)
-    angle += span
-    const x2 = cx + R * Math.cos(angle)
-    const y2 = cy + R * Math.sin(angle)
+    const span = Math.max(pct * 2 * Math.PI - gap, 0.001)
+    const a1 = angle + gap / 2
+    const a2 = a1 + span
+    angle += pct * 2 * Math.PI
+    const x1 = cx + R * Math.cos(a1), y1 = cy + R * Math.sin(a1)
+    const x2 = cx + R * Math.cos(a2), y2 = cy + R * Math.sin(a2)
     const large = span > Math.PI ? 1 : 0
-    return { d: `M ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2}`, color: s.color, pct, label: s.label }
+    return { d: `M ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2}`, color: s.color, pct }
   })
+
+  const top = [...slices].sort((a, b) => b.value - a.value)[0]
+  const topPct = total > 0 ? Math.round(top.value / total * 100) : 0
+
   return (
-    <svg width={128} height={128} viewBox="0 0 128 128" style={{ flexShrink: 0 }}>
+    <svg ref={svgRef} width={128} height={128} viewBox="0 0 128 128" style={{ flexShrink: 0 }}>
+      <defs>
+        <filter id="donutGlow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="2.5" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+      <circle cx={cx} cy={cy} r={R} fill="none" stroke="var(--ios-fill2)" strokeWidth={stroke} />
       {paths.map((p, i) => (
-        <path key={i} d={p.d} fill="none" stroke={p.color} strokeWidth={stroke}
-          strokeLinecap="butt" style={{ opacity: 0.9 }} />
+        <path key={i} className="donut-arc" d={p.d} fill="none" stroke={p.color}
+          strokeWidth={stroke} strokeLinecap="round" filter="url(#donutGlow)" style={{ opacity: 0.92 }} />
       ))}
-      <circle cx={cx} cy={cy} r={R - stroke / 2 - 1} fill="var(--ios-bg2)" />
+      <text x={cx} y={cy - 4} textAnchor="middle" fontSize="20" fontWeight="800"
+        fill="var(--ios-label)" fontFamily="var(--font-mono)">{topPct}%</text>
+      <text x={cx} y={cy + 12} textAnchor="middle" fontSize="8.5" fill="var(--ios-label3)">最大持倉</text>
     </svg>
   )
 }
