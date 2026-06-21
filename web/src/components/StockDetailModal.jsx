@@ -1776,9 +1776,9 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
     const obj = { val: 0 }
     gsap.to(obj, {
       val: stock.entry_score,
-      duration: 0.75,
+      duration: 0.85,
       ease: 'power3.out',
-      delay: 0.15,
+      delay: 0.38,
       onUpdate() { if (scoreRef.current) scoreRef.current.textContent = Math.round(obj.val) },
     })
   }, { dependencies: [stock?.stock_id] })

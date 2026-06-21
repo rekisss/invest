@@ -16,10 +16,10 @@ function ProbBar({ prob }) {
   useGSAP(() => {
     const obj = { val: 0 }
     gsap.to(obj, {
-      val: pct, duration: 0.9, ease: 'power3.out', delay: 0.1,
+      val: pct, duration: 0.9, ease: 'power3.out', delay: 0.3,
       onUpdate() { if (numRef.current) numRef.current.textContent = Math.round(obj.val) + '%' },
     })
-    gsap.from(barRef.current, { scaleX: 0, transformOrigin: 'left center', duration: 0.9, ease: 'power3.out', delay: 0.15 })
+    gsap.from(barRef.current, { scaleX: 0, transformOrigin: 'left center', duration: 0.9, ease: 'power3.out', delay: 0.35 })
   }, { dependencies: [pct] })
   return (
     <div>

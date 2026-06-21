@@ -169,10 +169,10 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
     gsap.from('.score-bar-fill', {
       scaleX: 0,
       transformOrigin: 'left center',
-      duration: 0.55,
-      stagger: { amount: 0.5, from: 'start' },
+      duration: 0.6,
+      stagger: { amount: 0.55, from: 'start' },
       ease: 'power3.out',
-      delay: 0.1,
+      delay: 0.35,
     })
   }, { scope: containerRef, dependencies: [stocks.length] })
 
