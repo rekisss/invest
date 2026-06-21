@@ -212,7 +212,7 @@ const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
     if (!arc) return
     const len = arc.getTotalLength()
     gsap.set([arc, glow], { strokeDasharray: len, strokeDashoffset: len })
-    const tl = gsap.timeline({ paused: true })
+    const tl = gsap.timeline({ paused: true, delay: 0.55 })
     tl.to(glow, { strokeDashoffset: 0, duration: 1.1, ease: 'power3.out' }, 0)
     tl.to(arc,  { strokeDashoffset: 0, duration: 1.0, ease: 'power3.out' }, 0.05)
     const io = new IntersectionObserver(es => {
@@ -280,7 +280,7 @@ function RiskCard({ risk, marketData, calendarRisk }) {
   useGSAP(() => {
     const el = riskBarRef.current
     if (!el) return
-    const tw = gsap.from(el, { scaleX: 0, transformOrigin: 'left center', duration: 0.8, ease: 'power3.out', paused: true })
+    const tw = gsap.from(el, { scaleX: 0, transformOrigin: 'left center', duration: 0.8, ease: 'power3.out', delay: 0.5, paused: true })
     const io = new IntersectionObserver(es => {
       if (es[0].isIntersecting) { tw.play(); io.disconnect() }
     }, { threshold: 0.2 })

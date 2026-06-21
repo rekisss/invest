@@ -1866,8 +1866,44 @@ export default function Dashboard({ data, error }) {
     { id: 'heatmap',   label: `🌡 族群` },
   ]
 
+  // Intercept horizontal right-swipe: when page > 0 go prev-page; when modal open,
+  // prevent the App-level tab switch (the modal's own drag handler closes it).
+  const dashSwipeRef = useRef(null)
+  const handleDashTouchStart = (e) => {
+    dashSwipeRef.current = { x0: e.touches[0].clientX, y0: e.touches[0].clientY, locked: false }
+  }
+  const handleDashTouchMove = (e) => {
+    const s = dashSwipeRef.current
+    if (!s || s.locked) return
+    const dx = e.touches[0].clientX - s.x0
+    const dy = e.touches[0].clientY - s.y0
+    if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return
+    if (Math.abs(dx) > Math.abs(dy) && dx > 0 && (selectedStock !== null || page > 0)) {
+      s.locked = true
+      e.stopPropagation() // prevent App from switching tabs
+      e.preventDefault()  // prevent page scroll
+    } else {
+      dashSwipeRef.current = null // vertical or leftward — let App handle
+    }
+  }
+  const handleDashTouchEnd = (e) => {
+    const s = dashSwipeRef.current
+    dashSwipeRef.current = null
+    if (!s?.locked) return
+    // Only advance pagination here; modal closing is handled by the modal's own drag handle
+    if (selectedStock === null && page > 0) {
+      const dx = (e.changedTouches?.[0]?.clientX ?? s.x0) - s.x0
+      if (dx > 60) setPage(p => p - 1)
+    }
+  }
+
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div
+      onTouchStart={handleDashTouchStart}
+      onTouchMove={handleDashTouchMove}
+      onTouchEnd={handleDashTouchEnd}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+    >
 
       {/* ── Controls Header ──────────────────────────────────────── */}
       <div style={{
