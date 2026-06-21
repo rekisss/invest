@@ -586,6 +586,109 @@ function AIBriefing({ scan, entryCount, totalStocks }) {
   )
 }
 
+/* ── Feature 4: Sector Heatmap ──────────────────────────────────── */
+// Stock ID range → sector mapping (Taiwan market convention)
+function inferSector(stockId) {
+  const n = parseInt(String(stockId), 10)
+  if (n >= 2300 && n <= 2399) return '半導體'
+  if (n >= 2400 && n <= 2499) return '電子'
+  if (n >= 2600 && n <= 2699) return '航運'
+  if (n >= 2800 && n <= 2899) return '金融'
+  if (n >= 3000 && n <= 3099) return 'IC設計'
+  if (n >= 3600 && n <= 3699) return '光電'
+  if (n >= 4900 && n <= 4999) return '電信'
+  if (n >= 5800 && n <= 5899) return '建設'
+  if (n >= 6000 && n <= 6099) return '光電'
+  if (n >= 6100 && n <= 6299) return '電子'
+  if (n >= 6600 && n <= 6699) return '生技'
+  if (n >= 8000 && n <= 8099) return '電子'
+  if (n >= 9200 && n <= 9299) return '其他'
+  if (n >= 1000 && n <= 1999) return '傳產'
+  if (n >= 2000 && n <= 2199) return '傳產'
+  if (n >= 2200 && n <= 2299) return '傳產'
+  if (n >= 2500 && n <= 2599) return '食品'
+  if (n >= 2700 && n <= 2799) return '貿易'
+  return '其他'
+}
+
+function SectorHeatmap({ stocks }) {
+  if (!stocks || stocks.length === 0) return null
+
+  // Group stocks by sector
+  const sectorMap = {}
+  for (const s of stocks) {
+    const sector = (s.industry_category && s.industry_category.trim()) || inferSector(s.stock_id)
+    if (!sectorMap[sector]) sectorMap[sector] = []
+    sectorMap[sector].push(s)
+  }
+
+  // Compute per-sector stats
+  const sectors = Object.entries(sectorMap).map(([name, members]) => {
+    const avgReturn = members.reduce((sum, s) => sum + (s.day_return || 0), 0) / members.length
+    const signalCount = members.filter(s => s.entry_signal).length
+    const avgScore = members.reduce((sum, s) => sum + (s.entry_score || 0), 0) / members.length
+    return { name, count: members.length, avgReturn, signalCount, avgScore }
+  }).sort((a, b) => b.avgReturn - a.avgReturn)
+
+  if (sectors.length === 0) return null
+
+  // Color scale: Taiwan convention — red=up, green=down
+  function heatColor(ret) {
+    const clamped = Math.max(-0.06, Math.min(0.06, ret))
+    if (clamped >= 0) {
+      const t = clamped / 0.06
+      const r = Math.round(255 * Math.min(1, 0.4 + t * 0.6))
+      const g = Math.round(40 * (1 - t))
+      return `rgba(${r},${g},40,${0.25 + t * 0.55})`
+    } else {
+      const t = -clamped / 0.06
+      const g = Math.round(255 * Math.min(1, 0.4 + t * 0.6))
+      const r = Math.round(40 * (1 - t))
+      return `rgba(${r},${g},40,${0.25 + t * 0.55})`
+    }
+  }
+
+  function textColor(ret) {
+    const abs = Math.abs(ret)
+    if (abs < 0.005) return 'var(--ios-label3)'
+    return ret > 0 ? 'var(--ios-red)' : 'var(--ios-green)'
+  }
+
+  return (
+    <div className="glass-panel" style={{ overflow: 'hidden' }}>
+      <div style={{ padding: '10px 14px 10px', borderBottom: '1px solid var(--ios-sep)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-label)' }}>🗂 板塊熱力圖</span>
+        <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>紅=漲 綠=跌（台灣慣例）</span>
+      </div>
+      <div style={{ padding: '10px 12px 12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 6 }}>
+        {sectors.map(({ name, count, avgReturn, signalCount }) => (
+          <div key={name} style={{
+            background: heatColor(avgReturn),
+            borderRadius: 10,
+            padding: '8px 6px',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            border: `0.5px solid ${avgReturn >= 0 ? 'rgba(255,69,58,0.25)' : 'rgba(48,209,88,0.25)'}`,
+            minHeight: 68,
+            position: 'relative',
+          }}>
+            {signalCount > 0 && (
+              <div style={{
+                position: 'absolute', top: 3, right: 5,
+                fontSize: 8, color: '#30D158', fontWeight: 700,
+              }}>✅{signalCount}</div>
+            )}
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-label)', textAlign: 'center', marginBottom: 3, lineHeight: 1.2 }}>{name}</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: textColor(avgReturn), fontFamily: 'monospace' }}>
+              {avgReturn >= 0 ? '+' : ''}{(avgReturn * 100).toFixed(1)}%
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 2 }}>{count} 支</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /* ── Main Export ─────────────────────────────────────────────────── */
 export default function Overview({ data, error }) {
   const pred = data?.prediction || null
@@ -668,6 +771,9 @@ export default function Overview({ data, error }) {
 
         {/* Feature 2: Watchlist alerts — entry signals or big drops */}
         <WatchlistAlerts stocks={stocks} />
+
+        {/* Feature 4: Sector heatmap */}
+        {stocks.length > 0 && <SectorHeatmap stocks={stocks} />}
 
         {/* Feature 5: AI daily briefing from scan ai_picks_text */}
         <AIBriefing scan={scan} entryCount={entryStocks.length} totalStocks={stocks.length} />
