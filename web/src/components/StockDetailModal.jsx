@@ -509,7 +509,7 @@ const CDP_LINE_DEFS = [
   { key: 'al',  color: 'rgba(48,209,88,0.95)',  sw: 1.2 },
 ]
 
-function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, onHoverIdx, hoveredIdx: extHoverIdx, onLock, locked, label, chartW: propChartW }) {
+function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, onHoverIdx, hoveredIdx: extHoverIdx, onLock, locked, label, chartW: propChartW, compareId, compareHistories, historyDates }) {
   const [hovered, setHovered] = useState(null)
   const touchRef = useRef(null)
 
@@ -543,6 +543,46 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
   )
 
   const { bars, W, CH, VH, GAP, H, PL, PR, PT, maxVol, slotW, bW, toY, toX, gridLevels, xLabels } = chart
+
+  // Feature 1: Build compare percentage-change series aligned to bars by date
+  const comparePolyline = useMemo(() => {
+    if (!compareId || !compareHistories?.[compareId] || !historyDates || !bars.length) return null
+    const cData = compareHistories[compareId]
+    // Build a date→close map for the compare stock
+    const closeMap = {}
+    historyDates.forEach((d, i) => { if (cData.c?.[i] != null) closeMap[d] = cData.c[i] })
+    if (Object.keys(closeMap).length === 0) return null
+
+    // Find bar dates (bars have .time field)
+    const barDates = bars.map(b => b.time)
+    const firstDate = barDates[0]
+    const baseClose = closeMap[firstDate]
+    if (!baseClose) return null
+
+    // Build pct-change values aligned to bars
+    const mainFirst = bars[0].close
+    const mainLast  = bars[bars.length - 1].close
+    const mainPctRange = Math.abs(mainLast - mainFirst) / mainFirst || 0.05
+
+    // pct-change polyline — use same vertical space as price chart
+    const points = []
+    for (let i = 0; i < bars.length; i++) {
+      const d = barDates[i]
+      const c = closeMap[d]
+      if (c == null) continue
+      const pct = (c - baseClose) / baseClose
+      // Map pct to y: center at mid of chart, scale to ±CH/2
+      // We scale so that the compare stock's range fits in the chart visually
+      const x = toX(i)
+      // pct is mapped to pixel: 0% → midY, scale by mainPctRange
+      const midY = PT + CH / 2
+      const scaleY = (CH * 0.45) / Math.max(mainPctRange, 0.02)
+      const y = midY - pct * scaleY
+      points.push(`${x.toFixed(1)},${y.toFixed(1)}`)
+    }
+    if (points.length < 2) return null
+    return points.join(' ')
+  }, [compareId, compareHistories, historyDates, bars, toX])
 
   const getIdx = (clientX, svgEl) => {
     const rect = svgEl.getBoundingClientRect()
@@ -734,6 +774,21 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
         toPolySegs(ma.values, toX, toY).map((pts, sj) => (
           <polyline key={`ma${mi}-${sj}`} points={pts} fill="none" stroke={ma.color} strokeWidth={1.2} opacity={0.85} />
         ))
+      )}
+
+      {/* Feature 1: Compare stock percentage-change overlay */}
+      {comparePolyline && (
+        <g>
+          {/* Legend */}
+          <rect x={PL + 4} y={PT + 18} width={60} height={14} rx={3} fill="rgba(0,0,0,0.45)" />
+          <circle cx={PL + 10} cy={PT + 25} r={3} fill="#FF9F0A" />
+          <text x={PL + 16} y={PT + 29} fontSize={8} fill="#FF9F0A" fontWeight="700">{compareId} %△</text>
+          {/* Zero line (0% change reference) */}
+          <line x1={PL} y1={PT + CH / 2} x2={W - PR} y2={PT + CH / 2}
+            stroke="#FF9F0A" strokeWidth={0.4} strokeDasharray="3,4" opacity={0.35} />
+          {/* The polyline */}
+          <polyline points={comparePolyline} fill="none" stroke="#FF9F0A" strokeWidth={1.5} opacity={0.8} strokeLinejoin="round" />
+        </g>
       )}
 
       {/* X-axis labels */}
@@ -1184,7 +1239,7 @@ function StrategyBacktestPanel({ bars, onPick, activeId }) {
 
 const PARAM_DEFAULTS = { rsiPeriod: 14, kdN: 9, kdM: 3, macdFast: 12, macdSlow: 26, macdSig: 9, bbPeriod: 20, bbMult: 2.0 }
 
-function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
+function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, compareId, compareHistories, historyDates }) {
   const cnyesUrl = `https://www.cnyes.com/twstock/${stockId}`
   const wantgooUrl = `https://www.wantgoo.com/stock/${stockId}`
 
@@ -1578,6 +1633,9 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
             locked={lockedIdx != null}
             label={`K線 · ${INTERVAL_LABELS.find(t => t.id === chartInterval)?.label || ''}`}
             chartW={totalChartW}
+            compareId={compareId}
+            compareHistories={compareHistories}
+            historyDates={historyDates}
           />
         ) : (
           <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
@@ -1939,7 +1997,7 @@ function Section({ title, children }) {
 
 // ── Main modal ───────────────────────────────────────────────────────────────
 
-export default function StockDetailModal({ stock, notionInfo, onClose, allScans }) {
+export default function StockDetailModal({ stock, notionInfo, onClose, allScans, compareHistories, historyDates }) {
   // Compute technical indicators from price_history for non-top-50 stocks.
   // Top-50 stocks already have pre-computed values from Python scan; slim stocks don't.
   // This fills all the "—" rows using the OHLCV bars we now carry for every scanned stock.
@@ -1992,7 +2050,11 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
   const [closing, setClosing] = useState(false)
   const swipeRef = useRef(null)
   const scoreRef = useRef(null)
-  useEffect(() => { setSwipeX(0); setClosing(false) }, [stock?.stock_id])
+  // Feature 1: K-line comparison
+  const [compareStockId, setCompareStockId] = useState('')
+  const [compareInput, setCompareInput]     = useState('')
+  const [showCompareInput, setShowCompareInput] = useState(false)
+  useEffect(() => { setSwipeX(0); setClosing(false); setCompareStockId(''); setCompareInput(''); setShowCompareInput(false) }, [stock?.stock_id])
 
   useGSAP(() => {
     if (!scoreRef.current || !stock?.entry_score) return
@@ -2094,6 +2156,19 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
             <div style={{ fontSize: 12, color: 'var(--ios-label3)', marginTop: 3 }}>{s.industry_category}</div>
           </div>
           <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexShrink: 0 }}>
+            {/* Feature 1: Compare button */}
+            <button
+              onClick={() => setShowCompareInput(v => !v)}
+              title="K線比較"
+              style={{
+                background: compareStockId ? 'rgba(255,159,10,0.2)' : 'var(--ios-fill3)',
+                border: compareStockId ? '1px solid #FF9F0A' : 'none',
+                color: compareStockId ? '#FF9F0A' : 'var(--ios-label2)',
+                borderRadius: 9999, padding: '0 10px', height: 28,
+                cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+              }}
+            >比較{compareStockId ? ` ${compareStockId}` : ''}</button>
             <button
               onClick={sendToStudio}
               title="在 AI 圓桌研究室分析此股"
@@ -2113,6 +2188,54 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
             >✕</button>
           </div>
         </div>
+
+        {/* Feature 1: Compare stock input panel */}
+        {showCompareInput && (
+          <div style={{
+            marginBottom: 12, padding: '10px 12px',
+            background: 'var(--ios-bg2)', borderRadius: 10,
+            border: '0.5px solid var(--ios-sep)',
+            display: 'flex', gap: 8, alignItems: 'center',
+          }}>
+            <input
+              value={compareInput}
+              onChange={e => setCompareInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const id = compareInput.trim()
+                  if (id && compareHistories?.[id]) { setCompareStockId(id); setShowCompareInput(false) }
+                }
+              }}
+              placeholder="輸入股票代號，如 0050"
+              style={{
+                flex: 1, padding: '7px 10px', fontSize: 13, borderRadius: 8,
+                background: 'var(--ios-fill3)', border: '0.5px solid var(--ios-sep)',
+                color: 'var(--ios-label)', outline: 'none',
+              }}
+            />
+            <button
+              onClick={() => {
+                const id = compareInput.trim()
+                if (id && compareHistories?.[id]) { setCompareStockId(id); setShowCompareInput(false) }
+              }}
+              style={{
+                padding: '7px 14px', fontSize: 12, fontWeight: 700,
+                background: 'var(--ios-blue)', color: '#fff',
+                border: 'none', borderRadius: 8, cursor: 'pointer',
+              }}
+            >確認</button>
+            {compareStockId && (
+              <button
+                onClick={() => { setCompareStockId(''); setCompareInput(''); setShowCompareInput(false) }}
+                style={{
+                  padding: '7px 10px', fontSize: 12,
+                  background: 'var(--ios-fill3)', color: 'var(--ios-red)',
+                  border: 'none', borderRadius: 8, cursor: 'pointer',
+                }}
+              >清除</button>
+            )}
+          </div>
+        )}
 
         {/* Feature 4: Score trend across dates */}
         {allScans && (() => {
@@ -2161,7 +2284,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
 
         {/* K 線圖 + 指標子圖 */}
         <Section title="K 線圖 &amp; 技術指標">
-          <KLineChart key={s.stock_id} stockId={s.stock_id} priceHistory={s.price_history} priceHistoryWk={s.price_history_wk} priceHistoryMo={s.price_history_mo} />
+          <KLineChart key={s.stock_id} stockId={s.stock_id} priceHistory={s.price_history} priceHistoryWk={s.price_history_wk} priceHistoryMo={s.price_history_mo} compareId={compareStockId || null} compareHistories={compareHistories} historyDates={historyDates} />
         </Section>
 
         {/* Notion 連結 */}
