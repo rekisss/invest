@@ -148,7 +148,7 @@ async function callClaude(apiKey, model, systemPrompt, userPrompt, onChunk) {
     'Content-Type': 'application/json',
     'x-api-key': apiKey,
     'anthropic-version': '2023-06-01',
-    'anthropic-dangerous-allow-browser': 'true',
+    'anthropic-dangerous-direct-browser-access': 'true',
   }
   const BODY = { model, max_tokens: 350, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }
 
