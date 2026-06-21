@@ -506,7 +506,17 @@ export default function Portfolio({ data }) {
                 <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>›</span>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                {pnlPct != null ? (
+                {sortBy === 'daysHeld' ? (
+                  <>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--ios-blue)' }}>{daysHeld ?? '—'} <span style={{ fontSize: 12, fontWeight: 500 }}>天</span></div>
+                    {pnlPct != null && <div style={{ fontSize: 11, color: pnlColor }}>{pnlPct >= 0 ? '+' : ''}{fmt(pnlPct)}%</div>}
+                  </>
+                ) : sortBy === 'cost' ? (
+                  <>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ios-label)' }}>{fmtNum(Math.round(cost))}</div>
+                    <div style={{ fontSize: 10, color: 'var(--ios-label3)' }}>成本</div>
+                  </>
+                ) : pnlPct != null ? (
                   <>
                     <div style={{ fontSize: 17, fontWeight: 700, color: pnlColor }}>{pnlPct >= 0 ? '+' : ''}{fmt(pnlPct)}%</div>
                     <div style={{ fontSize: 11, color: pnlColor }}>{pnlAmt >= 0 ? '+' : ''}{fmtNum(Math.round(pnlAmt))} 元</div>

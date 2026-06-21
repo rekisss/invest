@@ -1147,6 +1147,8 @@ function StrategyBacktestPanel({ bars, onPick, activeId }) {
   )
 }
 
+const PARAM_DEFAULTS = { rsiPeriod: 14, kdN: 9, kdM: 3, macdFast: 12, macdSlow: 26, macdSig: 9, bbPeriod: 20, bbMult: 2.0 }
+
 function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const cnyesUrl = `https://www.cnyes.com/twstock/${stockId}`
   const wantgooUrl = `https://www.wantgoo.com/stock/${stockId}`
@@ -1164,6 +1166,20 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
   const [hoveredIdx, setHoveredIdx] = useState(null)
   const [lockedIdx, setLockedIdx] = useState(null)
   const [barCount, setBarCount] = useState(250)
+  const [params, setParams] = useState(() => {
+    try { return { ...PARAM_DEFAULTS, ...JSON.parse(localStorage.getItem('indicatorParams') || '{}') } }
+    catch { return PARAM_DEFAULTS }
+  })
+  const updateParam = (key, raw) => {
+    const val = parseFloat(raw)
+    if (isNaN(val) || val <= 0) return
+    setParams(prev => {
+      const next = { ...prev, [key]: key === 'bbMult' ? val : Math.round(val) }
+      try { localStorage.setItem('indicatorParams', JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+  const [showParams, setShowParams] = useState(false)
 
   // Long-press locks the crosshair: after the finger lifts, the crosshair +
   // detail stay pinned to that bar. Live drag (hoveredIdx) overrides it; tapping
@@ -1307,9 +1323,9 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
     const closes = warmBars.map(d => d.close)
     const sl = arr => arr.slice(off)
 
-    const bb = bollingerCalc(closes, 20, 2)
-    const { macdLine, signalLine, hist } = macdCalc(closes)
-    const kdResult = kdCalc(warmBars)
+    const bb = bollingerCalc(closes, params.bbPeriod, params.bbMult)
+    const { macdLine, signalLine, hist } = macdCalc(closes, params.macdFast, params.macdSlow, params.macdSig)
+    const kdResult = kdCalc(warmBars, params.kdN, params.kdM)
     const obvWarm = obvCalc(warmBars)
     const adxResult = adxCalc(warmBars)
     const bbSl = sl(bb)
@@ -1322,7 +1338,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         lower: bbSl.map(v => v?.lower ?? null),
       },
       macd: { macdLine: sl(macdLine), signalLine: sl(signalLine), hist: sl(hist) },
-      rsi:  sl(rsiCalc(closes)),
+      rsi:  sl(rsiCalc(closes, params.rsiPeriod)),
       kd:   { kArr: sl(kdResult.kArr), dArr: sl(kdResult.dArr) },
       obv:  (() => { const v = sl(obvWarm); return { values: v, ma: smaCalc(v, 20) } })(),
       adx:  { adxLine: sl(adxResult.adxLine), plusDI: sl(adxResult.plusDI), minusDI: sl(adxResult.minusDI) },
@@ -1337,12 +1353,49 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         return { ah: c + r, nh: 2 * c - p.low, cdp: c, nl: 2 * c - p.high, al: c - r }
       }),
     }
-  }, [bars, _allBars, chartInterval, daily])
+  }, [bars, _allBars, chartInterval, daily, params])
 
   const unitLabel = { '1d': '個交易日', '1wk': '週', '1mo': '個月' }
 
   return (
     <div>
+      {/* Indicator param settings */}
+      <div style={{ marginBottom: 6 }}>
+        <button onClick={() => setShowParams(v => !v)} style={{
+          fontSize: 10, color: showParams ? 'var(--ios-blue)' : 'var(--ios-label3)',
+          background: showParams ? 'rgba(10,132,255,0.1)' : 'var(--ios-fill4)',
+          border: 'none', borderRadius: 6, padding: '3px 9px', cursor: 'pointer',
+          fontWeight: showParams ? 700 : 400, transition: 'all 0.15s',
+        }}>⚙ 指標係數</button>
+        {showParams && (
+          <div style={{ marginTop: 6, padding: '10px 12px', background: 'var(--ios-bg2)', borderRadius: 10, border: '0.5px solid var(--ios-sep)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px 16px' }}>
+              {[
+                ['RSI 週期', 'rsiPeriod', params.rsiPeriod],
+                ['KD 週期 (N)', 'kdN', params.kdN],
+                ['KD 平滑 (M)', 'kdM', params.kdM],
+                ['MACD 快線', 'macdFast', params.macdFast],
+                ['MACD 慢線', 'macdSlow', params.macdSlow],
+                ['MACD 信號', 'macdSig', params.macdSig],
+                ['BB 週期', 'bbPeriod', params.bbPeriod],
+                ['BB 倍數', 'bbMult', params.bbMult],
+              ].map(([lbl, key, val]) => (
+                <label key={key} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 9, color: 'var(--ios-label3)', fontWeight: 600 }}>{lbl}</span>
+                  <input type="number" defaultValue={val} min={1} step={key === 'bbMult' ? 0.1 : 1}
+                    onBlur={e => updateParam(key, e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && updateParam(key, e.target.value)}
+                    style={{ width: '100%', padding: '4px 6px', fontSize: 12, borderRadius: 6, border: '0.5px solid var(--ios-sep)', background: 'var(--ios-fill4)', color: 'var(--ios-label)', outline: 'none', boxSizing: 'border-box' }} />
+                </label>
+              ))}
+            </div>
+            <div style={{ marginTop: 8, display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+              <button onClick={() => { setParams(PARAM_DEFAULTS); try { localStorage.setItem('indicatorParams', JSON.stringify(PARAM_DEFAULTS)) } catch {} }} style={{ fontSize: 10, color: 'var(--ios-label3)', background: 'var(--ios-fill4)', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>重設預設值</button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Strategy preset row */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 6, alignItems: 'center' }}>
         <span style={{ fontSize: 10, color: 'var(--ios-label3)', marginRight: 2, flexShrink: 0 }}>策略</span>
@@ -1501,7 +1554,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         {active.macd && indicators && bars.length >= 26 && (
           <SubChartSVG
             bars={bars}
-            label="MACD(12,26,9)"
+            label={`MACD(${params.macdFast},${params.macdSlow},${params.macdSig})`}
             histSeries={{ values: indicators.macd.hist }}
             lines={[
               { color: '#0A84FF', label: 'MACD', values: indicators.macd.macdLine, width: 1 },
@@ -1520,7 +1573,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         {active.rsi && indicators && bars.length >= 15 && (
           <SubChartSVG
             bars={bars}
-            label="RSI(14)"
+            label={`RSI(${params.rsiPeriod})`}
             lines={[{ color: '#BF5AF2', label: 'RSI', values: indicators.rsi, width: 1.2 }]}
             hBands={[
               { value: 70, color: '#FF453A', label: '70' },
@@ -1540,7 +1593,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo }) {
         {active.kd && indicators && bars.length >= 9 && (
           <SubChartSVG
             bars={bars}
-            label="KD(9,3)"
+            label={`KD(${params.kdN},${params.kdM})`}
             lines={[
               { color: '#FF9F0A', label: 'K', values: indicators.kd.kArr, width: 1 },
               { color: '#0A84FF', label: 'D', values: indicators.kd.dArr, width: 1 },
