@@ -1053,9 +1053,14 @@ function DataQualityPanel({ dq }) {
       label: '法人資料',
       ok: dq.institutional_ok !== false,
       detail: dq.institutional_ok === false
-        ? `三大法人尚未公布（僅 ${dq.institutional_ratio ?? 0}% 有資料）· 盤後 16:00–18:00 TWSE 公布後自動補入`
+        ? `三大法人尚未公布（${dq.institutional_ratio ?? 0}% 有資料）· 盤後 TWSE 公布後自動補入`
         : dq.institutional_ratio != null
-          ? `${dq.institutional_source === 'twse_t86' ? '✦ TWSE 即時補抓' : '掃描原生資料'}（${dq.institutional_ratio}%）`
+          ? (() => {
+              const src = dq.institutional_source === 'twse_t86' ? '掃描 + TWSE 補抓' : '掃描原生資料'
+              const pct = dq.institutional_ratio
+              const note = pct < 80 ? `（${pct}%，部分股票無法人揭露）` : `（${pct}%）`
+              return src + note
+            })()
           : '無法人資料',
     },
     {
