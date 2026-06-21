@@ -54,6 +54,25 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
   const [refreshCount, setRefreshCount] = useState(0)
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('theme_pref') || 'auto' } catch { return 'auto' }
+  })
+
+  useEffect(() => {
+    try {
+      if (theme === 'auto') {
+        delete document.documentElement.dataset.theme
+        localStorage.removeItem('theme_pref')
+      } else {
+        document.documentElement.dataset.theme = theme
+        localStorage.setItem('theme_pref', theme)
+      }
+    } catch { /* ignore */ }
+  }, [theme])
+
+  const cycleTheme = () => setTheme(t => (t === 'auto' ? 'dark' : t === 'dark' ? 'light' : 'auto'))
+  const themeIcon = theme === 'auto' ? '🌗' : theme === 'dark' ? '🌙' : '☀️'
+  const themeLabel = theme === 'auto' ? '自動' : theme === 'dark' ? '深色' : '淺色'
 
   // Swipe state
   const [swipeOffset, setSwipeOffset] = useState(0)
@@ -225,8 +244,18 @@ export default function App() {
 
       {/* ── iOS Navigation Bar ───────────────────────────────────── */}
       <div className="ios-nav">
-        <div style={{ fontSize: 12, color: 'var(--ios-label2)', minWidth: 80 }}>
-          {formattedTime || ''}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 88 }}>
+          <button
+            onClick={cycleTheme}
+            title={`主題：${themeLabel}`}
+            style={{
+              background: 'var(--ios-fill2)', border: '0.5px solid var(--ios-sep)',
+              borderRadius: 9999, width: 28, height: 28, fontSize: 14,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', flexShrink: 0, lineHeight: 1,
+            }}
+          >{themeIcon}</button>
+          <span style={{ fontSize: 11, color: 'var(--ios-label3)' }}>{formattedTime || ''}</span>
         </div>
         <div className="ios-nav-title">台股 AI 助手</div>
         <button

@@ -87,9 +87,9 @@
   --purple:  var(--ios-purple);
 }
 
-/* ── Light Mode ───────────────────────────────────────────────────── */
+/* ── Light Mode vars (shared between auto-detect and forced [data-theme="light"]) ── */
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme]) {
     --ios-bg:   #f5f5f7;
     --ios-bg2:  #ffffff;
     --ios-bg3:  #f0f0f5;
@@ -118,6 +118,58 @@
     --shadow-card:  0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.06);
     --shadow-modal: 0 16px 40px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.07);
     --shadow-float: 0 8px 24px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
+  }
+}
+
+/* Forced light mode (JS toggle) */
+:root[data-theme="light"] {
+  --ios-bg:   #f5f5f7;
+  --ios-bg2:  #ffffff;
+  --ios-bg3:  #f0f0f5;
+  --ios-bg4:  #e8e8ee;
+
+  --ios-label:  #1a1a1e;
+  --ios-label2: rgba(60,60,67,0.65);
+  --ios-label3: rgba(60,60,67,0.35);
+  --ios-label4: rgba(60,60,67,0.18);
+
+  --ios-sep:        rgba(0,0,0,0.08);
+  --ios-sep-opaque: #d0d0d8;
+
+  --ios-fill:   rgba(0,0,0,0.06);
+  --ios-fill2:  rgba(0,0,0,0.04);
+  --ios-fill3:  rgba(0,0,0,0.03);
+  --ios-fill4:  rgba(0,0,0,0.02);
+
+  --ios-blue:   #007aff;
+  --ios-green:  #34c759;
+  --ios-red:    #ff3b30;
+  --ios-orange: #ff9500;
+  --ios-yellow: #ffcc00;
+  --ios-purple: #af52de;
+
+  --shadow-card:  0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.06);
+  --shadow-modal: 0 16px 40px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.07);
+  --shadow-float: 0 8px 24px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
+}
+
+/* Light mode aurora tones down, nav becomes light-opaque */
+:root[data-theme="light"] body::before { opacity: 0.45; }
+:root[data-theme="light"] body::after  { opacity: 0.35; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) body::before { opacity: 0.45; }
+  :root:not([data-theme]) body::after  { opacity: 0.35; }
+}
+:root[data-theme="light"] .ios-nav,
+:root[data-theme="light"] .ios-tabbar {
+  background: rgba(255,255,255,0.82);
+  border-color: rgba(0,0,0,0.08);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .ios-nav,
+  :root:not([data-theme]) .ios-tabbar {
+    background: rgba(255,255,255,0.82);
+    border-color: rgba(0,0,0,0.08);
   }
 }
 

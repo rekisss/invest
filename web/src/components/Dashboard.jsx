@@ -1291,7 +1291,7 @@ function MarketBreadthBar({ stocks }) {
           </div>
         </div>
       ))}
-      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 4 }}>EMA60上＝站穩60日均線；ADX趨勢＝ADX>25強趨勢；RSI強勢＝RSI>55；外資買＝外資連買中</div>
+      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 4 }}>EMA60上＝站穩60日均線；ADX趨勢＝ADX&gt;25強趨勢；RSI強勢＝RSI&gt;55；外資買＝外資連買中</div>
     </div>
   )
 }
