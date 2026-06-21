@@ -3,10 +3,16 @@
    Dark theme optimised for data density and readability
    ══════════════════════════════════════════════════════════════════════ */
 
+/* Display font for large titles — loaded from privacy-friendly Bunny Fonts,
+   degrades gracefully to the system stack if the network blocks it. */
+@import url('https://fonts.bunny.net/css?family=space-grotesk:500,600,700');
+
 :root {
   /* Fonts */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
                "Inter", "Helvetica Neue", sans-serif;
+  --font-display: "Space Grotesk", -apple-system, BlinkMacSystemFont, "SF Pro Display",
+               "Inter", sans-serif;
   --font-mono: "SF Mono", "Fira Code", ui-monospace, "JetBrains Mono", monospace;
 
   /* Spacing */
@@ -134,19 +140,50 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Ambient light — stronger gradients visible through white-tint glass panels */
+/* Ambient aurora — animated drifting glow visible through the glass panels.
+   Two stacked fixed layers gently breathe and rotate for a living backdrop. */
 body::before {
   content: '';
   position: fixed;
-  inset: 0;
+  inset: -25%;
   background:
-    radial-gradient(ellipse 70% 60% at 10% 30%, rgba(10,132,255,0.13) 0%, transparent 70%),
-    radial-gradient(ellipse 60% 70% at 90% 15%, rgba(191,90,242,0.09) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 50% at 50% 90%, rgba(48,209,88,0.07) 0%, transparent 70%);
+    radial-gradient(ellipse 60% 55% at 12% 28%, rgba(10,132,255,0.22) 0%, transparent 68%),
+    radial-gradient(ellipse 55% 65% at 88% 14%, rgba(191,90,242,0.18) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 50% at 50% 92%, rgba(48,209,88,0.12) 0%, transparent 72%);
   pointer-events: none;
   z-index: 0;
+  will-change: transform, opacity;
+  animation: aurora-drift 26s ease-in-out infinite;
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: -25%;
+  background:
+    radial-gradient(ellipse 45% 50% at 78% 70%, rgba(90,200,250,0.16) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 45% at 22% 78%, rgba(255,55,95,0.10) 0%, transparent 72%),
+    conic-gradient(from 210deg at 50% 40%, rgba(191,90,242,0.07), transparent 40%, rgba(10,132,255,0.07) 75%, transparent);
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform, opacity;
+  animation: aurora-drift-2 34s ease-in-out infinite;
+}
+@keyframes aurora-drift {
+  0%   { transform: translate3d(0,0,0) rotate(0deg)   scale(1);    opacity: 0.9; }
+  33%  { transform: translate3d(3%,2%,0) rotate(4deg)  scale(1.08); opacity: 1; }
+  66%  { transform: translate3d(-2%,-3%,0) rotate(-3deg) scale(1.04); opacity: 0.85; }
+  100% { transform: translate3d(0,0,0) rotate(0deg)   scale(1);    opacity: 0.9; }
+}
+@keyframes aurora-drift-2 {
+  0%   { transform: translate3d(0,0,0) rotate(0deg)   scale(1.05); opacity: 0.8; }
+  50%  { transform: translate3d(-4%,3%,0) rotate(6deg) scale(1.12); opacity: 1; }
+  100% { transform: translate3d(0,0,0) rotate(0deg)   scale(1.05); opacity: 0.8; }
 }
 #root { position: relative; z-index: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  body::before, body::after { animation: none; }
+}
 
 button { cursor: pointer; font-family: var(--font-sans); }
 input, textarea { font-family: var(--font-sans); }
@@ -228,7 +265,13 @@ input, textarea { font-family: var(--font-sans); }
 .ios-tab-btn:active { opacity: 0.6; }
 .ios-tab-icon  { font-size: 22px; line-height: 1; }
 .ios-tab-label { font-size: 10px; font-weight: 500; line-height: 1; color: var(--ios-label3); }
-.ios-tab-btn.active .ios-tab-label { color: var(--ios-blue); }
+.ios-tab-btn.active .ios-tab-label {
+  color: var(--ios-blue);
+  text-shadow: 0 0 10px rgba(10,132,255,0.55);
+}
+.ios-tab-btn.active .ios-tab-icon {
+  filter: drop-shadow(0 0 8px rgba(10,132,255,0.5));
+}
 .ios-tab-btn:not(.active) .ios-tab-icon { opacity: 0.45; }
 
 /* ── Category / Filter Bar ────────────────────────────────────────── */
@@ -282,25 +325,67 @@ input, textarea { font-family: var(--font-sans); }
 
 /* ── Glass utility classes — white-tint iOS style ─────────────────── */
 .glass-panel {
-  background: rgba(255,255,255,0.05);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(160deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.025) 45%, rgba(255,255,255,0.045) 100%);
+  backdrop-filter: blur(24px) saturate(185%);
+  -webkit-backdrop-filter: blur(24px) saturate(185%);
+  border: 1px solid rgba(255,255,255,0.10);
   border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.09);
-  transition: box-shadow 0.3s cubic-bezier(0.25,0.8,0.25,1);
+  box-shadow:
+    0 8px 32px rgba(0,0,0,0.32),
+    0 1px 0 rgba(255,255,255,0.04),
+    inset 0 1px 0 rgba(255,255,255,0.11),
+    inset 0 0 24px rgba(120,140,255,0.025);
+  transition: box-shadow 0.35s cubic-bezier(0.25,0.8,0.25,1), transform 0.35s cubic-bezier(0.25,0.8,0.25,1);
 }
 .glass-panel--bull {
-  border-top-color: rgba(48,209,88,0.45);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(48,209,88,0.18), 0 0 0 0.5px rgba(48,209,88,0.12);
+  border-top-color: rgba(48,209,88,0.55);
+  box-shadow:
+    0 8px 32px rgba(0,0,0,0.32),
+    inset 0 1px 0 rgba(48,209,88,0.22),
+    0 0 0 0.5px rgba(48,209,88,0.14),
+    0 0 28px rgba(48,209,88,0.10);
+  animation: glow-pulse-bull 4.5s ease-in-out infinite;
 }
 .glass-panel--bear {
-  border-top-color: rgba(255,69,58,0.45);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,69,58,0.15);
+  border-top-color: rgba(255,69,58,0.55);
+  box-shadow:
+    0 8px 32px rgba(0,0,0,0.32),
+    inset 0 1px 0 rgba(255,69,58,0.20),
+    0 0 28px rgba(255,69,58,0.10);
+  animation: glow-pulse-bear 4.5s ease-in-out infinite;
 }
 .glass-panel--blue {
-  border-top-color: rgba(10,132,255,0.40);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(10,132,255,0.15);
+  border-top-color: rgba(10,132,255,0.50);
+  box-shadow:
+    0 8px 32px rgba(0,0,0,0.32),
+    inset 0 1px 0 rgba(10,132,255,0.18),
+    0 0 28px rgba(10,132,255,0.10);
+  animation: glow-pulse-blue 4.5s ease-in-out infinite;
+}
+@keyframes glow-pulse-bull {
+  0%,100% { box-shadow: 0 8px 32px rgba(0,0,0,0.32), inset 0 1px 0 rgba(48,209,88,0.22), 0 0 0 0.5px rgba(48,209,88,0.14), 0 0 22px rgba(48,209,88,0.08); }
+  50%     { box-shadow: 0 8px 32px rgba(0,0,0,0.32), inset 0 1px 0 rgba(48,209,88,0.28), 0 0 0 0.5px rgba(48,209,88,0.22), 0 0 38px rgba(48,209,88,0.18); }
+}
+@keyframes glow-pulse-bear {
+  0%,100% { box-shadow: 0 8px 32px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,69,58,0.20), 0 0 22px rgba(255,69,58,0.08); }
+  50%     { box-shadow: 0 8px 32px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,69,58,0.26), 0 0 38px rgba(255,69,58,0.18); }
+}
+@keyframes glow-pulse-blue {
+  0%,100% { box-shadow: 0 8px 32px rgba(0,0,0,0.32), inset 0 1px 0 rgba(10,132,255,0.18), 0 0 22px rgba(10,132,255,0.08); }
+  50%     { box-shadow: 0 8px 32px rgba(0,0,0,0.32), inset 0 1px 0 rgba(10,132,255,0.26), 0 0 38px rgba(10,132,255,0.20); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glass-panel--bull, .glass-panel--bear, .glass-panel--blue { animation: none; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .glass-panel:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 18px 44px rgba(0,0,0,0.42),
+      inset 0 1px 0 rgba(255,255,255,0.14),
+      0 0 36px rgba(120,140,255,0.14);
+  }
 }
 
 /* ── Glass list rows ──────────────────────────────────────────────── */
@@ -487,10 +572,10 @@ input, textarea { font-family: var(--font-sans); }
   background: transparent; color: var(--ios-label2);
 }
 .ios-seg-btn.active {
-  background: var(--ios-bg3);
-  color: var(--ios-label);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  font-weight: 600;
+  background: linear-gradient(180deg, rgba(10,132,255,0.22), rgba(10,132,255,0.10));
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 0 14px rgba(10,132,255,0.30), inset 0 0 0 0.5px rgba(10,132,255,0.45);
+  font-weight: 700;
 }
 
 /* ══════════════════════════════════════════════════════════════════════

@@ -625,7 +625,7 @@ export default function Overview({ data, error }) {
   const entryStocks = stocks.filter(s => s.entry_signal)
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: '#070B14' }}>
+    <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: 'transparent' }}>
       <div style={{ padding: '10px 14px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
         {/* Row 1: Gauge + Risk */}

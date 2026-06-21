@@ -204,7 +204,7 @@ export default function App() {
     : 'none'
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--ios-bg)' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'transparent' }}>
 <style>{`
         @keyframes slideInFromRight {
           from { transform: translateX(60px); opacity: 0; }
@@ -213,6 +213,13 @@ export default function App() {
         @keyframes slideInFromLeft {
           from { transform: translateX(-60px); opacity: 0; }
           to   { transform: translateX(0);     opacity: 1; }
+        }
+        @keyframes titleReveal {
+          from { opacity: 0; transform: translateY(8px); filter: blur(6px); letter-spacing: 0.5px; }
+          to   { opacity: 1; transform: translateY(0);   filter: blur(0);   letter-spacing: -0.6px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          @keyframes titleReveal { from { opacity: 1; } to { opacity: 1; } }
         }
       `}</style>
 
@@ -233,8 +240,19 @@ export default function App() {
       </div>
 
       {/* ── Large Title ──────────────────────────────────────────── */}
-      <div style={{ padding: '8px 20px 10px', background: 'var(--ios-bg)', flexShrink: 0 }}>
-        <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.4px', color: 'var(--ios-label)', lineHeight: 1.32, paddingBottom: 1 }}>
+      <div style={{ padding: '8px 20px 10px', background: 'transparent', flexShrink: 0 }}>
+        <div
+          key={tab}
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 32, fontWeight: 700, letterSpacing: '-0.6px', lineHeight: 1.32, paddingBottom: 1,
+            background: 'linear-gradient(95deg, #FFFFFF 0%, #C9D6FF 42%, #BF5AF2 100%)',
+            WebkitBackgroundClip: 'text', backgroundClip: 'text',
+            WebkitTextFillColor: 'transparent', color: 'transparent',
+            textShadow: '0 0 28px rgba(120,140,255,0.18)',
+            animation: 'titleReveal 0.5s cubic-bezier(0.22,1,0.36,1) both',
+          }}
+        >
           {TAB_TITLES[tab]}
         </div>
       </div>
