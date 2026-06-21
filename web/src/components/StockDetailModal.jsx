@@ -386,7 +386,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
   }
 
   const accentColor = lines?.[0]?.color || (histSeries ? '#FF453A' : '#8E8E93')
-  const badgeW = Math.max(24, (label?.length || 0) * 5.2 + 10)
+  const badgeW = Math.max(30, (label?.length || 0) * 6.0 + 14)
 
   return (
     <svg
@@ -435,22 +435,23 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
 
       {/* Indicator label badge (top-left): colored pill with accent bar */}
       <g>
-        <rect x={CHART_PL + 1} y={PT} width={badgeW} height={14} rx={3}
-          fill={accentColor} fillOpacity={0.13} />
-        <rect x={CHART_PL + 1} y={PT} width={2.5} height={14} rx={1.5}
-          fill={accentColor} fillOpacity={0.9} />
-        <text x={CHART_PL + 7} y={PT + 9.5} fontSize={8} fill={accentColor} fontWeight="700" letterSpacing="0.3">{label}</text>
+        <rect x={CHART_PL + 1} y={PT} width={badgeW} height={16} rx={4}
+          fill={accentColor} fillOpacity={0.18}
+          stroke={accentColor} strokeWidth={0.6} strokeOpacity={0.35} />
+        <rect x={CHART_PL + 1} y={PT} width={3} height={16} rx={2}
+          fill={accentColor} fillOpacity={0.95} />
+        <text x={CHART_PL + 8} y={PT + 11} fontSize={9.5} fill={accentColor} fontWeight="800" letterSpacing="0.4">{label}</text>
       </g>
 
       {/* Hover values — offset right of the badge */}
       {hoveredIdx != null && (() => {
-        const labelW = badgeW + 6
+        const labelW = badgeW + 8
         return (lines || []).map((series, si) => {
           const v = series.values[hoveredIdx]
           if (v == null) return null
           const disp = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1)
           return (
-            <text key={si} x={CHART_PL + 3 + labelW + si * 58} y={PT + 9.5} fontSize={8} fill={series.color} fontWeight="600">
+            <text key={si} x={CHART_PL + 3 + labelW + si * 60} y={PT + 11} fontSize={9} fill={series.color} fontWeight="600">
               {series.label}:{disp}
             </text>
           )
@@ -701,7 +702,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
         <text key={i} x={toX(i)} y={H + PT + 12} fontSize={8.5} style={{ fill: 'var(--ios-label3)' }} textAnchor="middle">{label}</text>
       ))}
 
-      {/* CDP right-axis price labels (always visible when CDP is on) */}
+      {/* CDP right-axis price labels — de-collided so they never overlap */}
       {cdpSeries && bars.length > 0 && (() => {
         const lastLv = cdpSeries[bars.length - 1]
         if (!lastLv) return null
@@ -712,35 +713,66 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
           { v: lastLv.nl,  c: 'rgba(48,209,88,0.9)',   s: 'NL' },
           { v: lastLv.al,  c: 'rgba(48,209,88,1)',      s: 'AL' },
         ]
-        return CDP_AXIS.map(({ v, c, s }) => {
-          const y = toY(v)
-          if (y < PT || y > CH + PT) return null
+        // Filter to visible range and compute positions
+        const visible = CDP_AXIS.map(({ v, c, s }) => {
+          const y = toY(v); if (y < PT || y > CH + PT) return null
+          return { v, c, s, y, adjY: y }
+        }).filter(Boolean)
+        // De-collision: forward pass (push down), backward pass (pull up)
+        const BADGE_H = 11, MIN_GAP = 2
+        for (let i = 1; i < visible.length; i++) {
+          const minY = visible[i - 1].adjY + BADGE_H + MIN_GAP
+          if (visible[i].adjY < minY) visible[i].adjY = minY
+        }
+        for (let i = visible.length - 2; i >= 0; i--) {
+          const maxY = visible[i + 1].adjY - BADGE_H - MIN_GAP
+          if (visible[i].adjY > maxY) visible[i].adjY = Math.min(visible[i].adjY, maxY)
+        }
+        return visible.map(({ v, c, s, y, adjY }) => {
           const priceStr = v >= 100 ? v.toFixed(1) : v.toFixed(2)
+          const displaced = Math.abs(adjY - y) > 1.5
           return (
             <g key={s}>
               <line x1={W - PR} y1={y} x2={W - PR + 4} y2={y} stroke={c} strokeWidth={1.2} />
-              <rect x={W - PR + 5} y={y - 5.5} width={26} height={11} fill={c} rx={2} opacity={0.9} />
-              <text x={W - PR + 18} y={y + 3.5} fontSize={7} fill="#1C1C1E" fontWeight="bold" textAnchor="middle">{priceStr}</text>
+              {displaced && <line x1={W - PR + 4} y1={y} x2={W - PR + 5} y2={adjY} stroke={c} strokeWidth={0.5} strokeDasharray="2,1.5" opacity={0.55} />}
+              <rect x={W - PR + 5} y={adjY - 5.5} width={26} height={11} fill={c} rx={2} opacity={0.9} />
+              <text x={W - PR + 18} y={adjY + 3.5} fontSize={7} fill="#1C1C1E" fontWeight="bold" textAnchor="middle">{priceStr}</text>
             </g>
           )
         })
       })()}
 
-      {/* MA right-axis price labels (TradingView style) */}
-      {(maLines || []).map(ma => {
-        const lastVal = ma.values[bars.length - 1]
-        if (lastVal == null) return null
-        const y = toY(lastVal)
-        if (y < PT || y > CH + PT) return null
-        const priceStr = lastVal >= 100 ? lastVal.toFixed(0) : lastVal.toFixed(1)
-        return (
-          <g key={ma.label}>
-            <line x1={W - PR} y1={y} x2={W - PR + 4} y2={y} stroke={ma.color} strokeWidth={1.0} />
-            <rect x={W - PR + 5} y={y - 5.5} width={26} height={11} fill={ma.color} rx={2} opacity={0.85} />
-            <text x={W - PR + 18} y={y + 3.5} fontSize={7} fill="#1C1C1E" fontWeight="bold" textAnchor="middle">{priceStr}</text>
-          </g>
-        )
-      })}
+      {/* MA right-axis price labels — de-collided */}
+      {(() => {
+        const BADGE_H = 11, MIN_GAP = 2
+        const maVisible = (maLines || []).map(ma => {
+          const lastVal = ma.values[bars.length - 1]
+          if (lastVal == null) return null
+          const y = toY(lastVal)
+          if (y < PT || y > CH + PT) return null
+          return { ma, y, adjY: y }
+        }).filter(Boolean)
+        for (let i = 1; i < maVisible.length; i++) {
+          const minY = maVisible[i - 1].adjY + BADGE_H + MIN_GAP
+          if (maVisible[i].adjY < minY) maVisible[i].adjY = minY
+        }
+        for (let i = maVisible.length - 2; i >= 0; i--) {
+          const maxY = maVisible[i + 1].adjY - BADGE_H - MIN_GAP
+          if (maVisible[i].adjY > maxY) maVisible[i].adjY = Math.min(maVisible[i].adjY, maxY)
+        }
+        return maVisible.map(({ ma, y, adjY }) => {
+          const priceStr = ma.values[bars.length - 1] >= 100 ? ma.values[bars.length - 1].toFixed(0) : ma.values[bars.length - 1].toFixed(1)
+          const displaced = Math.abs(adjY - y) > 1.5
+          return (
+            <g key={ma.label}>
+              <line x1={W - PR} y1={y} x2={W - PR + 4} y2={y} stroke={ma.color} strokeWidth={1.0} />
+              {displaced && <line x1={W - PR + 4} y1={y} x2={W - PR + 5} y2={adjY} stroke={ma.color} strokeWidth={0.5} strokeDasharray="2,1.5" opacity={0.55} />}
+              <rect x={W - PR + 5} y={adjY - 5.5} width={26} height={11} fill={ma.color} rx={2} opacity={0.85} />
+              <text x={W - PR + 18} y={adjY + 3.5} fontSize={7} fill="#1C1C1E" fontWeight="bold" textAnchor="middle">{priceStr}</text>
+            </g>
+          )
+        })
+      })()}
 
       {/* Persistent chart label (top-left) — shows hovered date when crosshair active */}
       <text x={PL + 3} y={PT + 8} fontSize={9} style={{ fill: 'var(--ios-label3)' }} fontWeight="700" letterSpacing="0.3">
