@@ -442,27 +442,27 @@ function StockMiniRow({ stock, rank, maxScore, isLast }) {
   }, { dependencies: [normScore] })
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderBottom: isLast ? 'none' : '1px solid #1E293B', background: isEntry ? 'rgba(34,197,94,0.04)' : 'transparent' }}>
-      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.22)', fontFamily: 'monospace', minWidth: 18, textAlign: 'right' }}>{rank}</div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderBottom: isLast ? 'none' : '1px solid var(--ios-sep)', background: isEntry ? 'rgba(34,197,94,0.04)' : 'transparent' }}>
+      <div style={{ fontSize: 12, color: 'var(--ios-label4)', fontFamily: 'monospace', minWidth: 18, textAlign: 'right' }}>{rank}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 5 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#0A84FF', fontFamily: 'monospace', flexShrink: 0 }}>{stock.stock_id}</span>
-          <span style={{ fontSize: 13, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stock.name}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'monospace', flexShrink: 0 }}>{stock.stock_id}</span>
+          <span style={{ fontSize: 13, color: 'var(--ios-label)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stock.name}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-          <div style={{ flex: 1, height: 3, background: '#1E293B', borderRadius: 9999 }}>
+          <div style={{ flex: 1, height: 3, background: 'var(--ios-fill2)', borderRadius: 9999 }}>
             <div ref={scoreBarRef} style={{ height: '100%', width: `${normScore}%`, background: `linear-gradient(90deg,${scoreColor}70,${scoreColor})`, borderRadius: 9999 }} />
           </div>
           <span style={{ fontSize: 11, color: scoreColor, fontWeight: 700, minWidth: 22, textAlign: 'right', fontFamily: 'monospace' }}>{normScore}</span>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.22)', marginRight: 2 }}>技</span>
-            {[0,1,2,3,4].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i < techDots ? '#0A84FF' : '#1A2438' }} />)}
+            <span style={{ fontSize: 9, color: 'var(--ios-label4)', marginRight: 2 }}>技</span>
+            {[0,1,2,3,4].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i < techDots ? 'var(--ios-blue)' : 'var(--ios-fill2)' }} />)}
           </div>
           <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.22)', marginRight: 2 }}>籌</span>
-            {[0,1,2,3,4].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i < chipDots ? '#30D158' : '#1A2438' }} />)}
+            <span style={{ fontSize: 9, color: 'var(--ios-label4)', marginRight: 2 }}>籌</span>
+            {[0,1,2,3,4].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i < chipDots ? 'var(--ios-green)' : 'var(--ios-fill2)' }} />)}
           </div>
         </div>
       </div>
@@ -496,16 +496,16 @@ function AIAdviceBlock({ aiInsight, dangerSignals, forbiddenActions }) {
   if (bullets.length === 0) return null
 
   const icons = { info: '·', ban: '🚫', warn: '⚠️' }
-  const colors = { info: 'rgba(255,255,255,0.50)', ban: '#FF453A', warn: '#FF9F0A' }
+  const colors = { info: 'var(--ios-label2)', ban: 'var(--ios-red)', warn: 'var(--ios-orange)' }
 
   return (
     <div className="glass-panel" style={{ padding: '14px 16px' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>🤖 AI 操作建議</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>🤖 AI 操作建議</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {bullets.map((b, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, lineHeight: 1.6 }}>
             <span style={{ flexShrink: 0, minWidth: 16, color: colors[b.type], marginTop: 1 }}>{icons[b.type]}</span>
-            <span style={{ color: b.type === 'info' ? '#FFFFFF' : colors[b.type] }}>{b.text}</span>
+            <span style={{ color: b.type === 'info' ? 'var(--ios-label)' : colors[b.type] }}>{b.text}</span>
           </div>
         ))}
       </div>
@@ -653,15 +653,15 @@ export default function Overview({ data, error }) {
         {/* Row 4: TOP 5 */}
         {top5.length > 0 && (
           <div className="glass-panel" style={{ overflow: 'hidden' }}>
-            <div style={{ padding: '12px 14px 10px', borderBottom: '1px solid #1E293B', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>⚡ 今日最強</span>
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{latestDate}</span>
+            <div style={{ padding: '12px 14px 10px', borderBottom: '1px solid var(--ios-sep)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-label)' }}>⚡ 今日最強</span>
+              <span style={{ fontSize: 11, color: 'var(--ios-label4)' }}>{latestDate}</span>
             </div>
             {top5.map((stock, i) => (
               <StockMiniRow key={stock.stock_id} stock={stock} rank={i + 1} maxScore={maxScore} isLast={i === top5.length - 1} />
             ))}
-            <div style={{ padding: '9px 14px', borderTop: '1px solid #1E293B', textAlign: 'center' }}>
-              <span style={{ fontSize: 12, color: '#0A84FF' }}>完整排行請至掃描頁</span>
+            <div style={{ padding: '9px 14px', borderTop: '1px solid var(--ios-sep)', textAlign: 'center' }}>
+              <span style={{ fontSize: 12, color: 'var(--ios-blue)' }}>完整排行請至掃描頁</span>
             </div>
           </div>
         )}
