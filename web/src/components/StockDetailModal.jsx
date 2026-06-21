@@ -2281,66 +2281,6 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
           )
         })()}
 
-        {/* Feature 5: 訊號歷史 — detailed scan timeline */}
-        {allScans && (() => {
-          const history = Object.entries(allScans)
-            .map(([date, sc]) => {
-              const inTop = sc.top_stocks?.find(t => String(t.stock_id) === String(s.stock_id))
-              const inFilter = sc.filter_stocks?.find(t => String(t.stock_id) === String(s.stock_id))
-              const row = inTop || inFilter
-              if (!row) return null
-              return {
-                date,
-                score: row.entry_score ?? null,
-                signal: !!row.entry_signal,
-                grade: row.grade || null,
-                macdCross: !!row.macd_golden_cross,
-                rsi: row.rsi14 ?? null,
-                close: row.close ?? null,
-              }
-            })
-            .filter(Boolean)
-            .sort((a, b) => a.date.localeCompare(b.date))
-          if (history.length === 0) return null
-          return (
-            <Section title={`📋 訊號歷史（${history.length} 筆掃描記錄）`}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {history.map((h, i) => {
-                  const scoreColor = h.signal ? '#30D158' : (h.score ?? 0) >= 700 ? 'var(--ios-orange)' : 'var(--ios-label3)'
-                  const gc = { A: '#FFD60A', B: '#30D158', C: '#FF9F0A', D: '#64748B', X: '#FF453A' }
-                  return (
-                    <div key={h.date} style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '8px 0',
-                      borderBottom: i < history.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
-                    }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: h.signal ? '#30D158' : 'var(--ios-fill2)', flexShrink: 0 }} />
-                      <span style={{ fontSize: 11, color: 'var(--ios-label3)', fontFamily: 'monospace', minWidth: 52 }}>{h.date.slice(5)}</span>
-                      {h.score != null && (
-                        <span style={{ fontSize: 11, fontWeight: 700, color: scoreColor, minWidth: 44 }}>
-                          {Math.round(h.score)}分
-                        </span>
-                      )}
-                      {h.grade && (
-                        <span style={{ fontSize: 10, fontWeight: 700, color: gc[h.grade] || 'var(--ios-label3)' }}>[{h.grade}]</span>
-                      )}
-                      {h.signal && (
-                        <span style={{ fontSize: 9, color: '#30D158', fontWeight: 700, background: 'rgba(48,209,88,0.12)', borderRadius: 4, padding: '1px 5px' }}>進場</span>
-                      )}
-                      {h.macdCross && (
-                        <span style={{ fontSize: 9, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.1)', borderRadius: 4, padding: '1px 5px' }}>MACD金叉</span>
-                      )}
-                      {h.close != null && (
-                        <span style={{ fontSize: 10, color: 'var(--ios-label4)', marginLeft: 'auto' }}>{h.close.toFixed(1)}</span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </Section>
-          )
-        })()}
-
         {/* K 線圖 + 指標子圖 */}
         <Section title="K 線圖 &amp; 技術指標">
           <KLineChart key={s.stock_id} stockId={s.stock_id} priceHistory={s.price_history} priceHistoryWk={s.price_history_wk} priceHistoryMo={s.price_history_mo} compareId={compareStockId || null} compareHistories={compareHistories} historyDates={historyDates} />
@@ -2669,6 +2609,66 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
             ⚠️ 資料品質警示：此股票部分指標資料不完整，評分參考性較低
           </div>
         )}
+        {/* 訊號歷史 — detailed scan timeline */}
+        {allScans && (() => {
+          const history = Object.entries(allScans)
+            .map(([date, sc]) => {
+              const inTop = sc.top_stocks?.find(t => String(t.stock_id) === String(s.stock_id))
+              const inFilter = sc.filter_stocks?.find(t => String(t.stock_id) === String(s.stock_id))
+              const row = inTop || inFilter
+              if (!row) return null
+              return {
+                date,
+                score: row.entry_score ?? null,
+                signal: !!row.entry_signal,
+                grade: row.grade || null,
+                macdCross: !!row.macd_golden_cross,
+                rsi: row.rsi14 ?? null,
+                close: row.close ?? null,
+              }
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.date.localeCompare(b.date))
+          if (history.length === 0) return null
+          return (
+            <Section title={`📋 訊號歷史（${history.length} 筆掃描記錄）`}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {history.map((h, i) => {
+                  const scoreColor = h.signal ? '#30D158' : (h.score ?? 0) >= 700 ? 'var(--ios-orange)' : 'var(--ios-label3)'
+                  const gc = { A: '#FFD60A', B: '#30D158', C: '#FF9F0A', D: '#64748B', X: '#FF453A' }
+                  return (
+                    <div key={h.date} style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '8px 0',
+                      borderBottom: i < history.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
+                    }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: h.signal ? '#30D158' : 'var(--ios-fill2)', flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, color: 'var(--ios-label3)', fontFamily: 'monospace', minWidth: 52 }}>{h.date.slice(5)}</span>
+                      {h.score != null && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: scoreColor, minWidth: 44 }}>
+                          {Math.round(h.score)}分
+                        </span>
+                      )}
+                      {h.grade && (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: gc[h.grade] || 'var(--ios-label3)' }}>[{h.grade}]</span>
+                      )}
+                      {h.signal && (
+                        <span style={{ fontSize: 9, color: '#30D158', fontWeight: 700, background: 'rgba(48,209,88,0.12)', borderRadius: 4, padding: '1px 5px' }}>進場</span>
+                      )}
+                      {h.macdCross && (
+                        <span style={{ fontSize: 9, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.1)', borderRadius: 4, padding: '1px 5px' }}>MACD金叉</span>
+                      )}
+                      {h.close != null && (
+                        <span style={{ fontSize: 10, color: 'var(--ios-label4)', marginLeft: 'auto' }}>{h.close.toFixed(1)}</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </Section>
+          )
+        })()}
+
         {/* Bottom spacer — fixed 200px so content always scrolls fully clear of any UI chrome */}
         <div style={{ height: 200, flexShrink: 0 }} />
       </div>
