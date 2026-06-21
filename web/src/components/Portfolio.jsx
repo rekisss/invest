@@ -1,5 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
+import gsap from 'gsap'
+import { useGSAP } from '@gsap/react'
+gsap.registerPlugin(useGSAP)
 
 const STORAGE_KEY = 'tw_portfolio_positions'
 
@@ -219,6 +222,14 @@ export default function Portfolio({ data }) {
   const [priceLoading, setPriceLoading] = useState(false)
   const [selectedStock, setSelectedStock] = useState(null)
   const historiesRef = useRef(null)  // lazy-loaded stock_histories.json cache
+  const containerRef = useRef(null)
+
+  useGSAP(() => {
+    gsap.from('.pnl-bar-fill', {
+      scaleX: 0, transformOrigin: 'left center', duration: 0.6,
+      stagger: { amount: 0.4, from: 'start' }, ease: 'power2.out', delay: 0.2,
+    })
+  }, { scope: containerRef, dependencies: [Object.keys(positions).join(',')] })
 
   // Fetch live prices from Yahoo whenever the set of held stocks changes.
   const posKey = Object.keys(positions).sort().join(',')
@@ -331,7 +342,7 @@ export default function Portfolio({ data }) {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '0 14px 80px', overflowY: 'auto', height: '100%', WebkitOverflowScrolling: 'touch' }}>
+    <div ref={containerRef} style={{ padding: '0 14px 80px', overflowY: 'auto', height: '100%', WebkitOverflowScrolling: 'touch' }}>
       <style>{`
         @keyframes rowIn   { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
         @keyframes sheetIn { from { opacity:0; transform:translateY(16px) } to { opacity:1; transform:translateY(0) } }
@@ -387,7 +398,7 @@ export default function Portfolio({ data }) {
           </div>
 
           <div style={{ height: 4, background: 'var(--ios-fill4)', borderRadius: 2, overflow: 'hidden' }}>
-            <div style={{
+            <div className="pnl-bar-fill" style={{
               height: '100%', borderRadius: 2,
               background: totalPct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)',
               width: `${Math.min(100, Math.abs(totalPct) * 5)}%`,
@@ -523,7 +534,7 @@ export default function Portfolio({ data }) {
             {/* P&L bar */}
             {pnlPct != null && (
               <div style={{ height: 3, background: 'var(--ios-fill4)', borderRadius: 2, marginBottom: 8, overflow: 'hidden' }}>
-                <div style={{
+                <div className="pnl-bar-fill" style={{
                   height: '100%', borderRadius: 2, background: pnlColor,
                   width: `${Math.min(100, Math.abs(pnlPct) * 4)}%`,
                   transition: 'width 0.5s cubic-bezier(0.34,1.56,0.64,1)',

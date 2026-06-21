@@ -1,4 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
+import gsap from 'gsap'
+import { useGSAP } from '@gsap/react'
+gsap.registerPlugin(useGSAP)
 
 const HIST_PAGE_SIZE = 20
 
@@ -8,15 +11,25 @@ const RISK_LABEL = { LOW: '低風險', MEDIUM: '中風險', HIGH: '高風險', E
 function ProbBar({ prob }) {
   const pct = Math.round((prob ?? 0.5) * 100)
   const color = pct >= 60 ? 'var(--ios-green)' : pct <= 40 ? 'var(--ios-red)' : 'var(--ios-yellow)'
+  const numRef = useRef(null)
+  const barRef = useRef(null)
+  useGSAP(() => {
+    const obj = { val: 0 }
+    gsap.to(obj, {
+      val: pct, duration: 0.9, ease: 'power3.out', delay: 0.3,
+      onUpdate() { if (numRef.current) numRef.current.textContent = Math.round(obj.val) + '%' },
+    })
+    gsap.from(barRef.current, { scaleX: 0, transformOrigin: 'left center', duration: 0.9, ease: 'power3.out', delay: 0.35 })
+  }, { dependencies: [pct] })
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ fontSize: 13, color: 'var(--ios-label2)' }}>空方</span>
-        <span style={{ color, fontWeight: 700, fontSize: 34, fontFamily: 'var(--font-mono)', letterSpacing: '-0.3px' }}>{pct}%</span>
+        <span ref={numRef} style={{ color, fontWeight: 700, fontSize: 34, fontFamily: 'var(--font-mono)', letterSpacing: '-0.3px' }}>0%</span>
         <span style={{ fontSize: 13, color: 'var(--ios-label2)' }}>多方</span>
       </div>
       <div className="ios-prob-bar">
-        <div className="ios-prob-fill" style={{ width: `${pct}%`, background: color }} />
+        <div ref={barRef} className="ios-prob-fill" style={{ width: `${pct}%`, background: color }} />
       </div>
     </div>
   )
@@ -126,6 +139,7 @@ function Tag({ text, color }) {
 
 // Calibration analysis: actual win-rate per prediction confidence band
 function CalibrationPanel({ history }) {
+  const containerRef = useRef(null)
   const bands = useMemo(() => {
     const sorted = [...(history || [])]
       .filter(h => h.xgb_prob_up != null && h.date)
@@ -151,6 +165,14 @@ function CalibrationPanel({ history }) {
     return defs.filter(b => b.total >= 3)
   }, [history])
 
+  useGSAP(() => {
+    if (!containerRef.current) return
+    gsap.from('.calib-bar-fill', {
+      scaleX: 0, transformOrigin: 'left center', duration: 0.6,
+      stagger: 0.09, ease: 'power2.out', delay: 0.1,
+    })
+  }, { scope: containerRef, dependencies: [bands.length] })
+
   if (bands.length < 2) return null
 
   return (
@@ -158,6 +180,7 @@ function CalibrationPanel({ history }) {
       <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 10 }}>
         各信心區間的實際上漲率（隔日夜盤估算），與預測中心對比越近代表校準越好
       </div>
+      <div ref={containerRef}>
       {bands.map(b => {
         const actualPct = Math.round(b.actualUp / b.total * 100)
         const expectedPct = Math.round(b.center * 100)
@@ -177,7 +200,7 @@ function CalibrationPanel({ history }) {
             </div>
             {/* Dual bar: expected vs actual */}
             <div style={{ position: 'relative', height: 6, background: 'var(--ios-fill3)', borderRadius: 9999, overflow: 'visible' }}>
-              <div style={{
+              <div className="calib-bar-fill" style={{
                 position: 'absolute', left: 0, top: 0, height: '100%',
                 width: `${actualPct}%`, background: barColor, borderRadius: 9999,
                 transition: 'width 0.6s cubic-bezier(0.34,1.56,0.64,1)',
@@ -192,6 +215,7 @@ function CalibrationPanel({ history }) {
           </div>
         )
       })}
+      </div>
       <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 4, lineHeight: 1.5 }}>
         灰色刻度線 = 模型預測中心值。若實際率持續高於預測代表模型偏保守；持續低於代表過於樂觀。
       </div>
@@ -411,6 +435,12 @@ export default function PredictionPanel({ prediction, history = [] }) {
 
   const { xgb_prob_up, xgb_label, date, generated_at, regime, scenario, risk, news_sentiment, market_data, ai_insight } = prediction
   const riskLevel = risk?.level?.replace('RiskLevel.', '') || 'MEDIUM'
+  const riskBarRef = useRef(null)
+  const bullBearRef = useRef(null)
+  useGSAP(() => {
+    if (riskBarRef.current) gsap.from(riskBarRef.current, { scaleX: 0, transformOrigin: 'left center', duration: 0.7, ease: 'power3.out', delay: 0.2 })
+    if (bullBearRef.current) gsap.from(bullBearRef.current, { scaleX: 0, transformOrigin: 'left center', duration: 0.7, ease: 'power3.out', delay: 0.2 })
+  }, { dependencies: [date] })
   const [histPage, setHistPage] = useState(0)
   const histTotalPages = Math.ceil(history.length / HIST_PAGE_SIZE)
   const pagedHistory = useMemo(
@@ -514,7 +544,7 @@ export default function PredictionPanel({ prediction, history = [] }) {
                 {RISK_LABEL[riskLevel] || riskLevel}
               </div>
               <div className="ios-prob-bar" style={{ flex: 1 }}>
-                <div className="ios-prob-fill" style={{ width: `${(risk.score || 0) * 100}%`, background: RISK_COLOR[riskLevel] }} />
+                <div ref={riskBarRef} className="ios-prob-fill" style={{ width: `${(risk.score || 0) * 100}%`, background: RISK_COLOR[riskLevel] }} />
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--ios-label2)', minWidth: 32 }}>{((risk.score || 0) * 100).toFixed(0)}%</div>
             </div>
@@ -550,7 +580,7 @@ export default function PredictionPanel({ prediction, history = [] }) {
               const bp = total > 0 ? (b / total) * 100 : 50
               return (
                 <div style={{ marginBottom: 12 }}>
-                  <div style={{ display: 'flex', height: 8, borderRadius: 9999, overflow: 'hidden', background: 'var(--ios-bg3)' }}>
+                  <div ref={bullBearRef} style={{ display: 'flex', height: 8, borderRadius: 9999, overflow: 'hidden', background: 'var(--ios-bg3)' }}>
                     <div style={{ width: `${bp}%`, background: 'var(--ios-green)' }} />
                     <div style={{ width: `${100 - bp}%`, background: 'var(--ios-red)' }} />
                   </div>

@@ -169,10 +169,10 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
     gsap.from('.score-bar-fill', {
       scaleX: 0,
       transformOrigin: 'left center',
-      duration: 0.55,
-      stagger: { amount: 0.5, from: 'start' },
+      duration: 0.6,
+      stagger: { amount: 0.55, from: 'start' },
       ease: 'power3.out',
-      delay: 0.1,
+      delay: 0.35,
     })
   }, { scope: containerRef, dependencies: [stocks.length] })
 
@@ -515,9 +515,13 @@ function BBPositionBar({ bbPctB, width = 56 }) {
   else if (bbPctB > 0.2) color = '#FF9F0A'
   else color = '#FF453A'
   const label = bbPctB > 1.1 ? '突破上軌' : bbPctB > 0.8 ? '強勢上半' : bbPctB > 0.5 ? '中上' : bbPctB > 0.2 ? '中下' : '近下軌'
+  const fillRef = useRef(null)
+  useGSAP(() => {
+    if (fillRef.current) gsap.from(fillRef.current, { scaleX: 0, transformOrigin: 'left center', duration: 0.55, ease: 'power2.out' })
+  }, { dependencies: [pct] })
   return (
     <div title={`BB%B ${bbPctB.toFixed(2)} — ${label}`} style={{ width, height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
-      <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 9999 }}/>
+      <div ref={fillRef} style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 9999 }}/>
     </div>
   )
 }

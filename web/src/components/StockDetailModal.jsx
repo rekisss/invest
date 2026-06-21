@@ -996,9 +996,17 @@ function computeStrategyBacktest(bars, horizon) {
 function StrategyBacktestPanel({ bars, onPick, activeId }) {
   const [horizon, setHorizon] = useState(5)
   const bt = useMemo(() => computeStrategyBacktest(bars, horizon), [bars, horizon])
+  const containerRef = useRef(null)
+  useGSAP(() => {
+    if (!containerRef.current) return
+    gsap.from('.winrate-bar-fill', {
+      scaleX: 0, transformOrigin: 'left center', duration: 0.5,
+      stagger: 0.07, ease: 'power2.out', delay: 0.1,
+    })
+  }, { scope: containerRef, dependencies: [horizon, bt?.best] })
   if (!bt) return null
   return (
-    <div style={{ marginTop: 10, background: 'var(--ios-bg2)', borderRadius: 12, padding: '10px 12px', boxShadow: 'var(--shadow-card)' }}>
+    <div ref={containerRef} style={{ marginTop: 10, background: 'var(--ios-bg2)', borderRadius: 12, padding: '10px 12px', boxShadow: 'var(--shadow-card)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ color: 'var(--ios-blue)', fontSize: 11, fontWeight: 700, letterSpacing: 0.6 }}>📊 策略勝率回測</span>
         <div style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--ios-fill4)', borderRadius: 7 }}>
@@ -1031,7 +1039,7 @@ function StrategyBacktestPanel({ bars, onPick, activeId }) {
               </span>
             </div>
             <div style={{ height: 5, background: 'var(--ios-fill4)', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ width: `${enough ? r.winRate * 100 : 0}%`, height: '100%', background: r.color, opacity: isBest ? 1 : 0.55, borderRadius: 3, transition: 'width 0.3s' }} />
+              <div className="winrate-bar-fill" style={{ width: `${enough ? r.winRate * 100 : 0}%`, height: '100%', background: r.color, opacity: isBest ? 1 : 0.55, borderRadius: 3, transition: 'width 0.3s' }} />
             </div>
           </div>
         )
@@ -1768,9 +1776,9 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
     const obj = { val: 0 }
     gsap.to(obj, {
       val: stock.entry_score,
-      duration: 0.75,
+      duration: 0.85,
       ease: 'power3.out',
-      delay: 0.15,
+      delay: 0.38,
       onUpdate() { if (scoreRef.current) scoreRef.current.textContent = Math.round(obj.val) },
     })
   }, { dependencies: [stock?.stock_id] })
