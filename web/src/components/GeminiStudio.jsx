@@ -119,7 +119,30 @@ function fmtTime(ts) {
   } catch { return '' }
 }
 
-// ── Claude API (non-streaming for iOS Safari CORS compatibility) ─────────────
+// ── Claude API ────────────────────────────────────────────────────────────────
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+
+async function fetchClaude(headers, body) {
+  // On iOS, fetch() with custom CORS headers can throw "Load failed" even on
+  // non-streaming requests. Using XMLHttpRequest is more reliable on iOS Safari.
+  if (isIOS) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', 'https://api.anthropic.com/v1/messages', true)
+      Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v))
+      xhr.timeout = 30000
+      xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, json: () => Promise.resolve(JSON.parse(xhr.responseText)) })
+      xhr.onerror = () => reject(new Error('網路連線失敗，請確認網路後重試'))
+      xhr.ontimeout = () => reject(new Error('連線逾時（30秒），請重試'))
+      xhr.send(JSON.stringify(body))
+    })
+  }
+  return fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST', headers, body: JSON.stringify(body),
+    mode: 'cors', credentials: 'omit',
+  })
+}
+
 async function callClaude(apiKey, model, systemPrompt, userPrompt, onChunk) {
   const HEADERS = {
     'Content-Type': 'application/json',
@@ -129,16 +152,11 @@ async function callClaude(apiKey, model, systemPrompt, userPrompt, onChunk) {
   }
   const BODY = { model, max_tokens: 350, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }
 
-  // Try streaming first (desktop Chrome/Firefox). Falls back to non-streaming
-  // if ReadableStream is unavailable or the response body can't be read
-  // (iOS Safari blocks body.getReader() on CORS responses in some versions).
-  const supportsStreaming = typeof ReadableStream !== 'undefined' &&
-    !(/iPhone|iPad|iPod/.test(navigator.userAgent))  // skip SSE on iOS — CORS + streams unreliable
-
-  if (supportsStreaming) {
+  // Desktop: try streaming first for typewriter effect
+  if (!isIOS && typeof ReadableStream !== 'undefined') {
     try {
       const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST', headers: HEADERS,
+        method: 'POST', headers: HEADERS, mode: 'cors', credentials: 'omit',
         body: JSON.stringify({ ...BODY, stream: true }),
       })
       if (resp.ok) {
@@ -164,18 +182,15 @@ async function callClaude(apiKey, model, systemPrompt, userPrompt, onChunk) {
         }
         if (text) return text.trim()
       }
-    } catch { /* streaming failed — fall through to non-streaming */ }
+    } catch { /* streaming failed — fall through */ }
   }
 
-  // Non-streaming fallback (always works on iOS Safari and all CORS environments)
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST', headers: HEADERS,
-    body: JSON.stringify(BODY),
-  })
+  // Non-streaming (iOS uses XHR, desktop uses fetch)
+  const resp = await fetchClaude(HEADERS, BODY)
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}))
     const msg = err?.error?.message || `HTTP ${resp.status}`
-    if (resp.status === 401) throw new Error('Anthropic API Key 無效，請重新整理頁面重新輸入')
+    if (resp.status === 401) throw new Error('API Key 無效，請重新整理頁面重新輸入')
     if (resp.status === 529 || resp.status === 503) throw new Error('Claude 服務暫時繁忙，請稍後再試')
     throw new Error(msg)
   }

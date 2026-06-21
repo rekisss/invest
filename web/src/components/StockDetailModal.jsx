@@ -1,4 +1,7 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
+import gsap from 'gsap'
+import { useGSAP } from '@gsap/react'
+gsap.registerPlugin(useGSAP)
 
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
 const pct = (v) => (v == null || isNaN(v) ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}%`)
@@ -316,7 +319,7 @@ const FIB_LEVELS = [
 
 const CHART_W = 460
 const CHART_PL = 42
-const CHART_PR = 6
+const CHART_PR = 38   // wide enough for right-axis price badge (26px) + margin
 const BAR_W = 5  // fixed pixels per candle for scrollable chart
 
 function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHoverIdx, yFixed, chartW: propChartW }) {
@@ -380,7 +383,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
         <g key={i}>
           <line x1={CHART_PL} y1={toY(b.value)} x2={W - CHART_PR} y2={toY(b.value)}
             stroke={b.color || '#48484A'} strokeWidth={0.5} strokeDasharray="4,3" opacity={0.65} />
-          <text x={W - CHART_PR + 3} y={toY(b.value) + 3.5} fontSize={7} fill={b.color || '#48484A'} opacity={0.85}>{b.label ?? b.value}</text>
+          <text x={W - CHART_PR + 2} y={toY(b.value) + 3.5} fontSize={7.5} fill={b.color || '#636366'} opacity={0.9} textAnchor="start">{b.label ?? b.value}</text>
         </g>
       ))}
 
@@ -410,16 +413,18 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
         )
       })}
 
-      {/* Chart label */}
-      <text x={CHART_PL + 3} y={PT + 9} fontSize={8.5} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">{label}</text>
+      {/* Chart label — hidden while crosshair is active to avoid overlap with hover values */}
+      {hoveredIdx == null && (
+        <text x={CHART_PL + 3} y={PT + 9} fontSize={8.5} fill="#8E8E93" fontWeight="700" letterSpacing="0.3">{label}</text>
+      )}
 
-      {/* Hover values */}
+      {/* Hover values — replace label when crosshair is active */}
       {hoveredIdx != null && (lines || []).map((series, si) => {
         const v = series.values[hoveredIdx]
         if (v == null) return null
         const disp = Math.abs(v) < 0.01 ? v.toFixed(3) : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1)
         return (
-          <text key={si} x={CHART_PL + 36 + si * 58} y={PT + 9} fontSize={8} fill={series.color}>
+          <text key={si} x={CHART_PL + 3 + si * 62} y={PT + 9} fontSize={8} fill={series.color} fontWeight="600">
             {series.label}:{disp}
           </text>
         )
@@ -1755,7 +1760,20 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
   const [swipeX, setSwipeX]   = useState(0)
   const [closing, setClosing] = useState(false)
   const swipeRef = useRef(null)
+  const scoreRef = useRef(null)
   useEffect(() => { setSwipeX(0); setClosing(false) }, [stock?.stock_id])
+
+  useGSAP(() => {
+    if (!scoreRef.current || !stock?.entry_score) return
+    const obj = { val: 0 }
+    gsap.to(obj, {
+      val: stock.entry_score,
+      duration: 0.75,
+      ease: 'power3.out',
+      delay: 0.15,
+      onUpdate() { if (scoreRef.current) scoreRef.current.textContent = Math.round(obj.val) },
+    })
+  }, { dependencies: [stock?.stock_id] })
 
   if (!stock) return null
   const s = stock
@@ -1943,7 +1961,10 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans 
 
         {/* 評分 */}
         <Section title="入場評分">
-          <Row label="入場分數" value={s.entry_score} valueStyle={{ color: scoreColor, fontSize: 16 }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '0.5px solid var(--ios-sep)' }}>
+            <span style={{ color: 'var(--ios-label2)', fontSize: 13 }}>入場分數</span>
+            <span ref={scoreRef} style={{ color: scoreColor, fontSize: 16, fontWeight: 600 }}>0</span>
+          </div>
           {s.score_pct > 0 && (
             <Row label="市場百分位" value={`前 ${Math.max(1, (100 - s.score_pct).toFixed(0))}%`} valueStyle={{ color: s.score_pct >= 95 ? '#FFD60A' : s.score_pct >= 85 ? 'var(--ios-green)' : 'var(--ios-label)' }} />
           )}
