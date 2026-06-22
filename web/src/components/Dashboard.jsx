@@ -67,6 +67,15 @@ const GRADE_STYLE = {
 
 const GRADE_FILTERS = ['A', 'B', 'C', 'D']
 
+const TREND_TYPES = [
+  { key: 'uptrend',     label: '📈 多頭排列', match: s => !!(s.above_ema60 && s.ema60_gt_ema120 && s.ma5_above_ma10) },
+  { key: 'breakout',    label: '🚀 突破格局', match: s => !!(s.breakout_20d || s.bb_squeeze_breakout || s.breakout_volume_confirm) },
+  { key: 'strong_rs',   label: '💪 相對強勢', match: s => (s.market_rs_rank || 0) >= 75 },
+  { key: 'institution', label: '🏦 法人護盤', match: s => (s.foreign_buy_streak || 0) >= 3 || (s.invest_trust_streak || 0) >= 3 },
+  { key: 'leader',      label: '🏆 類股旗手', match: s => !!s.is_sector_leader },
+  { key: 'reversal',    label: '🔄 底部反彈', match: s => !!(s.kd_golden_cross || s.macd_golden_cross) && (s.rsi14 || 100) < 55 },
+]
+
 function GradeBadge({ grade }) {
   if (!grade) return null
   const g = GRADE_STYLE[grade] || GRADE_STYLE.D
@@ -1670,6 +1679,7 @@ export default function Dashboard({ data, error }) {
     })
   }
   const [activeSector, setActiveSector] = useState(null)
+  const [activeTrendType, setActiveTrendType] = useState(null)
 
   if (error || !data || !data.dates || data.dates.length === 0) {
     return (
@@ -1809,9 +1819,9 @@ export default function Dashboard({ data, error }) {
   const [showAllFiltered, setShowAllFiltered] = useState(false)
 
   // Reset page and show-all whenever filters or tab/date change
-  useEffect(() => { setPage(0); setShowAllFiltered(false) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals, activeGrades, activeSector])
+  useEffect(() => { setPage(0); setShowAllFiltered(false) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals, activeGrades, activeSector, activeTrendType])
 
-  const hasActiveFilter = activeSignals.size > 0 || activeGrades.size > 0 || !!activeSector || !!searchQuery.trim()
+  const hasActiveFilter = activeSignals.size > 0 || activeGrades.size > 0 || !!activeSector || !!activeTrendType || !!searchQuery.trim()
   const baseStocks = viewTab === 'entry' ? entryStocks
     : viewTab === 'limitdown' ? limitDownAlerts
     : viewTab === 'watchlist' ? watchlistStocks
@@ -1837,6 +1847,10 @@ export default function Dashboard({ data, error }) {
     if (activeSector && viewTab !== 'limitdown') {
       list = list.filter(s => (s.industry_category || '其他') === activeSector)
     }
+    if (activeTrendType && viewTab !== 'limitdown') {
+      const tt = TREND_TYPES.find(t => t.key === activeTrendType)
+      if (tt) list = list.filter(tt.match)
+    }
     return [...list].sort((a, b) => {
       // Special case: gap_to_20d_high_pct_asc sorts ascending by gap (smallest gap = nearest breakout)
       if (sortField === 'gap_to_20d_high_pct_asc') {
@@ -1853,13 +1867,13 @@ export default function Dashboard({ data, error }) {
       const vb = b[sortField] ?? -Infinity
       return sortDir === 'desc' ? vb - va : va - vb
     })
-  }, [baseStocks, searchQuery, sortField, sortDir, activeSignals, activeGrades, activeSector])
+  }, [baseStocks, searchQuery, sortField, sortDir, activeSignals, activeGrades, activeSector, activeTrendType])
 
   // When a grade/signal/sector/preset filter is active in the 'all' tab, cap to top 20
   // so the user sees "top 20 from full universe" — avoids scrolling through hundreds.
   // Search is intentionally excluded from the cap (user is looking for a specific stock).
   const FILTER_CAP = 20
-  const filterCapActive = (activeSignals.size > 0 || activeGrades.size > 0 || !!activeSector) &&
+  const filterCapActive = (activeSignals.size > 0 || activeGrades.size > 0 || !!activeSector || !!activeTrendType) &&
     !searchQuery.trim() && viewTab === 'all' && !showAllFiltered && filteredAndSorted.length > FILTER_CAP
   const displayList = filterCapActive ? filteredAndSorted.slice(0, FILTER_CAP) : filteredAndSorted
 
@@ -2054,8 +2068,8 @@ export default function Dashboard({ data, error }) {
 
         {/* Grade distribution summary */}
         {allScanStocks.length > 0 && (() => {
-          const hasAnyFilter = activeGrades.size > 0 || activeSignals.size > 0 || activeSector || searchQuery.trim()
-          const clearAll = () => { setActiveGrades(new Set()); setActiveSignals(new Set()); setActiveSector(null); setSearchQuery('') }
+          const hasAnyFilter = activeGrades.size > 0 || activeSignals.size > 0 || activeSector || activeTrendType || searchQuery.trim()
+          const clearAll = () => { setActiveGrades(new Set()); setActiveSignals(new Set()); setActiveSector(null); setActiveTrendType(null); setSearchQuery('') }
           return (
             <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>分佈</span>
@@ -2206,6 +2220,36 @@ export default function Dashboard({ data, error }) {
                   color: 'var(--ios-red)', cursor: 'pointer', fontWeight: 600,
                 }}
               >✕ 清除</button>
+            )}
+          </div>
+        )}
+
+        {/* Trend type filter chips */}
+        {viewTab !== 'limitdown' && (
+          <div style={{ marginTop: 6, display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none', alignItems: 'center' }}>
+            <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>趨勢</span>
+            {TREND_TYPES.map(tt => {
+              const isActive = activeTrendType === tt.key
+              return (
+                <button key={tt.key} onClick={() => setActiveTrendType(isActive ? null : tt.key)} style={{
+                  flexShrink: 0, fontSize: 11, fontWeight: 600,
+                  padding: '4px 10px', borderRadius: 9999, cursor: 'pointer',
+                  border: isActive ? '1px solid var(--ios-blue)' : '1px solid var(--ios-sep)',
+                  background: isActive ? 'rgba(10,132,255,0.18)' : 'var(--ios-bg3)',
+                  color: isActive ? 'var(--ios-blue)' : 'var(--ios-label3)',
+                  transition: 'all 0.15s',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {isActive ? '✓ ' : ''}{tt.label}
+                </button>
+              )
+            })}
+            {activeTrendType && (
+              <button onClick={() => setActiveTrendType(null)} style={{
+                flexShrink: 0, fontSize: 11, padding: '4px 10px', borderRadius: 9999,
+                border: '1px solid rgba(255,69,58,0.3)', background: 'rgba(255,69,58,0.08)',
+                color: 'var(--ios-red)', cursor: 'pointer', fontWeight: 600,
+              }}>✕</button>
             )}
           </div>
         )}

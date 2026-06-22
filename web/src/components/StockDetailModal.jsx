@@ -2188,6 +2188,69 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
           </div>
         </div>
 
+        {/* 基本資料快覽 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16, padding: '12px 14px', background: 'var(--ios-bg2)', borderRadius: 14, border: '0.5px solid var(--ios-sep)' }}>
+          {/* Price row */}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{ fontSize: 26, fontWeight: 700, color: 'var(--ios-label)', letterSpacing: '-0.5px' }}>{fmt(s.close, 1)}</span>
+              {s.day_return != null && (
+                <span style={{ fontSize: 15, fontWeight: 600, color: colorNum(s.day_return) }}>
+                  {s.day_return >= 0 ? '+' : ''}{(s.day_return * 100).toFixed(2)}%
+                </span>
+              )}
+            </div>
+            {s.return_5d != null && (
+              <span style={{ fontSize: 11, color: colorNum(s.return_5d), fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: s.return_5d >= 0 ? 'rgba(255,69,58,0.1)' : 'rgba(48,209,88,0.1)' }}>
+                5日 {s.return_5d >= 0 ? '+' : ''}{(s.return_5d * 100).toFixed(1)}%
+              </span>
+            )}
+            {s.regime_label && s.regime_label !== '未知' && (() => {
+              const c = s.regime_label === '牛市' ? '#30D158' : s.regime_label === '熊市' ? '#FF453A' : '#FF9F0A'
+              return <span style={{ fontSize: 10, fontWeight: 700, color: c, background: `${c}18`, padding: '2px 8px', borderRadius: 9999, border: `0.5px solid ${c}40`, marginLeft: 'auto' }}>{s.regime_label}</span>
+            })()}
+          </div>
+
+          {/* Stats grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+            {[
+              { label: '量比', value: `${fmt(s.volume_ratio, 1)}x`, color: s.volume_ratio > 2 ? 'var(--ios-yellow)' : s.volume_ratio > 1.2 ? 'var(--ios-label)' : 'var(--ios-label3)' },
+              { label: 'RSI', value: fmt(s.rsi14 ?? ci.rsi14, 0), color: (s.rsi14 ?? ci.rsi14) > 70 ? 'var(--ios-red)' : (s.rsi14 ?? ci.rsi14) < 30 ? 'var(--ios-green)' : 'var(--ios-label)' },
+              { label: '市場RS', value: s.market_rs_rank != null ? `${Math.round(s.market_rs_rank)}%` : '—', color: (s.market_rs_rank || 0) >= 80 ? '#FFD60A' : (s.market_rs_rank || 0) >= 60 ? 'var(--ios-green)' : 'var(--ios-label3)' },
+              { label: 'ADX', value: fmt(s.adx14 ?? ci.adx14, 0), color: (s.adx14 ?? ci.adx14) > 25 ? 'var(--ios-blue)' : 'var(--ios-label3)' },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ background: 'var(--ios-bg)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color }}>{value ?? '—'}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Institutional + fundamental chips */}
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+            {(s.foreign_buy_streak || 0) > 0 && (
+              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: 'rgba(255,69,58,0.12)', color: 'var(--ios-red)', fontWeight: 600 }}>外資連買 {s.foreign_buy_streak}天</span>
+            )}
+            {(s.invest_trust_streak || 0) > 0 && (
+              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: 'rgba(255,159,10,0.12)', color: 'var(--ios-orange)', fontWeight: 600 }}>投信連買 {s.invest_trust_streak}天</span>
+            )}
+            {(s.dealer_buy_streak || 0) > 0 && (
+              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: 'rgba(10,132,255,0.1)', color: 'var(--ios-blue)', fontWeight: 600 }}>自營連買 {s.dealer_buy_streak}天</span>
+            )}
+            {s.f_score != null && (
+              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: s.f_score >= 7 ? 'rgba(48,209,88,0.12)' : 'var(--ios-fill4)', color: s.f_score >= 7 ? 'var(--ios-green)' : 'var(--ios-label3)', fontWeight: 600 }}>F分 {s.f_score}/9</span>
+            )}
+            {s.revenue_yoy != null && (
+              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: s.revenue_yoy > 0 ? 'rgba(255,69,58,0.12)' : 'rgba(48,209,88,0.12)', color: s.revenue_yoy > 0 ? 'var(--ios-red)' : 'var(--ios-green)', fontWeight: 600 }}>
+                營收YoY {s.revenue_yoy > 0 ? '+' : ''}{(s.revenue_yoy * 100).toFixed(1)}%
+              </span>
+            )}
+            {s.is_sector_leader && (
+              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: 'rgba(255,214,10,0.15)', color: '#FFD60A', fontWeight: 700 }}>🏆 旗手股</span>
+            )}
+          </div>
+        </div>
+
         {/* Feature 1: Compare stock input panel */}
         {showCompareInput && (
           <div style={{
