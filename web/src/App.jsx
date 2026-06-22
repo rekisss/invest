@@ -251,20 +251,39 @@ export default function App() {
 
       {/* ── iOS Tab Bar ──────────────────────────────────────────── */}
       <div className="ios-tabbar">
-        {TABS.map((t, i) => (
-          <button
-            key={t.key}
-            className={`ios-tab-btn${tabIdx === i ? ' active' : ''}`}
-            onClick={() => goToTab(i)}
-          >
-            <span style={{ fontSize: 22, lineHeight: 1, opacity: tabIdx === i ? 1 : 0.45 }}>
-              {t.icon}
-            </span>
-            <span style={{ fontSize: 10, fontWeight: 500, color: tabIdx === i ? 'var(--ios-blue)' : 'var(--ios-label2)' }}>
-              {t.label}
-            </span>
-          </button>
-        ))}
+        {TABS.map((t, i) => {
+          const active = tabIdx === i
+          return (
+            <button
+              key={t.key}
+              className={`ios-tab-btn${active ? ' active' : ''}`}
+              onClick={() => goToTab(i)}
+            >
+              {active && (
+                <span style={{
+                  position: 'absolute', top: 1, left: '50%', transform: 'translateX(-50%)',
+                  width: 18, height: 2.5, borderRadius: 9999, background: 'var(--ios-blue)',
+                }} />
+              )}
+              <span style={{
+                fontSize: 21, lineHeight: 1,
+                opacity: active ? 1 : 0.4,
+                filter: active ? 'none' : 'grayscale(0.4)',
+                transform: active ? 'scale(1.12) translateY(-1px)' : 'scale(1)',
+                transition: 'transform 0.18s cubic-bezier(0.22,1,0.36,1), opacity 0.18s',
+              }}>
+                {t.icon}
+              </span>
+              <span style={{
+                fontSize: 10, fontWeight: active ? 700 : 500,
+                color: active ? 'var(--ios-blue)' : 'var(--ios-label3)',
+                transition: 'color 0.18s',
+              }}>
+                {t.label}
+              </span>
+            </button>
+          )
+        })}
       </div>
     </div>
   )
