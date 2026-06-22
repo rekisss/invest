@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
-import { useGSAP } from '@gsap/react'
-import gsap from 'gsap'
+import { animate, stagger, spring } from 'animejs'
 import { useLivePrices, isTWSEOpen } from '../hooks/useLivePrices'
 import StockDetailModal from './StockDetailModal'
 
@@ -317,65 +316,65 @@ export default function ValidationPanel({ data }) {
   const { prices: livePrices } = useLivePrices(liveIds)
   const showLive = histDate == null && marketOpen
 
-  // Animate stock cards in with stagger
-  useGSAP(() => {
+  // Anime.js: stagger cards when displayStocks changes
+  useEffect(() => {
     if (!listRef.current) return
     const cards = listRef.current.querySelectorAll('.stock-card')
     if (!cards.length) return
-    gsap.fromTo(cards,
-      { opacity: 0, y: 18 },
-      { opacity: 1, y: 0, duration: 0.35, stagger: 0.045, ease: 'power2.out', clearProps: 'transform' }
-    )
-  }, { scope: listRef, dependencies: [displayStocks] })
+    animate(cards, {
+      opacity: [0, 1],
+      translateY: [20, 0],
+      delay: stagger(40, { start: 20 }),
+      ease: spring({ stiffness: 320, damping: 26, mass: 0.85 }),
+    })
+  }, [displayStocks])
 
-  // Fade animation on histDate change
-  useGSAP(() => {
-    if (!listRef.current) return
-    gsap.fromTo(listRef.current,
-      { opacity: 0 },
-      { opacity: 1, duration: 0.25, ease: 'power1.out' }
-    )
-  }, { scope: listRef, dependencies: [histDate] })
-
-  // Animate summary stats fade in
-  useGSAP(() => {
-    if (!statsRef.current) return
-    gsap.fromTo(statsRef.current.querySelectorAll('.stat-block'),
-      { opacity: 0, scale: 0.92 },
-      { opacity: 1, scale: 1, duration: 0.4, stagger: 0.07, ease: 'back.out(1.4)', clearProps: 'transform' }
-    )
-  }, { scope: statsRef, dependencies: [summary] })
-
-  // GSAP number counter for winRate and avgR5
+  // Fade list container on history date change
   useEffect(() => {
-    if (winRateRef.current && summary.winRate != null) {
-      const obj = { val: 0 }
-      gsap.to(obj, {
-        val: summary.winRate * 100,
-        duration: 0.8,
-        ease: 'power2.out',
-        snap: { val: 0.1 },
-        onUpdate: () => { if (winRateRef.current) winRateRef.current.textContent = obj.val.toFixed(0) + '%' },
-      })
-    }
+    if (!listRef.current) return
+    animate(listRef.current, { opacity: [0.3, 1], duration: 220, ease: 'outQuad' })
+  }, [histDate])
+
+  // Anime.js: scale-in stat blocks
+  useEffect(() => {
+    if (!statsRef.current) return
+    const blocks = statsRef.current.querySelectorAll('.stat-block')
+    if (!blocks.length) return
+    animate(blocks, {
+      opacity: [0, 1],
+      scale: [0.88, 1],
+      delay: stagger(55, { start: 60 }),
+      ease: spring({ stiffness: 360, damping: 28, mass: 0.8 }),
+    })
+  }, [summary.scans])
+
+  // Anime.js number counter: winRate
+  useEffect(() => {
+    if (!winRateRef.current || summary.winRate == null) return
+    const obj = { val: 0 }
+    animate(obj, {
+      val: summary.winRate * 100,
+      duration: 900,
+      ease: 'outCubic',
+      onUpdate: () => { if (winRateRef.current) winRateRef.current.textContent = Math.round(obj.val) + '%' },
+    })
   }, [summary.winRate])
 
+  // Anime.js number counter: avgR5
   useEffect(() => {
-    if (avgR5Ref.current && summary.avgR5 != null) {
-      const obj = { val: 0 }
-      gsap.to(obj, {
-        val: summary.avgR5 * 100,
-        duration: 0.8,
-        ease: 'power2.out',
-        snap: { val: 0.01 },
-        onUpdate: () => {
-          if (avgR5Ref.current) {
-            const v = obj.val
-            avgR5Ref.current.textContent = (v >= 0 ? '+' : '') + v.toFixed(1) + '%'
-          }
-        },
-      })
-    }
+    if (!avgR5Ref.current || summary.avgR5 == null) return
+    const obj = { val: 0 }
+    animate(obj, {
+      val: summary.avgR5 * 100,
+      duration: 900,
+      ease: 'outCubic',
+      onUpdate: () => {
+        if (avgR5Ref.current) {
+          const v = obj.val
+          avgR5Ref.current.textContent = (v >= 0 ? '+' : '') + v.toFixed(1) + '%'
+        }
+      },
+    })
   }, [summary.avgR5])
 
   // Open stock detail modal
@@ -480,7 +479,7 @@ export default function ValidationPanel({ data }) {
           </div>
           <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
           <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均5日報酬</div>
+            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均5日報</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: retColor(batchStats.avgR5d) }}>{fmtPct(batchStats.avgR5d)}</div>
           </div>
           <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
