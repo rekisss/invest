@@ -84,7 +84,7 @@ function LiveMarketStrip() {
   }
 
   const chgColor = v => v == null ? 'var(--ios-label3)'
-    : v > 0 ? '#FF453A' : v < 0 ? '#30D158' : '#FF9F0A'
+    : v > 0 ? '#FF3340' : v < 0 ? '#16D67E' : '#FF9F0A'
   const fmtChg = v => v == null ? '—' : `${v > 0 ? '+' : ''}${(v * 100).toFixed(2)}%`
 
   const keysSet = mdt || urt
@@ -191,7 +191,7 @@ const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
   const { pct, isBull, isBear, color, confidence, cx, cy, r, nx, ny, nx2, ny2 } = useMemo(() => {
     const pct = Math.max(2, Math.min(98, Math.round((prob ?? 0.5) * 100)))
     const isBull = pct >= 55, isBear = pct <= 45
-    const color = isBull ? '#FF453A' : isBear ? '#30D158' : '#FF9F0A'
+    const color = isBull ? '#FF3340' : isBear ? '#16D67E' : '#FF9F0A'
     const confidence = isBull ? pct : isBear ? (100 - pct) : 50
     const cx = 80, cy = 68, r = 56
     const ang = ((-180 + pct * 1.8) * Math.PI) / 180
@@ -240,8 +240,8 @@ const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
         <circle cx={cx} cy={cy} r="5" fill={color} />
         <circle cx={cx} cy={cy} r="2.5" style={{ fill: 'var(--ios-label)' }} />
         {/* side labels */}
-        <text x={cx - r - 3} y={cy + 14} textAnchor="middle" fontSize="9" fill="#30D158" fontWeight="700">空</text>
-        <text x={cx + r + 3} y={cy + 14} textAnchor="middle" fontSize="9" fill="#FF453A" fontWeight="700">多</text>
+        <text x={cx - r - 3} y={cy + 14} textAnchor="middle" fontSize="9" fill="#16D67E" fontWeight="700">空</text>
+        <text x={cx + r + 3} y={cy + 14} textAnchor="middle" fontSize="9" fill="#FF3340" fontWeight="700">多</text>
         {/* big % — baseline at y=94, safely within the 100px viewBox */}
         <text x={cx} y={cy + 26} textAnchor="middle" fontSize="20" fontWeight="800" fill={color} fontFamily="monospace">{confidence}%</text>
       </svg>
@@ -310,17 +310,17 @@ function RiskCard({ risk, marketData, calendarRisk }) {
   const level = (risk?.level || '').replace('RiskLevel.', '') || 'MEDIUM'
   const score = risk?.score || 0.5
   const cfg = {
-    LOW:     { label: '低風險', color: '#30D158', bg: 'rgba(34,197,94,0.13)' },
+    LOW:     { label: '低風險', color: '#16D67E', bg: 'rgba(34,197,94,0.13)' },
     MEDIUM:  { label: '中風險', color: '#FF9F0A', bg: 'rgba(245,158,11,0.13)' },
-    HIGH:    { label: '高風險', color: '#FF453A', bg: 'rgba(239,68,68,0.13)' },
+    HIGH:    { label: '高風險', color: '#FF3340', bg: 'rgba(239,68,68,0.13)' },
     EXTREME: { label: '極高危', color: '#FF0000', bg: 'rgba(239,68,68,0.22)' },
   }[level] || { label: '中風險', color: '#FF9F0A', bg: 'rgba(245,158,11,0.13)' }
 
   const rows = [
     calendarRisk && ['日曆風險', calendarRisk, '#FF9F0A'],
-    marketData?.vix != null && ['VIX', marketData.vix.toFixed(1), marketData.vix > 25 ? '#FF453A' : marketData.vix > 18 ? '#FF9F0A' : '#30D158'],
-    marketData?.futures_net != null && ['外資期貨', `${marketData.futures_net > 0 ? '+' : ''}${Math.round(marketData.futures_net).toLocaleString()}`, marketData.futures_net > 0 ? '#FF453A' : '#30D158'],
-    marketData?.night_change != null && ['夜盤', `${marketData.night_change > 0 ? '+' : ''}${Math.round(marketData.night_change)}`, marketData.night_change > 0 ? '#FF453A' : '#30D158'],
+    marketData?.vix != null && ['VIX', marketData.vix.toFixed(1), marketData.vix > 25 ? '#FF3340' : marketData.vix > 18 ? '#FF9F0A' : '#16D67E'],
+    marketData?.futures_net != null && ['外資期貨', `${marketData.futures_net > 0 ? '+' : ''}${Math.round(marketData.futures_net).toLocaleString()}`, marketData.futures_net > 0 ? '#FF3340' : '#16D67E'],
+    marketData?.night_change != null && ['夜盤', `${marketData.night_change > 0 ? '+' : ''}${Math.round(marketData.night_change)}`, marketData.night_change > 0 ? '#FF3340' : '#16D67E'],
   ].filter(Boolean)
 
   const riskBarRef = useRef(null)
@@ -379,7 +379,7 @@ function MarketSignalsCard({ marketData, asof }) {
     const sign = n > 0 ? '+' : ''
     return `${sign}${(n * 100).toFixed(digits)}%`
   }
-  const color = v => v == null ? 'var(--ios-label3)' : v > 0 ? '#FF453A' : v < 0 ? '#30D158' : '#FF9F0A'
+  const color = v => v == null ? 'var(--ios-label3)' : v > 0 ? '#FF3340' : v < 0 ? '#16D67E' : '#FF9F0A'
 
   const usRows = [
     { label: 'S&P500', val: marketData.sp500_ret, fmt: fmt(marketData.sp500_ret) },
@@ -452,7 +452,7 @@ function ScenarioBlock({ scenario, prob }) {
   const pct = Math.round((prob ?? 0.5) * 100)
   const isBull = pct >= 55, isBear = pct <= 45
   // Taiwan convention: 偏多=紅, 偏空=綠
-  const accentColor = isBull ? '#FF453A' : isBear ? '#30D158' : '#FF9F0A'
+  const accentColor = isBull ? '#FF3340' : isBear ? '#16D67E' : '#FF9F0A'
 
   if (!scenario?.main_scenario && !scenario?.best_strategy) return null
 
@@ -475,7 +475,7 @@ function ScenarioBlock({ scenario, prob }) {
       {scenario.forbidden_actions?.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {scenario.forbidden_actions.map((a, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 13, color: '#FF453A' }}>
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 13, color: '#FF3340' }}>
               <span style={{ flexShrink: 0 }}>🚫</span><span>{a}</span>
             </div>
           ))}
@@ -485,13 +485,13 @@ function ScenarioBlock({ scenario, prob }) {
   )
 }
 
-const GRADE_COLOR = { A: '#FFD60A', B: '#30D158', C: '#FF9F0A', D: '#64748B', X: '#FF453A' }
+const GRADE_COLOR = { A: '#FFD60A', B: '#16D67E', C: '#FF9F0A', D: '#64748B', X: '#FF3340' }
 
 /* ── Stock Mini Row (TOP 5) ──────────────────────────────────────── */
 function StockMiniRow({ stock, rank, maxScore, isLast }) {
   const normScore = Math.min(Math.round((stock.entry_score || 0) / maxScore * 100), 99)
   const isEntry = stock.entry_signal
-  const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : 'var(--ios-label2)'
+  const scoreColor = isEntry ? '#16D67E' : normScore >= 70 ? '#0A84FF' : 'var(--ios-label2)'
   const grade = stock.grade || ''
 
   const techDots = [
@@ -552,7 +552,7 @@ function StockMiniRow({ stock, rank, maxScore, isLast }) {
           <span style={{ fontSize: 11, fontWeight: 800, color: GRADE_COLOR[grade] || '#64748B', background: `${GRADE_COLOR[grade] || '#64748B'}20`, borderRadius: 5, padding: '1px 6px', letterSpacing: 0.3 }}>{grade}</span>
         )}
         {isEntry
-          ? <span style={{ fontSize: 11, color: '#30D158', fontWeight: 700, background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '4px 10px' }}>進場</span>
+          ? <span style={{ fontSize: 11, color: '#16D67E', fontWeight: 700, background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '4px 10px' }}>進場</span>
           : <span style={{ fontSize: 11, color: '#0A84FF', fontWeight: 600, background: 'rgba(59,130,246,0.10)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '4px 10px' }}>觀察</span>
         }
       </div>
@@ -604,7 +604,7 @@ function RiskFactors({ factors }) {
       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>風險因子</div>
       {items.map((text, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: i < items.length - 1 ? 7 : 0 }}>
-          <span style={{ color: '#FF453A', flexShrink: 0, fontSize: 12 }}>✓</span>
+          <span style={{ color: '#FF3340', flexShrink: 0, fontSize: 12 }}>✓</span>
           <span style={{ fontSize: 13, color: 'var(--ios-label2)', lineHeight: 1.55 }}>{text}</span>
         </div>
       ))}
@@ -632,18 +632,18 @@ function WatchlistAlerts({ stocks }) {
       </div>
       {entries.map(s => (
         <div key={s.stock_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '0.5px solid var(--ios-sep)' }}>
-          <span style={{ fontSize: 11, background: 'rgba(48,209,88,0.15)', color: '#30D158', borderRadius: 6, padding: '2px 7px', fontWeight: 700, flexShrink: 0 }}>進場</span>
+          <span style={{ fontSize: 11, background: 'rgba(22,214,126,0.15)', color: '#16D67E', borderRadius: 6, padding: '2px 7px', fontWeight: 700, flexShrink: 0 }}>進場</span>
           <span style={{ fontFamily: 'monospace', color: '#0A84FF', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{s.stock_id}</span>
           <span style={{ fontSize: 13, color: 'var(--ios-label)', flex: 1 }}>{s.name}</span>
-          <span style={{ fontSize: 12, color: '#30D158', fontFamily: 'monospace' }}>{s.entry_score}</span>
+          <span style={{ fontSize: 12, color: '#16D67E', fontFamily: 'monospace' }}>{s.entry_score}</span>
         </div>
       ))}
       {risky.map(s => (
         <div key={s.stock_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '0.5px solid var(--ios-sep)' }}>
-          <span style={{ fontSize: 11, background: 'rgba(255,69,58,0.15)', color: '#FF453A', borderRadius: 6, padding: '2px 7px', fontWeight: 700, flexShrink: 0 }}>跌幅</span>
+          <span style={{ fontSize: 11, background: 'rgba(255,51,64,0.15)', color: '#FF3340', borderRadius: 6, padding: '2px 7px', fontWeight: 700, flexShrink: 0 }}>跌幅</span>
           <span style={{ fontFamily: 'monospace', color: '#0A84FF', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{s.stock_id}</span>
           <span style={{ fontSize: 13, color: 'var(--ios-label)', flex: 1 }}>{s.name}</span>
-          <span style={{ fontSize: 12, color: '#FF453A', fontFamily: 'monospace' }}>{((s.day_return || 0) * 100).toFixed(2)}%</span>
+          <span style={{ fontSize: 12, color: '#FF3340', fontFamily: 'monospace' }}>{((s.day_return || 0) * 100).toFixed(2)}%</span>
         </div>
       ))}
     </div>
@@ -714,14 +714,14 @@ function SectorHeatmap({ stocks, onStockClick }) {
   function tileBg(ret) {
     const t = Math.max(0, Math.min(1, Math.abs(ret) / 0.05))
     const a = 0.07 + t * 0.42
-    return ret >= 0 ? `rgba(255,59,48,${a})` : `rgba(48,209,88,${a})`
+    return ret >= 0 ? `rgba(255,59,48,${a})` : `rgba(22,214,126,${a})`
   }
 
   function tileBorder(ret, active) {
     if (active) return 'var(--ios-blue)'
     const t = Math.max(0, Math.min(1, Math.abs(ret) / 0.05))
     const a = 0.18 + t * 0.5
-    return ret > 0.002 ? `rgba(255,59,48,${a})` : ret < -0.002 ? `rgba(48,209,88,${a})` : 'var(--ios-sep)'
+    return ret > 0.002 ? `rgba(255,59,48,${a})` : ret < -0.002 ? `rgba(22,214,126,${a})` : 'var(--ios-sep)'
   }
 
   function retColor(ret) {
@@ -773,8 +773,8 @@ function SectorHeatmap({ stocks, onStockClick }) {
             }}>
               {signalCount > 0 && (
                 <div style={{ position: 'absolute', top: 6, right: 7, display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#30D158', boxShadow: '0 0 5px #30D158' }} />
-                  <span style={{ fontSize: 8, color: '#30D158', fontWeight: 700 }}>{signalCount}</span>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#16D67E', boxShadow: '0 0 5px #16D67E' }} />
+                  <span style={{ fontSize: 8, color: '#16D67E', fontWeight: 700 }}>{signalCount}</span>
                 </div>
               )}
               <div style={{ fontSize: 11.5, fontWeight: 700, color: isActive ? 'var(--ios-blue)' : 'var(--ios-label)', textAlign: 'center', marginBottom: 5, lineHeight: 1.2 }}>{name}</div>
@@ -812,12 +812,12 @@ function SectorHeatmap({ stocks, onStockClick }) {
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '8px 14px',
                   borderBottom: i < sectorStockList.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
-                  background: hasSignal ? 'rgba(48,209,88,0.04)' : 'transparent',
+                  background: hasSignal ? 'rgba(22,214,126,0.04)' : 'transparent',
                   cursor: onStockClick ? 'pointer' : 'default',
                   WebkitTapHighlightColor: 'transparent',
                 }}>
                 <span style={{ fontSize: 11, color: 'var(--ios-label4)', minWidth: 18, textAlign: 'right', fontFamily: 'monospace' }}>{i + 1}</span>
-                {hasSignal && <span style={{ fontSize: 9, background: 'rgba(48,209,88,0.18)', color: '#30D158', borderRadius: 4, padding: '1px 5px', fontWeight: 700, flexShrink: 0 }}>進場</span>}
+                {hasSignal && <span style={{ fontSize: 9, background: 'rgba(22,214,126,0.18)', color: '#16D67E', borderRadius: 4, padding: '1px 5px', fontWeight: 700, flexShrink: 0 }}>進場</span>}
                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'monospace', flexShrink: 0 }}>{s.stock_id}</span>
                 <span style={{ fontSize: 12, color: 'var(--ios-label)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
                 {rs != null && <span style={{ fontSize: 10, color: 'var(--ios-label3)', flexShrink: 0 }}>RS{rs}%</span>}
@@ -891,7 +891,7 @@ export default function Overview({ data, error }) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10, color: 'var(--ios-label2)' }}>
         <div style={{ fontSize: 36 }}>⚠️</div>
-        <div style={{ fontSize: 15, color: '#FF453A' }}>資料載入失敗</div>
+        <div style={{ fontSize: 15, color: '#FF3340' }}>資料載入失敗</div>
         <div style={{ fontSize: 12, color: 'var(--ios-label3)', fontFamily: 'monospace' }}>{error}</div>
       </div>
     )

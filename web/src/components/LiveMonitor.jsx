@@ -45,7 +45,7 @@ function IndexBar({ indices, loading }) {
     <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
       {[{ key: 't00', label: '加權指數' }, { key: 'o00', label: '櫃買指數' }].map(({ key, label }) => {
         const d = indices[key]
-        const color = d ? ((d.pct || 0) >= 0 ? '#FF453A' : '#30D158') : 'var(--ios-label3)'
+        const color = d ? ((d.pct || 0) >= 0 ? '#FF3340' : '#16D67E') : 'var(--ios-label3)'
         return (
           <div key={key} style={{
             flex: 1, background: 'var(--ios-bg2)', borderRadius: 12, padding: '12px 14px',
@@ -101,8 +101,8 @@ function useStaggerRows(containerRef, key) {
 
 // ── Stock row ─────────────────────────────────────────────────────────────
 function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, showRemove }) {
-  const upColor   = '#FF453A'
-  const downColor = '#30D158'
+  const upColor   = '#FF3340'
+  const downColor = '#16D67E'
   const pct       = live?.pct ?? null
   const color     = pct == null ? 'var(--ios-label)' : pct >= 0 ? upColor : downColor
   const pnlPct    = position && live ? (live.price - position.buyPrice) / position.buyPrice * 100 : null
@@ -116,7 +116,7 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
       style={{
         display: 'flex', alignItems: 'center', padding: '14px 14px', cursor: 'pointer',
         borderBottom: isLast ? 'none' : '0.5px solid var(--ios-sep)',
-        background: pct == null ? 'transparent' : pct >= 0 ? 'rgba(255,69,58,0.025)' : 'rgba(48,209,88,0.025)',
+        background: pct == null ? 'transparent' : pct >= 0 ? 'rgba(255,51,64,0.025)' : 'rgba(22,214,126,0.025)',
       }}
     >
       {/* Left column */}
@@ -128,8 +128,8 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
           {scan?.grade && (
             <span style={{
               fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '1px 5px',
-              color: scan.grade === 'A' ? '#FFD60A' : scan.grade === 'B' ? '#30D158' : '#94A3B8',
-              background: scan.grade === 'A' ? 'rgba(255,214,10,0.15)' : scan.grade === 'B' ? 'rgba(48,209,88,0.15)' : 'var(--ios-fill4)',
+              color: scan.grade === 'A' ? '#FFD60A' : scan.grade === 'B' ? '#16D67E' : '#94A3B8',
+              background: scan.grade === 'A' ? 'rgba(255,214,10,0.15)' : scan.grade === 'B' ? 'rgba(22,214,126,0.15)' : 'var(--ios-fill4)',
             }}>{scan.grade}</span>
           )}
           {scan?.entry_signal && (
@@ -223,8 +223,8 @@ function PortfolioSummary({ items }) {
     const prevPrice = e.live.price / (1 + e.live.pct)
     return s + (e.live.price - prevPrice) * e.position.qty
   }, 0)
-  const color      = totalPnl >= 0 ? '#FF453A' : '#30D158'
-  const todayColor = todayPnl >= 0 ? '#FF453A' : '#30D158'
+  const color      = totalPnl >= 0 ? '#FF3340' : '#16D67E'
+  const todayColor = todayPnl >= 0 ? '#FF3340' : '#16D67E'
 
   return (
     <div style={{
@@ -463,7 +463,7 @@ export default function LiveMonitor({ data }) {
   const addToMonitor    = (id)  => setMonitorList(prev => { const next = prev.includes(id) ? prev : [...prev, id]; saveMonitorList(next); return next })
   const removeFromMonitor = (id) => setMonitorList(prev => { const next = prev.filter(x => x !== id); saveMonitorList(next); return next })
 
-  const sessionColor = mktSession === 'open' ? '#30D158' : 'var(--ios-label3)'
+  const sessionColor = mktSession === 'open' ? '#16D67E' : 'var(--ios-label3)'
   const hasPorts = Object.keys(positions).length > 0
   const hasScans = scanStocks.length > 0
 
@@ -474,7 +474,7 @@ export default function LiveMonitor({ data }) {
 
       {/* ── Market status ───────────────────────────────────────── */}
       <div style={{
-        background: mktOpen ? 'linear-gradient(135deg, rgba(48,209,88,0.08) 0%, var(--ios-bg2) 65%)' : 'var(--ios-bg2)',
+        background: mktOpen ? 'linear-gradient(135deg, rgba(22,214,126,0.08) 0%, var(--ios-bg2) 65%)' : 'var(--ios-bg2)',
         borderRadius: 16, padding: '14px 16px', marginBottom: 12,
         boxShadow: 'var(--shadow-card)', borderLeft: `3px solid ${sessionColor}`,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',

@@ -7,10 +7,10 @@ const BASE = import.meta.env.BASE_URL || '/'
 
 const GRADE_CFG = {
   A: { color: '#FFD60A', bg: 'rgba(255,214,10,0.15)', border: 'rgba(255,214,10,0.35)', label: 'A' },
-  B: { color: '#30D158', bg: 'rgba(48,209,88,0.13)',  border: 'rgba(48,209,88,0.30)',  label: 'B' },
+  B: { color: '#16D67E', bg: 'rgba(22,214,126,0.13)',  border: 'rgba(22,214,126,0.30)',  label: 'B' },
   C: { color: '#FF9F0A', bg: 'rgba(255,159,10,0.13)', border: 'rgba(255,159,10,0.30)', label: 'C' },
   D: { color: '#94A3B8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.22)', label: 'D' },
-  X: { color: '#FF453A', bg: 'rgba(255,69,58,0.13)',  border: 'rgba(255,69,58,0.30)',  label: 'X' },
+  X: { color: '#FF3340', bg: 'rgba(255,51,64,0.13)',  border: 'rgba(255,51,64,0.30)',  label: 'X' },
 }
 
 const SIGNAL_LABELS = {
@@ -47,8 +47,8 @@ const SIGNAL_PRIORITY = [
 const fmtPct  = v => v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%'
 const fmtRate = v => v == null ? '—' : (v * 100).toFixed(0) + '%'
 const fmtP    = v => v == null ? '—' : v >= 100 ? v.toFixed(1) : v.toFixed(2)
-const winColor = r => r == null ? 'var(--ios-label3)' : r >= 0.7 ? '#30D158' : r >= 0.5 ? '#FF9F0A' : '#FF453A'
-const retColor = r => r == null ? 'var(--ios-label3)' : r > 0 ? '#FF453A' : r < 0 ? '#30D158' : 'var(--ios-label3)'
+const winColor = r => r == null ? 'var(--ios-label3)' : r >= 0.7 ? '#16D67E' : r >= 0.5 ? '#FF9F0A' : '#FF3340'
+const retColor = r => r == null ? 'var(--ios-label3)' : r > 0 ? '#FF3340' : r < 0 ? '#16D67E' : 'var(--ios-label3)'
 
 function parseSignals(entry_reason) {
   if (!entry_reason) return []
@@ -82,7 +82,7 @@ function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
       onTouchEnd={() => setPressed(false)}
       style={{
         background: 'var(--ios-bg2)', borderRadius: 14,
-        border: `0.5px solid ${hasExit ? 'rgba(255,69,58,0.4)' : 'var(--ios-sep)'}`,
+        border: `0.5px solid ${hasExit ? 'rgba(255,51,64,0.4)' : 'var(--ios-sep)'}`,
         padding: '11px 13px', cursor: onClick ? 'pointer' : 'default',
         transform: pressed ? 'scale(0.975)' : 'scale(1)',
         transition: 'transform 0.15s',
@@ -144,7 +144,7 @@ function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
 
       {/* Exit warning */}
       {hasExit && (
-        <div style={{ marginTop: 5, fontSize: 9, color: '#FF453A', fontWeight: 600 }}>
+        <div style={{ marginTop: 5, fontSize: 9, color: '#FF3340', fontWeight: 600 }}>
           ⚠️ 出場信號：{stock.base_exit_reason || '已觸發'}
         </div>
       )}
@@ -165,7 +165,7 @@ function DateBarChart({ byDate, sortedDates }) {
           const r = s.avgReturn || 0
           const bH = Math.max(3, Math.abs(r) / maxR * (H - 6))
           const y  = r >= 0 ? H - 3 - bH : H - 3
-          const col = r >= 0 ? '#FF453A' : '#30D158'
+          const col = r >= 0 ? '#FF3340' : '#16D67E'
           return (
             <g key={date}>
               <rect x={i * 26 + 4} y={y} width={16} height={bH} rx={3} fill={col} opacity={0.85} />
@@ -425,7 +425,7 @@ export default function ValidationPanel({ data }) {
           </span>
         )}
         {!isViewingHistory && batchStats.exits > 0 && (
-          <span style={{ fontSize: 9, color: '#FF453A', background: 'rgba(255,69,58,0.12)', borderRadius: 5, padding: '2px 6px', marginLeft: 'auto' }}>
+          <span style={{ fontSize: 9, color: '#FF3340', background: 'rgba(255,51,64,0.12)', borderRadius: 5, padding: '2px 6px', marginLeft: 'auto' }}>
             ⚠️ {batchStats.exits} 檔出場信號
           </span>
         )}

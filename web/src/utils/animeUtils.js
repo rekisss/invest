@@ -32,8 +32,8 @@ export function animateListRows(containerEl) {
 export function flashPriceEl(el, isUp) {
   if (!el) return
   const shadow = isUp
-    ? ['0 0 0 2px rgba(255,69,58,0.6)', '0 0 0 0px rgba(255,69,58,0)']
-    : ['0 0 0 2px rgba(48,209,88,0.6)',  '0 0 0 0px rgba(48,209,88,0)']
+    ? ['0 0 0 2px rgba(255,51,64,0.6)', '0 0 0 0px rgba(255,51,64,0)']
+    : ['0 0 0 2px rgba(22,214,126,0.6)',  '0 0 0 0px rgba(22,214,126,0)']
   animate(el, {
     scale:     [1, 1.07, 1],
     boxShadow: shadow,

@@ -9,7 +9,7 @@ gsap.registerPlugin(useGSAP)
 const PAGE_SIZE = 50
 
 const FILTER_PRESETS = [
-  { label: '外資主攻', filters: ['foreign_buy_3d', 'invest_trust_buy_2d'], color: '#30D158' },
+  { label: '外資主攻', filters: ['foreign_buy_3d', 'invest_trust_buy_2d'], color: '#16D67E' },
   { label: '三法人齊攻', filters: ['foreign_buy_3d', 'invest_trust_buy_2d', 'dealer_buy_3d'], color: '#FF6B35' },
   { label: '突破帶量', filters: ['breakout_20d', 'volume_break', 'adx_trending'], color: '#FF9F0A' },
   { label: '基本面強', filters: ['f_score_high', 'margin_shrinking'], color: '#5AC8FA' },
@@ -61,10 +61,10 @@ const REASON_LABEL = {
 
 const GRADE_STYLE = {
   A: { color: '#FFD60A', bg: 'rgba(255,214,10,0.15)',  border: 'rgba(255,214,10,0.35)' },
-  B: { color: '#30D158', bg: 'rgba(48,209,88,0.13)',   border: 'rgba(48,209,88,0.32)' },
+  B: { color: '#16D67E', bg: 'rgba(22,214,126,0.13)',   border: 'rgba(22,214,126,0.32)' },
   C: { color: '#FF9F0A', bg: 'rgba(255,159,10,0.13)',  border: 'rgba(255,159,10,0.32)' },
   D: { color: '#94A3B8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.22)' },
-  X: { color: '#FF453A', bg: 'rgba(255,69,58,0.13)',   border: 'rgba(255,69,58,0.32)' },
+  X: { color: '#FF3340', bg: 'rgba(255,51,64,0.13)',   border: 'rgba(255,51,64,0.32)' },
 }
 
 const GRADE_FILTERS = ['A', 'B', 'C', 'D']
@@ -106,7 +106,7 @@ function CopyListButton({ stocks }) {
   }
   return (
     <button onClick={copy} style={{
-      background: copied ? 'rgba(48,209,88,0.15)' : 'var(--ios-bg3)',
+      background: copied ? 'rgba(22,214,126,0.15)' : 'var(--ios-bg3)',
       color: copied ? 'var(--ios-green)' : 'var(--ios-label3)',
       border: 'none', borderRadius: 10, padding: '8px 10px',
       fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
@@ -119,8 +119,8 @@ function CopyListButton({ stocks }) {
 
 function StatCard({ label, value, sub, color }) {
   const accents = {
-    'var(--ios-green)':  { from: 'rgba(48,209,88,0.16)',  border: 'rgba(48,209,88,0.55)' },
-    'var(--ios-red)':    { from: 'rgba(255,69,58,0.14)',  border: 'rgba(255,69,58,0.55)' },
+    'var(--ios-green)':  { from: 'rgba(22,214,126,0.16)',  border: 'rgba(22,214,126,0.55)' },
+    'var(--ios-red)':    { from: 'rgba(255,51,64,0.14)',  border: 'rgba(255,51,64,0.55)' },
     'var(--ios-blue)':   { from: 'rgba(10,132,255,0.14)', border: 'rgba(10,132,255,0.50)' },
     'var(--ios-yellow)': { from: 'rgba(255,214,10,0.13)', border: 'rgba(255,214,10,0.50)' },
   }
@@ -158,7 +158,7 @@ function StreakBadge({ value }) {
   return (
     <span style={{
       display: 'inline-block',
-      background: value >= 3 ? 'rgba(48,209,88,0.15)' : 'rgba(255,214,10,0.15)',
+      background: value >= 3 ? 'rgba(22,214,126,0.15)' : 'rgba(255,214,10,0.15)',
       color, borderRadius: 6, padding: '1px 6px', fontSize: 12, fontWeight: 600,
     }}>{value}天</span>
   )
@@ -243,8 +243,8 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const revenueYoyVal = s.revenue_yoy || 0
           const revenueMom = s.revenue_mom || 0
           const scoreDelta = scoreDeltaMap[String(s.stock_id)]
-          const scoreColor = isEntry ? '#30D158' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
-          const rsiColor = rsi > 65 ? '#30D158' : rsi < 40 ? '#FF453A' : '#94A3B8'
+          const scoreColor = isEntry ? '#16D67E' : normScore >= 70 ? '#0A84FF' : '#94A3B8'
+          const rsiColor = rsi > 65 ? '#16D67E' : rsi < 40 ? '#FF3340' : '#94A3B8'
           const adxColor = adx > 25 ? '#5AC8FA' : '#94A3B8'
           const volColor = vol > 1.8 ? '#FF9F0A' : vol > 1.3 ? '#94A3B8' : '#475569'
 
@@ -282,11 +282,11 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   </span>
                 )}
                 {isEntry
-                  ? <span style={{ fontSize: 10, fontWeight: 700, color: '#30D158', background: 'rgba(48,209,88,0.14)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>進場</span>
+                  ? <span style={{ fontSize: 10, fontWeight: 700, color: '#16D67E', background: 'rgba(22,214,126,0.14)', border: '1px solid rgba(34,197,94,0.28)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>進場</span>
                   : <span style={{ fontSize: 10, fontWeight: 600, color: '#0A84FF', background: 'rgba(10,132,255,0.12)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 9999, padding: '2px 8px', flexShrink: 0 }}>觀察</span>
                 }
                 {baseExitSignal && (
-                  <span title={baseExitReason || '出場訊號'} style={{ fontSize: 10, fontWeight: 700, color: '#FF453A', background: 'rgba(255,69,58,0.12)', border: '1px solid rgba(255,69,58,0.38)', borderRadius: 9999, padding: '2px 7px', flexShrink: 0 }}>⚡出場</span>
+                  <span title={baseExitReason || '出場訊號'} style={{ fontSize: 10, fontWeight: 700, color: '#FF3340', background: 'rgba(255,51,64,0.12)', border: '1px solid rgba(255,51,64,0.38)', borderRadius: 9999, padding: '2px 7px', flexShrink: 0 }}>⚡出場</span>
                 )}
                 {hasMarginWarning && (
                   <span
@@ -324,7 +324,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 {scoreDelta != null && Math.abs(scoreDelta) >= 30 && (
                   <span title={`分數較前日${scoreDelta > 0 ? '上升' : '下滑'} ${Math.abs(Math.round(scoreDelta))}`} style={{
                     fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)',
-                    color: scoreDelta > 0 ? '#FF453A' : '#30D158',
+                    color: scoreDelta > 0 ? '#FF3340' : '#16D67E',
                     flexShrink: 0, whiteSpace: 'nowrap',
                   }}>
                     {scoreDelta > 0 ? '▲' : '▼'}{Math.abs(Math.round(scoreDelta))}
@@ -339,13 +339,13 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     {liveData[s.stock_id] ? (
                       <>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
-                          <span style={{ fontSize: 8, color: '#30D158', fontWeight: 900, lineHeight: 1 }}>◉</span>
-                          <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: (liveData[s.stock_id].pct || 0) >= 0 ? '#FF453A' : '#30D158', fontWeight: 700 }}>
+                          <span style={{ fontSize: 8, color: '#16D67E', fontWeight: 900, lineHeight: 1 }}>◉</span>
+                          <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: (liveData[s.stock_id].pct || 0) >= 0 ? '#FF3340' : '#16D67E', fontWeight: 700 }}>
                             {liveData[s.stock_id].price >= 100 ? liveData[s.stock_id].price.toFixed(0) : liveData[s.stock_id].price.toFixed(2)}
                           </span>
                         </div>
                         {liveData[s.stock_id].pct != null && (
-                          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, color: liveData[s.stock_id].pct >= 0 ? '#FF453A' : '#30D158' }}>
+                          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, color: liveData[s.stock_id].pct >= 0 ? '#FF3340' : '#16D67E' }}>
                             {liveData[s.stock_id].pct >= 0 ? '+' : ''}{(liveData[s.stock_id].pct * 100).toFixed(2)}%
                           </div>
                         )}
@@ -356,12 +356,12 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                           {s.close > 100 ? s.close.toFixed(0) : s.close.toFixed(1)}
                         </div>
                         {s.day_return != null && s.day_return !== 0 && (
-                          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, color: s.day_return > 0 ? '#FF453A' : '#30D158' }}>
+                          <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, color: s.day_return > 0 ? '#FF3340' : '#16D67E' }}>
                             {s.day_return > 0 ? '+' : ''}{(s.day_return * 100).toFixed(1)}%
                           </div>
                         )}
                         {s.return_5d != null && Math.abs(s.return_5d) >= 0.05 && (
-                          <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: s.return_5d > 0 ? '#FF9F0A' : '#30D158', opacity: 0.8 }} title="5日報酬">
+                          <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: s.return_5d > 0 ? '#FF9F0A' : '#16D67E', opacity: 0.8 }} title="5日報酬">
                             5d{s.return_5d > 0 ? '+' : ''}{(s.return_5d * 100).toFixed(0)}%
                           </div>
                         )}
@@ -385,7 +385,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   ADX <strong>{adx.toFixed(0)}</strong>
                 </span>
                 {conditionCount > 0 && (
-                  <span title={`${conditionCount} 個技術條件達成`} style={{ fontSize: 11, color: conditionCount >= 9 ? '#30D158' : conditionCount >= 6 ? '#0A84FF' : '#94A3B8', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  <span title={`${conditionCount} 個技術條件達成`} style={{ fontSize: 11, color: conditionCount >= 9 ? '#16D67E' : conditionCount >= 6 ? '#0A84FF' : '#94A3B8', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     ✓<strong>{conditionCount}</strong>
                   </span>
                 )}
@@ -405,7 +405,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   )
                 )}
                 {foreignStreak > 0 && (
-                  <span style={{ fontSize: 11, color: '#30D158', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 11, color: '#16D67E', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     外+<strong>{foreignStreak}</strong>天{s.foreign_buy_accel ? <span style={{ fontSize: 9, color: 'var(--ios-orange)', fontWeight: 700 }}>↑</span> : null}
                   </span>
                 )}
@@ -430,31 +430,31 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 {(persistentMap[s.stock_id]?.days || 0) >= 2 && (() => {
                   const pm = persistentMap[s.stock_id]
                   const trendArrow = pm.trend > 50 ? ' ↑' : pm.trend < -50 ? ' ↓' : ''
-                  const trendColor = pm.trend > 50 ? '#30D158' : pm.trend < -50 ? '#FF9F0A' : 'var(--ios-green)'
+                  const trendColor = pm.trend > 50 ? '#16D67E' : pm.trend < -50 ? '#FF9F0A' : 'var(--ios-green)'
                   return (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: trendColor, background: 'rgba(48,209,88,0.13)', borderRadius: 5, padding: '1px 5px', whiteSpace: 'nowrap', flexShrink: 0 }} title={`近14天入榜${pm.days}次，分數趨勢${pm.trend > 0 ? '上升' : '下滑'}${trendArrow}`}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: trendColor, background: 'rgba(22,214,126,0.13)', borderRadius: 5, padding: '1px 5px', whiteSpace: 'nowrap', flexShrink: 0 }} title={`近14天入榜${pm.days}次，分數趨勢${pm.trend > 0 ? '上升' : '下滑'}${trendArrow}`}>
                       📅{pm.days}次{trendArrow}
                     </span>
                   )
                 })()}
                 {rs5d > 0.01 && (
-                  <span style={{ fontSize: 11, color: rs5d > 0.05 ? '#30D158' : '#94A3B8', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 11, color: rs5d > 0.05 ? '#16D67E' : '#94A3B8', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     RS <strong>+{(rs5d * 100).toFixed(1)}%</strong>
                   </span>
                 )}
                 {Math.abs(marginChg) >= 1 && (
-                  <span style={{ fontSize: 11, color: marginChg < -1 ? '#30D158' : '#FF453A', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 11, color: marginChg < -1 ? '#16D67E' : '#FF3340', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                     融{marginChg > 0 ? '↑' : '↓'}{Math.abs(marginChg).toFixed(1)}%
                   </span>
                 )}
                 {revenueYoyVal >= 0.05 && (
-                  <span style={{ fontSize: 11, color: '#FF453A', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
+                  <span style={{ fontSize: 11, color: '#FF3340', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
                     營收+{(revenueYoyVal * 100).toFixed(0)}%
                     {revenueMom >= 0.05 && <span style={{ fontSize: 9, color: '#5AC8FA', marginLeft: 2 }}>MoM+{(revenueMom * 100).toFixed(0)}%</span>}
                   </span>
                 )}
                 {revenueYoyVal <= -0.10 && (
-                  <span style={{ fontSize: 11, color: '#30D158', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
+                  <span style={{ fontSize: 11, color: '#16D67E', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
                     營收{(revenueYoyVal * 100).toFixed(0)}%
                   </span>
                 )}
@@ -495,7 +495,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     </div>
                   )}
                   {baseExitSignal && baseExitReason && (
-                    <div style={{ fontSize: 10, color: '#FF453A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                    <div style={{ fontSize: 10, color: '#FF3340', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
                       🚨 {baseExitReason}
                     </div>
                   )}
@@ -524,7 +524,7 @@ function Sparkline({ data, stockId, width = 56, height = 20, days = 60 }) {
     return [x.toFixed(1), y.toFixed(1)]
   })
   const isUp = closes[n - 1] >= closes[0]
-  const color = isUp ? '#FF453A' : '#30D158'
+  const color = isUp ? '#FF3340' : '#16D67E'
   const linePoints = pts.map(([x, y]) => `${x},${y}`).join(' ')
   const areaPoints = `0,${height} ${linePoints} ${width},${height}`
   const gradId = `spk-${stockId || 'x'}`
@@ -551,11 +551,11 @@ function BBPositionBar({ bbPctB, width = 56 }) {
   const clamped = Math.max(-0.2, Math.min(1.5, bbPctB))
   const pct = Math.min(((clamped + 0.2) / 1.7) * 100, 100)
   let color
-  if (bbPctB > 1.1) color = '#30D158'
+  if (bbPctB > 1.1) color = '#16D67E'
   else if (bbPctB > 0.8) color = '#34C759'
   else if (bbPctB > 0.5) color = '#0A84FF'
   else if (bbPctB > 0.2) color = '#FF9F0A'
-  else color = '#FF453A'
+  else color = '#FF3340'
   const label = bbPctB > 1.1 ? '突破上軌' : bbPctB > 0.8 ? '強勢上半' : bbPctB > 0.5 ? '中上' : bbPctB > 0.2 ? '中下' : '近下軌'
   const fillRef = useRef(null)
   useGSAP(() => {
@@ -681,7 +681,7 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
           } else if (heatTab === 'strong') {
             const t = sec.avgMarketRs / 100
             bg = `rgba(255,${Math.round(120 - t * 70)},10,${0.10 + t * 0.22})`
-            textColor = t > 0.75 ? '#FF453A' : t > 0.5 ? '#FF9F0A' : '#FFD60A'
+            textColor = t > 0.75 ? '#FF3340' : t > 0.5 ? '#FF9F0A' : '#FFD60A'
             borderColor = `rgba(255,${Math.round(120 - t * 70)},10,${0.25 + t * 0.35})`
           } else {
             const t = 1 - sec.avgMarketRs / 50
@@ -823,11 +823,11 @@ function SignalChangeSection({ newEntry, dropped, onSelect }) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {newEntry.map(s => (
                 <button key={s.stock_id} onClick={() => onSelect && onSelect(s)} style={{
-                  background: 'rgba(48,209,88,0.12)', border: '0.5px solid rgba(48,209,88,0.35)',
+                  background: 'rgba(22,214,126,0.12)', border: '0.5px solid rgba(22,214,126,0.35)',
                   borderRadius: 8, padding: '3px 8px', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#30D158', fontFamily: 'var(--font-mono)' }}>{s.stock_id}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#16D67E', fontFamily: 'var(--font-mono)' }}>{s.stock_id}</span>
                   <span style={{ fontSize: 11, color: 'var(--ios-label2)' }}>{s.name}</span>
                   <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)' }}>{Math.round(s.entry_score)}</span>
                 </button>
@@ -872,14 +872,14 @@ function ScoreMoversSection({ stocks, scoreDeltaMap, onSelect }) {
 
   const Pill = ({ s, isGain, onClick }) => (
     <button onClick={onClick} style={{
-      background: isGain ? 'rgba(255,69,58,0.10)' : 'rgba(48,209,88,0.10)',
-      border: `0.5px solid ${isGain ? 'rgba(255,69,58,0.3)' : 'rgba(48,209,88,0.3)'}`,
+      background: isGain ? 'rgba(255,51,64,0.10)' : 'rgba(22,214,126,0.10)',
+      border: `0.5px solid ${isGain ? 'rgba(255,51,64,0.3)' : 'rgba(22,214,126,0.3)'}`,
       borderRadius: 8, padding: '4px 9px', cursor: 'pointer',
       display: 'flex', alignItems: 'center', gap: 6,
     }}>
       <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)' }}>{s.stock_id}</span>
       <span style={{ fontSize: 11, color: 'var(--ios-label2)' }}>{s.name}</span>
-      <span style={{ fontSize: 11, fontWeight: 700, color: isGain ? '#FF453A' : '#30D158', fontFamily: 'var(--font-mono)' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: isGain ? '#FF3340' : '#16D67E', fontFamily: 'var(--font-mono)' }}>
         {isGain ? '▲' : '▼'}{Math.abs(Math.round(s._delta))}
       </span>
     </button>
@@ -893,7 +893,7 @@ function ScoreMoversSection({ stocks, scoreDeltaMap, onSelect }) {
       <div className="glass-panel" style={{ overflow: 'hidden', padding: '10px 14px' }}>
         {gainers.length > 0 && (
           <div style={{ marginBottom: losers.length ? 10 : 0 }}>
-            <div style={{ fontSize: 10, color: '#FF453A', fontWeight: 700, marginBottom: 5 }}>▲ 大漲（+80分以上）</div>
+            <div style={{ fontSize: 10, color: '#FF3340', fontWeight: 700, marginBottom: 5 }}>▲ 大漲（+80分以上）</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {gainers.map(s => <Pill key={s.stock_id} s={s} isGain onClick={() => onSelect?.(s)} />)}
             </div>
@@ -901,7 +901,7 @@ function ScoreMoversSection({ stocks, scoreDeltaMap, onSelect }) {
         )}
         {losers.length > 0 && (
           <div>
-            <div style={{ fontSize: 10, color: '#30D158', fontWeight: 700, marginBottom: 5 }}>▼ 大跌（−80分以上）</div>
+            <div style={{ fontSize: 10, color: '#16D67E', fontWeight: 700, marginBottom: 5 }}>▼ 大跌（−80分以上）</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {losers.map(s => <Pill key={s.stock_id} s={s} isGain={false} onClick={() => onSelect?.(s)} />)}
             </div>
@@ -938,7 +938,7 @@ function NearBreakoutSection({ stocks, onSelect }) {
       }}>{s.gap_to_20d_high_pct.toFixed(1)}%</span>
     )},
     { key: 'score',    label: '分數', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ios-label2)' }}>{Math.round(s.entry_score)}</span> },
-    { key: 'rsi',      label: 'RSI', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: (s.rsi14 || 0) > 60 ? '#30D158' : 'var(--ios-label3)' }}>{s.rsi14?.toFixed(0)}</span> },
+    { key: 'rsi',      label: 'RSI', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: (s.rsi14 || 0) > 60 ? '#16D67E' : 'var(--ios-label3)' }}>{s.rsi14?.toFixed(0)}</span> },
   ]
   return <AlertTable title="📐 近突破雷達（距20日高點 ≤2%，尚未入場）" accentColor="#FF9F0A" stocks={candidates} columns={cols} onSelect={onSelect} />
 }
@@ -962,12 +962,12 @@ function VolumeSurgeSection({ stocks, onSelect }) {
     { key: 'close',    label: '收盤', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{s.close?.toFixed(s.close >= 100 ? 0 : 1)}</span> },
     { key: 'vol',      label: '量比', render: s => (
       <span style={{
-        background: (s.volume_ratio || 0) >= 5 ? 'rgba(255,69,58,0.2)' : 'rgba(255,107,53,0.14)',
-        color: (s.volume_ratio || 0) >= 5 ? '#FF453A' : '#FF6B35',
+        background: (s.volume_ratio || 0) >= 5 ? 'rgba(255,51,64,0.2)' : 'rgba(255,107,53,0.14)',
+        color: (s.volume_ratio || 0) >= 5 ? '#FF3340' : '#FF6B35',
         borderRadius: 6, padding: '2px 8px', fontWeight: 700, fontSize: 12,
       }}>{(s.volume_ratio || 0).toFixed(1)}x</span>
     )},
-    { key: 'rsi', label: 'RSI', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: (s.rsi14 || 0) > 60 ? '#30D158' : 'var(--ios-label3)' }}>{s.rsi14?.toFixed(0)}</span> },
+    { key: 'rsi', label: 'RSI', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: (s.rsi14 || 0) > 60 ? '#16D67E' : 'var(--ios-label3)' }}>{s.rsi14?.toFixed(0)}</span> },
     { key: 'score', label: '分數', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ios-label2)' }}>{Math.round(s.entry_score)}</span> },
   ]
   return <AlertTable title="🔥 放量異動（量比≥2.5x，尚未入場）" accentColor="#FF6B35" stocks={candidates} columns={cols} onSelect={onSelect} />
@@ -980,7 +980,7 @@ function LimitDownSection({ items, onSelect }) {
     { key: 'close',    label: '收盤', render: s => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{s.close?.toFixed(2)}</span> },
     { key: 'streak',   label: '連跌天', render: s => (
       <span style={{
-        background: s.limit_down_streak >= 5 ? '#7f1d1d' : 'rgba(255,69,58,0.18)',
+        background: s.limit_down_streak >= 5 ? '#7f1d1d' : 'rgba(255,51,64,0.18)',
         color: s.limit_down_streak >= 5 ? '#fff' : 'var(--ios-red)',
         borderRadius: 6, padding: '2px 8px', fontWeight: 700, fontSize: 12,
       }}>↓{s.limit_down_streak}天</span>
@@ -1127,8 +1127,8 @@ function DataQualityPanel({ dq }) {
   if (!dq) return null
   const fresh = dq.is_fresh
   const statusColor = fresh ? 'var(--ios-green)' : 'var(--ios-orange)'
-  const statusBg = fresh ? 'rgba(48,209,88,0.10)' : 'rgba(255,159,10,0.10)'
-  const statusBorder = fresh ? 'rgba(48,209,88,0.28)' : 'rgba(255,159,10,0.3)'
+  const statusBg = fresh ? 'rgba(22,214,126,0.10)' : 'rgba(255,159,10,0.10)'
+  const statusBorder = fresh ? 'rgba(22,214,126,0.28)' : 'rgba(255,159,10,0.3)'
   const checks = [
     {
       label: '資料新鮮度',
@@ -1316,7 +1316,7 @@ function DateComparisonPanel({ scan, prevScan }) {
   ]
 
   const overallDelta = (todayEntry - prevEntry) + (todayAB - prevAB)
-  const headerColor = overallDelta > 0 ? '#30D158' : overallDelta < 0 ? '#FF453A' : 'var(--ios-label3)'
+  const headerColor = overallDelta > 0 ? '#16D67E' : overallDelta < 0 ? '#FF3340' : 'var(--ios-label3)'
 
   return (
     <div style={{ margin: '10px 16px 0', background: 'var(--ios-bg2)', borderRadius: 16, padding: '12px 14px', boxShadow: 'var(--shadow-card)', border: '0.5px solid var(--ios-sep)' }}>
@@ -1325,7 +1325,7 @@ function DateComparisonPanel({ scan, prevScan }) {
       </div>
       {rows.map((r, i) => {
         const delta = r.today - r.prev
-        const dColor = delta > 0 ? '#30D158' : delta < 0 ? '#FF453A' : 'var(--ios-label3)'
+        const dColor = delta > 0 ? '#16D67E' : delta < 0 ? '#FF3340' : 'var(--ios-label3)'
         return (
           <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '0.5px solid var(--ios-sep)' }}>
             <span style={{ fontSize: 12, color: 'var(--ios-label2)', flex: 1 }}>{r.label}</span>
@@ -1365,7 +1365,7 @@ function MarketBreadthBar({ stocks }) {
     const rsiStr   = stocks.filter(s => s.rsi_strong).length
     const foreign  = stocks.filter(s => (s.foreign_buy_streak || 0) >= 1).length
     return [
-      { label: 'EMA60上', value: ema60,    pct: ema60 / n * 100,    color: '#30D158' },
+      { label: 'EMA60上', value: ema60,    pct: ema60 / n * 100,    color: '#16D67E' },
       { label: 'ADX趨勢', value: trending, pct: trending / n * 100, color: '#5AC8FA' },
       { label: 'RSI強勢', value: rsiStr,   pct: rsiStr / n * 100,   color: '#FF9F0A' },
       { label: '外資買',  value: foreign,  pct: foreign / n * 100,  color: '#BF5AF2' },
@@ -1615,12 +1615,12 @@ function QuickStatsBar({ stocks, onActivateFilter, onSort }) {
   }, [stocks])
 
   const items = [
-    { label: '外買3天+', value: stats.foreignBuy3, filter: 'foreign_buy_3d', color: '#30D158' },
+    { label: '外買3天+', value: stats.foreignBuy3, filter: 'foreign_buy_3d', color: '#16D67E' },
     { label: '投信2天+', value: stats.trustBuy2, filter: 'invest_trust_buy_2d', color: '#BF5AF2' },
     { label: 'F≥7', value: stats.fHigh, filter: 'f_score_high', color: '#5AC8FA' },
     { label: '近突破', value: stats.nearBreak, filter: null, sort: 'gap_to_20d_high_pct_asc', color: '#FF9F0A' },
     { label: '爆量3x+', value: stats.volumeSurge, filter: 'volume_surge_3x', color: '#FF6B35' },
-    ...(stats.exitSignals > 0 ? [{ label: '出場警示', value: stats.exitSignals, filter: null, color: '#FF453A' }] : []),
+    ...(stats.exitSignals > 0 ? [{ label: '出場警示', value: stats.exitSignals, filter: null, color: '#FF3340' }] : []),
   ].filter(item => item.value > 0)
 
   if (items.length === 0) return null
@@ -2101,9 +2101,9 @@ export default function Dashboard({ data, error }) {
               return (
                 <span style={{
                   fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 9999,
-                  background: fresh ? 'rgba(48,209,88,0.12)' : 'rgba(255,159,10,0.12)',
+                  background: fresh ? 'rgba(22,214,126,0.12)' : 'rgba(255,159,10,0.12)',
                   color: fresh ? 'var(--ios-green)' : 'var(--ios-orange)',
-                  border: `0.5px solid ${fresh ? 'rgba(48,209,88,0.3)' : 'rgba(255,159,10,0.35)'}`,
+                  border: `0.5px solid ${fresh ? 'rgba(22,214,126,0.3)' : 'rgba(255,159,10,0.35)'}`,
                   flexShrink: 0,
                 }}>
                   {fresh ? '✓ 資料正常' : `⚠ 資料T+${dq.days_behind}`}
@@ -2132,19 +2132,19 @@ export default function Dashboard({ data, error }) {
           const chips = []
           if (fn != null) chips.push({
             label: `期貨 ${fn > 0 ? '+' : ''}${Math.round(fn / 1000)}k口`,
-            color: fn >= 0 ? '#FF453A' : '#30D158',
+            color: fn >= 0 ? '#FF3340' : '#16D67E',
           })
           if (nc != null) chips.push({
             label: `夜盤 ${nc > 0 ? '+' : ''}${Math.round(nc)}pt`,
-            color: nc >= 0 ? '#FF453A' : '#30D158',
+            color: nc >= 0 ? '#FF3340' : '#16D67E',
           })
           if (rsi != null) chips.push({
             label: `大盤RSI ${rsi.toFixed(0)}`,
-            color: rsi > 70 ? '#FF453A' : rsi > 60 ? '#FF9F0A' : rsi < 40 ? '#30D158' : '#94A3B8',
+            color: rsi > 70 ? '#FF3340' : rsi > 60 ? '#FF9F0A' : rsi < 40 ? '#16D67E' : '#94A3B8',
           })
           if (disp != null && disp > 0) chips.push({
             label: `處置 ${disp}支`,
-            color: disp >= 50 ? '#FF453A' : '#FF9F0A',
+            color: disp >= 50 ? '#FF3340' : '#FF9F0A',
           })
           if (chips.length === 0) return null
           return (
@@ -2183,7 +2183,7 @@ export default function Dashboard({ data, error }) {
               {hasAnyFilter && (
                 <button onClick={clearAll} style={{
                   fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 9999,
-                  border: '0.5px solid rgba(255,69,58,0.35)', background: 'rgba(255,69,58,0.10)',
+                  border: '0.5px solid rgba(255,51,64,0.35)', background: 'rgba(255,51,64,0.10)',
                   color: 'var(--ios-red)', cursor: 'pointer', flexShrink: 0,
                 }}>✕ 清除</button>
               )}
@@ -2276,7 +2276,7 @@ export default function Dashboard({ data, error }) {
             {activeGrades.size > 0 && (
               <button onClick={() => setActiveGrades(new Set())} style={{
                 flexShrink: 0, fontSize: 10, padding: '3px 8px', borderRadius: 9999,
-                border: '1px solid rgba(255,69,58,0.3)', background: 'rgba(255,69,58,0.08)',
+                border: '1px solid rgba(255,51,64,0.3)', background: 'rgba(255,51,64,0.08)',
                 color: 'var(--ios-red)', cursor: 'pointer', fontWeight: 600,
               }}>✕</button>
             )}
@@ -2296,7 +2296,7 @@ export default function Dashboard({ data, error }) {
                     flexShrink: 0, fontSize: 11, fontWeight: 600,
                     padding: '4px 10px', borderRadius: 9999, cursor: 'pointer',
                     border: isActive ? '1px solid var(--ios-green)' : '1px solid var(--ios-sep)',
-                    background: isActive ? 'rgba(48,209,88,0.15)' : 'var(--ios-bg3)',
+                    background: isActive ? 'rgba(22,214,126,0.15)' : 'var(--ios-bg3)',
                     color: isActive ? 'var(--ios-green)' : 'var(--ios-label3)',
                     transition: 'all 0.15s',
                   }}
@@ -2310,7 +2310,7 @@ export default function Dashboard({ data, error }) {
                 onClick={() => setActiveSignals(new Set())}
                 style={{
                   flexShrink: 0, fontSize: 11, padding: '4px 10px', borderRadius: 9999,
-                  border: '1px solid rgba(255,69,58,0.3)', background: 'rgba(255,69,58,0.08)',
+                  border: '1px solid rgba(255,51,64,0.3)', background: 'rgba(255,51,64,0.08)',
                   color: 'var(--ios-red)', cursor: 'pointer', fontWeight: 600,
                 }}
               >✕ 清除</button>
@@ -2341,7 +2341,7 @@ export default function Dashboard({ data, error }) {
             {activeTrendType && (
               <button onClick={() => setActiveTrendType(null)} style={{
                 flexShrink: 0, fontSize: 11, padding: '4px 10px', borderRadius: 9999,
-                border: '1px solid rgba(255,69,58,0.3)', background: 'rgba(255,69,58,0.08)',
+                border: '1px solid rgba(255,51,64,0.3)', background: 'rgba(255,51,64,0.08)',
                 color: 'var(--ios-red)', cursor: 'pointer', fontWeight: 600,
               }}>✕</button>
             )}
@@ -2392,8 +2392,8 @@ export default function Dashboard({ data, error }) {
               style={{
                 flexShrink: 0, fontSize: 11, fontWeight: 700,
                 padding: '5px 10px', borderRadius: 9999, cursor: 'pointer',
-                border: '1px solid rgba(255,69,58,0.4)',
-                background: 'rgba(255,69,58,0.1)',
+                border: '1px solid rgba(255,51,64,0.4)',
+                background: 'rgba(255,51,64,0.1)',
                 color: 'var(--ios-red)',
                 whiteSpace: 'nowrap',
               }}
@@ -2433,7 +2433,7 @@ export default function Dashboard({ data, error }) {
         {/* Market summary banner */}
         {pred && (() => {
           const isBull = pred.xgb_label === '偏多', isBear = pred.xgb_label === '偏空'
-          const pColor = isBull ? '#FF453A' : isBear ? '#30D158' : '#0A84FF'
+          const pColor = isBull ? '#FF3340' : isBear ? '#16D67E' : '#0A84FF'
           return (
           <div style={{
             margin: '12px 16px 0',
