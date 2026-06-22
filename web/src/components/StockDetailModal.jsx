@@ -520,12 +520,11 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     const bars = data
     const n = bars.length
     const W = propChartW || Math.max(CHART_W, n * BAR_W + CHART_PL + CHART_PR)
-    const CH = 200, VH = 45, GAP = 6, H = CH + GAP + VH
+    const CH = 200, H = CH
     const PL = CHART_PL, PR = CHART_PR, PT = 8
     const maxP = Math.max(...bars.map(d => d.high ?? d.close ?? 0), ...(bbBands?.upper?.filter(Boolean) || []), ...(cdpSeries?.filter(Boolean).map(lv => lv.ah) || []))
     const minP = Math.min(...bars.map(d => d.low  ?? d.close ?? 0), ...(bbBands?.lower?.filter(Boolean) || []), ...(cdpSeries?.filter(Boolean).map(lv => lv.al) || []))
     const pRange = (isNaN(maxP) || isNaN(minP) || maxP === minP) ? 1 : maxP - minP
-    const maxVol = Math.max(...bars.map(d => d.volume ?? 0), 1)
     const slotW = (W - PL - PR) / n
     const bW = Math.max(slotW * 0.65, 1.5)
     const toY = p => PT + (1 - (p - (isNaN(minP) ? 0 : minP)) / pRange) * CH
@@ -535,7 +534,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     }))
     const xStep = Math.max(1, Math.floor(n / 5))
     const xLabels = bars.map((d, i) => ({ i, label: d.time ? d.time.slice(5) : '' })).filter((_, i) => i % xStep === 0 || i === n - 1)
-    return { bars, W, CH, VH, GAP, H, PL, PR, PT, maxVol, n, slotW, bW, toY, toX, gridLevels, xLabels }
+    return { bars, W, CH, H, PL, PR, PT, n, slotW, bW, toY, toX, gridLevels, xLabels }
   }, [data, bbBands, cdpSeries, propChartW])
 
   if (!chart) return (
@@ -544,7 +543,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     </div>
   )
 
-  const { bars, W, CH, VH, GAP, H, PL, PR, PT, maxVol, slotW, bW, toY, toX, gridLevels, xLabels } = chart
+  const { bars, W, CH, H, PL, PR, PT, n, slotW, bW, toY, toX, gridLevels, xLabels } = chart
 
   // Feature 1: Build compare percentage-change series aligned to bars by date
   const comparePolyline = useMemo(() => {
@@ -677,19 +676,12 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     return FIB_LEVELS.map(({ r, label, color }) => ({ price: fibH - r * fibR, label, color }))
   })() : null
 
-  // Volume anomaly: 20-bar average
-  const vol20avg = bars.map((_, i) => {
-    if (i < 5) return 0
-    const w = bars.slice(Math.max(0, i - 20), i).map(b => b.volume ?? 0)
-    return w.reduce((a, b) => a + b, 0) / (w.length || 1)
-  })
-
   // K-line patterns for each bar
   const patterns = showPatterns ? bars.map((_, i) => detectCandlePattern(bars, i)) : null
 
   // Right-axis extension: 36px when CDP or MA labels visible
   const hasRightLabels = cdpSeries || (maLines && maLines.length > 0)
-  const rightExt = hasRightLabels ? 36 : 0
+  const rightExt = hasRightLabels ? 52 : 0
 
   return (
     <svg
@@ -740,30 +732,17 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
         )
       })}
 
-      {/* Candles + volume + anomaly badge */}
+      {/* Candles */}
       {bars.map((d, i) => {
         const x = toX(i), color = candleColor(d.open ?? d.close, d.close)
         const bodyTop = toY(Math.max(d.open ?? d.close, d.close))
         const bodyBot = toY(Math.min(d.open ?? d.close, d.close))
         const bodyH = Math.max(bodyBot - bodyTop, 1)
-        const volH = ((d.volume ?? 0) / maxVol) * VH
         const isHovered = hovered?.idx === i
-        const isVolSpike = vol20avg[i] > 0 && (d.volume ?? 0) > vol20avg[i] * 2
         return (
           <g key={i} opacity={hovered && !isHovered ? 0.45 : 1}>
             <line x1={x} y1={toY(d.high ?? d.close)} x2={x} y2={toY(d.low ?? d.close)} stroke={color} strokeWidth={isHovered ? 1.4 : 0.8} />
             <rect x={x - bW / 2} y={bodyTop} width={bW} height={bodyH} fill={color} stroke={isHovered ? '#fff' : 'none'} strokeWidth={0.5} />
-            <rect x={x - bW / 2} y={CH + GAP + PT + VH - volH} width={bW} height={volH} fill={isVolSpike ? '#FFD60A' : color} opacity={isHovered ? 0.85 : isVolSpike ? 0.75 : 0.45} />
-            {isVolSpike && slotW > 7 && (
-              <text x={x} y={CH + GAP + PT + 9} fontSize={6} fill="#FFD60A" textAnchor="middle" fontWeight="bold">放量</text>
-            )}
-            {/* Feature 2: Volume warning — orange triangle above spike bar */}
-            {isVolSpike && (
-              <polygon
-                points={`${x},${CH + GAP + PT + VH - volH - 6} ${x - 4},${CH + GAP + PT + VH - volH - 1} ${x + 4},${CH + GAP + PT + VH - volH - 1}`}
-                fill="#FF9F0A" opacity={0.9}
-              />
-            )}
           </g>
         )
       })}
@@ -828,8 +807,8 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
             <g key={s}>
               <line x1={W - PR} y1={y} x2={W - PR + 4} y2={y} stroke={c} strokeWidth={1.2} />
               {displaced && <line x1={W - PR + 4} y1={y} x2={W - PR + 5} y2={adjY} stroke={c} strokeWidth={0.5} strokeDasharray="2,1.5" opacity={0.55} />}
-              <rect x={W - PR + 5} y={adjY - 5.5} width={26} height={11} fill={c} rx={2} opacity={0.9} />
-              <text x={W - PR + 18} y={adjY + 3.5} fontSize={7} fill="#1C1C1E" fontWeight="bold" textAnchor="middle">{priceStr}</text>
+              <rect x={W - PR + 4} y={adjY - 8} width={42} height={16} fill={c} rx={3} opacity={0.9} />
+              <text x={W - PR + 25} y={adjY + 4.5} fontSize={9.5} fill="#1C1C1E" fontWeight="800" textAnchor="middle">{priceStr}</text>
             </g>
           )
         })
@@ -860,8 +839,8 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
             <g key={ma.label}>
               <line x1={W - PR} y1={y} x2={W - PR + 4} y2={y} stroke={ma.color} strokeWidth={1.0} />
               {displaced && <line x1={W - PR + 4} y1={y} x2={W - PR + 5} y2={adjY} stroke={ma.color} strokeWidth={0.5} strokeDasharray="2,1.5" opacity={0.55} />}
-              <rect x={W - PR + 5} y={adjY - 5.5} width={26} height={11} fill={ma.color} rx={2} opacity={0.85} />
-              <text x={W - PR + 18} y={adjY + 3.5} fontSize={7} fill="#1C1C1E" fontWeight="bold" textAnchor="middle">{priceStr}</text>
+              <rect x={W - PR + 4} y={adjY - 8} width={42} height={16} fill={ma.color} rx={3} opacity={0.9} />
+              <text x={W - PR + 25} y={adjY + 4.5} fontSize={9.5} fill="#1C1C1E" fontWeight="800" textAnchor="middle">{priceStr}</text>
             </g>
           )
         })
@@ -948,6 +927,104 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
           </g>
         )
       })()}
+    </svg>
+  )
+}
+
+// ── Volume sub-chart ─────────────────────────────────────────────────────────
+
+function VolumeSubChart({ bars, hoveredIdx, onHoverIdx, onLock, locked, chartW: propChartW }) {
+  const subTouchRef = useRef(null)
+  const H = 58, PT = 4
+  const n = bars.length
+  const W = propChartW || Math.max(CHART_W, n * BAR_W + CHART_PL + CHART_PR)
+  const slotW = (W - CHART_PL - CHART_PR) / n
+  const toX = i => CHART_PL + (i + 0.5) * slotW
+  const bW = Math.max(slotW * 0.6, 1)
+  const maxVol = Math.max(...bars.map(d => d.volume ?? 0), 1)
+  const vol20avg = bars.map((_, i) => {
+    if (i < 5) return 0
+    const w = bars.slice(Math.max(0, i - 20), i).map(b => b.volume ?? 0)
+    return w.reduce((a, b) => a + b, 0) / (w.length || 1)
+  })
+  const idxFromX = (clientX, svgEl) => {
+    const rect = svgEl.getBoundingClientRect()
+    const svgX = (clientX - rect.left) / rect.width * W
+    const idx = Math.floor((svgX - CHART_PL) / slotW)
+    return idx >= 0 && idx < n ? idx : null
+  }
+  const handleMove = (clientX, svgEl) => { if (onHoverIdx) onHoverIdx(idxFromX(clientX, svgEl)) }
+  const handleTouchStart = (e) => {
+    if (e.touches.length !== 1) { if (subTouchRef.current) clearTimeout(subTouchRef.current.lpTimer); subTouchRef.current = null; return }
+    const t = e.touches[0]
+    subTouchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget, moved: false, didLock: false }
+    if (onLock) {
+      subTouchRef.current.lpTimer = setTimeout(() => {
+        if (!subTouchRef.current || subTouchRef.current.moved) return
+        subTouchRef.current.didLock = true
+        if (locked) { onLock(null); onHoverIdx?.(null) }
+        else {
+          const idx = idxFromX(subTouchRef.current.startX, subTouchRef.current.svgEl)
+          if (idx != null) { onLock(idx); onHoverIdx?.(idx) }
+        }
+      }, 420)
+    }
+  }
+  const handleTouchMove = (e) => {
+    if (!subTouchRef.current) return
+    const t = e.touches[0]
+    const dx = Math.abs(t.clientX - subTouchRef.current.startX)
+    const dy = Math.abs(t.clientY - subTouchRef.current.startY)
+    if (dx > 6 || dy > 6) { subTouchRef.current.moved = true; clearTimeout(subTouchRef.current.lpTimer) }
+    if (dx > dy && dx > 5) { e.stopPropagation(); handleMove(t.clientX, subTouchRef.current.svgEl) }
+  }
+  const handleTouchEnd = () => {
+    const ref = subTouchRef.current
+    subTouchRef.current = null
+    if (ref) clearTimeout(ref.lpTimer)
+    if (!locked) onHoverIdx?.(null)
+  }
+  const maxVolStr = maxVol >= 1e6 ? `${(maxVol / 1e6).toFixed(1)}M` : maxVol >= 1e3 ? `${(maxVol / 1e3).toFixed(0)}K` : maxVol.toFixed(0)
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H + 4}`}
+      style={{ width: W, display: 'block', background: 'var(--ios-bg2)', borderTop: '0.5px solid var(--ios-sep)', marginTop: 2, touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+      onMouseMove={e => handleMove(e.clientX, e.currentTarget)}
+      onMouseLeave={() => onHoverIdx?.(null)}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      <g>
+        <rect x={CHART_PL + 1} y={PT} width={28} height={16} rx={4} fill="rgba(255,159,10,0.18)" stroke="rgba(255,159,10,0.35)" strokeWidth={0.6} />
+        <rect x={CHART_PL + 1} y={PT} width={3} height={16} rx={2} fill="rgba(255,159,10,0.95)" />
+        <text x={CHART_PL + 8} y={PT + 11} fontSize={9.5} fill="#FF9F0A" fontWeight="800" letterSpacing="0.4">VOL</text>
+      </g>
+      <text x={CHART_PL - 3} y={PT + 8} fontSize={8} style={{ fill: 'var(--ios-label3)' }} textAnchor="end" opacity={0.85}>{maxVolStr}</text>
+      {bars.map((d, i) => {
+        const x = toX(i)
+        const color = candleColor(d.open ?? d.close, d.close)
+        const volH = Math.max(((d.volume ?? 0) / maxVol) * (H - PT - 2), 0.5)
+        const isVolSpike = vol20avg[i] > 0 && (d.volume ?? 0) > vol20avg[i] * 2
+        const isHov = hoveredIdx === i
+        const barY = H - volH
+        return (
+          <g key={i} opacity={hoveredIdx != null && !isHov ? 0.55 : 1}>
+            <rect x={x - bW / 2} y={barY} width={bW} height={volH}
+              fill={isVolSpike ? '#FFD60A' : color}
+              opacity={isHov ? 0.9 : isVolSpike ? 0.8 : 0.5} />
+            {isVolSpike && (
+              <>
+                <line x1={x} y1={barY - 11} x2={x} y2={barY - 5} stroke="#FF9F0A" strokeWidth={1.5} opacity={0.9} />
+                <polygon points={`${x},${barY - 5} ${x - 5},${barY - 10} ${x + 5},${barY - 10}`} fill="#FF9F0A" opacity={0.95} />
+              </>
+            )}
+          </g>
+        )
+      })}
+      {hoveredIdx != null && hoveredIdx >= 0 && hoveredIdx < n && (
+        <line x1={toX(hoveredIdx)} y1={PT} x2={toX(hoveredIdx)} y2={H} stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="2,2" opacity={0.55} />
+      )}
     </svg>
   )
 }
@@ -1640,6 +1717,18 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, com
           <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
             暫無歷史 K 線資料
           </div>
+        )}
+
+        {/* Volume sub-chart */}
+        {bars.length >= 2 && (
+          <VolumeSubChart
+            bars={bars}
+            hoveredIdx={displayIdx}
+            onHoverIdx={setHoveredIdx}
+            onLock={handleLock}
+            locked={lockedIdx != null}
+            chartW={totalChartW}
+          />
         )}
 
         {/* MACD sub-chart */}
