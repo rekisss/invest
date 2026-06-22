@@ -1695,10 +1695,22 @@ export default function Dashboard({ data, error }) {
   const headerTouchRef = useRef(null)  // tracks touch forwarding from header → list
 
   // Track the collapsible content's natural height; keep it live with ResizeObserver.
+  // Also sync the wrapper's pixel height when near the top so auto-resize works.
   useLayoutEffect(() => {
     const el = headerContentRef.current
     if (!el) return
-    const measure = () => setHeaderH(el.offsetHeight)
+    const measure = () => {
+      const h = el.offsetHeight
+      setHeaderH(h)
+      const inner = headerInnerRef.current
+      const list  = listScrollRef.current
+      if (inner && list && list.scrollTop <= 10) {
+        inner.style.height = `${h}px`
+        inner.style.opacity = '1'
+        inner.style.transform = 'translateY(0)'
+        inner.style.pointerEvents = 'auto'
+      }
+    }
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(el)
@@ -1725,13 +1737,28 @@ export default function Dashboard({ data, error }) {
 
   const handleListScroll = (e) => {
     const scrollTop = e.currentTarget.scrollTop
-    // Hysteresis snap: collapse once past 56px, re-open near the top. Toggling a boolean
-    // (not writing height every frame) lets the CSS transition stay buttery-smooth.
-    setHeaderCollapsed(prev => {
-      if (!prev && scrollTop > 56) return true
-      if (prev && scrollTop < 14) return false
-      return prev
-    })
+    const el = headerInnerRef.current
+    if (!el || headerH == null) return
+
+    const prog = Math.max(0, Math.min(1, scrollTop / headerH))
+
+    if (scrollTop <= 2) {
+      // At the very top: spring back open
+      el.style.transition = 'height 0.42s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease, transform 0.42s cubic-bezier(0.22,1,0.36,1)'
+      el.style.height = `${headerH}px`
+      el.style.opacity = '1'
+      el.style.transform = 'translateY(0)'
+      el.style.pointerEvents = 'auto'
+    } else {
+      // Progressive collapse tied to scroll position (no CSS transition — we control each frame)
+      el.style.transition = 'none'
+      el.style.height = `${Math.max(0, headerH * (1 - prog))}px`
+      el.style.opacity = String(Math.max(0, 1 - prog * 1.5))
+      el.style.transform = `translateY(${-8 * prog}px)`
+      el.style.pointerEvents = prog >= 0.95 ? 'none' : 'auto'
+    }
+
+    setHeaderCollapsed(prog >= 1)
   }
   const [activeSignals, setActiveSignals] = useState(new Set())
   const toggleSignal = (key) => {
@@ -1973,6 +2000,40 @@ export default function Dashboard({ data, error }) {
     { id: 'heatmap',   label: `🌡 族群` },
   ]
 
+  // View tab drag-to-switch (same UX as bottom tab bar)
+  const viewSegRef = useRef(null)
+  const viewTabDragRef = useRef({ active: false, x0: 0, y0: 0, moved: false })
+  const onViewTabTouchStart = (e) => {
+    const t = e.touches[0]
+    viewTabDragRef.current = { active: true, x0: t.clientX, y0: t.clientY, moved: false }
+  }
+  const onViewTabTouchMove = (e) => {
+    const d = viewTabDragRef.current
+    if (!d.active) return
+    const t = e.touches[0]
+    const dx = t.clientX - d.x0
+    const dy = t.clientY - d.y0
+    if (!d.moved) {
+      if (Math.abs(dx) < 8) return
+      if (Math.abs(dx) < Math.abs(dy)) { d.active = false; return }
+      d.moved = true
+    }
+    if (!viewSegRef.current) return
+    const btns = Array.from(viewSegRef.current.querySelectorAll('.ios-seg-btn'))
+    const x = t.clientX
+    for (let i = 0; i < btns.length; i++) {
+      const rect = btns[i].getBoundingClientRect()
+      if (x >= rect.left && x <= rect.right) {
+        const newId = viewOptions[i]?.id
+        if (newId && newId !== viewTab) setViewTab(newId)
+        break
+      }
+    }
+  }
+  const onViewTabTouchEnd = () => {
+    viewTabDragRef.current = { active: false, x0: 0, y0: 0, moved: false }
+  }
+
   // Forward vertical swipes that START in the header down to the scrollable list.
   // iOS only triggers native scroll when touch begins inside the overflow element.
   const handleHeaderTouchStart = (e) => {
@@ -2078,16 +2139,11 @@ export default function Dashboard({ data, error }) {
           <CopyListButton stocks={entryStocks} />
         </div>
 
-        {/* Collapsible secondary controls — smooth snap collapse on scroll (CSS transition) */}
+        {/* Collapsible secondary controls — progressively collapses as user scrolls down */}
         <div
           ref={headerInnerRef}
           style={{
             overflow: 'hidden',
-            height: headerH == null ? 'auto' : (headerCollapsed ? 0 : headerH),
-            opacity: headerCollapsed ? 0 : 1,
-            transform: headerCollapsed ? 'translateY(-6px)' : 'translateY(0)',
-            pointerEvents: headerCollapsed ? 'none' : 'auto',
-            transition: 'height 0.46s cubic-bezier(0.22,1,0.36,1), opacity 0.34s ease, transform 0.46s cubic-bezier(0.22,1,0.36,1)',
             willChange: 'height, opacity, transform',
           }}
         >
@@ -2239,8 +2295,14 @@ export default function Dashboard({ data, error }) {
           >{sortDir === 'desc' ? '↓' : '↑'}</button>
         </div>
 
-        {/* Segmented view selector */}
-        <div style={{ marginTop: 8 }}>
+        {/* Segmented view selector — supports drag-to-switch like bottom tab bar */}
+        <div
+          ref={viewSegRef}
+          style={{ marginTop: 8 }}
+          onTouchStart={onViewTabTouchStart}
+          onTouchMove={onViewTabTouchMove}
+          onTouchEnd={onViewTabTouchEnd}
+        >
           <div className="ios-segmented">
             {viewOptions.map(v => (
               <button
@@ -2447,7 +2509,7 @@ export default function Dashboard({ data, error }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
               <span style={{
                 fontSize: 15, fontWeight: 600,
-                color: pred.xgb_label === '偏多' ? 'var(--ios-green)' : pred.xgb_label === '偏空' ? 'var(--ios-red)' : 'var(--ios-label)',
+                color: pred.xgb_label === '偏多' ? 'var(--ios-red)' : pred.xgb_label === '偏空' ? 'var(--ios-green)' : 'var(--ios-label)',
               }}>
                 {pred.xgb_label === '偏多' ? '📈' : pred.xgb_label === '偏空' ? '📉' : '➡️'} 大盤預測 {Math.round((pred.xgb_prob_up || 0) * 100)}% 上漲
               </span>
@@ -2461,7 +2523,7 @@ export default function Dashboard({ data, error }) {
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {pred.market_data?.vix != null && <span style={{ fontSize: 12, color: 'var(--ios-label2)' }}>VIX <b style={{ color: 'var(--ios-label)' }}>{pred.market_data.vix}</b></span>}
               {pred.market_data?.futures_net != null && <span style={{ fontSize: 12, color: pred.market_data.futures_net < 0 ? 'var(--ios-green)' : 'var(--ios-red)' }}>外資期貨 {pred.market_data.futures_net?.toLocaleString()}口</span>}
-              {pred.market_data?.night_change != null && <span style={{ fontSize: 12, color: pred.market_data.night_change > 0 ? 'var(--ios-green)' : 'var(--ios-red)' }}>夜盤 {pred.market_data.night_change > 0 ? '+' : ''}{pred.market_data.night_change}pt</span>}
+              {pred.market_data?.night_change != null && <span style={{ fontSize: 12, color: pred.market_data.night_change > 0 ? 'var(--ios-red)' : 'var(--ios-green)' }}>夜盤 {pred.market_data.night_change > 0 ? '+' : ''}{pred.market_data.night_change}pt</span>}
             </div>
             {pred.scenario?.main_scenario && (
               <div style={{ marginTop: 8, fontSize: 13, color: 'var(--ios-label2)', lineHeight: 1.5, borderTop: '0.5px solid var(--ios-sep)', paddingTop: 8 }}>

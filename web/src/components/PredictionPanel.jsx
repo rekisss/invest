@@ -10,7 +10,7 @@ const RISK_LABEL = { LOW: '低風險', MEDIUM: '中風險', HIGH: '高風險', E
 
 function ProbBar({ prob }) {
   const pct = Math.round((prob ?? 0.5) * 100)
-  const color = pct >= 60 ? 'var(--ios-green)' : pct <= 40 ? 'var(--ios-red)' : 'var(--ios-yellow)'
+  const color = pct >= 60 ? 'var(--ios-red)' : pct <= 40 ? 'var(--ios-green)' : 'var(--ios-yellow)'
   const numRef = useRef(null)
   const barRef = useRef(null)
   useGSAP(() => {
@@ -413,9 +413,9 @@ function ErrorPatternPanel({ history }) {
           {data.recentErrors.map(e => (
             <div key={e.date} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '3px 0', borderBottom: '0.5px solid var(--ios-sep)' }}>
               <span style={{ color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)', minWidth: 60 }}>{e.date.slice(5)}</span>
-              <span style={{ color: e.p > 0.5 ? 'var(--ios-green)' : 'var(--ios-red)', fontWeight: 700, fontFamily: 'var(--font-mono)', minWidth: 32 }}>{Math.round(e.p * 100)}%</span>
+              <span style={{ color: e.p > 0.5 ? 'var(--ios-red)' : 'var(--ios-green)', fontWeight: 700, fontFamily: 'var(--font-mono)', minWidth: 32 }}>{Math.round(e.p * 100)}%</span>
               <span style={{ color: 'var(--ios-label3)', fontSize: 10 }}>→</span>
-              <span style={{ color: e.actualUp ? 'var(--ios-green)' : 'var(--ios-red)', fontWeight: 600 }}>{e.actualUp ? '實際↑' : '實際↓'}</span>
+              <span style={{ color: e.actualUp ? 'var(--ios-red)' : 'var(--ios-green)', fontWeight: 600 }}>{e.actualUp ? '實際↑' : '實際↓'}</span>
               {e.vix > 22 && <span style={{ fontSize: 10, color: 'var(--ios-orange)', background: 'rgba(255,159,10,0.12)', borderRadius: 4, padding: '1px 5px' }}>VIX高</span>}
               {e.futures < -30000 && <span style={{ fontSize: 10, color: 'var(--ios-red)', background: 'rgba(255,51,64,0.1)', borderRadius: 4, padding: '1px 5px' }}>空單重</span>}
             </div>
@@ -436,12 +436,12 @@ function MarketDataGrid({ data }) {
     { label: '那斯達克', value: data.nasdaq_ret != null ? `${(data.nasdaq_ret * 100).toFixed(2)}%` : '—', color: data.nasdaq_ret > 0 ? 'var(--ios-green)' : 'var(--ios-red)' },
     { label: '費半', value: data.sox_ret != null ? `${(data.sox_ret * 100).toFixed(2)}%` : '—', color: data.sox_ret > 0 ? 'var(--ios-green)' : 'var(--ios-red)' },
     { label: 'TSM ADR', value: data.tsm_adr_ret != null ? `${(data.tsm_adr_ret * 100).toFixed(2)}%` : '—', color: data.tsm_adr_ret > 0 ? 'var(--ios-green)' : 'var(--ios-red)' },
-    { label: '外資期貨', value: data.futures_net != null ? `${data.futures_net > 0 ? '+' : ''}${Math.round(data.futures_net).toLocaleString()}口` : '—', color: data.futures_net > 0 ? 'var(--ios-green)' : 'var(--ios-red)' },
-    { label: '夜盤', value: data.night_change != null ? `${data.night_change > 0 ? '+' : ''}${Math.round(data.night_change)}` : '—', color: data.night_change > 0 ? 'var(--ios-green)' : 'var(--ios-red)' },
+    { label: '外資期貨', value: data.futures_net != null ? `${data.futures_net > 0 ? '+' : ''}${Math.round(data.futures_net).toLocaleString()}口` : '—', color: data.futures_net > 0 ? 'var(--ios-red)' : 'var(--ios-green)' },
+    { label: '夜盤', value: data.night_change != null ? `${data.night_change > 0 ? '+' : ''}${Math.round(data.night_change)}` : '—', color: data.night_change > 0 ? 'var(--ios-red)' : 'var(--ios-green)' },
     { label: 'PCR', value: data.pcr?.toFixed(2), color: data.pcr > 1.2 ? 'var(--ios-red)' : data.pcr < 0.8 ? 'var(--ios-green)' : 'var(--ios-label)' },
     { label: 'TAIEX RSI', value: data.taiex_rsi?.toFixed(0) || data.rsi14?.toFixed(0), color: 'var(--ios-label)' },
-    { label: 'MACD 直方', value: data.macd_hist != null ? `${data.macd_hist > 0 ? '+' : ''}${data.macd_hist.toFixed(1)}` : null, color: data.macd_hist > 0 ? 'var(--ios-green)' : 'var(--ios-red)' },
-    { label: '距 MA60', value: data.dist_ma60 != null ? `${data.dist_ma60 > 0 ? '+' : ''}${data.dist_ma60.toFixed(1)}%` : null, color: data.dist_ma60 > 0 ? 'var(--ios-green)' : 'var(--ios-red)' },
+    { label: 'MACD 直方', value: data.macd_hist != null ? `${data.macd_hist > 0 ? '+' : ''}${data.macd_hist.toFixed(1)}` : null, color: data.macd_hist > 0 ? 'var(--ios-red)' : 'var(--ios-green)' },
+    { label: '距 MA60', value: data.dist_ma60 != null ? `${data.dist_ma60 > 0 ? '+' : ''}${data.dist_ma60.toFixed(1)}%` : null, color: data.dist_ma60 > 0 ? 'var(--ios-red)' : 'var(--ios-green)' },
     { label: '夜盤趨勢', value: data.night_trend || null, color: 'var(--ios-label)' },
   ].filter(i => i.value && i.value !== 'undefined' && i.value !== 'NaN')
 
@@ -460,7 +460,7 @@ function MarketDataGrid({ data }) {
 function HistoryRow({ entry }) {
   const [open, setOpen] = useState(false)
   const pct = Math.round((entry.xgb_prob_up ?? 0.5) * 100)
-  const color = pct >= 60 ? 'var(--ios-green)' : pct <= 40 ? 'var(--ios-red)' : 'var(--ios-yellow)'
+  const color = pct >= 60 ? 'var(--ios-red)' : pct <= 40 ? 'var(--ios-green)' : 'var(--ios-yellow)'
   const riskLevel = entry.risk?.level?.replace('RiskLevel.', '') || 'MEDIUM'
 
   return (
@@ -565,7 +565,7 @@ export default function PredictionPanel({ prediction, history = [] }) {
           <ProbBar prob={xgb_prob_up} />
           <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap' }}>
             <Tag text={xgb_label || (xgb_prob_up >= 0.55 ? '偏多' : xgb_prob_up <= 0.45 ? '偏空' : '中性')}
-              color={xgb_prob_up >= 0.55 ? 'var(--ios-green)' : xgb_prob_up <= 0.45 ? 'var(--ios-red)' : 'var(--ios-yellow)'} />
+              color={xgb_prob_up >= 0.55 ? 'var(--ios-red)' : xgb_prob_up <= 0.45 ? 'var(--ios-green)' : 'var(--ios-yellow)'} />
             {regime && <Tag text={`勝率 ${regime.win_rate > 1 ? regime.win_rate : Math.round(regime.win_rate * 100)}%`} color="var(--ios-blue)" />}
           </div>
           {regime?.label_zh && (
@@ -681,8 +681,8 @@ export default function PredictionPanel({ prediction, history = [] }) {
                     <div style={{ width: `${100 - bp}%`, background: 'var(--ios-red)' }} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ios-label3)', marginTop: 4 }}>
-                    <span style={{ color: 'var(--ios-green)' }}>偏多 {Math.round(bp)}%</span>
-                    <span style={{ color: 'var(--ios-red)' }}>偏空 {Math.round(100 - bp)}%</span>
+                    <span style={{ color: 'var(--ios-red)' }}>偏多 {Math.round(bp)}%</span>
+                    <span style={{ color: 'var(--ios-green)' }}>偏空 {Math.round(100 - bp)}%</span>
                   </div>
                 </div>
               )
