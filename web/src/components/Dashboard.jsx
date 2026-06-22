@@ -155,6 +155,7 @@ function CustomWatchlistTab({
   const [input, setInput] = useState('')
   const [shake, setShake] = useState(false)
   const [showDropouts, setShowDropouts] = useState(false)
+  const [trackSort, setTrackSort] = useState('default') // 'default' | 'lastSeen' | 'pct'
 
   const scanMap = useMemo(() => {
     const m = {}
@@ -200,6 +201,12 @@ function CustomWatchlistTab({
 
   const customIds = [...customTrack].filter(Boolean)
 
+  const sortedCustomIds = useMemo(() => {
+    if (trackSort === 'lastSeen') return [...customIds].sort((a, b) => (lastSeenMap[b] || '').localeCompare(lastSeenMap[a] || ''))
+    if (trackSort === 'pct') return [...customIds].sort((a, b) => (liveData[b]?.pct ?? -Infinity) - (liveData[a]?.pct ?? -Infinity))
+    return customIds
+  }, [customIds, trackSort, lastSeenMap, liveData])
+
   return (
     <div>
       {/* ── Custom track input bar ── */}
@@ -222,14 +229,27 @@ function CustomWatchlistTab({
             borderRadius: 10, padding: '8px 14px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
           }}
         >追蹤</button>
+        {customIds.length > 0 && (
+          <CopyAllButton ids={[...new Set([...customIds, ...watchlistStocks.map(s => String(s.stock_id))])]} />
+        )}
       </div>
 
       {/* ── Custom tracked (not from scan watchlist) ── */}
       {customIds.length > 0 && (
         <div style={{ padding: '2px 14px 10px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', marginBottom: 6 }}>自訂追蹤</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+            自訂追蹤
+            {['default','lastSeen','pct'].map(s => (
+              <button key={s} onClick={() => setTrackSort(s)} style={{
+                fontSize: 9, padding: '2px 7px', borderRadius: 9999, cursor: 'pointer',
+                border: trackSort === s ? '1px solid var(--ios-blue)' : '0.5px solid var(--ios-sep)',
+                background: trackSort === s ? 'rgba(10,132,255,0.12)' : 'none',
+                color: trackSort === s ? 'var(--ios-blue)' : 'var(--ios-label3)',
+              }}>{s === 'default' ? '預設' : s === 'lastSeen' ? '最近見' : '漲跌%'}</button>
+            ))}
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            {customIds.map(id => (
+            {sortedCustomIds.map(id => (
               <CustomTrackCard
                 key={id}
                 stockId={id}
@@ -390,6 +410,27 @@ function CopyListButton({ stocks }) {
   )
 }
 
+function CopyAllButton({ ids }) {
+  const [copied, setCopied] = useState(false)
+  if (!ids || ids.length === 0) return null
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard?.writeText(ids.join(','))
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      }}
+      title="複製所有追蹤股號"
+      style={{
+        flexShrink: 0, background: copied ? 'rgba(22,214,126,0.15)' : 'var(--ios-bg3)',
+        color: copied ? 'var(--ios-green)' : 'var(--ios-label3)',
+        border: 'none', borderRadius: 10, padding: '8px 10px',
+        fontSize: 12, cursor: 'pointer', transition: 'all 0.2s',
+      }}
+    >{copied ? '✓' : '📋'}</button>
+  )
+}
+
 function StatCard({ label, value, sub, color }) {
   const accents = {
     'var(--ios-green)':  { from: 'rgba(22,214,126,0.16)',  border: 'rgba(22,214,126,0.55)' },
@@ -531,6 +572,8 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 borderBottom: idx < stocks.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
                 cursor: 'pointer',
                 animation: `rowIn 0.35s ${Math.min(idx * 30, 300)}ms cubic-bezier(0.22,1,0.36,1) both`,
+                borderLeft: nearBreakout ? '2.5px solid #FFD60A' : 'none',
+                background: nearBreakout ? 'rgba(255,214,10,0.03)' : 'transparent',
               }}
             >
               {/* Row 1: ID + Name + Signal tag */}
@@ -2780,7 +2823,62 @@ export default function Dashboard({ data, error }) {
       {/* ── Scrollable Content ───────────────────────────────────── */}
       <div ref={listScrollRef} onScroll={handleListScroll} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
 
-        {/* ── Sector Selector Strip — sticky inside scroll so it doesn't overlap header */}
+        {/* Market summary banner */}
+        {pred && (() => {
+          const isBull = pred.xgb_label === '偏多', isBear = pred.xgb_label === '偏空'
+          const pColor = isBull ? '#FF3340' : isBear ? '#16D67E' : '#0A84FF'
+          return (
+          <div style={{
+            margin: '12px 16px 0',
+            background: `linear-gradient(135deg, ${pColor}13 0%, var(--ios-bg2) 55%)`,
+            borderRadius: 16,
+            padding: '14px 16px',
+            boxShadow: `var(--shadow-card), inset 0 0 0 0.5px ${pColor}28`,
+            borderLeft: `3px solid ${pColor}`,
+            position: 'relative', overflow: 'hidden',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+              <span style={{
+                fontSize: 15, fontWeight: 600,
+                color: pred.xgb_label === '偏多' ? 'var(--ios-red)' : pred.xgb_label === '偏空' ? 'var(--ios-green)' : 'var(--ios-label)',
+              }}>
+                <span style={{ display: 'inline-block', animation: 'predIconPulse 2.4s ease-in-out infinite' }}>
+                  {pred.xgb_label === '偏多' ? '📈' : pred.xgb_label === '偏空' ? '📉' : '➡️'}
+                </span>
+                {' '}大盤預測 {Math.round((pred.xgb_prob_up || 0) * 100)}% 上漲
+              </span>
+              {pred.regime?.label_zh && (
+                <span style={{
+                  fontSize: 12, color: 'var(--ios-blue)',
+                  background: 'rgba(10,132,255,0.12)', borderRadius: 8, padding: '2px 8px', fontWeight: 600,
+                }}>{pred.regime.label_zh}</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {pred.market_data?.vix != null && <span style={{ fontSize: 12, color: 'var(--ios-label2)' }}>VIX <b style={{ color: 'var(--ios-label)' }}>{pred.market_data.vix}</b></span>}
+              {pred.market_data?.futures_net != null && <span style={{ fontSize: 12, color: pred.market_data.futures_net < 0 ? 'var(--ios-green)' : 'var(--ios-red)' }}>外資期貨 {pred.market_data.futures_net?.toLocaleString()}口</span>}
+              {pred.market_data?.night_change != null && <span style={{ fontSize: 12, color: pred.market_data.night_change > 0 ? 'var(--ios-red)' : 'var(--ios-green)' }}>夜盤 {pred.market_data.night_change > 0 ? '+' : ''}{pred.market_data.night_change}pt</span>}
+            </div>
+            {pred.scenario?.main_scenario && (
+              <div style={{ marginTop: 8, fontSize: 13, color: 'var(--ios-label2)', lineHeight: 1.5, borderTop: '0.5px solid var(--ios-sep)', paddingTop: 8 }}>
+                <b style={{ color: 'var(--ios-label)', fontWeight: 600 }}>主力劇本 </b>{pred.scenario.main_scenario}
+              </div>
+            )}
+            {pred.scenario?.best_strategy && (
+              <div style={{ fontSize: 12, color: 'var(--ios-green)', marginTop: 4 }}>
+                最佳策略：{pred.scenario.best_strategy}
+              </div>
+            )}
+            {pred.scenario?.forbidden_actions?.length > 0 && (
+              <div style={{ fontSize: 12, color: 'var(--ios-red)', marginTop: 3 }}>
+                🚫 {pred.scenario.forbidden_actions.join(' · ')}
+              </div>
+            )}
+          </div>
+          )
+        })()}
+
+        {/* ── Sector Selector Strip — sticky below market banner so it never covers it */}
         {viewTab !== 'limitdown' && availableSectors.length > 0 && (
           <div style={{
             position: 'sticky', top: 0, zIndex: 10,
@@ -2832,58 +2930,6 @@ export default function Dashboard({ data, error }) {
             })}
           </div>
         )}
-
-        {/* Market summary banner */}
-        {pred && (() => {
-          const isBull = pred.xgb_label === '偏多', isBear = pred.xgb_label === '偏空'
-          const pColor = isBull ? '#FF3340' : isBear ? '#16D67E' : '#0A84FF'
-          return (
-          <div style={{
-            margin: '12px 16px 0',
-            background: `linear-gradient(135deg, ${pColor}13 0%, var(--ios-bg2) 55%)`,
-            borderRadius: 16,
-            padding: '14px 16px',
-            boxShadow: `var(--shadow-card), inset 0 0 0 0.5px ${pColor}28`,
-            borderLeft: `3px solid ${pColor}`,
-            position: 'relative', overflow: 'hidden',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-              <span style={{
-                fontSize: 15, fontWeight: 600,
-                color: pred.xgb_label === '偏多' ? 'var(--ios-red)' : pred.xgb_label === '偏空' ? 'var(--ios-green)' : 'var(--ios-label)',
-              }}>
-                {pred.xgb_label === '偏多' ? '📈' : pred.xgb_label === '偏空' ? '📉' : '➡️'} 大盤預測 {Math.round((pred.xgb_prob_up || 0) * 100)}% 上漲
-              </span>
-              {pred.regime?.label_zh && (
-                <span style={{
-                  fontSize: 12, color: 'var(--ios-blue)',
-                  background: 'rgba(10,132,255,0.12)', borderRadius: 8, padding: '2px 8px', fontWeight: 600,
-                }}>{pred.regime.label_zh}</span>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              {pred.market_data?.vix != null && <span style={{ fontSize: 12, color: 'var(--ios-label2)' }}>VIX <b style={{ color: 'var(--ios-label)' }}>{pred.market_data.vix}</b></span>}
-              {pred.market_data?.futures_net != null && <span style={{ fontSize: 12, color: pred.market_data.futures_net < 0 ? 'var(--ios-green)' : 'var(--ios-red)' }}>外資期貨 {pred.market_data.futures_net?.toLocaleString()}口</span>}
-              {pred.market_data?.night_change != null && <span style={{ fontSize: 12, color: pred.market_data.night_change > 0 ? 'var(--ios-red)' : 'var(--ios-green)' }}>夜盤 {pred.market_data.night_change > 0 ? '+' : ''}{pred.market_data.night_change}pt</span>}
-            </div>
-            {pred.scenario?.main_scenario && (
-              <div style={{ marginTop: 8, fontSize: 13, color: 'var(--ios-label2)', lineHeight: 1.5, borderTop: '0.5px solid var(--ios-sep)', paddingTop: 8 }}>
-                <b style={{ color: 'var(--ios-label)', fontWeight: 600 }}>主力劇本 </b>{pred.scenario.main_scenario}
-              </div>
-            )}
-            {pred.scenario?.best_strategy && (
-              <div style={{ fontSize: 12, color: 'var(--ios-green)', marginTop: 4 }}>
-                最佳策略：{pred.scenario.best_strategy}
-              </div>
-            )}
-            {pred.scenario?.forbidden_actions?.length > 0 && (
-              <div style={{ fontSize: 12, color: 'var(--ios-red)', marginTop: 3 }}>
-                🚫 {pred.scenario.forbidden_actions.join(' · ')}
-              </div>
-            )}
-          </div>
-          )
-        })()}
 
         {/* AI picks */}
         {aiText && (

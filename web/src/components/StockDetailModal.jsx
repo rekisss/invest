@@ -1129,6 +1129,20 @@ function VolumeSubChart({ bars, hoveredIdx, onHoverIdx, onLock, locked, chartW: 
           </g>
         )
       })}
+      {/* 5-day average volume line */}
+      <polyline
+        points={bars.map((_, i) => {
+          if (i < 5) return null
+          const x = toX(i)
+          const avgV = vol20avg[i]
+          const y = avgV > 0 ? (H - PT - 2) - (avgV / maxVol) * (H - PT - 2) + PT : H - 2
+          return `${x},${y}`
+        }).filter(Boolean).join(' ')}
+        fill="none"
+        stroke="#FF9F0A"
+        strokeWidth={1}
+        opacity={0.7}
+      />
       {hoveredIdx != null && hoveredIdx >= 0 && hoveredIdx < n && (
         <line x1={toX(hoveredIdx)} y1={PT} x2={toX(hoveredIdx)} y2={H} stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="2,2" opacity={0.55} />
       )}
@@ -2381,7 +2395,14 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
             <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--ios-label)', letterSpacing: '-0.3px' }}>
               {s.stock_id} <span style={{ fontSize: 16, color: 'var(--ios-label2)', fontWeight: 400 }}>{s.name}</span>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--ios-label3)', marginTop: 3 }}>{s.industry_category}</div>
+            {s.industry_category && (
+              <span style={{
+                display: 'inline-block', marginTop: 5,
+                fontSize: 11, fontWeight: 600, color: 'var(--ios-blue)',
+                background: 'rgba(10,132,255,0.12)', borderRadius: 7,
+                padding: '2px 9px',
+              }}>📂 {s.industry_category}</span>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexShrink: 0 }}>
             {/* Feature 1: Compare button */}
