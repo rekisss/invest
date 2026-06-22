@@ -3,6 +3,7 @@ import StockDetailModal from './StockDetailModal'
 import { useLivePrices } from '../hooks/useLivePrices'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
+import { animate, stagger, spring } from 'animejs'
 gsap.registerPlugin(useGSAP)
 
 const PAGE_SIZE = 50
@@ -570,6 +571,20 @@ function BBPositionBar({ bbPctB, width = 56 }) {
 /* ── Feature 3: Sector Heatmap ───────────────────────────────────── */
 function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
   const [heatTab, setHeatTab] = useState('strong')
+  const tileGridRef = useRef(null)
+
+  // Animate tiles in with stagger when tab switches
+  useEffect(() => {
+    if (!tileGridRef.current) return
+    const tiles = tileGridRef.current.querySelectorAll('.sector-tile')
+    if (!tiles.length) return
+    animate(tiles, {
+      opacity: [0, 1],
+      scale: [0.82, 1],
+      delay: stagger(30, { from: 'first', start: 0 }),
+      ease: spring({ stiffness: 360, damping: 28, mass: 0.7 }),
+    })
+  }, [heatTab])
 
   const allSectors = useMemo(() => {
     const map = {}
@@ -626,32 +641,33 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-          <button
-            onClick={() => setHeatTab('strong')}
-            style={{
-              fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 8, border: 'none',
-              cursor: 'pointer', transition: 'all 0.15s',
-              background: heatTab === 'strong' ? 'rgba(255,159,10,0.22)' : 'var(--ios-fill3)',
-              color: heatTab === 'strong' ? '#FF9F0A' : 'var(--ios-label3)',
-              outline: heatTab === 'strong' ? '1px solid rgba(255,159,10,0.5)' : '1px solid transparent',
-            }}
-          >強勢族群</button>
-          <button
-            onClick={() => setHeatTab('weak')}
-            style={{
-              fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 8, border: 'none',
-              cursor: 'pointer', transition: 'all 0.15s',
-              background: heatTab === 'weak' ? 'rgba(90,200,250,0.16)' : 'var(--ios-fill3)',
-              color: heatTab === 'weak' ? '#5AC8FA' : 'var(--ios-label3)',
-              outline: heatTab === 'weak' ? '1px solid rgba(90,200,250,0.4)' : '1px solid transparent',
-            }}
-          >弱勢族群</button>
+        {/* Segmented tab control — sliding indicator */}
+        <div style={{
+          display: 'flex', background: 'var(--ios-fill3)', borderRadius: 10,
+          padding: 2, gap: 0, position: 'relative', flexShrink: 0,
+        }}>
+          {[
+            { key: 'strong', label: '強勢', activeColor: '#FF9F0A', activeBg: 'rgba(255,159,10,0.22)', activeBorder: 'rgba(255,159,10,0.5)' },
+            { key: 'weak',   label: '弱勢', activeColor: '#5AC8FA', activeBg: 'rgba(90,200,250,0.16)', activeBorder: 'rgba(90,200,250,0.4)' },
+          ].map(t => (
+            <button
+              key={t.key}
+              onClick={() => setHeatTab(t.key)}
+              style={{
+                fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 8, border: 'none',
+                cursor: 'pointer',
+                transition: 'background 0.22s, color 0.22s, box-shadow 0.22s',
+                background: heatTab === t.key ? t.activeBg : 'transparent',
+                color: heatTab === t.key ? t.activeColor : 'var(--ios-label3)',
+                boxShadow: heatTab === t.key ? `0 0 0 1px ${t.activeBorder}, 0 2px 6px rgba(0,0,0,0.12)` : 'none',
+              }}
+            >{t.label}</button>
+          ))}
         </div>
       </div>
 
       {/* Tile grid */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      <div ref={tileGridRef} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {sectors.map(sec => {
           const isSelected = activeSector === sec.name
           const hasEntry = sec.entries > 0
@@ -675,7 +691,7 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
           }
 
           return (
-            <div key={sec.name} onClick={() => onSectorClick && onSectorClick(sec.name)} style={{
+            <div key={sec.name} className="sector-tile" onClick={() => onSectorClick && onSectorClick(sec.name)} style={{
               padding: heatTab === 'strong' ? '8px 12px' : '6px 10px',
               borderRadius: 10,
               background: bg, border: `0.5px solid ${borderColor}`,
@@ -683,7 +699,8 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
               minWidth: minW,
               cursor: onSectorClick ? 'pointer' : 'default',
               transform: isSelected ? 'scale(1.04)' : 'none',
-              transition: 'all 0.15s',
+              transition: 'transform 0.18s, box-shadow 0.18s',
+              boxShadow: isSelected ? `0 0 0 2px ${borderColor}` : 'none',
             }}>
               <div style={{ fontSize: heatTab === 'strong' ? 12 : 11, fontWeight: 600, color: textColor, lineHeight: 1.3, letterSpacing: '-0.1px' }}>
                 {sec.name.length > 7 ? sec.name.slice(0, 7) + '…' : sec.name}
