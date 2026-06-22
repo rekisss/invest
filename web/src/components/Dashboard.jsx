@@ -67,6 +67,15 @@ const GRADE_STYLE = {
 
 const GRADE_FILTERS = ['A', 'B', 'C', 'D']
 
+const TREND_TYPES = [
+  { key: 'uptrend',     label: '📈 多頭排列', match: s => !!(s.above_ema60 && s.ema60_gt_ema120 && s.ma5_above_ma10) },
+  { key: 'breakout',    label: '🚀 突破格局', match: s => !!(s.breakout_20d || s.bb_squeeze_breakout || s.breakout_volume_confirm) },
+  { key: 'strong_rs',   label: '💪 相對強勢', match: s => (s.market_rs_rank || 0) >= 75 },
+  { key: 'institution', label: '🏦 法人護盤', match: s => (s.foreign_buy_streak || 0) >= 3 || (s.invest_trust_streak || 0) >= 3 },
+  { key: 'leader',      label: '🏆 類股旗手', match: s => !!s.is_sector_leader },
+  { key: 'reversal',    label: '🔄 底部反彈', match: s => !!(s.kd_golden_cross || s.macd_golden_cross) && (s.rsi14 || 100) < 55 },
+]
+
 function GradeBadge({ grade }) {
   if (!grade) return null
   const g = GRADE_STYLE[grade] || GRADE_STYLE.D
@@ -184,7 +193,7 @@ function AnimatedScoreBar({ normScore, scoreColor }) {
   )
 }
 
-function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {} }) {
+function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {}, sectorMode = false, rankOffset = 0 }) {
 
   if (!stocks || stocks.length === 0) {
     return (
@@ -251,8 +260,8 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
             >
               {/* Row 1: ID + Name + Signal tag */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-                <span style={{ fontSize: 10, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)', minWidth: 18 }}>
-                  {String(idx + 1).padStart(2, '0')}
+                <span style={{ fontSize: 10, color: sectorMode ? 'var(--ios-blue)' : 'var(--ios-label4)', fontFamily: 'var(--font-mono)', minWidth: 18, fontWeight: sectorMode ? 700 : 400 }}>
+                  {String(rankOffset + idx + 1).padStart(2, '0')}
                 </span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
                   {s.stock_id}
@@ -341,6 +350,11 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
 
               {/* Row 3: Real indicator numbers */}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'nowrap', overflow: 'hidden' }}>
+                {sectorMode && s.sector_rs_rank > 0 && (
+                  <span style={{ fontSize: 11, color: '#0A84FF', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', fontWeight: 700 }}>
+                    類股RS <strong>{Math.round(s.sector_rs_rank)}%</strong>
+                  </span>
+                )}
                 <span style={{ fontSize: 11, color: rsiColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                   RSI <strong>{rsi.toFixed(0)}</strong>
                 </span>
@@ -1670,6 +1684,7 @@ export default function Dashboard({ data, error }) {
     })
   }
   const [activeSector, setActiveSector] = useState(null)
+  const [activeTrendType, setActiveTrendType] = useState(null)
 
   if (error || !data || !data.dates || data.dates.length === 0) {
     return (
@@ -1809,9 +1824,9 @@ export default function Dashboard({ data, error }) {
   const [showAllFiltered, setShowAllFiltered] = useState(false)
 
   // Reset page and show-all whenever filters or tab/date change
-  useEffect(() => { setPage(0); setShowAllFiltered(false) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals, activeGrades, activeSector])
+  useEffect(() => { setPage(0); setShowAllFiltered(false) }, [viewTab, searchQuery, sortField, sortDir, selectedDate, activeSignals, activeGrades, activeSector, activeTrendType])
 
-  const hasActiveFilter = activeSignals.size > 0 || activeGrades.size > 0 || !!activeSector || !!searchQuery.trim()
+  const hasActiveFilter = activeSignals.size > 0 || activeGrades.size > 0 || !!activeSector || !!activeTrendType || !!searchQuery.trim()
   const baseStocks = viewTab === 'entry' ? entryStocks
     : viewTab === 'limitdown' ? limitDownAlerts
     : viewTab === 'watchlist' ? watchlistStocks
@@ -1837,6 +1852,10 @@ export default function Dashboard({ data, error }) {
     if (activeSector && viewTab !== 'limitdown') {
       list = list.filter(s => (s.industry_category || '其他') === activeSector)
     }
+    if (activeTrendType && viewTab !== 'limitdown') {
+      const tt = TREND_TYPES.find(t => t.key === activeTrendType)
+      if (tt) list = list.filter(tt.match)
+    }
     return [...list].sort((a, b) => {
       // Special case: gap_to_20d_high_pct_asc sorts ascending by gap (smallest gap = nearest breakout)
       if (sortField === 'gap_to_20d_high_pct_asc') {
@@ -1853,13 +1872,13 @@ export default function Dashboard({ data, error }) {
       const vb = b[sortField] ?? -Infinity
       return sortDir === 'desc' ? vb - va : va - vb
     })
-  }, [baseStocks, searchQuery, sortField, sortDir, activeSignals, activeGrades, activeSector])
+  }, [baseStocks, searchQuery, sortField, sortDir, activeSignals, activeGrades, activeSector, activeTrendType])
 
   // When a grade/signal/sector/preset filter is active in the 'all' tab, cap to top 20
   // so the user sees "top 20 from full universe" — avoids scrolling through hundreds.
   // Search is intentionally excluded from the cap (user is looking for a specific stock).
   const FILTER_CAP = 20
-  const filterCapActive = (activeSignals.size > 0 || activeGrades.size > 0 || !!activeSector) &&
+  const filterCapActive = (activeSignals.size > 0 || activeGrades.size > 0 || !!activeSector || !!activeTrendType) &&
     !searchQuery.trim() && viewTab === 'all' && !showAllFiltered && filteredAndSorted.length > FILTER_CAP
   const displayList = filterCapActive ? filteredAndSorted.slice(0, FILTER_CAP) : filteredAndSorted
 
@@ -2054,8 +2073,8 @@ export default function Dashboard({ data, error }) {
 
         {/* Grade distribution summary */}
         {allScanStocks.length > 0 && (() => {
-          const hasAnyFilter = activeGrades.size > 0 || activeSignals.size > 0 || activeSector || searchQuery.trim()
-          const clearAll = () => { setActiveGrades(new Set()); setActiveSignals(new Set()); setActiveSector(null); setSearchQuery('') }
+          const hasAnyFilter = activeGrades.size > 0 || activeSignals.size > 0 || activeSector || activeTrendType || searchQuery.trim()
+          const clearAll = () => { setActiveGrades(new Set()); setActiveSignals(new Set()); setActiveSector(null); setActiveTrendType(null); setSearchQuery('') }
           return (
             <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>分佈</span>
@@ -2210,6 +2229,36 @@ export default function Dashboard({ data, error }) {
           </div>
         )}
 
+        {/* Trend type filter chips */}
+        {viewTab !== 'limitdown' && (
+          <div style={{ marginTop: 6, display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none', alignItems: 'center' }}>
+            <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>趨勢</span>
+            {TREND_TYPES.map(tt => {
+              const isActive = activeTrendType === tt.key
+              return (
+                <button key={tt.key} onClick={() => setActiveTrendType(isActive ? null : tt.key)} style={{
+                  flexShrink: 0, fontSize: 11, fontWeight: 600,
+                  padding: '4px 10px', borderRadius: 9999, cursor: 'pointer',
+                  border: isActive ? '1px solid var(--ios-blue)' : '1px solid var(--ios-sep)',
+                  background: isActive ? 'rgba(10,132,255,0.18)' : 'var(--ios-bg3)',
+                  color: isActive ? 'var(--ios-blue)' : 'var(--ios-label3)',
+                  transition: 'all 0.15s',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {isActive ? '✓ ' : ''}{tt.label}
+                </button>
+              )
+            })}
+            {activeTrendType && (
+              <button onClick={() => setActiveTrendType(null)} style={{
+                flexShrink: 0, fontSize: 11, padding: '4px 10px', borderRadius: 9999,
+                border: '1px solid rgba(255,69,58,0.3)', background: 'rgba(255,69,58,0.08)',
+                color: 'var(--ios-red)', cursor: 'pointer', fontWeight: 600,
+              }}>✕</button>
+            )}
+          </div>
+        )}
+
         {/* Filter preset combos */}
         {viewTab !== 'limitdown' && stocks.length > 0 && (
           <div style={{ marginTop: 6, display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -2241,30 +2290,52 @@ export default function Dashboard({ data, error }) {
           </div>
         )}
 
-        {/* Sector filter chips */}
-        {viewTab !== 'limitdown' && availableSectors.length > 0 && (
-          <div style={{ marginTop: 6, display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none', alignItems: 'center' }}>
-            <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>類股</span>
-            {availableSectors.map(({ sec, count }) => {
-              const isActive = activeSector === sec
-              return (
-                <button key={sec} onClick={() => setActiveSector(isActive ? null : sec)} style={{
-                  flexShrink: 0, fontSize: 10, fontWeight: 600,
-                  padding: '3px 8px', borderRadius: 9999, cursor: 'pointer',
-                  border: isActive ? '1px solid rgba(10,132,255,0.6)' : '1px solid var(--ios-sep)',
-                  background: isActive ? 'rgba(10,132,255,0.18)' : 'var(--ios-bg3)',
-                  color: isActive ? 'var(--ios-blue)' : 'var(--ios-label3)',
-                  transition: 'all 0.15s',
-                  whiteSpace: 'nowrap',
-                }}>
-                  {sec} <span style={{ opacity: 0.6 }}>{count}</span>
-                </button>
-              )
-            })}
-          </div>
-        )}
         </div>{/* /collapsible secondary controls */}
       </div>
+
+      {/* ── Sector Selector Strip (always visible) ───────────────── */}
+      {viewTab !== 'limitdown' && availableSectors.length > 0 && (
+        <div style={{ padding: '0 12px 8px', display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', flexShrink: 0 }}>
+          {activeSector && (
+            <button
+              onClick={() => setActiveSector(null)}
+              style={{
+                flexShrink: 0, fontSize: 11, fontWeight: 700,
+                padding: '5px 10px', borderRadius: 9999, cursor: 'pointer',
+                border: '1px solid rgba(255,69,58,0.4)',
+                background: 'rgba(255,69,58,0.1)',
+                color: 'var(--ios-red)',
+                whiteSpace: 'nowrap',
+              }}
+            >✕ 全部</button>
+          )}
+          {availableSectors.map(({ sec, count }) => {
+            const isActive = activeSector === sec
+            return (
+              <button
+                key={sec}
+                onClick={() => {
+                  const newSec = isActive ? null : sec
+                  setActiveSector(newSec)
+                  if (newSec) { setSortField('sector_rs_rank'); setSortDir('desc') }
+                }}
+                style={{
+                  flexShrink: 0, fontSize: 11, fontWeight: 600,
+                  padding: '5px 11px', borderRadius: 9999, cursor: 'pointer',
+                  border: isActive ? '1.5px solid var(--ios-blue)' : '0.5px solid var(--ios-sep)',
+                  background: isActive ? 'rgba(10,132,255,0.18)' : 'var(--ios-bg2)',
+                  color: isActive ? 'var(--ios-blue)' : 'var(--ios-label2)',
+                  transition: 'all 0.15s',
+                  whiteSpace: 'nowrap',
+                  boxShadow: isActive ? '0 0 0 2px rgba(10,132,255,0.12)' : 'none',
+                }}
+              >
+                {sec} <span style={{ fontSize: 10, opacity: 0.55 }}>{count}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* ── Scrollable Content ───────────────────────────────────── */}
       <div ref={listScrollRef} onScroll={handleListScroll} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -2386,6 +2457,13 @@ export default function Dashboard({ data, error }) {
 
         {/* Main stock table */}
         <div style={{ marginTop: 12 }}>
+          {/* Sector ranking banner */}
+          {activeSector && (
+            <div style={{ padding: '4px 16px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)' }}>📊 {activeSector}</span>
+              <span style={{ fontSize: 11, color: 'var(--ios-label3)' }}>{filteredAndSorted.length} 支 · 依類股RS排名</span>
+            </div>
+          )}
           <div style={{ padding: '0 20px 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
             {entryStocks.length > 0 && viewTab === 'all' && !searchQuery && (() => {
               const total = scan.total_scanned || stocks.length
@@ -2445,6 +2523,8 @@ export default function Dashboard({ data, error }) {
               toggleWatchlist={toggleWatchlist}
               persistentMap={persistentMap}
               scoreDeltaMap={scoreDeltaMap}
+              sectorMode={!!activeSector}
+              rankOffset={page * PAGE_SIZE}
             />
           )}
           {/* Show-more button when result is capped at top 20 */}

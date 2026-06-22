@@ -614,7 +614,6 @@ function inferSector(stockId) {
 function SectorHeatmap({ stocks }) {
   if (!stocks || stocks.length === 0) return null
 
-  // Group stocks by sector
   const sectorMap = {}
   for (const s of stocks) {
     const sector = (s.industry_category && s.industry_category.trim()) || inferSector(s.stock_id)
@@ -622,36 +621,30 @@ function SectorHeatmap({ stocks }) {
     sectorMap[sector].push(s)
   }
 
-  // Compute per-sector stats
   const sectors = Object.entries(sectorMap).map(([name, members]) => {
     const avgReturn = members.reduce((sum, s) => sum + (s.day_return || 0), 0) / members.length
     const signalCount = members.filter(s => s.entry_signal).length
-    const avgScore = members.reduce((sum, s) => sum + (s.entry_score || 0), 0) / members.length
-    return { name, count: members.length, avgReturn, signalCount, avgScore }
+    return { name, count: members.length, avgReturn, signalCount }
   }).sort((a, b) => b.avgReturn - a.avgReturn)
 
   if (sectors.length === 0) return null
 
-  // Color scale: Taiwan convention — red=up, green=down
-  function heatColor(ret) {
-    const clamped = Math.max(-0.06, Math.min(0.06, ret))
-    if (clamped >= 0) {
-      const t = clamped / 0.06
-      const r = Math.round(255 * Math.min(1, 0.4 + t * 0.6))
-      const g = Math.round(40 * (1 - t))
-      return `rgba(${r},${g},40,${0.25 + t * 0.55})`
-    } else {
-      const t = -clamped / 0.06
-      const g = Math.round(255 * Math.min(1, 0.4 + t * 0.6))
-      const r = Math.round(40 * (1 - t))
-      return `rgba(${r},${g},40,${0.25 + t * 0.55})`
-    }
+  function tileBg(ret) {
+    const t = Math.max(0, Math.min(1, Math.abs(ret) / 0.05))
+    const a = 0.07 + t * 0.42
+    return ret >= 0 ? `rgba(255,59,48,${a})` : `rgba(48,209,88,${a})`
   }
 
-  function textColor(ret) {
-    const abs = Math.abs(ret)
-    if (abs < 0.005) return 'var(--ios-label3)'
-    return ret > 0 ? 'var(--ios-red)' : 'var(--ios-green)'
+  function tileBorder(ret) {
+    const t = Math.max(0, Math.min(1, Math.abs(ret) / 0.05))
+    const a = 0.18 + t * 0.5
+    return ret > 0.002 ? `rgba(255,59,48,${a})` : ret < -0.002 ? `rgba(48,209,88,${a})` : 'var(--ios-sep)'
+  }
+
+  function retColor(ret) {
+    if (ret > 0.002) return 'var(--ios-red)'
+    if (ret < -0.002) return 'var(--ios-green)'
+    return 'var(--ios-label3)'
   }
 
   return (
@@ -660,30 +653,40 @@ function SectorHeatmap({ stocks }) {
         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-label)' }}>🗂 板塊熱力圖</span>
         <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>紅=漲 綠=跌（台灣慣例）</span>
       </div>
-      <div style={{ padding: '10px 12px 12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 6 }}>
-        {sectors.map(({ name, count, avgReturn, signalCount }) => (
-          <div key={name} style={{
-            background: heatColor(avgReturn),
-            borderRadius: 10,
-            padding: '8px 6px',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            border: `0.5px solid ${avgReturn >= 0 ? 'rgba(255,69,58,0.25)' : 'rgba(48,209,88,0.25)'}`,
-            minHeight: 68,
-            position: 'relative',
-          }}>
-            {signalCount > 0 && (
-              <div style={{
-                position: 'absolute', top: 3, right: 5,
-                fontSize: 8, color: '#30D158', fontWeight: 700,
-              }}>✅{signalCount}</div>
-            )}
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-label)', textAlign: 'center', marginBottom: 3, lineHeight: 1.2 }}>{name}</div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: textColor(avgReturn), fontFamily: 'monospace' }}>
-              {avgReturn >= 0 ? '+' : ''}{(avgReturn * 100).toFixed(1)}%
+      <div style={{ padding: '10px 12px 12px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        {sectors.map(({ name, count, avgReturn, signalCount }) => {
+          const miniBarW = Math.round(Math.min(1, Math.abs(avgReturn) / 0.05) * 32)
+          return (
+            <div key={name} style={{
+              background: tileBg(avgReturn),
+              borderRadius: 12,
+              padding: '9px 7px 7px',
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              border: `1px solid ${tileBorder(avgReturn)}`,
+              minHeight: 72,
+              position: 'relative',
+            }}>
+              {signalCount > 0 && (
+                <div style={{ position: 'absolute', top: 6, right: 7, display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#30D158', boxShadow: '0 0 5px #30D158' }} />
+                  <span style={{ fontSize: 8, color: '#30D158', fontWeight: 700 }}>{signalCount}</span>
+                </div>
+              )}
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ios-label)', textAlign: 'center', marginBottom: 5, lineHeight: 1.2 }}>{name}</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: retColor(avgReturn), fontFamily: 'monospace', letterSpacing: '-0.5px', lineHeight: 1 }}>
+                {avgReturn >= 0 ? '+' : ''}{(avgReturn * 100).toFixed(1)}%
+              </div>
+              <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>{count} 支</span>
+                {miniBarW > 0 && (
+                  <div style={{ width: 36, height: 2, background: 'var(--ios-fill2)', borderRadius: 1, overflow: 'hidden' }}>
+                    <div style={{ width: miniBarW, height: '100%', background: retColor(avgReturn), opacity: 0.65 }} />
+                  </div>
+                )}
+              </div>
             </div>
-            <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 2 }}>{count} 支</div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

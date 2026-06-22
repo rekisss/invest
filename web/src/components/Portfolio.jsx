@@ -249,6 +249,8 @@ export default function Portfolio({ data }) {
   const [livePrices, setLivePrices] = useState({})   // { stockId: price } from Yahoo
   const [priceLoading, setPriceLoading] = useState(false)
   const [selectedStock, setSelectedStock] = useState(null)
+  const [compareHistories, setCompareHistories] = useState(null)
+  const [historyDates, setHistoryDates] = useState(null)
   const historiesRef = useRef(null)  // lazy-loaded stock_histories.json cache
   const containerRef = useRef(null)
 
@@ -322,6 +324,8 @@ export default function Portfolio({ data }) {
         const base = import.meta.env.BASE_URL || '/'
         const h = await fetch(`${base}stock_histories.json`).then(r => r.ok ? r.json() : null)
         historiesRef.current = h || {}
+        if (h?.stocks) setCompareHistories(h.stocks)
+        if (Array.isArray(h?.dates)) setHistoryDates(h.dates)
       } catch { historiesRef.current = {} }
     }
     const h = historiesRef.current
@@ -696,6 +700,8 @@ export default function Portfolio({ data }) {
           notionInfo={null}
           onClose={() => setSelectedStock(null)}
           allScans={data?.scans}
+          compareHistories={compareHistories}
+          historyDates={historyDates}
         />
       )}
     </div>
