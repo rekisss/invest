@@ -324,7 +324,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 {scoreDelta != null && Math.abs(scoreDelta) >= 30 && (
                   <span title={`分數較前日${scoreDelta > 0 ? '上升' : '下滑'} ${Math.abs(Math.round(scoreDelta))}`} style={{
                     fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)',
-                    color: scoreDelta > 0 ? '#30D158' : '#FF453A',
+                    color: scoreDelta > 0 ? '#FF453A' : '#30D158',
                     flexShrink: 0, whiteSpace: 'nowrap',
                   }}>
                     {scoreDelta > 0 ? '▲' : '▼'}{Math.abs(Math.round(scoreDelta))}
@@ -448,13 +448,13 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   </span>
                 )}
                 {revenueYoyVal >= 0.05 && (
-                  <span style={{ fontSize: 11, color: '#30D158', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
+                  <span style={{ fontSize: 11, color: '#FF453A', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
                     營收+{(revenueYoyVal * 100).toFixed(0)}%
                     {revenueMom >= 0.05 && <span style={{ fontSize: 9, color: '#5AC8FA', marginLeft: 2 }}>MoM+{(revenueMom * 100).toFixed(0)}%</span>}
                   </span>
                 )}
                 {revenueYoyVal <= -0.10 && (
-                  <span style={{ fontSize: 11, color: '#FF453A', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
+                  <span style={{ fontSize: 11, color: '#30D158', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }} title="月營收年增率">
                     營收{(revenueYoyVal * 100).toFixed(0)}%
                   </span>
                 )}
@@ -524,7 +524,7 @@ function Sparkline({ data, stockId, width = 56, height = 20, days = 60 }) {
     return [x.toFixed(1), y.toFixed(1)]
   })
   const isUp = closes[n - 1] >= closes[0]
-  const color = isUp ? '#30D158' : '#FF453A'
+  const color = isUp ? '#FF453A' : '#30D158'
   const linePoints = pts.map(([x, y]) => `${x},${y}`).join(' ')
   const areaPoints = `0,${height} ${linePoints} ${width},${height}`
   const gradId = `spk-${stockId || 'x'}`
@@ -872,14 +872,14 @@ function ScoreMoversSection({ stocks, scoreDeltaMap, onSelect }) {
 
   const Pill = ({ s, isGain, onClick }) => (
     <button onClick={onClick} style={{
-      background: isGain ? 'rgba(48,209,88,0.10)' : 'rgba(255,69,58,0.10)',
-      border: `0.5px solid ${isGain ? 'rgba(48,209,88,0.3)' : 'rgba(255,69,58,0.3)'}`,
+      background: isGain ? 'rgba(255,69,58,0.10)' : 'rgba(48,209,88,0.10)',
+      border: `0.5px solid ${isGain ? 'rgba(255,69,58,0.3)' : 'rgba(48,209,88,0.3)'}`,
       borderRadius: 8, padding: '4px 9px', cursor: 'pointer',
       display: 'flex', alignItems: 'center', gap: 6,
     }}>
       <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)' }}>{s.stock_id}</span>
       <span style={{ fontSize: 11, color: 'var(--ios-label2)' }}>{s.name}</span>
-      <span style={{ fontSize: 11, fontWeight: 700, color: isGain ? '#30D158' : '#FF453A', fontFamily: 'var(--font-mono)' }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: isGain ? '#FF453A' : '#30D158', fontFamily: 'var(--font-mono)' }}>
         {isGain ? '▲' : '▼'}{Math.abs(Math.round(s._delta))}
       </span>
     </button>
@@ -893,7 +893,7 @@ function ScoreMoversSection({ stocks, scoreDeltaMap, onSelect }) {
       <div className="glass-panel" style={{ overflow: 'hidden', padding: '10px 14px' }}>
         {gainers.length > 0 && (
           <div style={{ marginBottom: losers.length ? 10 : 0 }}>
-            <div style={{ fontSize: 10, color: '#30D158', fontWeight: 700, marginBottom: 5 }}>▲ 大漲（+80分以上）</div>
+            <div style={{ fontSize: 10, color: '#FF453A', fontWeight: 700, marginBottom: 5 }}>▲ 大漲（+80分以上）</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {gainers.map(s => <Pill key={s.stock_id} s={s} isGain onClick={() => onSelect?.(s)} />)}
             </div>
@@ -901,7 +901,7 @@ function ScoreMoversSection({ stocks, scoreDeltaMap, onSelect }) {
         )}
         {losers.length > 0 && (
           <div>
-            <div style={{ fontSize: 10, color: '#FF453A', fontWeight: 700, marginBottom: 5 }}>▼ 大跌（−80分以上）</div>
+            <div style={{ fontSize: 10, color: '#30D158', fontWeight: 700, marginBottom: 5 }}>▼ 大跌（−80分以上）</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {losers.map(s => <Pill key={s.stock_id} s={s} isGain={false} onClick={() => onSelect?.(s)} />)}
             </div>
@@ -2132,11 +2132,11 @@ export default function Dashboard({ data, error }) {
           const chips = []
           if (fn != null) chips.push({
             label: `期貨 ${fn > 0 ? '+' : ''}${Math.round(fn / 1000)}k口`,
-            color: fn >= 0 ? '#30D158' : '#FF453A',
+            color: fn >= 0 ? '#FF453A' : '#30D158',
           })
           if (nc != null) chips.push({
             label: `夜盤 ${nc > 0 ? '+' : ''}${Math.round(nc)}pt`,
-            color: nc >= 0 ? '#30D158' : '#FF453A',
+            color: nc >= 0 ? '#FF453A' : '#30D158',
           })
           if (rsi != null) chips.push({
             label: `大盤RSI ${rsi.toFixed(0)}`,
@@ -2433,7 +2433,7 @@ export default function Dashboard({ data, error }) {
         {/* Market summary banner */}
         {pred && (() => {
           const isBull = pred.xgb_label === '偏多', isBear = pred.xgb_label === '偏空'
-          const pColor = isBull ? '#30D158' : isBear ? '#FF453A' : '#0A84FF'
+          const pColor = isBull ? '#FF453A' : isBear ? '#30D158' : '#0A84FF'
           return (
           <div style={{
             margin: '12px 16px 0',

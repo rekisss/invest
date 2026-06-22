@@ -102,7 +102,7 @@ function ProbTrend({ history }) {
 
   const last = pts[pts.length - 1]
   const lastPct = Math.round(last.p * 100)
-  const lastColor = lastPct >= 60 ? '#30D158' : lastPct <= 40 ? '#FF453A' : '#FF9F0A'
+  const lastColor = lastPct >= 60 ? '#FF453A' : lastPct <= 40 ? '#30D158' : '#FF9F0A'
   const y50 = (lo <= 0.5 && hi >= 0.5) ? ys(0.5) : null
   const hasActual = pts.some(d => d.actual !== null)
   const gradId = 'ptGrad'
@@ -143,8 +143,8 @@ function ProbTrend({ history }) {
         {pts.map((d, i) => {
           const isLast = i === pts.length - 1
           const cx = xs(i).toFixed(1), cy = ys(d.p).toFixed(1)
-          const dotColor = d.actual === 1 ? '#30D158'
-            : d.actual === -1 ? '#FF453A'
+          const dotColor = d.actual === 1 ? '#FF453A'
+            : d.actual === -1 ? '#30D158'
             : isLast ? lastColor : 'var(--ios-label4)'
           const r = isLast ? 4 : d.actual !== null ? 3.5 : 2
           return (
@@ -174,11 +174,11 @@ function ProbTrend({ history }) {
       {/* Outcome legend */}
       {hasActual && (
         <div style={{ display: 'flex', gap: 12, fontSize: 11, flexWrap: 'wrap', padding: '7px 10px', background: 'var(--ios-fill3)', borderRadius: 10 }}>
-          <span style={{ color: '#30D158', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#30D158"/></svg>實際上漲
-          </span>
           <span style={{ color: '#FF453A', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#FF453A"/></svg>實際下跌
+            <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#FF453A"/></svg>實際上漲
+          </span>
+          <span style={{ color: '#30D158', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#30D158"/></svg>實際下跌
           </span>
           <span style={{ color: 'var(--ios-label4)', fontSize: 10, marginLeft: 'auto' }}>夜盤 ±20點估算</span>
         </div>

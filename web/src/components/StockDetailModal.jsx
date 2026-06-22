@@ -995,7 +995,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
         const pct = pA !== 0 ? (diff / pA) * 100 : 0
         const nBars = Math.abs(iB - iA)
         const up = diff >= 0
-        const col = up ? '#30D158' : '#FF453A'
+        const col = up ? '#FF453A' : '#30D158'
         const fmtP = v => v.toFixed(Math.abs(v) >= 100 ? 1 : 2)
         // Range high/low within the selected window for a richer readout
         const wLo = Math.min(iA, iB), wHi = Math.max(iA, iB)
