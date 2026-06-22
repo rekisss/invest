@@ -1232,6 +1232,40 @@ for (const d of recentDates) {
 }
 console.log(`K-line: injected into stocks across ${recentDates.length} dates`)
 
+// Compute return_1d (next-day forward return) from kline data, then inject into scan stocks.
+// Uses kline daily bars first, falls back to priceHistoryMap (scan-date closes).
+const klineReturn1dMap = {}
+for (const [sid, entry] of Object.entries(klineMap)) {
+  const bars = getKlineBars(entry, '1d')
+  if (!bars || bars.length < 2) continue
+  klineReturn1dMap[sid] = {}
+  for (let i = 0; i + 1 < bars.length; i++) {
+    const cur = bars[i], nxt = bars[i + 1]
+    if (cur.time && cur.close > 0 && nxt.close > 0)
+      klineReturn1dMap[sid][cur.time] = Math.round((nxt.close - cur.close) / cur.close * 10000) / 10000
+  }
+}
+const scanReturn1dMap = {}
+for (const [sid, bars] of Object.entries(priceHistoryMap)) {
+  for (let i = 0; i + 1 < bars.length; i++) {
+    const cur = bars[i], nxt = bars[i + 1]
+    if (cur.time && cur.close > 0 && nxt.close > 0) {
+      if (!scanReturn1dMap[sid]) scanReturn1dMap[sid] = {}
+      scanReturn1dMap[sid][cur.time] = Math.round((nxt.close - cur.close) / cur.close * 10000) / 10000
+    }
+  }
+}
+for (const d of dates) {
+  for (const arr of [scans[d]?.top_stocks, scans[d]?.filter_stocks, scans[d]?.persistent]) {
+    if (!arr) continue
+    for (const stock of arr) {
+      if (stock.return_1d == null)
+        stock.return_1d = klineReturn1dMap[stock.stock_id]?.[d] ?? scanReturn1dMap[stock.stock_id]?.[d] ?? null
+    }
+  }
+}
+console.log(`return_1d: computed from kline data for ${Object.keys(klineReturn1dMap).length} stocks`)
+
 // Write stock_histories.json — last ~120 OHLCV bars for ALL stocks (for Dashboard lazy load).
 // Carries full open/high/low/close/volume + dates so the detail modal can draw real candles
 // and compute KD / ADX / OBV-based indicators + strategy backtest for every scanned stock

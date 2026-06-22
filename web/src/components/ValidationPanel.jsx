@@ -62,7 +62,7 @@ function parseSignals(entry_reason) {
 function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
   const cfg = GRADE_CFG[stock.grade] || GRADE_CFG.D
   const signals = parseSignals(stock.entry_reason)
-  const r1 = stock.day_return
+  const r1 = stock.return_1d
   const r5 = stock.return_5d
   const hasExit = stock.base_exit_signal
 
@@ -128,9 +128,9 @@ function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
               <div style={{ fontSize: 12, fontWeight: 700, color: retColor(liveReturn) }}>{fmtPct(liveReturn)}</div>
             </div>
           ) : (
-            /* Day return */
+            /* Next-day return */
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 7.5, color: 'var(--ios-label4)', marginBottom: 1 }}>當日</div>
+              <div style={{ fontSize: 7.5, color: 'var(--ios-label4)', marginBottom: 1 }}>隔日</div>
               <div style={{ fontSize: 12, fontWeight: 700, color: retColor(r1) }}>{fmtPct(r1)}</div>
             </div>
           )}
@@ -156,25 +156,28 @@ function DateBarChart({ byDate, sortedDates }) {
   const valid = sortedDates.filter(d => byDate[d])
   if (!valid.length) return null
   const maxR = Math.max(...valid.map(d => Math.abs(byDate[d].avgReturn || 0)), 0.01)
-  const H = 60
+  const H = 90
+  const BAR_W = 22, SPACING = 32, PAD = 6
+  const totalW = valid.length * SPACING + PAD * 2
   return (
     <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
-      <svg viewBox={`0 0 ${valid.length * 26 + 8} ${H + 20}`} style={{ width: valid.length * 26 + 8, height: H + 20, display: 'block' }}>
+      <svg viewBox={`0 0 ${totalW} ${H + 24}`} style={{ width: Math.max(totalW, 280), height: H + 24, display: 'block' }}>
         {valid.map((date, i) => {
           const s = byDate[date]
           const r = s.avgReturn || 0
-          const bH = Math.max(3, Math.abs(r) / maxR * (H - 6))
-          const y  = r >= 0 ? H - 3 - bH : H - 3
+          const bH = Math.max(4, Math.abs(r) / maxR * (H - 10))
+          const x = PAD + i * SPACING
+          const y  = r >= 0 ? H - 4 - bH : H - 4
           const col = r >= 0 ? '#FF3340' : '#16D67E'
           return (
             <g key={date}>
-              <rect x={i * 26 + 4} y={y} width={16} height={bH} rx={3} fill={col} opacity={0.85} />
-              <text x={i * 26 + 12} y={H + 10} fontSize={7} textAnchor="middle" style={{ fill: 'var(--ios-label3)' }}>{date.slice(5)}</text>
-              <text x={i * 26 + 12} y={r >= 0 ? y - 2 : y + bH + 8} fontSize={6.5} textAnchor="middle" fill={col} fontWeight="700">{(r*100).toFixed(0)}%</text>
+              <rect x={x} y={y} width={BAR_W} height={bH} rx={4} fill={col} opacity={0.85} />
+              <text x={x + BAR_W / 2} y={H + 12} fontSize={7.5} textAnchor="middle" style={{ fill: 'var(--ios-label3)' }}>{date.slice(5)}</text>
+              <text x={x + BAR_W / 2} y={r >= 0 ? y - 3 : y + bH + 9} fontSize={7} textAnchor="middle" fill={col} fontWeight="700">{(r * 100).toFixed(0)}%</text>
             </g>
           )
         })}
-        <line x1={4} y1={H - 3} x2={valid.length * 26 + 4} y2={H - 3} stroke="var(--ios-sep)" strokeWidth={0.5} />
+        <line x1={PAD} y1={H - 4} x2={totalW - PAD} y2={H - 4} stroke="var(--ios-sep)" strokeWidth={0.5} />
       </svg>
     </div>
   )
@@ -396,13 +399,31 @@ export default function ValidationPanel({ data }) {
       if (!historiesRef.current) {
         const base = BASE.endsWith('/') ? BASE : BASE + '/'
         const resp = await fetch(`${base}stock_histories.json`)
-        if (resp.ok) {
-          historiesRef.current = await resp.json()
-        } else {
-          historiesRef.current = {}
+        historiesRef.current = resp.ok ? await resp.json() : {}
+      }
+      const h = historiesRef.current
+      const sid = String(stock.stock_id)
+      let history = null
+
+      // Try OHLCV kline history (stocks section: {o,h,l,c,v} aligned to dates array)
+      const rec = h.stocks?.[sid]
+      if (rec && Array.isArray(h.dates) && rec.c) {
+        const bars = []
+        for (let i = 0; i < h.dates.length; i++) {
+          if (rec.c[i] == null) continue
+          bars.push({ time: h.dates[i], open: rec.o?.[i], high: rec.h?.[i], low: rec.l?.[i], close: rec.c[i], volume: rec.v?.[i] })
+        }
+        if (bars.length >= 2) history = bars
+      }
+
+      // Fall back to scan_stocks (compact [date,o,h,l,c,v] tuples)
+      if (!history) {
+        const scanRec = h.scan_stocks?.[sid]
+        if (Array.isArray(scanRec) && scanRec.length >= 2) {
+          history = scanRec.map(b => ({ time: b[0], open: b[1], high: b[2], low: b[3], close: b[4], volume: b[5] }))
         }
       }
-      const history = historiesRef.current[String(stock.stock_id)] || null
+
       setSelectedStock(prev => prev ? { ...prev, price_history: history, price_history_loading: false } : null)
     } catch {
       setSelectedStock(prev => prev ? { ...prev, price_history: null, price_history_loading: false } : null)
@@ -571,6 +592,7 @@ export default function ValidationPanel({ data }) {
         <StockDetailModal
           stock={selectedStock}
           onClose={() => setSelectedStock(null)}
+          allScans={data?.scans}
         />
       )}
 
