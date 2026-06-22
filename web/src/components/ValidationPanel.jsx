@@ -48,7 +48,7 @@ const fmtPct  = v => v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed
 const fmtRate = v => v == null ? '—' : (v * 100).toFixed(0) + '%'
 const fmtP    = v => v == null ? '—' : v >= 100 ? v.toFixed(1) : v.toFixed(2)
 const winColor = r => r == null ? 'var(--ios-label3)' : r >= 0.7 ? '#30D158' : r >= 0.5 ? '#FF9F0A' : '#FF453A'
-const retColor = r => r == null ? 'var(--ios-label3)' : r > 0 ? '#30D158' : r < 0 ? '#FF453A' : 'var(--ios-label3)'
+const retColor = r => r == null ? 'var(--ios-label3)' : r > 0 ? '#FF453A' : r < 0 ? '#30D158' : 'var(--ios-label3)'
 
 function parseSignals(entry_reason) {
   if (!entry_reason) return []
@@ -165,7 +165,7 @@ function DateBarChart({ byDate, sortedDates }) {
           const r = s.avgReturn || 0
           const bH = Math.max(3, Math.abs(r) / maxR * (H - 6))
           const y  = r >= 0 ? H - 3 - bH : H - 3
-          const col = r >= 0 ? '#30D158' : '#FF453A'
+          const col = r >= 0 ? '#FF453A' : '#30D158'
           return (
             <g key={date}>
               <rect x={i * 26 + 4} y={y} width={16} height={bH} rx={3} fill={col} opacity={0.85} />

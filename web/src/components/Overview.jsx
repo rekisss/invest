@@ -84,7 +84,7 @@ function LiveMarketStrip() {
   }
 
   const chgColor = v => v == null ? 'var(--ios-label3)'
-    : v > 0 ? '#30D158' : v < 0 ? '#FF453A' : '#FF9F0A'
+    : v > 0 ? '#FF453A' : v < 0 ? '#30D158' : '#FF9F0A'
   const fmtChg = v => v == null ? '—' : `${v > 0 ? '+' : ''}${(v * 100).toFixed(2)}%`
 
   const keysSet = mdt || urt
@@ -191,7 +191,7 @@ const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
   const { pct, isBull, isBear, color, confidence, cx, cy, r, nx, ny, nx2, ny2 } = useMemo(() => {
     const pct = Math.max(2, Math.min(98, Math.round((prob ?? 0.5) * 100)))
     const isBull = pct >= 55, isBear = pct <= 45
-    const color = isBull ? '#30D158' : isBear ? '#FF453A' : '#FF9F0A'
+    const color = isBull ? '#FF453A' : isBear ? '#30D158' : '#FF9F0A'
     const confidence = isBull ? pct : isBear ? (100 - pct) : 50
     const cx = 80, cy = 68, r = 56
     const ang = ((-180 + pct * 1.8) * Math.PI) / 180
@@ -240,8 +240,8 @@ const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
         <circle cx={cx} cy={cy} r="5" fill={color} />
         <circle cx={cx} cy={cy} r="2.5" style={{ fill: 'var(--ios-label)' }} />
         {/* side labels */}
-        <text x={cx - r - 3} y={cy + 14} textAnchor="middle" fontSize="9" fill="#EF4444" fontWeight="700">空</text>
-        <text x={cx + r + 3} y={cy + 14} textAnchor="middle" fontSize="9" fill="#22C55E" fontWeight="700">多</text>
+        <text x={cx - r - 3} y={cy + 14} textAnchor="middle" fontSize="9" fill="#30D158" fontWeight="700">空</text>
+        <text x={cx + r + 3} y={cy + 14} textAnchor="middle" fontSize="9" fill="#FF453A" fontWeight="700">多</text>
         {/* big % — baseline at y=94, safely within the 100px viewBox */}
         <text x={cx} y={cy + 26} textAnchor="middle" fontSize="20" fontWeight="800" fill={color} fontFamily="monospace">{confidence}%</text>
       </svg>
@@ -273,8 +273,8 @@ function RiskCard({ risk, marketData, calendarRisk }) {
   const rows = [
     calendarRisk && ['日曆風險', calendarRisk, '#FF9F0A'],
     marketData?.vix != null && ['VIX', marketData.vix.toFixed(1), marketData.vix > 25 ? '#FF453A' : marketData.vix > 18 ? '#FF9F0A' : '#30D158'],
-    marketData?.futures_net != null && ['外資期貨', `${marketData.futures_net > 0 ? '+' : ''}${Math.round(marketData.futures_net).toLocaleString()}`, marketData.futures_net > 0 ? '#30D158' : '#FF453A'],
-    marketData?.night_change != null && ['夜盤', `${marketData.night_change > 0 ? '+' : ''}${Math.round(marketData.night_change)}`, marketData.night_change > 0 ? '#30D158' : '#FF453A'],
+    marketData?.futures_net != null && ['外資期貨', `${marketData.futures_net > 0 ? '+' : ''}${Math.round(marketData.futures_net).toLocaleString()}`, marketData.futures_net > 0 ? '#FF453A' : '#30D158'],
+    marketData?.night_change != null && ['夜盤', `${marketData.night_change > 0 ? '+' : ''}${Math.round(marketData.night_change)}`, marketData.night_change > 0 ? '#FF453A' : '#30D158'],
   ].filter(Boolean)
 
   const riskBarRef = useRef(null)
@@ -320,7 +320,7 @@ function MarketSignalsCard({ marketData }) {
     const sign = n > 0 ? '+' : ''
     return `${sign}${(n * 100).toFixed(digits)}%`
   }
-  const color = v => v == null ? 'var(--ios-label3)' : v > 0 ? '#30D158' : v < 0 ? '#FF453A' : '#FF9F0A'
+  const color = v => v == null ? 'var(--ios-label3)' : v > 0 ? '#FF453A' : v < 0 ? '#30D158' : '#FF9F0A'
 
   const usRows = [
     { label: 'S&P500', val: marketData.sp500_ret, fmt: fmt(marketData.sp500_ret) },
