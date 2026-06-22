@@ -11,12 +11,14 @@ const QuotaPanel = lazy(() => import('./components/QuotaPanel.jsx'))
 const Portfolio = lazy(() => import('./components/Portfolio.jsx'))
 const GeminiStudio = lazy(() => import('./components/GeminiStudio.jsx'))
 const LiveMonitor = lazy(() => import('./components/LiveMonitor.jsx'))
+const ValidationPanel = lazy(() => import('./components/ValidationPanel.jsx'))
 
 const BASE = import.meta.env.BASE_URL || '/'
 
 const TABS = [
   { key: 'overview',   label: '總覽', icon: '⚡' },
   { key: 'dashboard',  label: '掃描', icon: '📊' },
+  { key: 'validate',   label: '驗證', icon: '🔬' },
   { key: 'portfolio',  label: '持倉', icon: '💼' },
   { key: 'monitor',    label: '盯盤', icon: '📈' },
   { key: 'news',       label: '新聞', icon: '📰' },
@@ -29,6 +31,7 @@ const TABS = [
 const TAB_TITLES = {
   overview:  '今日總覽',
   dashboard: '掃描結果',
+  validate:  '選股驗證',
   portfolio: '持倉追蹤',
   monitor:   '即時盯盤',
   news:      '市場新聞',
@@ -122,6 +125,7 @@ export default function App() {
     switch (tab) {
       case 'overview':   return <Overview data={data} error={error} />
       case 'dashboard':  return <Dashboard data={data} error={error} />
+      case 'validate':   return <ValidationPanel data={data} />
       case 'portfolio':  return <Portfolio data={data} />
       case 'monitor':    return <LiveMonitor data={data} />
       case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} />
