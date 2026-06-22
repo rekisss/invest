@@ -2048,8 +2048,9 @@ export default function Dashboard({ data, error }) {
   const headerContentRef = useRef(null)   // natural-height content wrapper (measured)
   const [headerH, setHeaderH] = useState(null)
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
-  const listScrollRef = useRef(null)   // ref to the scrollable list div
-  const headerTouchRef = useRef(null)  // tracks touch forwarding from header → list
+  const listScrollRef = useRef(null)    // ref to the scrollable list div
+  const headerTouchRef = useRef(null)   // tracks touch forwarding from header → list
+  const headerAnimatingRef = useRef(false) // true while snap-close animation is running
 
   // Track the collapsible content's natural height; keep it live with ResizeObserver.
   // Also sync the wrapper's pixel height when near the top so auto-resize works.
@@ -2095,27 +2096,41 @@ export default function Dashboard({ data, error }) {
   const handleListScroll = (e) => {
     const scrollTop = e.currentTarget.scrollTop
     const el = headerInnerRef.current
+    const listEl = listScrollRef.current
     if (!el || headerH == null) return
 
-    const prog = Math.max(0, Math.min(1, scrollTop / headerH))
-
     if (scrollTop <= 2) {
-      // At the very top: spring back open
+      // Back at top: spring header open
       el.style.transition = 'height 0.42s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease, transform 0.42s cubic-bezier(0.22,1,0.36,1)'
       el.style.height = `${headerH}px`
       el.style.opacity = '1'
       el.style.transform = 'translateY(0)'
       el.style.pointerEvents = 'auto'
-    } else {
-      // Progressive collapse tied to scroll position (no CSS transition — we control each frame)
-      el.style.transition = 'none'
-      el.style.height = `${Math.max(0, headerH * (1 - prog))}px`
-      el.style.opacity = String(Math.max(0, 1 - prog * 1.5))
-      el.style.transform = `translateY(${-8 * prog}px)`
-      el.style.pointerEvents = prog >= 0.95 ? 'none' : 'auto'
+      setHeaderCollapsed(false)
+      return
     }
 
-    setHeaderCollapsed(prog >= 1)
+    // First scroll while header still open: snap-close the header,
+    // then block content scrolling until the animation finishes.
+    if (!headerCollapsed && !headerAnimatingRef.current) {
+      headerAnimatingRef.current = true
+      el.style.transition = 'height 0.36s cubic-bezier(0.22,1,0.36,1), opacity 0.24s ease, transform 0.36s cubic-bezier(0.22,1,0.36,1)'
+      el.style.height = '0px'
+      el.style.opacity = '0'
+      el.style.transform = 'translateY(-8px)'
+      el.style.pointerEvents = 'none'
+      setHeaderCollapsed(true)
+
+      // Reset content scroll to top and lock it for the animation duration
+      if (listEl) {
+        listEl.scrollTop = 0
+        listEl.style.overflowY = 'hidden'
+      }
+      setTimeout(() => {
+        headerAnimatingRef.current = false
+        if (listEl) listEl.style.overflowY = 'auto'
+      }, 380)
+    }
   }
   const [activeSignals, setActiveSignals] = useState(new Set())
   const toggleSignal = (key) => {
