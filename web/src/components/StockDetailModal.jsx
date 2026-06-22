@@ -2381,7 +2381,14 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
             <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--ios-label)', letterSpacing: '-0.3px' }}>
               {s.stock_id} <span style={{ fontSize: 16, color: 'var(--ios-label2)', fontWeight: 400 }}>{s.name}</span>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--ios-label3)', marginTop: 3 }}>{s.industry_category}</div>
+            {s.industry_category && (
+              <span style={{
+                display: 'inline-block', marginTop: 5,
+                fontSize: 11, fontWeight: 600, color: 'var(--ios-blue)',
+                background: 'rgba(10,132,255,0.12)', borderRadius: 7,
+                padding: '2px 9px',
+              }}>📂 {s.industry_category}</span>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexShrink: 0 }}>
             {/* Feature 1: Compare button */}

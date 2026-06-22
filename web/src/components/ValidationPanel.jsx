@@ -244,20 +244,24 @@ export default function ValidationPanel({ data }) {
     const top20   = scans[validDates[0]]?.top_stocks?.slice(0, 20) || aggregateLatest?.top_stocks || []
     const scanDate = validDates[0] || aggregateLatest?.date?.slice(0, 10)
 
-    const bWith = top20.filter(s => s.return_5d != null)
+    const bWith  = top20.filter(s => s.return_5d != null)
+    const b1With = top20.filter(s => s.return_1d != null)
     const batchStats = {
-      total:   top20.length,
-      wins5d:  bWith.filter(s => s.return_5d > 0).length,
-      winRate: bWith.length ? bWith.filter(s => s.return_5d > 0).length / bWith.length : null,
-      avgR5d:  bWith.length ? bWith.reduce((a, s) => a + s.return_5d, 0) / bWith.length : null,
-      exits:   top20.filter(s => s.base_exit_signal).length,
+      total:      top20.length,
+      wins5d:     bWith.filter(s => s.return_5d > 0).length,
+      winRate:    bWith.length ? bWith.filter(s => s.return_5d > 0).length / bWith.length : null,
+      avgR5d:     bWith.length ? bWith.reduce((a, s) => a + s.return_5d, 0) / bWith.length : null,
+      wins1d:     b1With.filter(s => s.return_1d > 0).length,
+      winRate1d:  b1With.length ? b1With.filter(s => s.return_1d > 0).length / b1With.length : null,
+      avgR1d:     b1With.length ? b1With.reduce((a, s) => a + s.return_1d, 0) / b1With.length : null,
+      exits:      top20.filter(s => s.base_exit_signal).length,
     }
 
     const allObs = []
     const sortedDates = [...validDates].reverse()
     for (const date of validDates) {
       for (const s of (scans[date]?.top_stocks || [])) {
-        allObs.push({ date, ...s, r5d: s.return_5d, r1d: s.day_return })
+        allObs.push({ date, ...s, r5d: s.return_5d, r1d: s.return_1d })
       }
     }
 
@@ -497,20 +501,32 @@ export default function ValidationPanel({ data }) {
 
       {/* Batch summary row */}
       {!isViewingHistory && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12, background: 'var(--ios-bg2)', borderRadius: 14, padding: '10px 14px', border: '0.5px solid var(--ios-sep)' }}>
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>本批勝率</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: winColor(batchStats.winRate) }}>{fmtRate(batchStats.winRate)}</div>
-          </div>
-          <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均5日報</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: retColor(batchStats.avgR5d) }}>{fmtPct(batchStats.avgR5d)}</div>
-          </div>
-          <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>精選檔數</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ios-label)' }}>{batchStats.total}</div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 8, background: 'var(--ios-bg2)', borderRadius: 14, padding: '10px 14px', border: '0.5px solid var(--ios-sep)' }}>
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>5日勝率</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: winColor(batchStats.winRate) }}>{fmtRate(batchStats.winRate)}</div>
+            </div>
+            <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均5日報</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: retColor(batchStats.avgR5d) }}>{fmtPct(batchStats.avgR5d)}</div>
+            </div>
+            <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>隔日勝率</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: winColor(batchStats.winRate1d) }}>{fmtRate(batchStats.winRate1d)}</div>
+            </div>
+            <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均隔日報</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: retColor(batchStats.avgR1d) }}>{fmtPct(batchStats.avgR1d)}</div>
+            </div>
+            <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
+            <div style={{ flex: 1, textAlign: 'center' }}>
+              <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>精選檔數</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ios-label)' }}>{batchStats.total}</div>
+            </div>
           </div>
         </div>
       )}

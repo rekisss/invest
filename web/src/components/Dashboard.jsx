@@ -2780,59 +2780,6 @@ export default function Dashboard({ data, error }) {
       {/* ── Scrollable Content ───────────────────────────────────── */}
       <div ref={listScrollRef} onScroll={handleListScroll} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
 
-        {/* ── Sector Selector Strip — sticky inside scroll so it doesn't overlap header */}
-        {viewTab !== 'limitdown' && availableSectors.length > 0 && (
-          <div style={{
-            position: 'sticky', top: 0, zIndex: 10,
-            padding: '6px 12px 6px',
-            display: 'flex', gap: 6, overflowX: 'auto',
-            scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
-            background: 'var(--ios-bg)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            borderBottom: '0.5px solid var(--ios-sep)',
-          }}>
-            {activeSector && (
-              <button
-                onClick={() => setActiveSector(null)}
-                style={{
-                  flexShrink: 0, fontSize: 11, fontWeight: 700,
-                  padding: '5px 10px', borderRadius: 9999, cursor: 'pointer',
-                  border: '1px solid rgba(255,51,64,0.4)',
-                  background: 'rgba(255,51,64,0.1)',
-                  color: 'var(--ios-red)',
-                  whiteSpace: 'nowrap',
-                }}
-              >✕ 全部</button>
-            )}
-            {availableSectors.map(({ sec, count }) => {
-              const isActive = activeSector === sec
-              return (
-                <button
-                  key={sec}
-                  onClick={() => {
-                    const newSec = isActive ? null : sec
-                    setActiveSector(newSec)
-                    if (newSec) { setSortField('sector_rs_rank'); setSortDir('desc') }
-                  }}
-                  style={{
-                    flexShrink: 0, fontSize: 11, fontWeight: 600,
-                    padding: '5px 11px', borderRadius: 9999, cursor: 'pointer',
-                    border: isActive ? '1.5px solid var(--ios-blue)' : '0.5px solid var(--ios-sep)',
-                    background: isActive ? 'rgba(10,132,255,0.18)' : 'var(--ios-bg2)',
-                    color: isActive ? 'var(--ios-blue)' : 'var(--ios-label2)',
-                    transition: 'all 0.15s',
-                    whiteSpace: 'nowrap',
-                    boxShadow: isActive ? '0 0 0 2px rgba(10,132,255,0.12)' : 'none',
-                  }}
-                >
-                  {sec} <span style={{ fontSize: 10, opacity: 0.55 }}>{count}</span>
-                </button>
-              )
-            })}
-          </div>
-        )}
-
         {/* Market summary banner */}
         {pred && (() => {
           const isBull = pred.xgb_label === '偏多', isBear = pred.xgb_label === '偏空'
@@ -2884,6 +2831,59 @@ export default function Dashboard({ data, error }) {
           </div>
           )
         })()}
+
+        {/* ── Sector Selector Strip — sticky below market banner so it never covers it */}
+        {viewTab !== 'limitdown' && availableSectors.length > 0 && (
+          <div style={{
+            position: 'sticky', top: 0, zIndex: 10,
+            padding: '6px 12px 6px',
+            display: 'flex', gap: 6, overflowX: 'auto',
+            scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
+            background: 'var(--ios-bg)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            borderBottom: '0.5px solid var(--ios-sep)',
+          }}>
+            {activeSector && (
+              <button
+                onClick={() => setActiveSector(null)}
+                style={{
+                  flexShrink: 0, fontSize: 11, fontWeight: 700,
+                  padding: '5px 10px', borderRadius: 9999, cursor: 'pointer',
+                  border: '1px solid rgba(255,51,64,0.4)',
+                  background: 'rgba(255,51,64,0.1)',
+                  color: 'var(--ios-red)',
+                  whiteSpace: 'nowrap',
+                }}
+              >✕ 全部</button>
+            )}
+            {availableSectors.map(({ sec, count }) => {
+              const isActive = activeSector === sec
+              return (
+                <button
+                  key={sec}
+                  onClick={() => {
+                    const newSec = isActive ? null : sec
+                    setActiveSector(newSec)
+                    if (newSec) { setSortField('sector_rs_rank'); setSortDir('desc') }
+                  }}
+                  style={{
+                    flexShrink: 0, fontSize: 11, fontWeight: 600,
+                    padding: '5px 11px', borderRadius: 9999, cursor: 'pointer',
+                    border: isActive ? '1.5px solid var(--ios-blue)' : '0.5px solid var(--ios-sep)',
+                    background: isActive ? 'rgba(10,132,255,0.18)' : 'var(--ios-bg2)',
+                    color: isActive ? 'var(--ios-blue)' : 'var(--ios-label2)',
+                    transition: 'all 0.15s',
+                    whiteSpace: 'nowrap',
+                    boxShadow: isActive ? '0 0 0 2px rgba(10,132,255,0.12)' : 'none',
+                  }}
+                >
+                  {sec} <span style={{ fontSize: 10, opacity: 0.55 }}>{count}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         {/* AI picks */}
         {aiText && (
