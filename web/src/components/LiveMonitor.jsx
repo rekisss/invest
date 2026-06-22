@@ -48,7 +48,7 @@ function IndexBar({ indices, loading }) {
         const color = d ? ((d.pct || 0) >= 0 ? '#FF453A' : '#30D158') : 'var(--ios-label3)'
         return (
           <div key={key} style={{
-            flex: 1, background: 'var(--ios-bg2)', borderRadius: 12, padding: '10px 12px',
+            flex: 1, background: 'var(--ios-bg2)', borderRadius: 12, padding: '12px 14px',
             boxShadow: 'var(--shadow-card)', borderLeft: d ? `3px solid ${color}` : '3px solid var(--ios-sep)',
           }}>
             <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, marginBottom: 2 }}>{label}</div>
@@ -114,7 +114,7 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
       data-row
       onClick={() => onSelect({ stock_id: id, name, ...(scan || {}) })}
       style={{
-        display: 'flex', alignItems: 'center', padding: '11px 14px', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', padding: '14px 14px', cursor: 'pointer',
         borderBottom: isLast ? 'none' : '0.5px solid var(--ios-sep)',
         background: pct == null ? 'transparent' : pct >= 0 ? 'rgba(255,69,58,0.025)' : 'rgba(48,209,88,0.025)',
       }}
@@ -140,7 +140,7 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
           )}
         </div>
         {/* Sub-row: OHLV + P&L */}
-        <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--ios-label4)', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--ios-label4)', flexWrap: 'wrap', marginTop: 2 }}>
           {live?.open  != null && <span>開 {fmtP(live.open)}</span>}
           {live?.high  != null && <span style={{ color: upColor }}>高 {fmtP(live.high)}</span>}
           {live?.low   != null && <span style={{ color: downColor }}>低 {fmtP(live.low)}</span>}
@@ -470,12 +470,12 @@ export default function LiveMonitor({ data }) {
   return (
     <>
     <style>{`@keyframes monSpin { to { transform: rotate(360deg) } }`}</style>
-    <div style={{ padding: '0 16px 80px', overflowY: 'auto', height: '100%', WebkitOverflowScrolling: 'touch' }}>
+    <div style={{ padding: '10px 16px 80px', overflowY: 'auto', height: '100%', WebkitOverflowScrolling: 'touch' }}>
 
       {/* ── Market status ───────────────────────────────────────── */}
       <div style={{
         background: mktOpen ? 'linear-gradient(135deg, rgba(48,209,88,0.08) 0%, var(--ios-bg2) 65%)' : 'var(--ios-bg2)',
-        borderRadius: 16, padding: '12px 16px', marginBottom: 10,
+        borderRadius: 16, padding: '14px 16px', marginBottom: 12,
         boxShadow: 'var(--shadow-card)', borderLeft: `3px solid ${sessionColor}`,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
@@ -525,7 +525,7 @@ export default function LiveMonitor({ data }) {
       </div>
 
       {/* ── 自選盯盤 ─────────────────────────────────────────── */}
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 20 }}>
         <SectionHeader
           title="自選盯盤"
           count={monitorList.length}
@@ -564,7 +564,7 @@ export default function LiveMonitor({ data }) {
 
       {/* ── 持倉損益 ─────────────────────────────────────────── */}
       {hasPorts && (
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 20 }}>
           <SectionHeader
             title="持倉損益"
             count={Object.keys(positions).length}
@@ -595,7 +595,7 @@ export default function LiveMonitor({ data }) {
 
       {/* ── 掃描結果 ─────────────────────────────────────────── */}
       {hasScans && (
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 20 }}>
           <SectionHeader
             title="掃描結果盯盤"
             count={scanItems.length}
