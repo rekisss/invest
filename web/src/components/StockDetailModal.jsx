@@ -1377,9 +1377,12 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, com
   useEffect(() => { maxBarsRef.current = totalBarsAvail }, [totalBarsAvail])
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth
-    }
+    const el = scrollRef.current
+    if (!el) return
+    // Immediate + RAF to cover both sync and async DOM paint timings
+    el.scrollLeft = el.scrollWidth
+    const raf = requestAnimationFrame(() => { el.scrollLeft = el.scrollWidth })
+    return () => cancelAnimationFrame(raf)
   }, [bars.length, chartInterval, barCount])
 
   // Pinch-to-zoom: adjust barCount with 2-finger pinch
