@@ -92,6 +92,158 @@ function GradeBadge({ grade }) {
 
 const BASE = import.meta.env.BASE_URL
 
+/* ── CustomWatchlistTab — ⭐ tab with manual stock tracking ──────── */
+function CustomTrackCard({ stockId, liveQuote, scanStock, onRemove, onSelect }) {
+  const price = liveQuote?.price
+  const pct   = liveQuote?.pct
+  const [pressed, setPressed] = useState(false)
+  const displayName = scanStock?.name || ''
+  const pColor = pct == null ? 'var(--ios-label3)' : pct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)'
+  return (
+    <div
+      onMouseDown={() => setPressed(true)} onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)} onTouchStart={() => setPressed(true)} onTouchEnd={() => setPressed(false)}
+      onClick={() => scanStock && onSelect && onSelect(scanStock)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        background: 'var(--ios-bg2)', borderRadius: 14, padding: '10px 13px',
+        border: '0.5px solid var(--ios-sep)',
+        transform: pressed ? 'scale(0.975)' : 'scale(1)', transition: 'transform 0.15s',
+        cursor: scanStock ? 'pointer' : 'default',
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-label)' }}>{stockId}</span>
+          {displayName && <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>{displayName}</span>}
+          {scanStock && <span style={{ fontSize: 9, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.12)', borderRadius: 4, padding: '1px 5px', marginLeft: 2 }}>在掃描</span>}
+        </div>
+        {!liveQuote && (
+          <div style={{ fontSize: 10, color: 'var(--ios-label4)', marginTop: 2 }}>盤中才顯示即時價</div>
+        )}
+      </div>
+      {liveQuote && (
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: pColor, fontFamily: 'var(--font-mono)' }}>
+            {price >= 100 ? price.toFixed(0) : price?.toFixed(2)}
+          </div>
+          {pct != null && (
+            <div style={{ fontSize: 11, fontWeight: 600, color: pColor }}>
+              {pct >= 0 ? '+' : ''}{(pct * 100).toFixed(2)}%
+            </div>
+          )}
+        </div>
+      )}
+      <button
+        onClick={e => { e.stopPropagation(); onRemove(stockId) }}
+        style={{
+          flexShrink: 0, background: 'none', border: 'none',
+          color: 'var(--ios-label4)', fontSize: 16, padding: '2px 4px', cursor: 'pointer',
+        }}
+      >✕</button>
+    </div>
+  )
+}
+
+function CustomWatchlistTab({
+  watchlistStocks, customTrack, allScanStocks, liveData,
+  onAdd, onRemove, onSelect,
+  notionMap, watchlist, toggleWatchlist, persistentMap, scoreDeltaMap, globalMaxScore, rankOffset,
+}) {
+  const [input, setInput] = useState('')
+  const [shake, setShake] = useState(false)
+
+  const scanMap = useMemo(() => {
+    const m = {}
+    for (const s of allScanStocks) m[String(s.stock_id)] = s
+    return m
+  }, [allScanStocks])
+
+  const handleAdd = () => {
+    const id = input.trim().replace(/\D/g, '')
+    if (!id) { setShake(true); setTimeout(() => setShake(false), 400); return }
+    onAdd(id)
+    setInput('')
+  }
+
+  const customIds = [...customTrack].filter(Boolean)
+
+  return (
+    <div>
+      {/* ── Custom track input bar ── */}
+      <div style={{ padding: '10px 14px 6px', display: 'flex', gap: 8 }}>
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()}
+          placeholder="輸入股票代號（如 1409）"
+          style={{
+            flex: 1, background: 'var(--ios-bg3)', border: `0.5px solid ${shake ? 'var(--ios-red)' : 'var(--ios-sep)'}`,
+            borderRadius: 10, padding: '8px 12px', fontSize: 14, color: 'var(--ios-label)',
+            outline: 'none', transition: 'border-color 0.2s',
+          }}
+        />
+        <button
+          onClick={handleAdd}
+          style={{
+            flexShrink: 0, background: 'var(--ios-blue)', color: '#fff', border: 'none',
+            borderRadius: 10, padding: '8px 14px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+          }}
+        >追蹤</button>
+      </div>
+
+      {/* ── Custom tracked (not from scan watchlist) ── */}
+      {customIds.length > 0 && (
+        <div style={{ padding: '2px 14px 10px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', marginBottom: 6 }}>自訂追蹤</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {customIds.map(id => (
+              <CustomTrackCard
+                key={id}
+                stockId={id}
+                liveQuote={liveData[id]}
+                scanStock={scanMap[id] || null}
+                onRemove={onRemove}
+                onSelect={onSelect}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Scan-based watchlist ── */}
+      {watchlistStocks.length > 0 ? (
+        <div>
+          {customIds.length > 0 && (
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', padding: '0 14px 6px', borderTop: '0.5px solid var(--ios-sep)', paddingTop: 10 }}>
+              自選股（掃描出現）
+            </div>
+          )}
+          <WatchlistView
+            stocks={watchlistStocks}
+            globalMaxScore={globalMaxScore}
+            onSelect={onSelect}
+            notionMap={notionMap}
+            watchlist={watchlist}
+            toggleWatchlist={toggleWatchlist}
+            persistentMap={persistentMap}
+            scoreDeltaMap={scoreDeltaMap}
+            sectorMode={false}
+            rankOffset={rankOffset}
+            liveData={liveData}
+          />
+        </div>
+      ) : customIds.length === 0 ? (
+        <div style={{ padding: '48px 20px', textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>☆</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ios-label)', marginBottom: 6 }}>尚無自選股</div>
+          <div style={{ fontSize: 13, color: 'var(--ios-label3)' }}>點選股票列右側的 ☆ 加入，或上方輸入代號追蹤</div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 /* ── Utility micro-components ────────────────────────────────────── */
 
 function CopyListButton({ stocks }) {
@@ -1683,6 +1835,30 @@ export default function Dashboard({ data, error }) {
       return next
     })
   }
+
+  // Custom tracked stocks — any ID the user pins manually, persisted across scans
+  const [customTrack, setCustomTrack] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('custom_track') || '[]')) }
+    catch { return new Set() }
+  })
+  const addCustomTrack = (id) => {
+    const sid = String(id).trim()
+    if (!sid) return
+    setCustomTrack(prev => {
+      const next = new Set(prev)
+      next.add(sid)
+      try { localStorage.setItem('custom_track', JSON.stringify([...next])) } catch {}
+      return next
+    })
+  }
+  const removeCustomTrack = (id) => {
+    setCustomTrack(prev => {
+      const next = new Set(prev)
+      next.delete(String(id))
+      try { localStorage.setItem('custom_track', JSON.stringify([...next])) } catch {}
+      return next
+    })
+  }
   // Smooth snap-collapse: the secondary controls glide closed once you scroll past a
   // threshold and glide back open near the top. A single CSS transition does the easing
   // (no per-frame height writes → no layout thrash), and a ResizeObserver keeps the
@@ -1783,14 +1959,18 @@ export default function Dashboard({ data, error }) {
 
   // ── 即時報價 — must be called before any conditional return ─────────────
   // Compute entry stock IDs from the latest scan date (or empty when no data).
+  // Always include customTrack IDs so manually-pinned stocks always have live prices.
   const liveStockIds = useMemo(() => {
-    if (!data?.scans || !data?.dates?.length) return []
-    const latestDate = [...data.dates].sort((a, b) => b.localeCompare(a))[0]
-    const latestScan = data.scans[latestDate] || {}
-    return (latestScan.top_stocks || [])
-      .filter(s => s.entry_signal)
-      .map(s => String(s.stock_id))
-  }, [data])
+    const ids = new Set([...customTrack])
+    if (data?.scans && data?.dates?.length) {
+      const latestDate = [...data.dates].sort((a, b) => b.localeCompare(a))[0]
+      const latestScan = data.scans[latestDate] || {}
+      for (const s of (latestScan.top_stocks || [])) {
+        if (s.entry_signal) ids.add(String(s.stock_id))
+      }
+    }
+    return [...ids]
+  }, [data, customTrack])
   const { prices: liveData } = useLivePrices(liveStockIds)
 
   if (error || !data || !data.dates || data.dates.length === 0) {
@@ -2672,12 +2852,23 @@ export default function Dashboard({ data, error }) {
                 if (activeSector !== sec) setViewTab('all')
               }}
             />
-          ) : viewTab === 'watchlist' && watchlistStocks.length === 0 ? (
-            <div style={{ padding: '48px 20px', textAlign: 'center' }}>
-              <div style={{ fontSize: 40, marginBottom: 10 }}>☆</div>
-              <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ios-label)', marginBottom: 6 }}>尚無自選股</div>
-              <div style={{ fontSize: 13, color: 'var(--ios-label3)' }}>點選股票列右側的 ☆ 即可加入</div>
-            </div>
+          ) : viewTab === 'watchlist' ? (
+            <CustomWatchlistTab
+              watchlistStocks={pagedStocks}
+              customTrack={customTrack}
+              allScanStocks={allScanStocks}
+              liveData={liveData}
+              onAdd={addCustomTrack}
+              onRemove={removeCustomTrack}
+              onSelect={setSelectedStock}
+              notionMap={notionMap}
+              watchlist={watchlist}
+              toggleWatchlist={toggleWatchlist}
+              persistentMap={persistentMap}
+              scoreDeltaMap={scoreDeltaMap}
+              globalMaxScore={globalMaxScore}
+              rankOffset={page * PAGE_SIZE}
+            />
           ) : (
             <WatchlistView
               stocks={pagedStocks}
