@@ -308,12 +308,13 @@ export default function Portfolio({ data }) {
   const openStockDetail = async (id) => {
     const scan = getScanInfo(id, data)
     const p = positions[id]
-    // Build base stock object from scan data + position data
+    // Build base stock object; price_history_loading=true shows a spinner in the chart section
     const baseStock = {
       stock_id: id,
       name: p?.name || scan?.name || id,
       close: livePrices[id] ?? scan?.close ?? null,
       ...(scan || {}),
+      price_history_loading: true,
     }
     // Show modal immediately with whatever we have (chart section loads async)
     setSelectedStock(baseStock)
@@ -342,9 +343,10 @@ export default function Portfolio({ data }) {
     } else if (Array.isArray(scanHist) && scanHist.length >= 2) {
       priceHistory = scanHist.map(b => ({ time: b[0], open: b[1], high: b[2], low: b[3], close: b[4], volume: b[5] }))
     }
-    if (priceHistory) {
-      setSelectedStock(prev => prev?.stock_id === id ? { ...prev, price_history: priceHistory } : prev)
-    }
+    setSelectedStock(prev => prev?.stock_id === id
+      ? { ...prev, price_history: priceHistory || undefined, price_history_loading: false }
+      : prev
+    )
   }
 
   // ── Computed entries ──────────────────────────────────────────────────────
