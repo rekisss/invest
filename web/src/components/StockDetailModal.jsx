@@ -355,16 +355,18 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
   const handleTouchStart = (e) => {
     if (e.touches.length !== 1) { if (subTouchRef.current) clearTimeout(subTouchRef.current.lpTimer); subTouchRef.current = null; return }
     const t = e.touches[0]
-    subTouchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget, moved: false, didLock: false }
+    // lockedNow: see CandleSVG — lets a long-press toggle the lock mid-gesture.
+    subTouchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget, moved: false, didLock: false, lockedNow: locked }
     if (onLock) {
       subTouchRef.current.lpTimer = setTimeout(() => {
         if (!subTouchRef.current || subTouchRef.current.moved) return
         subTouchRef.current.didLock = true
-        if (locked) {
+        if (subTouchRef.current.lockedNow) {
+          subTouchRef.current.lockedNow = false
           onLock(null); onHoverIdx?.(null)
         } else {
           const idx = idxFromX(subTouchRef.current.startX, subTouchRef.current.svgEl)
-          if (idx != null) { onLock(idx); onHoverIdx?.(idx) }
+          if (idx != null) { subTouchRef.current.lockedNow = true; onLock(idx); onHoverIdx?.(idx) }
         }
       }, 420)
     }
@@ -374,8 +376,9 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
     const t = e.touches[0]
     const dx = Math.abs(t.clientX - subTouchRef.current.startX)
     const dy = Math.abs(t.clientY - subTouchRef.current.startY)
-    if (dx > 6 || dy > 6) { subTouchRef.current.moved = true; clearTimeout(subTouchRef.current.lpTimer) }
-    if (!locked) return // Not locked: browser scrolls natively
+    const moveThresh = subTouchRef.current.lockedNow ? 14 : 6
+    if (dx > moveThresh || dy > moveThresh) { subTouchRef.current.moved = true; clearTimeout(subTouchRef.current.lpTimer) }
+    if (!subTouchRef.current.lockedNow) return // Not locked: browser scrolls natively
     if (dx > dy && dx > 5) {
       e.stopPropagation()
       handleMove(t.clientX, subTouchRef.current.svgEl)
@@ -385,7 +388,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
     const ref = subTouchRef.current
     subTouchRef.current = null
     if (ref) clearTimeout(ref.lpTimer)
-    if (!locked) onHoverIdx?.(null)
+    if (!ref || !ref.lockedNow) onHoverIdx?.(null)
   }
 
   const accentColor = lines?.[0]?.color || (histSeries ? '#FF453A' : '#8E8E93')
@@ -609,16 +612,20 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     if (e.touches.length !== 1) { if (touchRef.current) clearTimeout(touchRef.current.lpTimer); touchRef.current = null; return }
     const t = e.touches[0]
     const svgEl = e.currentTarget
-    touchRef.current = { startX: t.clientX, startY: t.clientY, svgEl, active: false, moved: false, didLock: false }
+    // lockedNow mirrors the lock state *within this gesture* so a long-press that
+    // toggles the lock takes effect immediately (the `locked` prop is stale until
+    // the next React render).
+    touchRef.current = { startX: t.clientX, startY: t.clientY, svgEl, active: false, moved: false, didLock: false, lockedNow: locked }
     if (onLock) {
       touchRef.current.lpTimer = setTimeout(() => {
         if (!touchRef.current || touchRef.current.moved) return
         touchRef.current.didLock = true
-        if (locked) {
+        if (touchRef.current.lockedNow) {
+          touchRef.current.lockedNow = false
           onLock(null); setHovered(null); onHoverIdx?.(null)
         } else {
           const idx = getIdx(touchRef.current.startX, touchRef.current.svgEl)
-          if (idx >= 0 && idx < bars.length) { onLock(idx); setBar(idx, touchRef.current.svgEl) }
+          if (idx >= 0 && idx < bars.length) { touchRef.current.lockedNow = true; onLock(idx); setBar(idx, touchRef.current.svgEl) }
         }
       }, 420)
     }
@@ -628,8 +635,11 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     const t = e.touches[0]
     const dx = Math.abs(t.clientX - touchRef.current.startX)
     const dy = Math.abs(t.clientY - touchRef.current.startY)
-    if (dx > 6 || dy > 6) { touchRef.current.moved = true; clearTimeout(touchRef.current.lpTimer) }
-    if (!locked) return // Not locked: touchAction pan-x pan-y lets browser scroll natively
+    // While locked, tolerate finger jitter (14px) so a held finger reliably
+    // long-presses to UNLOCK; a clear drag still cancels the timer to move the crosshair.
+    const moveThresh = touchRef.current.lockedNow ? 14 : 6
+    if (dx > moveThresh || dy > moveThresh) { touchRef.current.moved = true; clearTimeout(touchRef.current.lpTimer) }
+    if (!touchRef.current.lockedNow) return // Not locked: touchAction pan-x pan-y lets browser scroll natively
     // Locked: crosshair follows finger, prevent scroll
     if (dx > dy && dx > 5) {
       e.stopPropagation()
@@ -643,7 +653,8 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     const ref = touchRef.current
     touchRef.current = null
     if (ref) clearTimeout(ref.lpTimer)
-    if (!locked) { setHovered(null); onHoverIdx?.(null) }
+    // Clear the crosshair unless this gesture left the chart locked (pinned).
+    if (!ref || !ref.lockedNow) { setHovered(null); onHoverIdx?.(null) }
   }
 
   // Effective hover: prefer this chart's own pointer; otherwise mirror the
@@ -960,15 +971,16 @@ function VolumeSubChart({ bars, hoveredIdx, onHoverIdx, onLock, locked, chartW: 
   const handleTouchStart = (e) => {
     if (e.touches.length !== 1) { if (subTouchRef.current) clearTimeout(subTouchRef.current.lpTimer); subTouchRef.current = null; return }
     const t = e.touches[0]
-    subTouchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget, moved: false, didLock: false }
+    // lockedNow: see CandleSVG — lets a long-press toggle the lock mid-gesture.
+    subTouchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget, moved: false, didLock: false, lockedNow: locked }
     if (onLock) {
       subTouchRef.current.lpTimer = setTimeout(() => {
         if (!subTouchRef.current || subTouchRef.current.moved) return
         subTouchRef.current.didLock = true
-        if (locked) { onLock(null); onHoverIdx?.(null) }
+        if (subTouchRef.current.lockedNow) { subTouchRef.current.lockedNow = false; onLock(null); onHoverIdx?.(null) }
         else {
           const idx = idxFromX(subTouchRef.current.startX, subTouchRef.current.svgEl)
-          if (idx != null) { onLock(idx); onHoverIdx?.(idx) }
+          if (idx != null) { subTouchRef.current.lockedNow = true; onLock(idx); onHoverIdx?.(idx) }
         }
       }, 420)
     }
@@ -978,15 +990,16 @@ function VolumeSubChart({ bars, hoveredIdx, onHoverIdx, onLock, locked, chartW: 
     const t = e.touches[0]
     const dx = Math.abs(t.clientX - subTouchRef.current.startX)
     const dy = Math.abs(t.clientY - subTouchRef.current.startY)
-    if (dx > 6 || dy > 6) { subTouchRef.current.moved = true; clearTimeout(subTouchRef.current.lpTimer) }
-    if (!locked) return // Not locked: browser scrolls natively
+    const moveThresh = subTouchRef.current.lockedNow ? 14 : 6
+    if (dx > moveThresh || dy > moveThresh) { subTouchRef.current.moved = true; clearTimeout(subTouchRef.current.lpTimer) }
+    if (!subTouchRef.current.lockedNow) return // Not locked: browser scrolls natively
     if (dx > dy && dx > 5) { e.stopPropagation(); handleMove(t.clientX, subTouchRef.current.svgEl) }
   }
   const handleTouchEnd = () => {
     const ref = subTouchRef.current
     subTouchRef.current = null
     if (ref) clearTimeout(ref.lpTimer)
-    if (!locked) onHoverIdx?.(null)
+    if (!ref || !ref.lockedNow) onHoverIdx?.(null)
   }
   const maxVolStr = maxVol >= 1e6 ? `${(maxVol / 1e6).toFixed(1)}M` : maxVol >= 1e3 ? `${(maxVol / 1e3).toFixed(0)}K` : maxVol.toFixed(0)
   return (
@@ -1692,7 +1705,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4, minHeight: 14 }}>
         {lockedIdx != null ? (
           <span style={{ fontSize: 9.5, color: '#FFD60A', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-            🔒 已鎖定 {bars[lockedIdx]?.time ? bars[lockedIdx].time.slice(5) : ''} · 點圖表空白處解除
+            🔒 已鎖定 {bars[lockedIdx]?.time ? bars[lockedIdx].time.slice(5) : ''} · 再長按圖表解除鎖定
           </span>
         ) : (
           <span style={{ fontSize: 9, color: 'var(--ios-label4)', opacity: 0.7 }}>長按圖表可鎖定十字線 · 雙指縮放 · 左右滑看更早</span>
