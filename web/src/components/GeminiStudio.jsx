@@ -58,7 +58,7 @@ const ANALYSTS = [
 分析完請列：技術面信心 X/10（無資料則給 0/10）`,
   },
   {
-    id: 'fund', name: '基本面派', emoji: '💰', color: '#30d158',
+    id: 'fund', name: '基本面派', emoji: '💰', color: '#16d67e',
     persona: `你是台股基本面分析師。
 
 資料分級：
@@ -429,7 +429,7 @@ function parseVerdict(messages) {
   if (!riskMsgs.length) return null
   const txt = riskMsgs[riskMsgs.length - 1].content || ''
   if (/資料不足|數據不足|資訊不足|無法判斷|不足以(判斷|決策)/.test(txt)) return { verdict: '資料不足', color: '#8e8e93', emoji: '❓' }
-  if (/建議進場|可以進場|適合買進|進場訊號|值得買/.test(txt)) return { verdict: '建議進場', color: '#30d158', emoji: '✅' }
+  if (/建議進場|可以進場|適合買進|進場訊號|值得買/.test(txt)) return { verdict: '建議進場', color: '#16d67e', emoji: '✅' }
   if (/建議迴避|暫時迴避|避開|不建議|風險過高|先回避/.test(txt)) return { verdict: '建議迴避', color: '#f85149', emoji: '🚫' }
   if (/建議觀察|先觀察|觀望|等待確認|觀察等待/.test(txt)) return { verdict: '建議觀察', color: '#ff9f0a', emoji: '👀' }
   return null

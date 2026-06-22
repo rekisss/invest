@@ -258,8 +258,8 @@ const s = {
   },
   errorMsg: {
     padding: '10px 14px',
-    background: 'rgba(255,69,58,0.12)',
-    border: '0.5px solid rgba(255,69,58,0.3)',
+    background: 'rgba(255,51,64,0.12)',
+    border: '0.5px solid rgba(255,51,64,0.3)',
     borderRadius: '12px',
     color: 'var(--ios-red)',
     fontSize: '13px',

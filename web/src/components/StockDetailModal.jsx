@@ -12,7 +12,7 @@ const colorNum = (v, pos = 'var(--ios-red)', neg = 'var(--ios-green)') => {
 }
 
 // Taiwan convention: red = up, green = down
-function candleColor(open, close) { return close >= open ? '#FF453A' : '#30D158' }
+function candleColor(open, close) { return close >= open ? '#FF3340' : '#16D67E' }
 
 function isOTC(stockId) {
   const n = parseInt(String(stockId), 10)
@@ -306,13 +306,13 @@ function detectCandlePattern(bars, i) {
 // ── Fibonacci retracement levels ─────────────────────────────────────────────
 
 const FIB_LEVELS = [
-  { r: 0,     label: '0%',    color: 'rgba(255,69,58,0.75)' },
+  { r: 0,     label: '0%',    color: 'rgba(255,51,64,0.75)' },
   { r: 0.236, label: '23.6%', color: 'rgba(255,159,10,0.7)' },
   { r: 0.382, label: '38.2%', color: 'rgba(255,214,10,0.8)' },
   { r: 0.5,   label: '50%',   color: 'rgba(180,180,180,0.7)' },
   { r: 0.618, label: '61.8%', color: 'rgba(255,214,10,0.8)' },
   { r: 0.786, label: '78.6%', color: 'rgba(255,159,10,0.7)' },
-  { r: 1,     label: '100%',  color: 'rgba(48,209,88,0.75)' },
+  { r: 1,     label: '100%',  color: 'rgba(22,214,126,0.75)' },
 ]
 
 // ── Sub-chart panel (MACD / RSI / KD) ───────────────────────────────────────
@@ -391,7 +391,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
     if (!ref || !ref.lockedNow) onHoverIdx?.(null)
   }
 
-  const accentColor = lines?.[0]?.color || (histSeries ? '#FF453A' : '#8E8E93')
+  const accentColor = lines?.[0]?.color || (histSeries ? '#FF3340' : '#8E8E93')
   const badgeW = Math.max(30, (label?.length || 0) * 6.0 + 14)
 
   return (
@@ -418,7 +418,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
         if (v == null) return null
         const x = toX(i), zero = toY(0), y = toY(v), h = Math.abs(y - zero)
         return <rect key={i} x={x - bW / 2} y={Math.min(y, zero)} width={bW} height={Math.max(h, 0.5)}
-          fill={v >= 0 ? '#FF453A' : '#30D158'} opacity={0.75} />
+          fill={v >= 0 ? '#FF3340' : '#16D67E'} opacity={0.75} />
       })}
 
       {/* Line series */}
@@ -467,7 +467,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
         const histV = histSeries?.values[hoveredIdx]
         const lineRows = (lines || []).filter(s => s.values[hoveredIdx] != null)
         const rows = [
-          ...(histV != null ? [{ label: 'Hist', value: histV, color: histV >= 0 ? '#FF453A' : '#30D158' }] : []),
+          ...(histV != null ? [{ label: 'Hist', value: histV, color: histV >= 0 ? '#FF3340' : '#16D67E' }] : []),
           ...lineRows.map(s => ({ label: s.label, value: s.values[hoveredIdx], color: s.color })),
         ]
         if (rows.length === 0) return null
@@ -508,11 +508,11 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
 // ── Candlestick chart ────────────────────────────────────────────────────────
 
 const CDP_LINE_DEFS = [
-  { key: 'ah',  color: 'rgba(255,69,58,0.85)',  sw: 1.2 },
+  { key: 'ah',  color: 'rgba(255,51,64,0.85)',  sw: 1.2 },
   { key: 'nh',  color: 'rgba(255,159,10,0.8)',  sw: 1.2 },
   { key: 'cdp', color: 'rgba(255,214,10,0.92)', sw: 1.5 },
-  { key: 'nl',  color: 'rgba(48,209,88,0.8)',   sw: 1.2 },
-  { key: 'al',  color: 'rgba(48,209,88,0.95)',  sw: 1.2 },
+  { key: 'nl',  color: 'rgba(22,214,126,0.8)',   sw: 1.2 },
+  { key: 'al',  color: 'rgba(22,214,126,0.95)',  sw: 1.2 },
 ]
 
 function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, onHoverIdx, hoveredIdx: extHoverIdx, onLock, locked, label, chartW: propChartW, compareId, compareHistories, historyDates, logScale = false, measureMode = false }) {
@@ -834,11 +834,11 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
         const lastLv = cdpSeries[bars.length - 1]
         if (!lastLv) return null
         const CDP_AXIS = [
-          { v: lastLv.ah,  c: 'rgba(255,69,58,0.95)',  s: 'AH' },
+          { v: lastLv.ah,  c: 'rgba(255,51,64,0.95)',  s: 'AH' },
           { v: lastLv.nh,  c: 'rgba(255,159,10,0.95)', s: 'NH' },
           { v: lastLv.cdp, c: 'rgba(255,214,10,0.95)', s: 'CDP' },
-          { v: lastLv.nl,  c: 'rgba(48,209,88,0.9)',   s: 'NL' },
-          { v: lastLv.al,  c: 'rgba(48,209,88,1)',      s: 'AL' },
+          { v: lastLv.nl,  c: 'rgba(22,214,126,0.9)',   s: 'NL' },
+          { v: lastLv.al,  c: 'rgba(22,214,126,1)',      s: 'AL' },
         ]
         // Filter to visible range and compute positions
         const visible = CDP_AXIS.map(({ v, c, s }) => {
@@ -923,11 +923,11 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
         const baseH = slimOnly ? 42 : tipH
         const fullH = baseH + patOffset + (cdpLv ? 72 : 0)
         const CDP_TIP = cdpLv ? [
-          { label: 'AH',  v: cdpLv.ah,  c: 'rgba(255,69,58,0.95)' },
+          { label: 'AH',  v: cdpLv.ah,  c: 'rgba(255,51,64,0.95)' },
           { label: 'NH',  v: cdpLv.nh,  c: 'rgba(255,159,10,0.95)' },
           { label: 'CDP', v: cdpLv.cdp, c: 'rgba(255,214,10,0.95)' },
-          { label: 'NL',  v: cdpLv.nl,  c: 'rgba(48,209,88,0.9)' },
-          { label: 'AL',  v: cdpLv.al,  c: 'rgba(48,209,88,1)' },
+          { label: 'NL',  v: cdpLv.nl,  c: 'rgba(22,214,126,0.9)' },
+          { label: 'AL',  v: cdpLv.al,  c: 'rgba(22,214,126,1)' },
         ] : []
         return (
           <g>
@@ -949,9 +949,9 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
               <text x={tipX + 8} y={tipY + 30} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>開</text>
               <text x={tipX + tipW - 6} y={tipY + 30} fontSize={9} fontWeight="600" textAnchor="end" style={{ fill: 'var(--ios-label)' }}>{fmtP(b.open)}</text>
               <text x={tipX + 8} y={tipY + 43} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>高</text>
-              <text x={tipX + tipW - 6} y={tipY + 43} fontSize={9} fill="#FF453A" fontWeight="600" textAnchor="end">{fmtP(b.high)}</text>
+              <text x={tipX + tipW - 6} y={tipY + 43} fontSize={9} fill="#FF3340" fontWeight="600" textAnchor="end">{fmtP(b.high)}</text>
               <text x={tipX + 8} y={tipY + 56} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>低</text>
-              <text x={tipX + tipW - 6} y={tipY + 56} fontSize={9} fill="#30D158" fontWeight="600" textAnchor="end">{fmtP(b.low)}</text>
+              <text x={tipX + tipW - 6} y={tipY + 56} fontSize={9} fill="#16D67E" fontWeight="600" textAnchor="end">{fmtP(b.low)}</text>
               <text x={tipX + 8} y={tipY + 69} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>收</text>
               <text x={tipX + tipW - 6} y={tipY + 69} fontSize={9} fill={closeColor} fontWeight="700" textAnchor="end">{fmtP(b.close)}</text>
               <text x={tipX + 8} y={tipY + 82} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>量</text>
@@ -959,7 +959,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
             </>}
             {patInfo && !slimOnly && (() => {
               const pd = PATTERN_DESC[patInfo.name]
-              const patColor = patInfo.type === 'bullish' ? '#30D158' : patInfo.type === 'bearish' ? '#FF453A' : '#8E8E93'
+              const patColor = patInfo.type === 'bullish' ? '#16D67E' : patInfo.type === 'bearish' ? '#FF3340' : '#8E8E93'
               return (
                 <>
                   <line x1={tipX+5} y1={tipY+tipH} x2={tipX+tipW-5} y2={tipY+tipH} strokeWidth={0.5} style={{ stroke: 'var(--ios-sep)' }} />
@@ -995,7 +995,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
         const pct = pA !== 0 ? (diff / pA) * 100 : 0
         const nBars = Math.abs(iB - iA)
         const up = diff >= 0
-        const col = up ? '#FF453A' : '#30D158'
+        const col = up ? '#FF3340' : '#16D67E'
         const fmtP = v => v.toFixed(Math.abs(v) >= 100 ? 1 : 2)
         // Range high/low within the selected window for a richer readout
         const wLo = Math.min(iA, iB), wHi = Math.max(iA, iB)
@@ -1221,14 +1221,14 @@ function ChartValueStrip({ bars, indicators, active, hoveredIdx }) {
       </span>
 
       {active.rsi && rsi != null && (() => {
-        const c = rsi > 70 ? '#FF453A' : rsi < 30 ? '#30D158' : '#BF5AF2'
+        const c = rsi > 70 ? '#FF3340' : rsi < 30 ? '#16D67E' : '#BF5AF2'
         return <Chip label="RSI" borderColor={c}><V v={vn(rsi)} c={c} /></Chip>
       })()}
 
       {active.macd && macdL != null && (
         <Chip label="MACD" borderColor="#0A84FF">
           <V v={vn(macdL, 2)} c="#0A84FF" />
-          {macdH != null && <span style={{ fontSize: 9.5, color: macdH >= 0 ? '#FF453A' : '#30D158', fontWeight: 700, marginLeft: 1 }}>{macdH >= 0 ? '▲' : '▼'}{Math.abs(macdH) < 0.01 ? macdH.toFixed(3) : vn(macdH, 2)}</span>}
+          {macdH != null && <span style={{ fontSize: 9.5, color: macdH >= 0 ? '#FF3340' : '#16D67E', fontWeight: 700, marginLeft: 1 }}>{macdH >= 0 ? '▲' : '▼'}{Math.abs(macdH) < 0.01 ? macdH.toFixed(3) : vn(macdH, 2)}</span>}
         </Chip>
       )}
 
@@ -1240,27 +1240,27 @@ function ChartValueStrip({ bars, indicators, active, hoveredIdx }) {
       )}
 
       {active.adx && adx != null && (() => {
-        const c = adx > 25 ? '#FF453A' : '#FF6B35'
+        const c = adx > 25 ? '#FF3340' : '#FF6B35'
         return (
           <Chip label="ADX" borderColor={c}>
             <V v={vn(adx)} c={c} />
-            {pdi != null && <><span style={{ fontSize: 9, color: '#30D158', fontWeight: 700 }}>+{vn(pdi, 0)}</span><span style={{ fontSize: 9, color: '#FF6B35', fontWeight: 700 }}>-{vn(ndi, 0)}</span></>}
+            {pdi != null && <><span style={{ fontSize: 9, color: '#16D67E', fontWeight: 700 }}>+{vn(pdi, 0)}</span><span style={{ fontSize: 9, color: '#FF6B35', fontWeight: 700 }}>-{vn(ndi, 0)}</span></>}
           </Chip>
         )
       })()}
 
       {active.wr && wr != null && (() => {
-        const c = wr > -20 ? '#FF453A' : wr < -80 ? '#30D158' : '#FF6B35'
+        const c = wr > -20 ? '#FF3340' : wr < -80 ? '#16D67E' : '#FF6B35'
         return <Chip label="W%R" borderColor={c}><V v={vn(wr)} c={c} /></Chip>
       })()}
 
       {active.cci && cci != null && (() => {
-        const c = cci > 100 ? '#FF453A' : cci < -100 ? '#30D158' : '#5E5CE6'
+        const c = cci > 100 ? '#FF3340' : cci < -100 ? '#16D67E' : '#5E5CE6'
         return <Chip label="CCI" borderColor={c}><V v={vn(cci, 0)} c={c} /></Chip>
       })()}
 
       {active.mfi && mfi != null && (() => {
-        const c = mfi > 80 ? '#FF453A' : mfi < 20 ? '#30D158' : '#FFD60A'
+        const c = mfi > 80 ? '#FF3340' : mfi < 20 ? '#16D67E' : '#FFD60A'
         return <Chip label="MFI" borderColor={c}><V v={vn(mfi)} c={c} /></Chip>
       })()}
     </div>
@@ -1281,7 +1281,7 @@ const STRATEGY_PRESETS = [
     state: { ma: true,  bb: true,  macd: true,  rsi: true,  kd: true,  obv: true,  adx: true,  wr: true,  cci: true,  mfi: true  } },
   { id: 'momentum',   label: '動能', color: '#FF9F0A', desc: 'MACD 翻紅 + RSI 站上 50 才進場，追強勢續攻',
     state: { ma: true,  bb: false, macd: true,  rsi: true,  kd: false, obv: false, adx: false, wr: false, cci: false, mfi: false } },
-  { id: 'oscillator', label: '震盪', color: '#30D158', desc: 'KD 低檔金叉 + W%R/CCI 超賣回升，抓區間反彈',
+  { id: 'oscillator', label: '震盪', color: '#16D67E', desc: 'KD 低檔金叉 + W%R/CCI 超賣回升，抓區間反彈',
     state: { ma: false, bb: true,  macd: false, rsi: false, kd: true,  obv: false, adx: false, wr: true,  cci: true,  mfi: false } },
   { id: 'trend',      label: '趨勢', color: '#0A84FF', desc: 'ADX>25 且 +DI>-DI 站上均線，順勢波段',
     state: { ma: true,  bb: true,  macd: false, rsi: false, kd: false, obv: false, adx: true,  wr: false, cci: false, mfi: false } },
@@ -1297,9 +1297,9 @@ const TOGGLE_DEFS = [
   { key: 'pat',  label: '型態', color: '#BF5AF2', title: 'K 線型態：錘子/吞噬/十字星等反轉型態，滑動時顯示（開啟後見下方說明）' },
   { key: 'macd', label: 'MACD', color: '#FF9F0A', title: 'MACD(12,26,9)：柱子翻紅=多頭動能增強，金叉(藍穿紅上)=買進訊號' },
   { key: 'rsi',  label: 'RSI',  color: '#BF5AF2', title: 'RSI(14)：>70 超買警示，<30 超賣反彈機會，50 以上偏多' },
-  { key: 'kd',   label: 'KD',   color: '#30D158', title: 'KD(9)：低檔金叉(K穿D上)買進訊號，高檔死叉賣出訊號' },
+  { key: 'kd',   label: 'KD',   color: '#16D67E', title: 'KD(9)：低檔金叉(K穿D上)買進訊號，高檔死叉賣出訊號' },
   { key: 'obv',  label: 'OBV',  color: '#64D2FF', title: 'OBV 能量潮：OBV 隨價上升=量價配合，OBV 背離=潛在反轉' },
-  { key: 'adx',  label: 'ADX',  color: '#FF453A', title: 'ADX/DMI(14)：ADX>25 趨勢強，+DI>-DI 多頭趨勢，反之空頭' },
+  { key: 'adx',  label: 'ADX',  color: '#FF3340', title: 'ADX/DMI(14)：ADX>25 趨勢強，+DI>-DI 多頭趨勢，反之空頭' },
   { key: 'wr',   label: 'W%R',  color: '#FF6B35', title: 'Williams %R(14)：>-20 超買，<-80 超賣，由超賣回升=買進機會' },
   { key: 'cci',  label: 'CCI',  color: '#5E5CE6', title: 'CCI(20)：>+100 超買，<-100 超賣，穿越±100 往往是趨勢啟動點' },
   { key: 'mfi',  label: 'MFI',  color: '#FFD60A', title: 'MFI(14) 資金流量指標：>80 超買，<20 超賣，結合量能判斷主力動向' },
@@ -1331,7 +1331,7 @@ function computeStrategyBacktest(bars, horizon) {
     { id: 'momentum', label: '動能', color: '#FF9F0A',
       fire: i => i > 0 && macd.hist[i] != null && macd.hist[i - 1] != null &&
         macd.hist[i] > 0 && macd.hist[i - 1] <= 0 && rsi[i] != null && rsi[i] > 50 },
-    { id: 'oscillator', label: '震盪', color: '#30D158',
+    { id: 'oscillator', label: '震盪', color: '#16D67E',
       fire: i => i > 0 && kd.kArr[i] != null && kd.kArr[i - 1] != null &&
         kd.kArr[i] > kd.dArr[i] && kd.kArr[i - 1] <= kd.dArr[i - 1] && kd.kArr[i] < 35 },
     { id: 'trend', label: '趨勢', color: '#0A84FF',
@@ -1800,11 +1800,11 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
           ))}
           {active.bb && <span style={{ fontSize: 10, color: 'rgba(10,132,255,0.7)', fontWeight: 600 }}>— BB(20)</span>}
           {active.cdp && <span style={{ fontSize: 10, fontWeight: 600, display: 'flex', gap: 6 }}>
-            <span style={{ color: 'rgba(255,69,58,0.9)' }}>AH</span>
+            <span style={{ color: 'rgba(255,51,64,0.9)' }}>AH</span>
             <span style={{ color: 'rgba(255,159,10,0.9)' }}>NH</span>
             <span style={{ color: 'rgba(255,214,10,0.95)' }}>CDP</span>
-            <span style={{ color: 'rgba(48,209,88,0.9)' }}>NL</span>
-            <span style={{ color: 'rgba(48,209,88,1)' }}>AL</span>
+            <span style={{ color: 'rgba(22,214,126,0.9)' }}>NL</span>
+            <span style={{ color: 'rgba(22,214,126,1)' }}>AL</span>
           </span>}
         </div>
       )}
@@ -1879,7 +1879,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
             histSeries={{ values: indicators.macd.hist }}
             lines={[
               { color: '#0A84FF', label: 'MACD', values: indicators.macd.macdLine, width: 1 },
-              { color: '#FF453A', label: 'Signal', values: indicators.macd.signalLine, width: 1 },
+              { color: '#FF3340', label: 'Signal', values: indicators.macd.signalLine, width: 1 },
             ]}
             hBands={[{ value: 0, color: '#48484A', label: '' }]}
             hoveredIdx={displayIdx}
@@ -1897,9 +1897,9 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
             label={`RSI(${params.rsiPeriod})`}
             lines={[{ color: '#BF5AF2', label: 'RSI', values: indicators.rsi, width: 1.2 }]}
             hBands={[
-              { value: 70, color: '#FF453A', label: '70' },
+              { value: 70, color: '#FF3340', label: '70' },
               { value: 50, color: '#48484A', label: '50' },
-              { value: 30, color: '#30D158', label: '30' },
+              { value: 30, color: '#16D67E', label: '30' },
             ]}
             hoveredIdx={displayIdx}
             onHoverIdx={setHoveredIdx}
@@ -1920,8 +1920,8 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
               { color: '#0A84FF', label: 'D', values: indicators.kd.dArr, width: 1 },
             ]}
             hBands={[
-              { value: 80, color: '#FF453A', label: '80' },
-              { value: 20, color: '#30D158', label: '20' },
+              { value: 80, color: '#FF3340', label: '80' },
+              { value: 20, color: '#16D67E', label: '20' },
             ]}
             hoveredIdx={displayIdx}
             onHoverIdx={setHoveredIdx}
@@ -1956,8 +1956,8 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
             bars={bars}
             label="ADX(14) / DMI"
             lines={[
-              { color: '#FF453A', label: 'ADX',  values: indicators.adx.adxLine,  width: 1.5 },
-              { color: '#30D158', label: '+DI',  values: indicators.adx.plusDI,   width: 1,   opacity: 0.85 },
+              { color: '#FF3340', label: 'ADX',  values: indicators.adx.adxLine,  width: 1.5 },
+              { color: '#16D67E', label: '+DI',  values: indicators.adx.plusDI,   width: 1,   opacity: 0.85 },
               { color: '#FF6B35', label: '-DI',  values: indicators.adx.minusDI,  width: 1,   opacity: 0.85 },
             ]}
             hBands={[{ value: 25, color: '#FFD60A', label: '25' }]}
@@ -1977,9 +1977,9 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
             label="Williams %R(14)"
             lines={[{ color: '#FF6B35', label: 'W%R', values: indicators.wr, width: 1.2 }]}
             hBands={[
-              { value: -20, color: '#FF453A', label: '-20' },
+              { value: -20, color: '#FF3340', label: '-20' },
               { value: -50, color: '#48484A', label: '-50' },
-              { value: -80, color: '#30D158', label: '-80' },
+              { value: -80, color: '#16D67E', label: '-80' },
             ]}
             hoveredIdx={displayIdx}
             onHoverIdx={setHoveredIdx}
@@ -1997,9 +1997,9 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
             label="CCI(20)"
             lines={[{ color: '#5E5CE6', label: 'CCI', values: indicators.cci, width: 1.2 }]}
             hBands={[
-              { value: 100,  color: '#FF453A', label: '+100' },
+              { value: 100,  color: '#FF3340', label: '+100' },
               { value: 0,    color: '#48484A', label: '0' },
-              { value: -100, color: '#30D158', label: '-100' },
+              { value: -100, color: '#16D67E', label: '-100' },
             ]}
             hoveredIdx={displayIdx}
             onHoverIdx={setHoveredIdx}
@@ -2016,9 +2016,9 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
             label="MFI(14) 資金流"
             lines={[{ color: '#FFD60A', label: 'MFI', values: indicators.mfi, width: 1.2 }]}
             hBands={[
-              { value: 80, color: '#FF453A', label: '80' },
+              { value: 80, color: '#FF3340', label: '80' },
               { value: 50, color: '#48484A', label: '50' },
-              { value: 20, color: '#30D158', label: '20' },
+              { value: 20, color: '#16D67E', label: '20' },
             ]}
             hoveredIdx={displayIdx}
             onHoverIdx={setHoveredIdx}
@@ -2037,7 +2037,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 10px' }}>
             {Object.entries(PATTERN_DESC).map(([name, { short, hint }]) => {
               const type = name === '十字星' ? 'neutral' : (name.includes('多頭') || name.includes('錘子') || name.includes('倒錘')) ? 'bullish' : 'bearish'
-              const color = type === 'bullish' ? '#30D158' : type === 'bearish' ? '#FF453A' : '#8E8E93'
+              const color = type === 'bullish' ? '#16D67E' : type === 'bearish' ? '#FF3340' : '#8E8E93'
               return (
                 <div key={name} title={hint} style={{ display: 'flex', flexDirection: 'column', gap: 1, cursor: 'help' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -2430,12 +2430,12 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
               )}
             </div>
             {s.return_5d != null && (
-              <span style={{ fontSize: 11, color: colorNum(s.return_5d), fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: s.return_5d >= 0 ? 'rgba(255,69,58,0.1)' : 'rgba(48,209,88,0.1)' }}>
+              <span style={{ fontSize: 11, color: colorNum(s.return_5d), fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: s.return_5d >= 0 ? 'rgba(255,51,64,0.1)' : 'rgba(22,214,126,0.1)' }}>
                 5日 {s.return_5d >= 0 ? '+' : ''}{(s.return_5d * 100).toFixed(1)}%
               </span>
             )}
             {s.regime_label && s.regime_label !== '未知' && (() => {
-              const c = s.regime_label === '牛市' ? '#30D158' : s.regime_label === '熊市' ? '#FF453A' : '#FF9F0A'
+              const c = s.regime_label === '牛市' ? '#16D67E' : s.regime_label === '熊市' ? '#FF3340' : '#FF9F0A'
               return <span style={{ fontSize: 10, fontWeight: 700, color: c, background: `${c}18`, padding: '2px 8px', borderRadius: 9999, border: `0.5px solid ${c}40`, marginLeft: 'auto' }}>{s.regime_label}</span>
             })()}
           </div>
@@ -2458,7 +2458,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
           {/* Institutional + fundamental chips */}
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
             {(s.foreign_buy_streak || 0) > 0 && (
-              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: 'rgba(255,69,58,0.12)', color: 'var(--ios-red)', fontWeight: 600 }}>外資連買 {s.foreign_buy_streak}天</span>
+              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: 'rgba(255,51,64,0.12)', color: 'var(--ios-red)', fontWeight: 600 }}>外資連買 {s.foreign_buy_streak}天</span>
             )}
             {(s.invest_trust_streak || 0) > 0 && (
               <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: 'rgba(255,159,10,0.12)', color: 'var(--ios-orange)', fontWeight: 600 }}>投信連買 {s.invest_trust_streak}天</span>
@@ -2467,10 +2467,10 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
               <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: 'rgba(10,132,255,0.1)', color: 'var(--ios-blue)', fontWeight: 600 }}>自營連買 {s.dealer_buy_streak}天</span>
             )}
             {s.f_score != null && (
-              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: s.f_score >= 7 ? 'rgba(48,209,88,0.12)' : 'var(--ios-fill4)', color: s.f_score >= 7 ? 'var(--ios-green)' : 'var(--ios-label3)', fontWeight: 600 }}>F分 {s.f_score}/9</span>
+              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: s.f_score >= 7 ? 'rgba(22,214,126,0.12)' : 'var(--ios-fill4)', color: s.f_score >= 7 ? 'var(--ios-green)' : 'var(--ios-label3)', fontWeight: 600 }}>F分 {s.f_score}/9</span>
             )}
             {s.revenue_yoy != null && (
-              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: s.revenue_yoy > 0 ? 'rgba(255,69,58,0.12)' : 'rgba(48,209,88,0.12)', color: s.revenue_yoy > 0 ? 'var(--ios-red)' : 'var(--ios-green)', fontWeight: 600 }}>
+              <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: s.revenue_yoy > 0 ? 'rgba(255,51,64,0.12)' : 'rgba(22,214,126,0.12)', color: s.revenue_yoy > 0 ? 'var(--ios-red)' : 'var(--ios-green)', fontWeight: 600 }}>
                 營收YoY {s.revenue_yoy > 0 ? '+' : ''}{(s.revenue_yoy * 100).toFixed(1)}%
               </span>
             )}
@@ -2581,7 +2581,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
                     const y = h2 - (h.score / maxScore) * (h2 - 6) - 3
                     return (
                       <g key={h.date}>
-                        <circle cx={x} cy={y} r={h.signal ? 4 : 2.5} fill={h.signal ? '#30D158' : 'var(--ios-blue)'} />
+                        <circle cx={x} cy={y} r={h.signal ? 4 : 2.5} fill={h.signal ? '#16D67E' : 'var(--ios-blue)'} />
                         {i === history.length - 1 && (
                           <text x={x} y={y - 7} textAnchor="middle" fontSize="9" fill="var(--ios-label2)">{h.score}</text>
                         )}
@@ -2662,7 +2662,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
           {s.entry_reason && <Row label="入場理由" value={s.entry_reason} valueStyle={{ color: 'var(--ios-green)', fontSize: 11 }} />}
           {s.skip_reason && <Row label="跳過原因" value={s.skip_reason} valueStyle={{ color: 'var(--ios-red)', fontSize: 11 }} />}
           {s.base_exit_signal && (
-            <div style={{ margin: '6px 0 2px', padding: '6px 10px', background: 'rgba(255,69,58,0.10)', border: '0.5px solid var(--ios-red)', borderRadius: 8, fontSize: 11, color: 'var(--ios-red)' }}>
+            <div style={{ margin: '6px 0 2px', padding: '6px 10px', background: 'rgba(255,51,64,0.10)', border: '0.5px solid var(--ios-red)', borderRadius: 8, fontSize: 11, color: 'var(--ios-red)' }}>
               🚪 出場訊號觸發{s.base_exit_reason ? `：${s.base_exit_reason}` : ''}
             </div>
           )}
@@ -2731,11 +2731,11 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
           const close = s.close
           return (
             <Section title="CDP 逆勢操作系統">
-              <Row label="AH 強力壓力" value={fmt(ah, 2)} valueStyle={{ color: 'rgba(255,69,58,0.9)', fontWeight: 700 }} />
+              <Row label="AH 強力壓力" value={fmt(ah, 2)} valueStyle={{ color: 'rgba(255,51,64,0.9)', fontWeight: 700 }} />
               <Row label="NH 一般壓力" value={fmt(nh, 2)} valueStyle={{ color: close != null && close >= nh ? 'var(--ios-red)' : 'var(--ios-label3)' }} />
               <Row label="CDP 中樞" value={fmt(cdp, 2)} valueStyle={{ color: 'var(--ios-yellow)', fontWeight: 600 }} />
               <Row label="NL 一般支撐" value={fmt(nl, 2)} valueStyle={{ color: close != null && close <= nl ? 'var(--ios-green)' : 'var(--ios-label3)' }} />
-              <Row label="AL 強力支撐" value={fmt(al, 2)} valueStyle={{ color: 'rgba(48,209,88,0.9)', fontWeight: 700 }} />
+              <Row label="AL 強力支撐" value={fmt(al, 2)} valueStyle={{ color: 'rgba(22,214,126,0.9)', fontWeight: 700 }} />
             </Section>
           )
         })()}
@@ -2807,7 +2807,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
               {activeB.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: activeR.length ? 10 : 0 }}>
                   {activeB.map(sig => (
-                    <span key={sig.key} style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(48,209,88,0.12)', color: 'var(--ios-green)', border: '0.5px solid rgba(48,209,88,0.4)', borderRadius: 6, fontWeight: 600, letterSpacing: 0.2 }}>
+                    <span key={sig.key} style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(22,214,126,0.12)', color: 'var(--ios-green)', border: '0.5px solid rgba(22,214,126,0.4)', borderRadius: 6, fontWeight: 600, letterSpacing: 0.2 }}>
                       ✓ {sig.label}
                     </span>
                   ))}
@@ -2816,7 +2816,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
               {activeR.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {activeR.map(sig => (
-                    <span key={sig.key} style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(255,69,58,0.12)', color: 'var(--ios-red)', border: '0.5px solid rgba(255,69,58,0.4)', borderRadius: 6, fontWeight: 600, letterSpacing: 0.2 }}>
+                    <span key={sig.key} style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(255,51,64,0.12)', color: 'var(--ios-red)', border: '0.5px solid rgba(255,51,64,0.4)', borderRadius: 6, fontWeight: 600, letterSpacing: 0.2 }}>
                       ✗ {sig.label}
                     </span>
                   ))}
@@ -2923,7 +2923,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
           )}
         </Section>
         {!s.data_quality_ok && s.data_quality_ok != null && (
-          <div style={{ margin: '4px 0 10px', padding: '8px 12px', background: 'rgba(255,69,58,0.08)', border: '0.5px solid var(--ios-red)', borderRadius: 10, fontSize: 11, color: 'var(--ios-red)' }}>
+          <div style={{ margin: '4px 0 10px', padding: '8px 12px', background: 'rgba(255,51,64,0.08)', border: '0.5px solid var(--ios-red)', borderRadius: 10, fontSize: 11, color: 'var(--ios-red)' }}>
             ⚠️ 資料品質警示：此股票部分指標資料不完整，評分參考性較低
           </div>
         )}
@@ -2952,15 +2952,15 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
             <Section title={`📋 訊號歷史（${history.length} 筆掃描記錄）`}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                 {history.map((h, i) => {
-                  const scoreColor = h.signal ? '#30D158' : (h.score ?? 0) >= 700 ? 'var(--ios-orange)' : 'var(--ios-label3)'
-                  const gc = { A: '#FFD60A', B: '#30D158', C: '#FF9F0A', D: '#64748B', X: '#FF453A' }
+                  const scoreColor = h.signal ? '#16D67E' : (h.score ?? 0) >= 700 ? 'var(--ios-orange)' : 'var(--ios-label3)'
+                  const gc = { A: '#FFD60A', B: '#16D67E', C: '#FF9F0A', D: '#64748B', X: '#FF3340' }
                   return (
                     <div key={h.date} style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       padding: '8px 0',
                       borderBottom: i < history.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
                     }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: h.signal ? '#30D158' : 'var(--ios-fill2)', flexShrink: 0 }} />
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: h.signal ? '#16D67E' : 'var(--ios-fill2)', flexShrink: 0 }} />
                       <span style={{ fontSize: 11, color: 'var(--ios-label3)', fontFamily: 'monospace', minWidth: 52 }}>{h.date.slice(5)}</span>
                       {h.score != null && (
                         <span style={{ fontSize: 11, fontWeight: 700, color: scoreColor, minWidth: 44 }}>
@@ -2971,7 +2971,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
                         <span style={{ fontSize: 10, fontWeight: 700, color: gc[h.grade] || 'var(--ios-label3)' }}>[{h.grade}]</span>
                       )}
                       {h.signal && (
-                        <span style={{ fontSize: 9, color: '#30D158', fontWeight: 700, background: 'rgba(48,209,88,0.12)', borderRadius: 4, padding: '1px 5px' }}>進場</span>
+                        <span style={{ fontSize: 9, color: '#16D67E', fontWeight: 700, background: 'rgba(22,214,126,0.12)', borderRadius: 4, padding: '1px 5px' }}>進場</span>
                       )}
                       {h.macdCross && (
                         <span style={{ fontSize: 9, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.1)', borderRadius: 4, padding: '1px 5px' }}>MACD金叉</span>

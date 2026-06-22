@@ -91,7 +91,7 @@ function fmt(v, d = 2) { return v == null || isNaN(v) ? '—' : Number(v).toFixe
 function fmtNum(v) { return v == null ? '—' : Number(v).toLocaleString('zh-TW', { maximumFractionDigits: 0 }) }
 
 const EMPTY_FORM = { stock_id: '', name: '', buyPrice: '', qty: '', buyDate: '', note: '' }
-const PALETTE = ['#0a84ff','#30d158','#ff9f0a','#ff453a','#bf5af2','#64d2ff','#ffd60a','#ff6961','#34c759','#5e5ce6']
+const PALETTE = ['#0a84ff','#16d67e','#ff9f0a','#ff3340','#bf5af2','#64d2ff','#ffd60a','#ff6961','#34c759','#5e5ce6']
 const inputStyle = {
   width: '100%', background: 'var(--ios-fill3)', border: '0.5px solid var(--ios-sep)',
   borderRadius: 8, padding: '8px 10px', color: 'var(--ios-label)', fontSize: 13,
@@ -162,7 +162,7 @@ function ScanBadge({ scan }) {
   const grade = scan.grade
   if (signal) {
     return (
-      <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(48,209,88,0.15)', color: '#30d158', padding: '2px 7px', borderRadius: 5 }}>
+      <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(22,214,126,0.15)', color: '#16d67e', padding: '2px 7px', borderRadius: 5 }}>
         ✅ 掃描入榜{score ? ` ${score}分` : ''}{grade ? ` [${grade}]` : ''}
       </span>
     )
@@ -170,7 +170,7 @@ function ScanBadge({ scan }) {
   if (score != null) {
     const weak = score < 500
     return (
-      <span style={{ fontSize: 10, fontWeight: 700, background: weak ? 'rgba(255,69,58,0.12)' : 'rgba(255,159,10,0.12)', color: weak ? 'var(--ios-red)' : 'var(--ios-yellow)', padding: '2px 7px', borderRadius: 5 }}>
+      <span style={{ fontSize: 10, fontWeight: 700, background: weak ? 'rgba(255,51,64,0.12)' : 'rgba(255,159,10,0.12)', color: weak ? 'var(--ios-red)' : 'var(--ios-yellow)', padding: '2px 7px', borderRadius: 5 }}>
         {weak ? '⚠️ 訊號轉弱' : '📊 觀察中'}{score ? ` ${score}分` : ''}
       </span>
     )
@@ -362,9 +362,9 @@ export default function Portfolio({ data }) {
               <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase' }}>持倉總覽</div>
               <span style={{
                 fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 9999,
-                background: mktOpen ? 'rgba(48,209,88,0.13)' : 'rgba(148,163,184,0.1)',
-                color: mktOpen ? '#30d158' : 'var(--ios-label3)',
-                border: `0.5px solid ${mktOpen ? 'rgba(48,209,88,0.3)' : 'var(--ios-sep)'}`,
+                background: mktOpen ? 'rgba(22,214,126,0.13)' : 'rgba(148,163,184,0.1)',
+                color: mktOpen ? '#16d67e' : 'var(--ios-label3)',
+                border: `0.5px solid ${mktOpen ? 'rgba(22,214,126,0.3)' : 'var(--ios-sep)'}`,
               }}>
                 {mktSession === 'open' ? '🟢 盤中' : mktSession === 'pre' ? '⏰ 開盤前' : mktSession === 'weekend' ? '📆 假日' : '⚫ 已收盤'}
               </span>
@@ -431,7 +431,7 @@ export default function Portfolio({ data }) {
           </div>
 
           {alertCount > 0 && (
-            <div style={{ marginTop: 10, fontSize: 11, color: 'var(--ios-red)', background: 'rgba(255,69,58,0.1)', borderRadius: 7, padding: '6px 10px', fontWeight: 600 }}>
+            <div style={{ marginTop: 10, fontSize: 11, color: 'var(--ios-red)', background: 'rgba(255,51,64,0.1)', borderRadius: 7, padding: '6px 10px', fontWeight: 600 }}>
               ⚠️ {alertCount} 檔持股訊號轉弱，請向下查看
             </div>
           )}
@@ -469,7 +469,7 @@ export default function Portfolio({ data }) {
         const nearStop   = curPrice != null && curPrice <= stopLoss * 1.02
         const nearTarget = curPrice != null && curPrice >= takePrft * 0.98
         const scanWeak   = scan && !scan.entry_signal && scan.entry_score != null && scan.entry_score < 500
-        const borderColor = nearStop ? 'rgba(255,69,58,0.55)' : scanWeak ? 'rgba(255,69,58,0.3)' : nearTarget ? 'rgba(255,149,0,0.5)' : 'transparent'
+        const borderColor = nearStop ? 'rgba(255,51,64,0.55)' : scanWeak ? 'rgba(255,51,64,0.3)' : nearTarget ? 'rgba(255,149,0,0.5)' : 'transparent'
         return (
           <div key={id} style={{
             background: 'var(--ios-bg2)', borderRadius: 14, padding: '12px 14px', marginBottom: 8,
@@ -479,7 +479,7 @@ export default function Portfolio({ data }) {
             {/* Alert banner */}
             {(nearStop || nearTarget) && (
               <div style={{ fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 6, marginBottom: 8,
-                background: nearStop ? 'rgba(255,69,58,0.12)' : 'rgba(255,149,0,0.12)',
+                background: nearStop ? 'rgba(255,51,64,0.12)' : 'rgba(255,149,0,0.12)',
                 color: nearStop ? 'var(--ios-red)' : 'var(--ios-yellow)',
               }}>
                 {nearStop ? `⚠️ 接近停損線 ${fmt(stopLoss)} 元` : `🎯 接近止盈目標 ${fmt(takePrft)} 元`}
@@ -554,12 +554,12 @@ export default function Portfolio({ data }) {
             {/* Tags */}
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', fontSize: 10, marginBottom: 6 }}>
               {mktOpen && livePriceData[id]?.pct != null && (
-                <span style={{ background: livePriceData[id].pct >= 0 ? 'rgba(255,59,48,0.12)' : 'rgba(48,209,88,0.12)', color: livePriceData[id].pct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)', padding: '2px 7px', borderRadius: 5, fontWeight: 700, border: `0.5px solid ${livePriceData[id].pct >= 0 ? 'rgba(255,59,48,0.25)' : 'rgba(48,209,88,0.25)'}` }}>
+                <span style={{ background: livePriceData[id].pct >= 0 ? 'rgba(255,59,48,0.12)' : 'rgba(22,214,126,0.12)', color: livePriceData[id].pct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)', padding: '2px 7px', borderRadius: 5, fontWeight: 700, border: `0.5px solid ${livePriceData[id].pct >= 0 ? 'rgba(255,59,48,0.25)' : 'rgba(22,214,126,0.25)'}` }}>
                   今 {livePriceData[id].pct >= 0 ? '+' : ''}{(livePriceData[id].pct * 100).toFixed(2)}%
                 </span>
               )}
               {annReturn != null && (
-                <span style={{ background: annReturn >= 0 ? 'rgba(255,59,48,0.1)' : 'rgba(48,209,88,0.1)', color: annReturn >= 0 ? 'var(--ios-red)' : 'var(--ios-green)', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
+                <span style={{ background: annReturn >= 0 ? 'rgba(255,59,48,0.1)' : 'rgba(22,214,126,0.1)', color: annReturn >= 0 ? 'var(--ios-red)' : 'var(--ios-green)', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
                   年化 {annReturn >= 0 ? '+' : ''}{fmt(annReturn, 1)}%
                 </span>
               )}
@@ -570,7 +570,7 @@ export default function Portfolio({ data }) {
                 目標 {fmt(takePrft)}
               </span>
               {targets?.rr != null && (
-                <span style={{ background: targets.rr >= 2 ? 'rgba(48,209,88,0.12)' : 'rgba(142,142,147,0.12)', color: targets.rr >= 2 ? 'var(--ios-green)' : 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
+                <span style={{ background: targets.rr >= 2 ? 'rgba(22,214,126,0.12)' : 'rgba(142,142,147,0.12)', color: targets.rr >= 2 ? 'var(--ios-green)' : 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
                   風報比 {fmt(targets.rr, 1)}
                 </span>
               )}
