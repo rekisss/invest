@@ -1221,80 +1221,6 @@ function DailyActionPanel({ scan, prevScan, persistent }) {
   )
 }
 
-/* ── Real-time 盤中盯盤 panel ────────────────────────────────────── */
-function LiveMonitorPanel({ entryStocks, liveData, lastUpdate, loading, onSelect }) {
-  const liveEntries = useMemo(() => {
-    return entryStocks
-      .filter(s => liveData[s.stock_id])
-      .map(s => ({ ...s, _live: liveData[s.stock_id] }))
-      .sort((a, b) => (b._live.pct || 0) - (a._live.pct || 0))
-  }, [entryStocks, liveData])
-
-  return (
-    <div style={{
-      margin: '10px 16px 0',
-      background: 'linear-gradient(135deg, rgba(48,209,88,0.07) 0%, var(--ios-bg2) 65%)',
-      borderRadius: 16, padding: '12px 14px',
-      boxShadow: 'var(--shadow-card)',
-      borderLeft: '3px solid #30D158',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#30D158', letterSpacing: 0.7, textTransform: 'uppercase' }}>🟢 盤中即時盯盤</span>
-          {loading && <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>更新中…</span>}
-        </div>
-        {lastUpdate && (
-          <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>
-            {lastUpdate.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </span>
-        )}
-      </div>
-
-      {liveEntries.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--ios-label3)', textAlign: 'center', padding: '10px 0' }}>
-          {loading ? '報價載入中…' : '等待成交報價（市場剛開盤時可能需要幾分鐘）'}
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {liveEntries.map(s => {
-            const pct = s._live.pct || 0
-            const isUp = pct >= 0
-            const color = isUp ? '#FF453A' : '#30D158'
-            const bg = isUp ? 'rgba(255,69,58,0.10)' : 'rgba(48,209,88,0.10)'
-            const border = isUp ? 'rgba(255,69,58,0.22)' : 'rgba(48,209,88,0.22)'
-            return (
-              <button key={s.stock_id} onClick={() => onSelect(s)} style={{
-                background: bg, border: `0.5px solid ${border}`, borderRadius: 10,
-                padding: '6px 10px', cursor: 'pointer', textAlign: 'left',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)' }}>{s.stock_id}</span>
-                  <span style={{ fontSize: 11, color: 'var(--ios-label2)', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color, fontFamily: 'var(--font-mono)' }}>
-                    {s._live.price >= 100 ? s._live.price.toFixed(0) : s._live.price.toFixed(2)}
-                  </span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color }}>
-                    {pct >= 0 ? '+' : ''}{(pct * 100).toFixed(2)}%
-                  </span>
-                </div>
-                {s._live.time && (
-                  <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 1 }}>{s._live.time}</div>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      <div style={{ fontSize: 9.5, color: 'var(--ios-label4)', marginTop: 8 }}>
-        今日有進場訊號 · 報價 {liveEntries.length}/{entryStocks.length} 支 · TWSE 即時行情每 30 秒更新
-      </div>
-    </div>
-  )
-}
-
 /* ── Today vs Previous Day comparison ───────────────────────────── */
 function DateComparisonPanel({ scan, prevScan }) {
   const todayStocks = scan?.top_stocks || []
@@ -1789,7 +1715,7 @@ export default function Dashboard({ data, error }) {
       .filter(s => s.entry_signal)
       .map(s => String(s.stock_id))
   }, [data])
-  const { prices: liveData, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: liveLoading } = useLivePrices(liveStockIds)
+  const { prices: liveData } = useLivePrices(liveStockIds)
 
   if (error || !data || !data.dates || data.dates.length === 0) {
     return (
@@ -2525,17 +2451,6 @@ export default function Dashboard({ data, error }) {
         <InstitutionalLeaderboard stocks={allScanStocks} onSelect={setSelectedStock} />
         <SectorRotationTracker scans={data.scans} dates={sortedDates} />
         <DailyActionPanel scan={scan} prevScan={prevScan} persistent={persistent} />
-
-        {/* 即時盯盤 panel — only shown during Taiwan market hours */}
-        {mktOpen && (
-          <LiveMonitorPanel
-            entryStocks={entryStocks}
-            liveData={liveData}
-            lastUpdate={liveTime}
-            loading={liveLoading}
-            onSelect={setSelectedStock}
-          />
-        )}
 
         {/* Margin chip stats */}
         {(marginStats.clean_count > 0 || marginStats.surge_count > 0) && (
