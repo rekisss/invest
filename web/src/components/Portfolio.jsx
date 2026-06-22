@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
+import { useLivePrices } from '../hooks/useLivePrices'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 gsap.registerPlugin(useGSAP)
@@ -11,13 +12,6 @@ function loadPositions() {
 }
 function savePositions(p) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)) } catch {}
-}
-
-// Rough 上市/上櫃 split by stock-id range — picks which Yahoo suffix to try first.
-function isOTC(stockId) {
-  const n = parseInt(String(stockId), 10)
-  return (n >= 4200 && n <= 4999) || (n >= 5000 && n <= 5999) ||
-         (n >= 6000 && n <= 6999) || (n >= 8000 && n <= 8999) || (n >= 9200 && n <= 9999)
 }
 
 // Find the most recent scan object that actually has stock rows.
@@ -218,26 +212,6 @@ function CostAvgCalc({ buyPrice, qty }) {
   )
 }
 
-// Fetch latest price from Yahoo Finance for a Taiwan stock.
-// Tries .TW (上市) then .TWO (上櫃). Returns last close or null.
-async function fetchYahooPrice(stockId) {
-  const suffixes = isOTC(stockId) ? ['.TWO', '.TW'] : ['.TW', '.TWO']
-  for (const sfx of suffixes) {
-    try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${stockId}${sfx}?range=5d&interval=1d`
-      const r = await fetch(url)
-      if (!r.ok) continue
-      const j = await r.json()
-      const res = j?.chart?.result?.[0]
-      const closes = (res?.indicators?.quote?.[0]?.close || []).filter(v => v != null)
-      const live = res?.meta?.regularMarketPrice
-      const last = live ?? (closes.length ? closes[closes.length - 1] : null)
-      if (last != null && last > 0) return Math.round(last * 100) / 100
-    } catch { /* try next suffix */ }
-  }
-  return null
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 export default function Portfolio({ data }) {
   const [positions, setPositions] = useState(loadPositions)
@@ -246,13 +220,20 @@ export default function Portfolio({ data }) {
   const [form, setForm]           = useState(EMPTY_FORM)
   const [sortBy, setSortBy]       = useState('pnlPct')
   const [showChart, setShowChart] = useState(true)
-  const [livePrices, setLivePrices] = useState({})   // { stockId: price } from Yahoo
-  const [priceLoading, setPriceLoading] = useState(false)
   const [selectedStock, setSelectedStock] = useState(null)
   const [compareHistories, setCompareHistories] = useState(null)
   const [historyDates, setHistoryDates] = useState(null)
   const historiesRef = useRef(null)  // lazy-loaded stock_histories.json cache
   const containerRef = useRef(null)
+
+  // ── Live prices via TWSE 即時行情 (replaces Yahoo Finance one-shot fetch) ──
+  const posKey = Object.keys(positions).sort().join(',')
+  const posIds = useMemo(() => Object.keys(positions), [posKey])
+  const { prices: livePriceData, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: livePriceLoading } = useLivePrices(posIds)
+  const livePrices = useMemo(
+    () => Object.fromEntries(Object.entries(livePriceData).map(([id, d]) => [id, d.price])),
+    [livePriceData]
+  )
 
   useGSAP(() => {
     const el = containerRef.current
@@ -268,24 +249,7 @@ export default function Portfolio({ data }) {
     return () => io.disconnect()
   }, { scope: containerRef, dependencies: [Object.keys(positions).join(',')] })
 
-  // Fetch live prices from Yahoo whenever the set of held stocks changes.
-  const posKey = Object.keys(positions).sort().join(',')
-  useEffect(() => {
-    const ids = Object.keys(positions)
-    if (ids.length === 0) { setLivePrices({}); return }
-    let cancelled = false
-    setPriceLoading(true)
-    Promise.all(ids.map(async id => [id, await fetchYahooPrice(id)]))
-      .then(pairs => {
-        if (cancelled) return
-        const next = {}
-        for (const [id, px] of pairs) if (px != null) next[id] = px
-        setLivePrices(next)
-      })
-      .finally(() => { if (!cancelled) setPriceLoading(false) })
-    return () => { cancelled = true }
-  }, [posKey])
-
+  // ── CRUD helpers ──────────────────────────────────────────────────────────
   const update = p => { setPositions(p); savePositions(p) }
   const openAdd = () => { setForm(EMPTY_FORM); setEditId(null); setShowForm(true) }
   const openEdit = id => {
@@ -393,8 +357,26 @@ export default function Portfolio({ data }) {
       {/* ── Summary card ─────────────────────────────── */}
       {entries.length > 0 && (
         <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '14px 16px', marginBottom: 12, boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase' }}>持倉總覽</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase' }}>持倉總覽</div>
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 9999,
+                background: mktOpen ? 'rgba(48,209,88,0.13)' : 'rgba(148,163,184,0.1)',
+                color: mktOpen ? '#30d158' : 'var(--ios-label3)',
+                border: `0.5px solid ${mktOpen ? 'rgba(48,209,88,0.3)' : 'var(--ios-sep)'}`,
+              }}>
+                {mktSession === 'open' ? '🟢 盤中' : mktSession === 'pre' ? '⏰ 開盤前' : mktSession === 'weekend' ? '📆 假日' : '⚫ 已收盤'}
+              </span>
+              {mktOpen && liveTime && (
+                <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>
+                  {liveTime.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} 更新
+                </span>
+              )}
+              {mktOpen && livePriceLoading && !liveTime && (
+                <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>報價中…</span>
+              )}
+            </div>
             <button onClick={() => setShowChart(c => !c)} style={{ fontSize: 10, color: 'var(--ios-blue)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>
               {showChart ? '隱藏圖表' : '顯示圖表'}
             </button>
@@ -426,7 +408,7 @@ export default function Portfolio({ data }) {
                 成本 {fmtNum(Math.round(totalCost))}｜市值 {fmtNum(Math.round(totalValue))}
                 {priceCount < entries.length && (
                   <span style={{ color: 'var(--ios-yellow)', marginLeft: 6 }}>
-                    {priceLoading ? '報價載入中…' : `${entries.length - priceCount} 檔無報價`}
+                    {livePriceLoading ? '報價載入中…' : `${entries.length - priceCount} 檔無報價`}
                   </span>
                 )}
               </div>
@@ -529,7 +511,7 @@ export default function Portfolio({ data }) {
                     <div style={{ fontSize: 11, color: pnlColor }}>{pnlAmt >= 0 ? '+' : ''}{fmtNum(Math.round(pnlAmt))} 元</div>
                   </>
                 ) : (
-                  <div style={{ fontSize: 11, color: 'var(--ios-label4)' }}>{priceLoading ? '報價載入中…' : '無即時報價'}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ios-label4)' }}>{livePriceLoading ? '報價載入中…' : '無即時報價'}</div>
                 )}
               </div>
             </div>
@@ -571,6 +553,11 @@ export default function Portfolio({ data }) {
 
             {/* Tags */}
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', fontSize: 10, marginBottom: 6 }}>
+              {mktOpen && livePriceData[id]?.pct != null && (
+                <span style={{ background: livePriceData[id].pct >= 0 ? 'rgba(255,59,48,0.12)' : 'rgba(48,209,88,0.12)', color: livePriceData[id].pct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)', padding: '2px 7px', borderRadius: 5, fontWeight: 700, border: `0.5px solid ${livePriceData[id].pct >= 0 ? 'rgba(255,59,48,0.25)' : 'rgba(48,209,88,0.25)'}` }}>
+                  今 {livePriceData[id].pct >= 0 ? '+' : ''}{(livePriceData[id].pct * 100).toFixed(2)}%
+                </span>
+              )}
               {annReturn != null && (
                 <span style={{ background: annReturn >= 0 ? 'rgba(255,59,48,0.1)' : 'rgba(48,209,88,0.1)', color: annReturn >= 0 ? 'var(--ios-red)' : 'var(--ios-green)', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
                   年化 {annReturn >= 0 ? '+' : ''}{fmt(annReturn, 1)}%
