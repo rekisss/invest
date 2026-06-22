@@ -250,14 +250,60 @@ const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
           {isBull ? '偏多 ↑' : isBear ? '偏空 ↓' : '中性 →'}
         </span>
         {winRate != null && winRate > 0 && (
-          <div style={{ fontSize: 11, color: 'var(--ios-label2)', marginTop: 3 }}>
+          <div style={{ fontSize: 11, color: 'var(--ios-label2)', marginTop: 3, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
             勝率 ~{winRate > 1 ? Math.round(winRate) : Math.round(winRate * 100)}%
+            <InfoTip term="勝率" />
           </div>
         )}
       </div>
     </div>
   )
 })
+
+/* ── Info tooltip (tap-to-explain, mobile-friendly) ──────────────── */
+const GLOSSARY = {
+  '勝率':     '歷史上出現同類市場訊號後，隔日上漲的比例。僅供參考，非未來保證。',
+  '外資期貨': '外資在台指期的未平倉淨額（口數）。紅色(正)＝偏多佈局，綠色(負)＝偏空避險。',
+  '夜盤':     '台指期夜盤相對日盤收盤的漲跌點數，反映隔日開盤前的情緒。',
+  'VIX':      '美股恐慌指數。>25 市場恐慌（高風險），18~25 偏謹慎，<18 情緒穩定。',
+  '日曆風險': '當日有重大事件（如 FOMC、CPI、台股結算）可能造成波動。',
+}
+
+function InfoTip({ term, text }) {
+  const [open, setOpen] = useState(false)
+  const tip = text || GLOSSARY[term]
+  if (!tip) return null
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(o => !o) }}
+        aria-label={`說明：${term}`}
+        style={{
+          width: 14, height: 14, borderRadius: 9999, border: 'none', cursor: 'pointer',
+          background: 'var(--ios-fill3)', color: 'var(--ios-label3)',
+          fontSize: 9, fontWeight: 800, lineHeight: 1, padding: 0, marginLeft: 4,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}
+      >i</button>
+      {open && (
+        <>
+          <span
+            onClick={(e) => { e.stopPropagation(); setOpen(false) }}
+            style={{ position: 'fixed', inset: 0, zIndex: 40 }}
+          />
+          <span style={{
+            position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)',
+            zIndex: 41, width: 200, maxWidth: '70vw',
+            background: 'var(--ios-bg3)', border: '0.5px solid var(--ios-sep)',
+            borderRadius: 10, padding: '8px 10px', boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+            fontSize: 11, lineHeight: 1.55, color: 'var(--ios-label)', fontWeight: 400,
+            textAlign: 'left', whiteSpace: 'normal',
+          }}>{tip}</span>
+        </>
+      )}
+    </span>
+  )
+}
 
 /* ── Risk Card ───────────────────────────────────────────────────── */
 function RiskCard({ risk, marketData, calendarRisk }) {
@@ -301,7 +347,9 @@ function RiskCard({ risk, marketData, calendarRisk }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         {rows.map(([label, val, color]) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: 'var(--ios-label2)' }}>{label}</span>
+            <span style={{ fontSize: 11, color: 'var(--ios-label2)', display: 'inline-flex', alignItems: 'center' }}>
+              {label}{GLOSSARY[label] && <InfoTip term={label} />}
+            </span>
             <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color }}>{val}</span>
           </div>
         ))}
@@ -311,7 +359,18 @@ function RiskCard({ risk, marketData, calendarRisk }) {
 }
 
 /* ── Market Signals Card ─────────────────────────────────────────── */
-function MarketSignalsCard({ marketData }) {
+// Format an ISO timestamp to HH:MM in Taipei time, with date if not today
+function fmtAsof(iso) {
+  if (!iso) return null
+  try {
+    return new Intl.DateTimeFormat('zh-TW', {
+      timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(new Date(iso))
+  } catch { return null }
+}
+
+function MarketSignalsCard({ marketData, asof }) {
   if (!marketData) return null
 
   const fmt = (v, digits = 1) => {
@@ -339,7 +398,10 @@ function MarketSignalsCard({ marketData }) {
 
   return (
     <div className="glass-panel" style={{ padding: '12px 14px' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>美股夜盤 · 籌碼</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', textTransform: 'uppercase', letterSpacing: 0.8 }}>美股夜盤 · 籌碼</span>
+        {fmtAsof(asof) && <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>更新 {fmtAsof(asof)}</span>}
+      </div>
       <div style={{ display: 'flex', gap: 10 }}>
         {usRows.length > 0 && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -369,10 +431,28 @@ function MarketSignalsCard({ marketData }) {
 }
 
 /* ── Scenario Block ──────────────────────────────────────────────── */
+// Bold key market terms so the eye catches them faster
+const SCENARIO_KEYWORDS = [
+  '區間內震盪','區間震盪','箱型整理','族群輪動','類股輪動','輪動','震盪',
+  '突破','跌破','站上','拉回','回測','反彈','支撐','壓力','量能','爆量','量縮',
+  '偏多','偏空','觀望','開高','開低','收紅','收黑','高檔','低檔','轉強','轉弱',
+]
+const KW_RE = new RegExp(`(${SCENARIO_KEYWORDS.sort((a, b) => b.length - a.length).join('|')})`, 'g')
+function highlightScenario(text) {
+  if (!text) return text
+  const parts = text.split(KW_RE)
+  return parts.map((p, i) =>
+    SCENARIO_KEYWORDS.includes(p)
+      ? <strong key={i} style={{ color: 'var(--ios-blue)', fontWeight: 700 }}>{p}</strong>
+      : p
+  )
+}
+
 function ScenarioBlock({ scenario, prob }) {
   const pct = Math.round((prob ?? 0.5) * 100)
   const isBull = pct >= 55, isBear = pct <= 45
-  const accentColor = isBull ? '#30D158' : isBear ? '#FF453A' : '#FF9F0A'
+  // Taiwan convention: 偏多=紅, 偏空=綠
+  const accentColor = isBull ? '#FF453A' : isBear ? '#30D158' : '#FF9F0A'
 
   if (!scenario?.main_scenario && !scenario?.best_strategy) return null
 
@@ -385,7 +465,7 @@ function ScenarioBlock({ scenario, prob }) {
         </div>
       )}
       {scenario.main_scenario && (
-        <div style={{ fontSize: 14, color: 'var(--ios-label)', lineHeight: 1.65, marginBottom: 10 }}>{scenario.main_scenario}</div>
+        <div style={{ fontSize: 14, color: 'var(--ios-label)', lineHeight: 1.65, marginBottom: 10 }}>{highlightScenario(scenario.main_scenario)}</div>
       )}
       {scenario.best_strategy && (
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(10,132,255,0.14)', borderRadius: 8, padding: '6px 12px', fontSize: 13, color: '#0A84FF', fontWeight: 600, marginBottom: scenario.forbidden_actions?.length ? 10 : 0 }}>
@@ -855,7 +935,7 @@ export default function Overview({ data, error }) {
         <LiveMarketStrip />
 
         {/* Row 2: US Market + Risk Signals */}
-        <MarketSignalsCard marketData={marketData} />
+        <MarketSignalsCard marketData={marketData} asof={pred?.generated_at} />
 
         {/* Row 3: Scenario */}
         {(scenario?.main_scenario || scenario?.best_strategy) && (

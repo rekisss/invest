@@ -311,6 +311,7 @@ input, textarea { font-family: var(--font-sans); }
 
 .ios-tab-btn {
   flex: 1;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
