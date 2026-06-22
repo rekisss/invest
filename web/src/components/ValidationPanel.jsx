@@ -1,6 +1,10 @@
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import { useGSAP } from '@gsap/react'
 import gsap from 'gsap'
+import { useLivePrices, isTWSEOpen } from '../hooks/useLivePrices'
+import StockDetailModal from './StockDetailModal'
+
+const BASE = import.meta.env.BASE_URL || '/'
 
 const GRADE_CFG = {
   A: { color: '#FFD60A', bg: 'rgba(255,214,10,0.15)', border: 'rgba(255,214,10,0.35)', label: 'A' },
@@ -56,19 +60,36 @@ function parseSignals(entry_reason) {
   return [...pri, ...rest].slice(0, 4)
 }
 
-function StockCard({ stock, rank, style }) {
+function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
   const cfg = GRADE_CFG[stock.grade] || GRADE_CFG.D
   const signals = parseSignals(stock.entry_reason)
   const r1 = stock.day_return
   const r5 = stock.return_5d
   const hasExit = stock.base_exit_signal
 
+  const liveReturn = showLive && livePrice != null && stock.close > 0
+    ? (livePrice - stock.close) / stock.close
+    : null
+
+  const [pressed, setPressed] = useState(false)
+
   return (
-    <div style={{
-      background: 'var(--ios-bg2)', borderRadius: 14,
-      border: `0.5px solid ${hasExit ? 'rgba(255,69,58,0.4)' : 'var(--ios-sep)'}`,
-      padding: '11px 13px', ...style,
-    }}>
+    <div
+      onClick={onClick}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
+      onTouchStart={() => setPressed(true)}
+      onTouchEnd={() => setPressed(false)}
+      style={{
+        background: 'var(--ios-bg2)', borderRadius: 14,
+        border: `0.5px solid ${hasExit ? 'rgba(255,69,58,0.4)' : 'var(--ios-sep)'}`,
+        padding: '11px 13px', cursor: onClick ? 'pointer' : 'default',
+        transform: pressed ? 'scale(0.975)' : 'scale(1)',
+        transition: 'transform 0.15s',
+        ...style,
+      }}
+    >
       {/* Row 1: rank + grade + name + price */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
         <span style={{ fontSize: 10, color: 'var(--ios-label4)', minWidth: 16, textAlign: 'center', fontWeight: 700 }}>{rank}</span>
@@ -82,7 +103,7 @@ function StockCard({ stock, rank, style }) {
           <span style={{ fontSize: 12, color: 'var(--ios-label2)', marginLeft: 5, fontWeight: 400 }}>{stock.name || ''}</span>
         </div>
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ios-label)', flexShrink: 0 }}>
-          ${fmtP(stock.close)}
+          {showLive && livePrice != null ? `$${fmtP(livePrice)}` : `$${fmtP(stock.close)}`}
         </span>
       </div>
 
@@ -101,11 +122,19 @@ function StockCard({ stock, rank, style }) {
 
         {/* Return badges */}
         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
-          {/* Day return */}
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 7.5, color: 'var(--ios-label4)', marginBottom: 1 }}>當日</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: retColor(r1) }}>{fmtPct(r1)}</div>
-          </div>
+          {/* Live return (when market open and histDate == null) */}
+          {showLive && liveReturn != null ? (
+            <div style={{ textAlign: 'center', minWidth: 42 }}>
+              <div style={{ fontSize: 7.5, color: 'var(--ios-label4)', marginBottom: 1 }}>今→</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: retColor(liveReturn) }}>{fmtPct(liveReturn)}</div>
+            </div>
+          ) : (
+            /* Day return */
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 7.5, color: 'var(--ios-label4)', marginBottom: 1 }}>當日</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: retColor(r1) }}>{fmtPct(r1)}</div>
+            </div>
+          )}
           {/* 5D return */}
           <div style={{ textAlign: 'center', minWidth: 42 }}>
             <div style={{ fontSize: 7.5, color: 'var(--ios-label4)', marginBottom: 1 }}>5日</div>
@@ -172,9 +201,33 @@ function GradeRow({ grade, stats }) {
   )
 }
 
+const HIST_KEY = 'tw_val_history'
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HIST_KEY) || '{}') } catch { return {} }
+}
+
+function saveHistory(dateStr, top20) {
+  try {
+    const existing = loadHistory()
+    existing[dateStr] = top20
+    // Keep only last 30 dates to avoid bloat
+    const keys = Object.keys(existing).sort().slice(-30)
+    const trimmed = {}
+    for (const k of keys) trimmed[k] = existing[k]
+    localStorage.setItem(HIST_KEY, JSON.stringify(trimmed))
+  } catch { /* ignore quota errors */ }
+}
+
 export default function ValidationPanel({ data }) {
-  const listRef  = useRef(null)
-  const statsRef = useRef(null)
+  const listRef      = useRef(null)
+  const statsRef     = useRef(null)
+  const historiesRef = useRef(null)
+  const winRateRef   = useRef(null)
+  const avgR5Ref     = useRef(null)
+
+  const [selectedStock, setSelectedStock] = useState(null)
+  const [histDate, setHistDate] = useState(null)
 
   const { top20, scanDate, batchStats, byGrade, byDate, summary, sortedDates } = useMemo(() => {
     if (!data?.scans || !data?.dates) {
@@ -182,12 +235,9 @@ export default function ValidationPanel({ data }) {
     }
     const { scans, dates, aggregateLatest } = data
 
-    // Use scans[dates[0]].top_stocks for correct normalized grades (aggregateLatest
-    // marks nearly all TOP 20 as grade A, bypassing the per-stock CSV grades).
     const top20   = scans[dates[0]]?.top_stocks?.slice(0, 20) || aggregateLatest?.top_stocks || []
     const scanDate = dates[0] || aggregateLatest?.date?.slice(0, 10)
 
-    // Batch stats for the latest top 20
     const bWith = top20.filter(s => s.return_5d != null)
     const batchStats = {
       total:   top20.length,
@@ -197,7 +247,6 @@ export default function ValidationPanel({ data }) {
       exits:   top20.filter(s => s.base_exit_signal).length,
     }
 
-    // Historical: all top_stocks across all dates
     const allObs = []
     const sortedDates = [...dates].reverse()
     for (const date of dates) {
@@ -206,7 +255,6 @@ export default function ValidationPanel({ data }) {
       }
     }
 
-    // Grade breakdown (5d)
     const byG = {}
     for (const o of allObs.filter(o => o.r5d != null)) {
       const g = o.grade || 'D'
@@ -216,7 +264,6 @@ export default function ValidationPanel({ data }) {
       byG[g].returns.push(o.r5d)
     }
 
-    // Per-date chart data
     const byDate = {}
     for (const date of sortedDates) {
       const top = (scans[date]?.top_stocks || []).filter(s => s.return_5d != null)
@@ -240,6 +287,36 @@ export default function ValidationPanel({ data }) {
     return { top20, scanDate, batchStats, byGrade: byG, byDate, summary, sortedDates }
   }, [data])
 
+  // Persist top20 to localStorage
+  useEffect(() => {
+    if (top20.length > 0 && scanDate) {
+      const hist = loadHistory()
+      if (!hist[scanDate]) {
+        saveHistory(scanDate, top20)
+      }
+    }
+  }, [top20, scanDate])
+
+  // Saved history dates for the pill row
+  const [histDates, setHistDates] = useState([])
+  useEffect(() => {
+    const hist = loadHistory()
+    setHistDates(Object.keys(hist).sort().reverse())
+  }, [top20, scanDate])
+
+  // Determine which stocks to show
+  const displayStocks = useMemo(() => {
+    if (histDate == null) return top20
+    const hist = loadHistory()
+    return hist[histDate] || []
+  }, [histDate, top20])
+
+  // Live prices (only for current scan, not history)
+  const marketOpen = isTWSEOpen()
+  const liveIds = histDate == null ? top20.map(s => String(s.stock_id)) : []
+  const { prices: livePrices } = useLivePrices(liveIds)
+  const showLive = histDate == null && marketOpen
+
   // Animate stock cards in with stagger
   useGSAP(() => {
     if (!listRef.current) return
@@ -249,7 +326,16 @@ export default function ValidationPanel({ data }) {
       { opacity: 0, y: 18 },
       { opacity: 1, y: 0, duration: 0.35, stagger: 0.045, ease: 'power2.out', clearProps: 'transform' }
     )
-  }, { scope: listRef, dependencies: [top20] })
+  }, { scope: listRef, dependencies: [displayStocks] })
+
+  // Fade animation on histDate change
+  useGSAP(() => {
+    if (!listRef.current) return
+    gsap.fromTo(listRef.current,
+      { opacity: 0 },
+      { opacity: 1, duration: 0.25, ease: 'power1.out' }
+    )
+  }, { scope: listRef, dependencies: [histDate] })
 
   // Animate summary stats fade in
   useGSAP(() => {
@@ -260,56 +346,170 @@ export default function ValidationPanel({ data }) {
     )
   }, { scope: statsRef, dependencies: [summary] })
 
+  // GSAP number counter for winRate and avgR5
+  useEffect(() => {
+    if (winRateRef.current && summary.winRate != null) {
+      const obj = { val: 0 }
+      gsap.to(obj, {
+        val: summary.winRate * 100,
+        duration: 0.8,
+        ease: 'power2.out',
+        snap: { val: 0.1 },
+        onUpdate: () => { if (winRateRef.current) winRateRef.current.textContent = obj.val.toFixed(0) + '%' },
+      })
+    }
+  }, [summary.winRate])
+
+  useEffect(() => {
+    if (avgR5Ref.current && summary.avgR5 != null) {
+      const obj = { val: 0 }
+      gsap.to(obj, {
+        val: summary.avgR5 * 100,
+        duration: 0.8,
+        ease: 'power2.out',
+        snap: { val: 0.01 },
+        onUpdate: () => {
+          if (avgR5Ref.current) {
+            const v = obj.val
+            avgR5Ref.current.textContent = (v >= 0 ? '+' : '') + v.toFixed(1) + '%'
+          }
+        },
+      })
+    }
+  }, [summary.avgR5])
+
+  // Open stock detail modal
+  const handleStockClick = async (stock) => {
+    const baseStock = {
+      ...stock,
+      stock_id: stock.stock_id,
+      name: stock.name,
+      close: livePrices[String(stock.stock_id)]?.price ?? stock.close,
+      price_history_loading: true,
+    }
+    setSelectedStock(baseStock)
+
+    try {
+      if (!historiesRef.current) {
+        const base = BASE.endsWith('/') ? BASE : BASE + '/'
+        const resp = await fetch(`${base}stock_histories.json`)
+        if (resp.ok) {
+          historiesRef.current = await resp.json()
+        } else {
+          historiesRef.current = {}
+        }
+      }
+      const history = historiesRef.current[String(stock.stock_id)] || null
+      setSelectedStock(prev => prev ? { ...prev, price_history: history, price_history_loading: false } : null)
+    } catch {
+      setSelectedStock(prev => prev ? { ...prev, price_history: null, price_history_loading: false } : null)
+    }
+  }
+
   if (!data) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--ios-label3)' }}>載入中⋯</div>
   )
+
+  const isViewingHistory = histDate != null
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '0 14px 32px' }}>
 
       {/* ── 最新精選 TOP 20 ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, marginBottom: 10 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--ios-label)' }}>精選 TOP 20</span>
-        {scanDate && (
-          <span style={{ fontSize: 10, background: 'rgba(10,132,255,0.15)', color: '#0A84FF', borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>
-            {scanDate}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, marginBottom: 8 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--ios-label)' }}>
+          {isViewingHistory ? '查歷史' : '精選 TOP 20'}
+        </span>
+        {(isViewingHistory ? histDate : scanDate) && (
+          <span style={{ fontSize: 10, background: isViewingHistory ? 'rgba(255,159,10,0.15)' : 'rgba(10,132,255,0.15)', color: isViewingHistory ? '#FF9F0A' : '#0A84FF', borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>
+            {isViewingHistory ? histDate : scanDate}
           </span>
         )}
-        {batchStats.exits > 0 && (
+        {!isViewingHistory && batchStats.exits > 0 && (
           <span style={{ fontSize: 9, color: '#FF453A', background: 'rgba(255,69,58,0.12)', borderRadius: 5, padding: '2px 6px', marginLeft: 'auto' }}>
             ⚠️ {batchStats.exits} 檔出場信號
           </span>
         )}
+        {isViewingHistory && (
+          <button
+            onClick={() => setHistDate(null)}
+            style={{ marginLeft: 'auto', fontSize: 10, color: '#0A84FF', background: 'rgba(10,132,255,0.12)', border: '0.5px solid rgba(10,132,255,0.3)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}
+          >
+            回最新
+          </button>
+        )}
       </div>
 
+      {/* History date pills */}
+      {histDates.length > 0 && (
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', marginBottom: 10 }}>
+          <div style={{ display: 'flex', gap: 6, paddingBottom: 2, width: 'max-content' }}>
+            <button
+              onClick={() => setHistDate(null)}
+              style={{
+                fontSize: 10, padding: '4px 10px', borderRadius: 20, border: '0.5px solid',
+                cursor: 'pointer', fontWeight: 600, flexShrink: 0,
+                background: histDate == null ? 'rgba(10,132,255,0.18)' : 'var(--ios-fill3)',
+                borderColor: histDate == null ? 'rgba(10,132,255,0.5)' : 'var(--ios-sep)',
+                color: histDate == null ? '#0A84FF' : 'var(--ios-label3)',
+              }}
+            >最新</button>
+            {histDates.map(d => (
+              <button
+                key={d}
+                onClick={() => setHistDate(d)}
+                style={{
+                  fontSize: 10, padding: '4px 10px', borderRadius: 20, border: '0.5px solid',
+                  cursor: 'pointer', fontWeight: 600, flexShrink: 0,
+                  background: histDate === d ? 'rgba(255,159,10,0.18)' : 'var(--ios-fill3)',
+                  borderColor: histDate === d ? 'rgba(255,159,10,0.5)' : 'var(--ios-sep)',
+                  color: histDate === d ? '#FF9F0A' : 'var(--ios-label3)',
+                }}
+              >{d.slice(5)}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Batch summary row */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, background: 'var(--ios-bg2)', borderRadius: 14, padding: '10px 14px', border: '0.5px solid var(--ios-sep)' }}>
-        <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>本批勝率</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: winColor(batchStats.winRate) }}>{fmtRate(batchStats.winRate)}</div>
+      {!isViewingHistory && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, background: 'var(--ios-bg2)', borderRadius: 14, padding: '10px 14px', border: '0.5px solid var(--ios-sep)' }}>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>本批勝率</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: winColor(batchStats.winRate) }}>{fmtRate(batchStats.winRate)}</div>
+          </div>
+          <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均5日報酬</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: retColor(batchStats.avgR5d) }}>{fmtPct(batchStats.avgR5d)}</div>
+          </div>
+          <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>精選檔數</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ios-label)' }}>{batchStats.total}</div>
+          </div>
         </div>
-        <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
-        <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均5日報酬</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: retColor(batchStats.avgR5d) }}>{fmtPct(batchStats.avgR5d)}</div>
-        </div>
-        <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
-        <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>精選檔數</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ios-label)' }}>{batchStats.total}</div>
-        </div>
-      </div>
+      )}
 
       {/* Stock cards */}
       <div ref={listRef} style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 18 }}>
-        {top20.length === 0 && (
+        {displayStocks.length === 0 && (
           <div style={{ textAlign: 'center', color: 'var(--ios-label3)', fontSize: 13, padding: '24px 0' }}>尚無精選資料</div>
         )}
-        {top20.map((s, i) => (
-          <div key={`${s.stock_id}-${i}`} className="stock-card" style={{ opacity: 0 }}>
-            <StockCard stock={s} rank={i + 1} />
-          </div>
-        ))}
+        {displayStocks.map((s, i) => {
+          const livePrice = showLive ? (livePrices[String(s.stock_id)]?.price ?? null) : null
+          return (
+            <div key={`${s.stock_id}-${i}`} className="stock-card" style={{ opacity: 0 }}>
+              <StockCard
+                stock={s}
+                rank={i + 1}
+                livePrice={livePrice}
+                showLive={showLive}
+                onClick={() => handleStockClick(s)}
+              />
+            </div>
+          )
+        })}
       </div>
 
       {/* ── 歷史驗證 ── */}
@@ -322,12 +522,22 @@ export default function ValidationPanel({ data }) {
         {[
           { label: '驗證批次', value: summary.scans || 0 },
           { label: '股次',     value: summary.total || 0 },
-          { label: '歷史勝率', value: fmtRate(summary.winRate), color: winColor(summary.winRate) },
-          { label: '均5日報',  value: fmtPct(summary.avgR5),   color: retColor(summary.avgR5) },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="stat-block" style={{ flex: 1, background: 'var(--ios-bg2)', borderRadius: 10, padding: '8px 6px', border: '0.5px solid var(--ios-sep)', textAlign: 'center', opacity: 0 }}>
-            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 3 }}>{label}</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: color || 'var(--ios-label)', lineHeight: 1 }}>{value}</div>
+          { label: '歷史勝率', value: null, color: winColor(summary.winRate), ref: winRateRef },
+          { label: '均5日報',  value: null, color: retColor(summary.avgR5),   ref: avgR5Ref },
+        ].map(({ label, value, color, ref: elRef }) => (
+          <div key={label} className="stat-block" style={{
+            flex: 1, background: 'var(--ios-bg2)', borderRadius: 10,
+            padding: '8px 6px', border: '0.5px solid var(--ios-sep)',
+            textAlign: 'center', opacity: 0, overflow: 'hidden',
+          }}>
+            <div style={{ fontSize: 7, color: 'var(--ios-label4)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</div>
+            {elRef ? (
+              <div ref={elRef} style={{ fontSize: 13, fontWeight: 700, color: color || 'var(--ios-label)', lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {label === '歷史勝率' ? fmtRate(summary.winRate) : fmtPct(summary.avgR5)}
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, fontWeight: 700, color: color || 'var(--ios-label)', lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+            )}
           </div>
         ))}
       </div>
@@ -352,6 +562,14 @@ export default function ValidationPanel({ data }) {
           <div style={{ textAlign: 'center', color: 'var(--ios-label3)', fontSize: 11, padding: '8px 0' }}>尚無等級資料</div>
         )}
       </div>
+
+      {/* Stock detail modal */}
+      {selectedStock && (
+        <StockDetailModal
+          stock={selectedStock}
+          onClose={() => setSelectedStock(null)}
+        />
+      )}
 
     </div>
   )

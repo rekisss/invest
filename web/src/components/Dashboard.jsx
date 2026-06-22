@@ -267,9 +267,12 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
                   {s.stock_id}
                 </span>
-                <span style={{ fontSize: 13, color: 'var(--ios-label)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {s.name}
-                  {notionMap[s.stock_id] && <span style={{ fontSize: 9, color: 'var(--ios-blue)', fontWeight: 700, marginLeft: 4 }}>N</span>}
+                <span style={{ fontSize: 13, color: 'var(--ios-label)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {s.name}
+                    {notionMap[s.stock_id] && <span style={{ fontSize: 9, color: 'var(--ios-blue)', fontWeight: 700, marginLeft: 4 }}>N</span>}
+                  </span>
+                  {s.industry_category && <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>{s.industry_category}</span>}
                 </span>
                 <GradeBadge grade={grade} />
                 {scorePct >= 90 && (
@@ -566,7 +569,9 @@ function BBPositionBar({ bbPctB, width = 56 }) {
 
 /* ── Feature 3: Sector Heatmap ───────────────────────────────────── */
 function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
-  const sectors = useMemo(() => {
+  const [heatTab, setHeatTab] = useState('strong')
+
+  const allSectors = useMemo(() => {
     const map = {}
     for (const s of stocks) {
       const sec = s.industry_category || '其他'
@@ -592,54 +597,96 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
         avgMarketRs: d.count > 0 ? d.totalMarketRs / d.count : 0,
         breadth60: d.breadth60Count > 0 ? d.totalBreadth60 / d.breadth60Count : 0,
       }))
-      .sort((a, b) => b.avgMarketRs - a.avgMarketRs || b.entries - a.entries)
       .slice(0, 30)
   }, [stocks])
 
-  if (sectors.length === 0) return null
-  const maxRs = Math.max(...sectors.map(s => s.avgMarketRs), 1)
+  const strongSectors = useMemo(() =>
+    allSectors.filter(s => s.avgMarketRs >= 50).sort((a, b) => b.avgMarketRs - a.avgMarketRs),
+    [allSectors]
+  )
+  const weakSectors = useMemo(() =>
+    allSectors.filter(s => s.avgMarketRs < 50).sort((a, b) => a.avgMarketRs - b.avgMarketRs),
+    [allSectors]
+  )
+
+  if (allSectors.length === 0) return null
+
+  const sectors = heatTab === 'strong' ? strongSectors : weakSectors
+  const maxEntries = Math.max(...sectors.map(s => s.entries), 1)
 
   return (
     <div style={{ padding: '12px 16px 8px' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 10 }}>
-        🌡 族群輪動熱圖（依市場RS均值排序）
-        {activeSector && (
-          <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--ios-blue)', fontWeight: 600 }}>
-            · 已篩：{activeSector}
-          </span>
-        )}
+      {/* Header + tabs */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.7, textTransform: 'uppercase', flex: 1 }}>
+          🌡 族群輪動熱圖
+          {activeSector && (
+            <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--ios-blue)', fontWeight: 600 }}>
+              · 已篩：{activeSector}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          <button
+            onClick={() => setHeatTab('strong')}
+            style={{
+              fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 8, border: 'none',
+              cursor: 'pointer', transition: 'all 0.15s',
+              background: heatTab === 'strong' ? 'rgba(255,159,10,0.22)' : 'var(--ios-fill3)',
+              color: heatTab === 'strong' ? '#FF9F0A' : 'var(--ios-label3)',
+              outline: heatTab === 'strong' ? '1px solid rgba(255,159,10,0.5)' : '1px solid transparent',
+            }}
+          >強勢族群</button>
+          <button
+            onClick={() => setHeatTab('weak')}
+            style={{
+              fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 8, border: 'none',
+              cursor: 'pointer', transition: 'all 0.15s',
+              background: heatTab === 'weak' ? 'rgba(90,200,250,0.16)' : 'var(--ios-fill3)',
+              color: heatTab === 'weak' ? '#5AC8FA' : 'var(--ios-label3)',
+              outline: heatTab === 'weak' ? '1px solid rgba(90,200,250,0.4)' : '1px solid transparent',
+            }}
+          >弱勢族群</button>
+        </div>
       </div>
+
+      {/* Tile grid */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {sectors.map(sec => {
-          const rsIntensity = sec.avgMarketRs / maxRs
-          const hasEntry = sec.entries > 0
           const isSelected = activeSector === sec.name
-          const bg = isSelected
-            ? 'rgba(10,132,255,0.18)'
-            : rsIntensity > 0.7
-              ? `rgba(48,209,88,${0.08 + rsIntensity * 0.20})`
-              : rsIntensity > 0.4
-                ? `rgba(10,132,255,${0.06 + rsIntensity * 0.12})`
-                : 'rgba(148,163,184,0.05)'
-          const textColor = isSelected ? '#0A84FF' : rsIntensity > 0.7 ? '#30D158' : rsIntensity > 0.4 ? '#5AC8FA' : 'var(--ios-label3)'
-          const borderColor = isSelected
-            ? 'rgba(10,132,255,0.6)'
-            : rsIntensity > 0.7
-              ? `rgba(48,209,88,${0.15 + rsIntensity * 0.35})`
-              : rsIntensity > 0.4
-                ? `rgba(10,132,255,${0.15 + rsIntensity * 0.25})`
-                : 'var(--ios-sep)'
+          const hasEntry = sec.entries > 0
+          // Width scale: larger tiles for sectors with more entries (mini treemap)
+          const tileScale = Math.max(1, sec.entries / Math.max(maxEntries, 1))
+          const minW = heatTab === 'strong' ? Math.round(80 + tileScale * 30) : 80
+
+          let bg, textColor, borderColor
+          if (isSelected) {
+            bg = 'rgba(10,132,255,0.18)'; textColor = '#0A84FF'; borderColor = 'rgba(10,132,255,0.6)'
+          } else if (heatTab === 'strong') {
+            const t = sec.avgMarketRs / 100
+            bg = `rgba(255,${Math.round(120 - t * 70)},10,${0.10 + t * 0.22})`
+            textColor = t > 0.75 ? '#FF453A' : t > 0.5 ? '#FF9F0A' : '#FFD60A'
+            borderColor = `rgba(255,${Math.round(120 - t * 70)},10,${0.25 + t * 0.35})`
+          } else {
+            const t = 1 - sec.avgMarketRs / 50
+            bg = `rgba(90,${Math.round(150 + t * 55)},250,${0.06 + t * 0.12})`
+            textColor = t > 0.6 ? '#5AC8FA' : 'var(--ios-label3)'
+            borderColor = `rgba(90,200,250,${0.10 + t * 0.20})`
+          }
+
           return (
             <div key={sec.name} onClick={() => onSectorClick && onSectorClick(sec.name)} style={{
-              padding: '6px 10px', borderRadius: 10,
+              padding: heatTab === 'strong' ? '8px 12px' : '6px 10px',
+              borderRadius: 10,
               background: bg, border: `0.5px solid ${borderColor}`,
-              display: 'flex', flexDirection: 'column', gap: 2, minWidth: 88,
+              display: 'flex', flexDirection: 'column', gap: 2,
+              minWidth: minW,
               cursor: onSectorClick ? 'pointer' : 'default',
               transform: isSelected ? 'scale(1.04)' : 'none',
               transition: 'all 0.15s',
             }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: textColor, lineHeight: 1.3, letterSpacing: '-0.1px' }}>
-                {sec.name.length > 6 ? sec.name.slice(0, 6) + '…' : sec.name}
+              <div style={{ fontSize: heatTab === 'strong' ? 12 : 11, fontWeight: 600, color: textColor, lineHeight: 1.3, letterSpacing: '-0.1px' }}>
+                {sec.name.length > 7 ? sec.name.slice(0, 7) + '…' : sec.name}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 {sec.avgMarketRs > 0 && (
@@ -649,12 +696,15 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
                   <span style={{ fontSize: 9, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)' }}>{Math.round(sec.breadth60)}%</span>
                 )}
                 {hasEntry && (
-                  <span style={{ fontSize: 9, color: '#30D158', fontWeight: 700 }}>↑{sec.entries}</span>
+                  <span style={{ fontSize: 9, color: heatTab === 'strong' ? '#FF9F0A' : '#5AC8FA', fontWeight: 700 }}>↑{sec.entries}</span>
                 )}
               </div>
             </div>
           )
         })}
+        {sectors.length === 0 && (
+          <div style={{ fontSize: 11, color: 'var(--ios-label4)', padding: '12px 0' }}>無資料</div>
+        )}
       </div>
       <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 8 }}>RS=市場RS均值（跨類股百分位）· %=60日MA上方比例 · ↑=入榜支數 · 點擊族群篩選</div>
     </div>
