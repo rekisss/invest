@@ -383,6 +383,7 @@ export default function Portfolio({ data }) {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
+    <>
     <div ref={containerRef} style={{ padding: '0 14px 80px', overflowY: 'auto', height: '100%', WebkitOverflowScrolling: 'touch' }}>
       <style>{`
         @keyframes rowIn   { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
@@ -695,17 +696,19 @@ export default function Portfolio({ data }) {
         }}>＋ 新增持倉</button>
       )}
 
-      {/* ── Stock detail modal ───────────────────────── */}
-      {selectedStock && (
-        <StockDetailModal
-          stock={selectedStock}
-          notionInfo={null}
-          onClose={() => setSelectedStock(null)}
-          allScans={data?.scans}
-          compareHistories={compareHistories}
-          historyDates={historyDates}
-        />
-      )}
     </div>
+
+    {/* ── Stock detail modal — outside scroll container so position:fixed works on iOS ── */}
+    {selectedStock && (
+      <StockDetailModal
+        stock={selectedStock}
+        notionInfo={null}
+        onClose={() => setSelectedStock(null)}
+        allScans={data?.scans}
+        compareHistories={compareHistories}
+        historyDates={historyDates}
+      />
+    )}
+    </>
   )
 }
