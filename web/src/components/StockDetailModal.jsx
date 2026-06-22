@@ -355,16 +355,18 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
   const handleTouchStart = (e) => {
     if (e.touches.length !== 1) { if (subTouchRef.current) clearTimeout(subTouchRef.current.lpTimer); subTouchRef.current = null; return }
     const t = e.touches[0]
-    subTouchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget, moved: false, didLock: false }
+    // lockedNow: see CandleSVG — lets a long-press toggle the lock mid-gesture.
+    subTouchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget, moved: false, didLock: false, lockedNow: locked }
     if (onLock) {
       subTouchRef.current.lpTimer = setTimeout(() => {
         if (!subTouchRef.current || subTouchRef.current.moved) return
         subTouchRef.current.didLock = true
-        if (locked) {
+        if (subTouchRef.current.lockedNow) {
+          subTouchRef.current.lockedNow = false
           onLock(null); onHoverIdx?.(null)
         } else {
           const idx = idxFromX(subTouchRef.current.startX, subTouchRef.current.svgEl)
-          if (idx != null) { onLock(idx); onHoverIdx?.(idx) }
+          if (idx != null) { subTouchRef.current.lockedNow = true; onLock(idx); onHoverIdx?.(idx) }
         }
       }, 420)
     }
@@ -374,8 +376,9 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
     const t = e.touches[0]
     const dx = Math.abs(t.clientX - subTouchRef.current.startX)
     const dy = Math.abs(t.clientY - subTouchRef.current.startY)
-    if (dx > 6 || dy > 6) { subTouchRef.current.moved = true; clearTimeout(subTouchRef.current.lpTimer) }
-    if (!locked) return // Not locked: browser scrolls natively
+    const moveThresh = subTouchRef.current.lockedNow ? 14 : 6
+    if (dx > moveThresh || dy > moveThresh) { subTouchRef.current.moved = true; clearTimeout(subTouchRef.current.lpTimer) }
+    if (!subTouchRef.current.lockedNow) return // Not locked: browser scrolls natively
     if (dx > dy && dx > 5) {
       e.stopPropagation()
       handleMove(t.clientX, subTouchRef.current.svgEl)
@@ -385,7 +388,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
     const ref = subTouchRef.current
     subTouchRef.current = null
     if (ref) clearTimeout(ref.lpTimer)
-    if (!locked) onHoverIdx?.(null)
+    if (!ref || !ref.lockedNow) onHoverIdx?.(null)
   }
 
   const accentColor = lines?.[0]?.color || (histSeries ? '#FF453A' : '#8E8E93')
@@ -512,9 +515,14 @@ const CDP_LINE_DEFS = [
   { key: 'al',  color: 'rgba(48,209,88,0.95)',  sw: 1.2 },
 ]
 
-function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, onHoverIdx, hoveredIdx: extHoverIdx, onLock, locked, label, chartW: propChartW, compareId, compareHistories, historyDates }) {
+function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, onHoverIdx, hoveredIdx: extHoverIdx, onLock, locked, label, chartW: propChartW, compareId, compareHistories, historyDates, logScale = false, measureMode = false }) {
   const [hovered, setHovered] = useState(null)
   const touchRef = useRef(null)
+  // Measure tool: A = anchor bar, B = current bar. Active only when measureMode is on.
+  const [measA, setMeasA] = useState(null)
+  const [measB, setMeasB] = useState(null)
+  const measDragRef = useRef(false)
+  useEffect(() => { if (!measureMode) { setMeasA(null); setMeasB(null) } }, [measureMode])
 
   const chart = useMemo(() => {
     if (!data || data.length < 2) return null
@@ -528,15 +536,23 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     const pRange = (isNaN(maxP) || isNaN(minP) || maxP === minP) ? 1 : maxP - minP
     const slotW = (W - PL - PR) / n
     const bW = Math.max(slotW * 0.65, 1.5)
-    const toY = p => PT + (1 - (p - (isNaN(minP) ? 0 : minP)) / pRange) * CH
+    // Logarithmic price axis: equal % moves take equal vertical space (pro long-term view).
+    // Falls back to linear if any non-positive price would break log().
+    const useLog = logScale && !isNaN(minP) && !isNaN(maxP) && minP > 0 && maxP > 0
+    const lMin = useLog ? Math.log(minP) : 0
+    const lRange = useLog ? (Math.log(maxP) - lMin) || 1 : 1
+    const toY = useLog
+      ? p => p > 0 ? PT + (1 - (Math.log(p) - lMin) / lRange) * CH : PT + CH
+      : p => PT + (1 - (p - (isNaN(minP) ? 0 : minP)) / pRange) * CH
     const toX = i => PL + (i + 0.5) * slotW
     const gridLevels = isNaN(minP) ? [] : [0, 1/3, 2/3, 1].map(t => ({
-      price: minP + t * pRange, y: PT + (1 - t) * CH,
+      price: useLog ? Math.exp(lMin + t * lRange) : minP + t * pRange,
+      y: PT + (1 - t) * CH,
     }))
     const xStep = Math.max(1, Math.floor(n / 5))
     const xLabels = bars.map((d, i) => ({ i, label: d.time ? d.time.slice(5) : '' })).filter((_, i) => i % xStep === 0 || i === n - 1)
     return { bars, W, CH, H, PL, PR, PT, n, slotW, bW, toY, toX, gridLevels, xLabels }
-  }, [data, bbBands, cdpSeries, propChartW])
+  }, [data, bbBands, cdpSeries, propChartW, logScale])
 
   if (!chart) return (
     <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
@@ -602,34 +618,66 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     }
   }
 
-  const handleMouseMove = (e) => setBar(getIdx(e.clientX, e.currentTarget), e.currentTarget)
-  const handleMouseLeave = () => { setHovered(null); onHoverIdx?.(null) }
+  const clampIdx = (clientX, svgEl) => Math.max(0, Math.min(bars.length - 1, getIdx(clientX, svgEl)))
+
+  const handleMouseDown = (e) => {
+    if (!measureMode) return
+    const i = clampIdx(e.clientX, e.currentTarget)
+    measDragRef.current = true
+    setMeasA(i); setMeasB(i)
+  }
+  const handleMouseMove = (e) => {
+    if (measureMode) { if (measDragRef.current) setMeasB(clampIdx(e.clientX, e.currentTarget)); return }
+    setBar(getIdx(e.clientX, e.currentTarget), e.currentTarget)
+  }
+  const handleMouseUp = () => { measDragRef.current = false }
+  const handleMouseLeave = () => { measDragRef.current = false; if (!measureMode) { setHovered(null); onHoverIdx?.(null) } }
 
   const handleTouchStart = (e) => {
+    if (measureMode) {
+      if (e.touches.length !== 1) return
+      const i = clampIdx(e.touches[0].clientX, e.currentTarget)
+      measDragRef.current = true
+      setMeasA(i); setMeasB(i)
+      return
+    }
     if (e.touches.length !== 1) { if (touchRef.current) clearTimeout(touchRef.current.lpTimer); touchRef.current = null; return }
     const t = e.touches[0]
     const svgEl = e.currentTarget
-    touchRef.current = { startX: t.clientX, startY: t.clientY, svgEl, active: false, moved: false, didLock: false }
+    // lockedNow mirrors the lock state *within this gesture* so a long-press that
+    // toggles the lock takes effect immediately (the `locked` prop is stale until
+    // the next React render).
+    touchRef.current = { startX: t.clientX, startY: t.clientY, svgEl, active: false, moved: false, didLock: false, lockedNow: locked }
     if (onLock) {
       touchRef.current.lpTimer = setTimeout(() => {
         if (!touchRef.current || touchRef.current.moved) return
         touchRef.current.didLock = true
-        if (locked) {
+        if (touchRef.current.lockedNow) {
+          touchRef.current.lockedNow = false
           onLock(null); setHovered(null); onHoverIdx?.(null)
         } else {
           const idx = getIdx(touchRef.current.startX, touchRef.current.svgEl)
-          if (idx >= 0 && idx < bars.length) { onLock(idx); setBar(idx, touchRef.current.svgEl) }
+          if (idx >= 0 && idx < bars.length) { touchRef.current.lockedNow = true; onLock(idx); setBar(idx, touchRef.current.svgEl) }
         }
       }, 420)
     }
   }
   const handleTouchMove = (e) => {
+    if (measureMode) {
+      if (!measDragRef.current || e.touches.length !== 1) return
+      e.stopPropagation()
+      setMeasB(clampIdx(e.touches[0].clientX, e.currentTarget))
+      return
+    }
     if (!touchRef.current) return
     const t = e.touches[0]
     const dx = Math.abs(t.clientX - touchRef.current.startX)
     const dy = Math.abs(t.clientY - touchRef.current.startY)
-    if (dx > 6 || dy > 6) { touchRef.current.moved = true; clearTimeout(touchRef.current.lpTimer) }
-    if (!locked) return // Not locked: touchAction pan-x pan-y lets browser scroll natively
+    // While locked, tolerate finger jitter (14px) so a held finger reliably
+    // long-presses to UNLOCK; a clear drag still cancels the timer to move the crosshair.
+    const moveThresh = touchRef.current.lockedNow ? 14 : 6
+    if (dx > moveThresh || dy > moveThresh) { touchRef.current.moved = true; clearTimeout(touchRef.current.lpTimer) }
+    if (!touchRef.current.lockedNow) return // Not locked: touchAction pan-x pan-y lets browser scroll natively
     // Locked: crosshair follows finger, prevent scroll
     if (dx > dy && dx > 5) {
       e.stopPropagation()
@@ -640,10 +688,12 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     }
   }
   const handleTouchEnd = () => {
+    if (measureMode) { measDragRef.current = false; return }
     const ref = touchRef.current
     touchRef.current = null
     if (ref) clearTimeout(ref.lpTimer)
-    if (!locked) { setHovered(null); onHoverIdx?.(null) }
+    // Clear the crosshair unless this gesture left the chart locked (pinned).
+    if (!ref || !ref.lockedNow) { setHovered(null); onHoverIdx?.(null) }
   }
 
   // Effective hover: prefer this chart's own pointer; otherwise mirror the
@@ -689,8 +739,10 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
   return (
     <svg
       viewBox={`0 0 ${W + rightExt} ${H + PT + 18}`}
-      style={{ width: W + rightExt, display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: locked ? 'none' : 'pan-x pan-y', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+      style={{ width: W + rightExt, display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: measureMode ? 'col-resize' : 'crosshair', touchAction: (locked || measureMode) ? 'none' : 'pan-x pan-y', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+      onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -930,6 +982,55 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
           </g>
         )
       })()}
+
+      {/* Measure tool overlay: drag two points to read Δprice / Δ% / bar count */}
+      {measureMode && measA != null && measB != null && bars[measA] && bars[measB] && (() => {
+        const iA = measA, iB = measB
+        const pA = bars[iA].close, pB = bars[iB].close
+        if (pA == null || pB == null) return null
+        const xA = toX(iA), xB = toX(iB)
+        const yA = toY(pA), yB = toY(pB)
+        const xLeft = Math.min(xA, xB), xRight = Math.max(xA, xB)
+        const diff = pB - pA
+        const pct = pA !== 0 ? (diff / pA) * 100 : 0
+        const nBars = Math.abs(iB - iA)
+        const up = diff >= 0
+        const col = up ? '#30D158' : '#FF453A'
+        const fmtP = v => v.toFixed(Math.abs(v) >= 100 ? 1 : 2)
+        // Range high/low within the selected window for a richer readout
+        const wLo = Math.min(iA, iB), wHi = Math.max(iA, iB)
+        let hiP = -Infinity, loP = Infinity
+        for (let i = wLo; i <= wHi; i++) {
+          const h = bars[i].high ?? bars[i].close, l = bars[i].low ?? bars[i].close
+          if (h != null && h > hiP) hiP = h
+          if (l != null && l < loP) loP = l
+        }
+        const ampPct = loP > 0 ? ((hiP - loP) / loP) * 100 : 0
+        const boxW = 92, boxH = 50
+        let bx = (xLeft + xRight) / 2 - boxW / 2
+        bx = Math.max(PL + 2, Math.min(bx, W - PR - boxW - 2))
+        const by = PT + 4
+        return (
+          <g>
+            <rect x={xLeft} y={PT} width={Math.max(xRight - xLeft, 1)} height={CH} fill={col} opacity={0.10} />
+            <line x1={xLeft} y1={PT} x2={xLeft} y2={PT + CH} stroke={col} strokeWidth={0.7} strokeDasharray="3,2" opacity={0.6} />
+            <line x1={xRight} y1={PT} x2={xRight} y2={PT + CH} stroke={col} strokeWidth={0.7} strokeDasharray="3,2" opacity={0.6} />
+            <line x1={xA} y1={yA} x2={xB} y2={yB} stroke={col} strokeWidth={1.3} />
+            <circle cx={xA} cy={yA} r={2.6} fill={col} />
+            <circle cx={xB} cy={yB} r={2.6} fill={col} />
+            <rect x={bx} y={by} width={boxW} height={boxH} rx={6} style={{ fill: 'var(--ios-bg3)', stroke: col }} strokeWidth={0.8} opacity={0.97} />
+            <text x={bx + boxW / 2} y={by + 14} fontSize={11} fill={col} fontWeight="800" textAnchor="middle">
+              {up ? '▲' : '▼'} {up ? '+' : ''}{pct.toFixed(2)}%
+            </text>
+            <text x={bx + 7} y={by + 27} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>價差</text>
+            <text x={bx + boxW - 7} y={by + 27} fontSize={8.5} fill={col} fontWeight="600" textAnchor="end">{up ? '+' : ''}{fmtP(diff)}</text>
+            <text x={bx + 7} y={by + 38} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>K棒</text>
+            <text x={bx + boxW - 7} y={by + 38} fontSize={8.5} style={{ fill: 'var(--ios-label)' }} fontWeight="600" textAnchor="end">{nBars} 根</text>
+            <text x={bx + 7} y={by + 47} fontSize={8} style={{ fill: 'var(--ios-label3)' }}>振幅</text>
+            <text x={bx + boxW - 7} y={by + 47} fontSize={8.5} style={{ fill: 'var(--ios-label2)' }} fontWeight="600" textAnchor="end">{ampPct.toFixed(2)}%</text>
+          </g>
+        )
+      })()}
     </svg>
   )
 }
@@ -960,15 +1061,16 @@ function VolumeSubChart({ bars, hoveredIdx, onHoverIdx, onLock, locked, chartW: 
   const handleTouchStart = (e) => {
     if (e.touches.length !== 1) { if (subTouchRef.current) clearTimeout(subTouchRef.current.lpTimer); subTouchRef.current = null; return }
     const t = e.touches[0]
-    subTouchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget, moved: false, didLock: false }
+    // lockedNow: see CandleSVG — lets a long-press toggle the lock mid-gesture.
+    subTouchRef.current = { startX: t.clientX, startY: t.clientY, svgEl: e.currentTarget, moved: false, didLock: false, lockedNow: locked }
     if (onLock) {
       subTouchRef.current.lpTimer = setTimeout(() => {
         if (!subTouchRef.current || subTouchRef.current.moved) return
         subTouchRef.current.didLock = true
-        if (locked) { onLock(null); onHoverIdx?.(null) }
+        if (subTouchRef.current.lockedNow) { subTouchRef.current.lockedNow = false; onLock(null); onHoverIdx?.(null) }
         else {
           const idx = idxFromX(subTouchRef.current.startX, subTouchRef.current.svgEl)
-          if (idx != null) { onLock(idx); onHoverIdx?.(idx) }
+          if (idx != null) { subTouchRef.current.lockedNow = true; onLock(idx); onHoverIdx?.(idx) }
         }
       }, 420)
     }
@@ -978,15 +1080,16 @@ function VolumeSubChart({ bars, hoveredIdx, onHoverIdx, onLock, locked, chartW: 
     const t = e.touches[0]
     const dx = Math.abs(t.clientX - subTouchRef.current.startX)
     const dy = Math.abs(t.clientY - subTouchRef.current.startY)
-    if (dx > 6 || dy > 6) { subTouchRef.current.moved = true; clearTimeout(subTouchRef.current.lpTimer) }
-    if (!locked) return // Not locked: browser scrolls natively
+    const moveThresh = subTouchRef.current.lockedNow ? 14 : 6
+    if (dx > moveThresh || dy > moveThresh) { subTouchRef.current.moved = true; clearTimeout(subTouchRef.current.lpTimer) }
+    if (!subTouchRef.current.lockedNow) return // Not locked: browser scrolls natively
     if (dx > dy && dx > 5) { e.stopPropagation(); handleMove(t.clientX, subTouchRef.current.svgEl) }
   }
   const handleTouchEnd = () => {
     const ref = subTouchRef.current
     subTouchRef.current = null
     if (ref) clearTimeout(ref.lpTimer)
-    if (!locked) onHoverIdx?.(null)
+    if (!ref || !ref.lockedNow) onHoverIdx?.(null)
   }
   const maxVolStr = maxVol >= 1e6 ? `${(maxVol / 1e6).toFixed(1)}M` : maxVol >= 1e3 ? `${(maxVol / 1e3).toFixed(0)}K` : maxVol.toFixed(0)
   return (
@@ -1335,6 +1438,8 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
   const [preset, setPreset] = useState('momentum')
   const [hoveredIdx, setHoveredIdx] = useState(null)
   const [lockedIdx, setLockedIdx] = useState(null)
+  const [logScale, setLogScale] = useState(false)
+  const [measureMode, setMeasureMode] = useState(false)
   const [barCount, setBarCount] = useState(250)
   const [params, setParams] = useState(() => {
     try { return { ...PARAM_DEFAULTS, ...JSON.parse(localStorage.getItem('indicatorParams') || '{}') } }
@@ -1366,6 +1471,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
     const defaults = { '1wk': 60, '1mo': 24 }
     setBarCount(defaults[chartInterval] || 250)
     setLockedIdx(null)
+    setMeasureMode(false)
   }, [chartInterval])
 
   const toggle = key => { setActive(prev => ({ ...prev, [key]: !prev[key] })); setPreset(null) }
@@ -1644,6 +1750,21 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
             }}>{label}</button>
           ))}
         </div>
+        {/* Log scale + Measure tool */}
+        <div style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--ios-fill4)', borderRadius: 8 }}>
+          <button onClick={() => setLogScale(v => !v)} title="對數座標：等比例%漲跌占相同高度，適合長期報酬比較" style={{
+            background: logScale ? 'var(--ios-bg3)' : 'transparent', border: 'none',
+            color: logScale ? 'var(--ios-blue)' : 'var(--ios-label3)',
+            borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: logScale ? 700 : 400,
+            boxShadow: logScale ? '0 1px 4px rgba(0,0,0,0.3)' : 'none', transition: 'all 0.15s',
+          }}>對數</button>
+          <button onClick={() => { setMeasureMode(v => !v); setLockedIdx(null) }} title="量測工具：在圖上拖曳兩點，顯示漲跌幅%、價差、K棒數" style={{
+            background: measureMode ? 'var(--ios-bg3)' : 'transparent', border: 'none',
+            color: measureMode ? '#FF9F0A' : 'var(--ios-label3)',
+            borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: measureMode ? 700 : 400,
+            boxShadow: measureMode ? '0 1px 4px rgba(0,0,0,0.3)' : 'none', transition: 'all 0.15s',
+          }}>量測</button>
+        </div>
       </div>
 
       {/* Indicator toggles — two grouped rows */}
@@ -1690,9 +1811,13 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
 
       {/* Lock status hint */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4, minHeight: 14 }}>
-        {lockedIdx != null ? (
+        {measureMode ? (
+          <span style={{ fontSize: 9.5, color: '#FF9F0A', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+            📏 量測模式 · 在圖上拖曳兩點看漲跌幅 · 再按「量測」結束
+          </span>
+        ) : lockedIdx != null ? (
           <span style={{ fontSize: 9.5, color: '#FFD60A', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-            🔒 已鎖定 {bars[lockedIdx]?.time ? bars[lockedIdx].time.slice(5) : ''} · 點圖表空白處解除
+            🔒 已鎖定 {bars[lockedIdx]?.time ? bars[lockedIdx].time.slice(5) : ''} · 再長按圖表解除鎖定
           </span>
         ) : (
           <span style={{ fontSize: 9, color: 'var(--ios-label4)', opacity: 0.7 }}>長按圖表可鎖定十字線 · 雙指縮放 · 左右滑看更早</span>
@@ -1700,7 +1825,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
       </div>
 
       {/* Scrollable chart area — locked = freeze scroll so crosshair is the only interaction */}
-      <div ref={scrollRef} style={{ overflowX: lockedIdx != null ? 'hidden' : 'auto', WebkitOverflowScrolling: 'touch', borderRadius: 10, marginBottom: 2 }}>
+      <div ref={scrollRef} style={{ overflowX: (lockedIdx != null || measureMode) ? 'hidden' : 'auto', WebkitOverflowScrolling: 'touch', borderRadius: 10, marginBottom: 2 }}>
         {/* Main candlestick chart */}
         {bars.length >= 2 ? (
           <CandleSVG
@@ -1714,6 +1839,8 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
             hoveredIdx={displayIdx}
             onLock={handleLock}
             locked={lockedIdx != null}
+            logScale={logScale}
+            measureMode={measureMode}
             label={`K線 · ${INTERVAL_LABELS.find(t => t.id === chartInterval)?.label || ''}`}
             chartW={totalChartW}
             compareId={compareId}
