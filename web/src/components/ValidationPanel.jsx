@@ -234,8 +234,12 @@ export default function ValidationPanel({ data }) {
     }
     const { scans, dates, aggregateLatest } = data
 
-    const top20   = scans[dates[0]]?.top_stocks?.slice(0, 20) || aggregateLatest?.top_stocks || []
-    const scanDate = dates[0] || aggregateLatest?.date?.slice(0, 10)
+    // Exclude today (Taiwan time) — today's scan hasn't been verified by 5-day return yet
+    const todayTW = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
+    const validDates = dates.filter(d => d < todayTW)
+
+    const top20   = scans[validDates[0]]?.top_stocks?.slice(0, 20) || aggregateLatest?.top_stocks || []
+    const scanDate = validDates[0] || aggregateLatest?.date?.slice(0, 10)
 
     const bWith = top20.filter(s => s.return_5d != null)
     const batchStats = {
@@ -247,8 +251,8 @@ export default function ValidationPanel({ data }) {
     }
 
     const allObs = []
-    const sortedDates = [...dates].reverse()
-    for (const date of dates) {
+    const sortedDates = [...validDates].reverse()
+    for (const date of validDates) {
       for (const s of (scans[date]?.top_stocks || [])) {
         allObs.push({ date, ...s, r5d: s.return_5d, r1d: s.day_return })
       }
