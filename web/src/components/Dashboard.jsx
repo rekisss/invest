@@ -2100,6 +2100,8 @@ export default function Dashboard({ data, error }) {
     if (!el || headerH == null) return
 
     if (scrollTop <= 2) {
+      // Ignore the synthetic scroll event fired by our own scrollTop=0 reset during snap-close
+      if (headerAnimatingRef.current) return
       // Back at top: spring header open
       el.style.transition = 'height 0.42s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease, transform 0.42s cubic-bezier(0.22,1,0.36,1)'
       el.style.height = `${headerH}px`
