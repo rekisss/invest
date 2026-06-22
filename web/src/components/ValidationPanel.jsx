@@ -99,7 +99,7 @@ export default function ValidationPanel({ data }) {
 
     const gradeStats = key => {
       const byG = {}
-      for (const o of withR(key)) {
+      for (const o of allObs.filter(o => o[key] != null)) {
         const g = o.grade || 'D'
         if (!byG[g]) byG[g] = { total: 0, wins: 0, returns: [] }
         byG[g].total++
