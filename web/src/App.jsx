@@ -179,7 +179,7 @@ export default function App() {
       </div>
 
       {/* ── Large Title ──────────────────────────────────────────── */}
-      <div style={{ padding: '8px 20px 10px', background: 'transparent', flexShrink: 0 }}>
+      <div style={{ padding: '12px 20px 16px', background: 'transparent', flexShrink: 0 }}>
         <div
           key={tab}
           style={{
