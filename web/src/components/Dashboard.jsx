@@ -212,28 +212,55 @@ function CustomWatchlistTab({
       )}
 
       {/* ── Scan-based watchlist ── */}
-      {watchlistStocks.length > 0 ? (
-        <div>
-          {customIds.length > 0 && (
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', padding: '0 14px 6px', borderTop: '0.5px solid var(--ios-sep)', paddingTop: 10 }}>
-              自選股（掃描出現）
-            </div>
-          )}
-          <WatchlistView
-            stocks={watchlistStocks}
-            globalMaxScore={globalMaxScore}
-            onSelect={onSelect}
-            notionMap={notionMap}
-            watchlist={watchlist}
-            toggleWatchlist={toggleWatchlist}
-            persistentMap={persistentMap}
-            scoreDeltaMap={scoreDeltaMap}
-            sectorMode={false}
-            rankOffset={rankOffset}
-            liveData={liveData}
-          />
-        </div>
-      ) : customIds.length === 0 ? (
+      {watchlistStocks.length > 0 ? (() => {
+        const onScan   = watchlistStocks.filter(s => !s._offScan)
+        const offScan  = watchlistStocks.filter(s =>  s._offScan)
+        return (
+          <div>
+            {/* Off-scan starred stocks — show like custom track cards with unstar button */}
+            {offScan.length > 0 && (
+              <div style={{ padding: '2px 14px 10px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', marginBottom: 6 }}>⭐ 自選（已離開掃描）</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {offScan.map(s => (
+                    <CustomTrackCard
+                      key={s.stock_id}
+                      stockId={s.stock_id}
+                      liveQuote={liveData[String(s.stock_id)]}
+                      scanStock={null}
+                      onRemove={id => toggleWatchlist(id)}
+                      onSelect={null}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Normal watchlist — stocks currently in scan */}
+            {onScan.length > 0 && (
+              <div>
+                {(offScan.length > 0 || customIds.length > 0) && (
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', padding: '0 14px 6px', borderTop: '0.5px solid var(--ios-sep)', paddingTop: 10 }}>
+                    ⭐ 自選股（今日在掃描）
+                  </div>
+                )}
+                <WatchlistView
+                  stocks={onScan}
+                  globalMaxScore={globalMaxScore}
+                  onSelect={onSelect}
+                  notionMap={notionMap}
+                  watchlist={watchlist}
+                  toggleWatchlist={toggleWatchlist}
+                  persistentMap={persistentMap}
+                  scoreDeltaMap={scoreDeltaMap}
+                  sectorMode={false}
+                  rankOffset={rankOffset}
+                  liveData={liveData}
+                />
+              </div>
+            )}
+          </div>
+        )
+      })() : customIds.length === 0 ? (
         <div style={{ padding: '48px 20px', textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 10 }}>☆</div>
           <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ios-label)', marginBottom: 6 }}>尚無自選股</div>
@@ -454,7 +481,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                   }}>F{fScore}</span>
                 )}
                 <button
-                  onClick={e => { e.stopPropagation(); toggleWatchlist && toggleWatchlist(s.stock_id) }}
+                  onClick={e => { e.stopPropagation(); toggleWatchlist && toggleWatchlist(s.stock_id, s) }}
                   style={{
                     background: 'none', border: 'none', padding: '0 2px',
                     cursor: 'pointer', flexShrink: 0, lineHeight: 1,
@@ -1826,11 +1853,28 @@ export default function Dashboard({ data, error }) {
       return new Set(saved ? JSON.parse(saved) : [])
     } catch { return new Set() }
   })
-  const toggleWatchlist = (stock_id) => {
+  // Persist basic stock info when starred so off-scan stocks still show in ⭐ tab
+  const [watchlistInfo, setWatchlistInfo] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('watchlist_info') || '{}') }
+    catch { return {} }
+  })
+  // toggleWatchlist accepts optional stock object to save name/industry for off-scan display
+  const toggleWatchlist = (stock_id, stockObj) => {
+    const sid = String(stock_id)
     setWatchlist(prev => {
       const next = new Set(prev)
-      if (next.has(stock_id)) next.delete(stock_id)
-      else next.add(stock_id)
+      if (next.has(sid)) {
+        next.delete(sid)
+      } else {
+        next.add(sid)
+        if (stockObj) {
+          setWatchlistInfo(info => {
+            const next2 = { ...info, [sid]: { name: stockObj.name || '', industry_category: stockObj.industry_category || '' } }
+            try { localStorage.setItem('watchlist_info', JSON.stringify(next2)) } catch {}
+            return next2
+          })
+        }
+      }
       try { localStorage.setItem('stock_watchlist', JSON.stringify([...next])) } catch {}
       return next
     })
@@ -1961,7 +2005,8 @@ export default function Dashboard({ data, error }) {
   // Compute entry stock IDs from the latest scan date (or empty when no data).
   // Always include customTrack IDs so manually-pinned stocks always have live prices.
   const liveStockIds = useMemo(() => {
-    const ids = new Set([...customTrack])
+    // Always poll customTrack + watchlist (including off-scan) + entry_signal stocks
+    const ids = new Set([...customTrack, ...watchlist])
     if (data?.scans && data?.dates?.length) {
       const latestDate = [...data.dates].sort((a, b) => b.localeCompare(a))[0]
       const latestScan = data.scans[latestDate] || {}
@@ -1970,7 +2015,7 @@ export default function Dashboard({ data, error }) {
       }
     }
     return [...ids]
-  }, [data, customTrack])
+  }, [data, customTrack, watchlist])
   const { prices: liveData } = useLivePrices(liveStockIds)
 
   if (error || !data || !data.dates || data.dates.length === 0) {
@@ -2052,7 +2097,20 @@ export default function Dashboard({ data, error }) {
     ? (data.scans[sortedDates[prevDateIdx + 1]] || null)
     : null
 
-  const watchlistStocks = useMemo(() => allScanStocks.filter(s => watchlist.has(s.stock_id)), [allScanStocks, watchlist])
+  const watchlistStocks = useMemo(() => {
+    const scanMap = new Map(allScanStocks.map(s => [String(s.stock_id), s]))
+    const result = []
+    for (const sid of watchlist) {
+      if (scanMap.has(sid)) {
+        result.push(scanMap.get(sid))
+      } else {
+        // Stock left the scan universe — show with saved info + live price
+        const info = watchlistInfo[sid] || {}
+        result.push({ stock_id: sid, name: info.name || '', industry_category: info.industry_category || '', _offScan: true, close: 0, entry_score: 0, entry_signal: false, condition_count: 0, grade: '' })
+      }
+    }
+    return result
+  }, [allScanStocks, watchlist, watchlistInfo])
 
   // Score delta map: stock_id → (today_score - prev_score), only when prevScan has the same stock
   const scoreDeltaMap = useMemo(() => {
