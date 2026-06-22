@@ -117,6 +117,11 @@ function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
             }}>{SIGNAL_LABELS[key] || key}</span>
           ))}
           {!signals.length && <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>—</span>}
+          {stock.industry_category && (
+            <span style={{ fontSize: 8, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.10)', borderRadius: 4, padding: '1px 5px' }}>
+              {stock.industry_category}
+            </span>
+          )}
         </div>
 
         {/* Return badges */}
@@ -131,7 +136,10 @@ function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
             /* Next-day return */
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 7.5, color: 'var(--ios-label4)', marginBottom: 1 }}>隔日</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: retColor(r1) }}>{fmtPct(r1)}</div>
+              {r1 != null
+                ? <div style={{ fontSize: 12, fontWeight: 700, color: retColor(r1) }}>{fmtPct(r1)}</div>
+                : <div style={{ fontSize: 9, fontWeight: 700, color: '#FF9F0A', background: 'rgba(255,159,10,0.1)', borderRadius: 4, padding: '2px 4px', marginTop: 1 }}>待驗</div>
+              }
             </div>
           )}
           {/* 5D return */}
@@ -152,7 +160,7 @@ function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
   )
 }
 
-function DateBarChart({ byDate, sortedDates }) {
+function DateBarChart({ byDate, byDate1d = {}, sortedDates }) {
   const valid = sortedDates.filter(d => byDate[d])
   if (!valid.length) return null
   const maxR = Math.max(...valid.map(d => Math.abs(byDate[d].avgReturn || 0)), 0.01)
@@ -177,6 +185,31 @@ function DateBarChart({ byDate, sortedDates }) {
             </g>
           )
         })}
+        {/* 1-day return dots overlay */}
+        {valid.map((date, i) => {
+          const d1 = byDate1d[date]
+          if (!d1) return null
+          const r = d1.avgReturn || 0
+          const x = PAD + i * SPACING + BAR_W / 2
+          const bH1 = Math.max(4, Math.abs(r) / maxR * (H - 10))
+          const cy = r >= 0 ? H - 4 - bH1 : H - 4 + bH1
+          const col = r >= 0 ? '#FF9F0A' : '#5AC8FA'
+          return <circle key={date} cx={x} cy={Math.min(cy, H - 6)} r={3.5} fill={col} opacity={0.9} />
+        })}
+        {/* Connect the dots */}
+        {(() => {
+          const pts = valid.map((date, i) => {
+            const d1 = byDate1d[date]
+            if (!d1) return null
+            const r = d1.avgReturn || 0
+            const x = PAD + i * SPACING + BAR_W / 2
+            const bH1 = Math.max(4, Math.abs(r) / maxR * (H - 10))
+            const cy = r >= 0 ? H - 4 - bH1 : H - 4 + bH1
+            return `${x},${Math.min(cy, H - 6)}`
+          }).filter(Boolean)
+          if (pts.length < 2) return null
+          return <polyline points={pts.join(' ')} fill="none" stroke="#FF9F0A" strokeWidth={1} opacity={0.5} strokeDasharray="3,2" />
+        })()}
         <line x1={PAD} y1={H - 4} x2={totalW - PAD} y2={H - 4} stroke="var(--ios-sep)" strokeWidth={0.5} />
       </svg>
     </div>
@@ -230,10 +263,11 @@ export default function ValidationPanel({ data }) {
 
   const [selectedStock, setSelectedStock] = useState(null)
   const [histDate, setHistDate] = useState(null)
+  const [gradeFilter, setGradeFilter] = useState(null)
 
-  const { top20, scanDate, batchStats, byGrade, byDate, summary, sortedDates } = useMemo(() => {
+  const { top20, scanDate, batchStats, byGrade, byDate, byDate1d, summary, sortedDates } = useMemo(() => {
     if (!data?.scans || !data?.dates) {
-      return { top20: [], scanDate: null, batchStats: {}, byGrade: {}, byDate: {}, summary: {}, sortedDates: [] }
+      return { top20: [], scanDate: null, batchStats: {}, byGrade: {}, byDate: {}, byDate1d: {}, summary: {}, sortedDates: [] }
     }
     const { scans, dates, aggregateLatest } = data
 
@@ -286,6 +320,18 @@ export default function ValidationPanel({ data }) {
       }
     }
 
+    const byDate1d = {}
+    for (const date of sortedDates) {
+      const top = (scans[date]?.top_stocks || []).filter(s => s.return_1d != null)
+      if (!top.length) continue
+      const r1s = top.map(s => s.return_1d)
+      byDate1d[date] = {
+        total: top.length,
+        wins:  top.filter(s => s.return_1d > 0).length,
+        avgReturn: r1s.reduce((a, v) => a + v, 0) / r1s.length,
+      }
+    }
+
     const all5d = allObs.filter(o => o.r5d != null)
     const summary = {
       scans: sortedDates.filter(d => byDate[d]).length,
@@ -294,7 +340,7 @@ export default function ValidationPanel({ data }) {
       avgR5: all5d.length ? all5d.reduce((a, o) => a + o.r5d, 0) / all5d.length : null,
     }
 
-    return { top20, scanDate, batchStats, byGrade: byG, byDate, summary, sortedDates }
+    return { top20, scanDate, batchStats, byGrade: byG, byDate, byDate1d, summary, sortedDates }
   }, [data])
 
   // Persist top20 to localStorage
@@ -316,10 +362,9 @@ export default function ValidationPanel({ data }) {
 
   // Determine which stocks to show
   const displayStocks = useMemo(() => {
-    if (histDate == null) return top20
-    const hist = loadHistory()
-    return hist[histDate] || []
-  }, [histDate, top20])
+    const base = histDate == null ? top20 : (loadHistory()[histDate] || [])
+    return gradeFilter ? base.filter(s => s.grade === gradeFilter) : base
+  }, [top20, histDate, gradeFilter])
 
   // Live prices (only for current scan, not history)
   const marketOpen = isTWSEOpen()
@@ -531,6 +576,36 @@ export default function ValidationPanel({ data }) {
         </div>
       )}
 
+      {/* Grade filter pills */}
+      {!isViewingHistory && top20.some(s => s.grade) && (
+        <div style={{ display: 'flex', gap: 5, marginBottom: 8, flexWrap: 'wrap' }}>
+          {['A','B','C','D'].map(g => {
+            const cfg = GRADE_CFG[g]
+            const count = top20.filter(s => s.grade === g).length
+            if (!count) return null
+            const active = gradeFilter === g
+            return (
+              <button
+                key={g}
+                onClick={() => setGradeFilter(prev => prev === g ? null : g)}
+                style={{
+                  fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 9999, cursor: 'pointer',
+                  border: active ? `1.5px solid ${cfg.color}` : `0.5px solid ${cfg.border}`,
+                  background: active ? cfg.bg : 'transparent',
+                  color: cfg.color, transition: 'all 0.15s',
+                }}
+              >{g} <span style={{ fontSize: 9, opacity: 0.7 }}>{count}</span></button>
+            )
+          })}
+          {gradeFilter && (
+            <button
+              onClick={() => setGradeFilter(null)}
+              style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 9999, cursor: 'pointer', border: '0.5px solid var(--ios-sep)', background: 'none', color: 'var(--ios-label3)' }}
+            >全部</button>
+          )}
+        </div>
+      )}
+
       {/* Stock cards */}
       <div ref={listRef} style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 18 }}>
         {displayStocks.length === 0 && (
@@ -585,7 +660,7 @@ export default function ValidationPanel({ data }) {
       {/* Per-date chart */}
       <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '12px 12px', marginBottom: 12, border: '0.5px solid var(--ios-sep)' }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ios-label)', marginBottom: 7 }}>逐日均5日報酬</div>
-        <DateBarChart byDate={byDate} sortedDates={sortedDates} />
+        <DateBarChart byDate={byDate} byDate1d={byDate1d} sortedDates={sortedDates} />
         {!Object.keys(byDate).length && (
           <div style={{ textAlign: 'center', color: 'var(--ios-label3)', fontSize: 11, padding: '12px 0' }}>尚無資料</div>
         )}

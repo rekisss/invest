@@ -155,6 +155,7 @@ function CustomWatchlistTab({
   const [input, setInput] = useState('')
   const [shake, setShake] = useState(false)
   const [showDropouts, setShowDropouts] = useState(false)
+  const [trackSort, setTrackSort] = useState('default') // 'default' | 'lastSeen' | 'pct'
 
   const scanMap = useMemo(() => {
     const m = {}
@@ -200,6 +201,12 @@ function CustomWatchlistTab({
 
   const customIds = [...customTrack].filter(Boolean)
 
+  const sortedCustomIds = useMemo(() => {
+    if (trackSort === 'lastSeen') return [...customIds].sort((a, b) => (lastSeenMap[b] || '').localeCompare(lastSeenMap[a] || ''))
+    if (trackSort === 'pct') return [...customIds].sort((a, b) => (liveData[b]?.pct ?? -Infinity) - (liveData[a]?.pct ?? -Infinity))
+    return customIds
+  }, [customIds, trackSort, lastSeenMap, liveData])
+
   return (
     <div>
       {/* ── Custom track input bar ── */}
@@ -222,14 +229,27 @@ function CustomWatchlistTab({
             borderRadius: 10, padding: '8px 14px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
           }}
         >追蹤</button>
+        {customIds.length > 0 && (
+          <CopyAllButton ids={[...new Set([...customIds, ...watchlistStocks.map(s => String(s.stock_id))])]} />
+        )}
       </div>
 
       {/* ── Custom tracked (not from scan watchlist) ── */}
       {customIds.length > 0 && (
         <div style={{ padding: '2px 14px 10px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', marginBottom: 6 }}>自訂追蹤</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+            自訂追蹤
+            {['default','lastSeen','pct'].map(s => (
+              <button key={s} onClick={() => setTrackSort(s)} style={{
+                fontSize: 9, padding: '2px 7px', borderRadius: 9999, cursor: 'pointer',
+                border: trackSort === s ? '1px solid var(--ios-blue)' : '0.5px solid var(--ios-sep)',
+                background: trackSort === s ? 'rgba(10,132,255,0.12)' : 'none',
+                color: trackSort === s ? 'var(--ios-blue)' : 'var(--ios-label3)',
+              }}>{s === 'default' ? '預設' : s === 'lastSeen' ? '最近見' : '漲跌%'}</button>
+            ))}
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            {customIds.map(id => (
+            {sortedCustomIds.map(id => (
               <CustomTrackCard
                 key={id}
                 stockId={id}
@@ -390,6 +410,27 @@ function CopyListButton({ stocks }) {
   )
 }
 
+function CopyAllButton({ ids }) {
+  const [copied, setCopied] = useState(false)
+  if (!ids || ids.length === 0) return null
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard?.writeText(ids.join(','))
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      }}
+      title="複製所有追蹤股號"
+      style={{
+        flexShrink: 0, background: copied ? 'rgba(22,214,126,0.15)' : 'var(--ios-bg3)',
+        color: copied ? 'var(--ios-green)' : 'var(--ios-label3)',
+        border: 'none', borderRadius: 10, padding: '8px 10px',
+        fontSize: 12, cursor: 'pointer', transition: 'all 0.2s',
+      }}
+    >{copied ? '✓' : '📋'}</button>
+  )
+}
+
 function StatCard({ label, value, sub, color }) {
   const accents = {
     'var(--ios-green)':  { from: 'rgba(22,214,126,0.16)',  border: 'rgba(22,214,126,0.55)' },
@@ -531,6 +572,8 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 borderBottom: idx < stocks.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
                 cursor: 'pointer',
                 animation: `rowIn 0.35s ${Math.min(idx * 30, 300)}ms cubic-bezier(0.22,1,0.36,1) both`,
+                borderLeft: nearBreakout ? '2.5px solid #FFD60A' : 'none',
+                background: nearBreakout ? 'rgba(255,214,10,0.03)' : 'transparent',
               }}
             >
               {/* Row 1: ID + Name + Signal tag */}
@@ -2799,7 +2842,10 @@ export default function Dashboard({ data, error }) {
                 fontSize: 15, fontWeight: 600,
                 color: pred.xgb_label === '偏多' ? 'var(--ios-red)' : pred.xgb_label === '偏空' ? 'var(--ios-green)' : 'var(--ios-label)',
               }}>
-                {pred.xgb_label === '偏多' ? '📈' : pred.xgb_label === '偏空' ? '📉' : '➡️'} 大盤預測 {Math.round((pred.xgb_prob_up || 0) * 100)}% 上漲
+                <span style={{ display: 'inline-block', animation: 'predIconPulse 2.4s ease-in-out infinite' }}>
+                  {pred.xgb_label === '偏多' ? '📈' : pred.xgb_label === '偏空' ? '📉' : '➡️'}
+                </span>
+                {' '}大盤預測 {Math.round((pred.xgb_prob_up || 0) * 100)}% 上漲
               </span>
               {pred.regime?.label_zh && (
                 <span style={{

@@ -1129,6 +1129,20 @@ function VolumeSubChart({ bars, hoveredIdx, onHoverIdx, onLock, locked, chartW: 
           </g>
         )
       })}
+      {/* 5-day average volume line */}
+      <polyline
+        points={bars.map((_, i) => {
+          if (i < 5) return null
+          const x = toX(i)
+          const avgV = vol20avg[i]
+          const y = avgV > 0 ? (H - PT - 2) - (avgV / maxVol) * (H - PT - 2) + PT : H - 2
+          return `${x},${y}`
+        }).filter(Boolean).join(' ')}
+        fill="none"
+        stroke="#FF9F0A"
+        strokeWidth={1}
+        opacity={0.7}
+      />
       {hoveredIdx != null && hoveredIdx >= 0 && hoveredIdx < n && (
         <line x1={toX(hoveredIdx)} y1={PT} x2={toX(hoveredIdx)} y2={H} stroke="#0A84FF" strokeWidth={0.6} strokeDasharray="2,2" opacity={0.55} />
       )}
