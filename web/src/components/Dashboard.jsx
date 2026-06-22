@@ -1616,27 +1616,27 @@ export default function Dashboard({ data, error }) {
       return next
     })
   }
-  // Proportional scroll collapse: scroll position directly maps to collapse progress.
-  // Uses requestAnimationFrame + direct DOM style mutation — no React state re-render.
-  const headerInnerRef = useRef(null)
-  const maxCollapseHeightRef = useRef(null)
-  const scrollRafRef = useRef(null)
-  const COLLAPSE_RANGE = 55 // px of scroll → fully collapsed
+  // Smooth snap-collapse: the secondary controls glide closed once you scroll past a
+  // threshold and glide back open near the top. A single CSS transition does the easing
+  // (no per-frame height writes → no layout thrash), and a ResizeObserver keeps the
+  // natural height accurate as filters/tabs change the content.
+  const headerInnerRef = useRef(null)     // animated height container
+  const headerContentRef = useRef(null)   // natural-height content wrapper (measured)
+  const [headerH, setHeaderH] = useState(null)
+  const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const listScrollRef = useRef(null)   // ref to the scrollable list div
   const headerTouchRef = useRef(null)  // tracks touch forwarding from header → list
 
-  // Measure once on mount and whenever content-affecting filters change
+  // Track the collapsible content's natural height; keep it live with ResizeObserver.
   useLayoutEffect(() => {
-    const el = headerInnerRef.current
+    const el = headerContentRef.current
     if (!el) return
-    el.style.height = 'auto'
-    const h = el.scrollHeight
-    maxCollapseHeightRef.current = h
-    el.style.height = h + 'px'
-  }, [viewTab]) // re-measure when tab changes (grade row shows/hides)
-
-  // RAF cleanup
-  useEffect(() => () => { if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current) }, [])
+    const measure = () => setHeaderH(el.offsetHeight)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   // Lazy-load OHLCV price histories for ALL scanned stocks. Powers both the list
   // sparklines and the detail modal's candles / KD / ADX / OBV indicators + backtest.
@@ -1658,30 +1658,12 @@ export default function Dashboard({ data, error }) {
 
   const handleListScroll = (e) => {
     const scrollTop = e.currentTarget.scrollTop
-    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current)
-    scrollRafRef.current = requestAnimationFrame(() => {
-      const el = headerInnerRef.current
-      if (!el) return
-      const outer = el.parentElement
-      if (scrollTop <= 2) {
-        // Back at top — re-measure in case content changed
-        el.style.height = 'auto'
-        const h = el.scrollHeight
-        maxCollapseHeightRef.current = h
-        el.style.height = h + 'px'
-        el.style.opacity = '1'
-        el.style.pointerEvents = 'auto'
-        if (outer) outer.style.paddingBottom = '12px'
-        return
-      }
-      if (maxCollapseHeightRef.current == null) {
-        maxCollapseHeightRef.current = el.scrollHeight
-      }
-      const progress = Math.min(1, scrollTop / COLLAPSE_RANGE)
-      el.style.height = `${maxCollapseHeightRef.current * (1 - progress)}px`
-      el.style.opacity = `${Math.max(0, 1 - progress * 1.8)}`
-      el.style.pointerEvents = progress > 0.9 ? 'none' : 'auto'
-      if (outer) outer.style.paddingBottom = `${Math.round(12 * (1 - progress))}px`
+    // Hysteresis snap: collapse once past 56px, re-open near the top. Toggling a boolean
+    // (not writing height every frame) lets the CSS transition stay buttery-smooth.
+    setHeaderCollapsed(prev => {
+      if (!prev && scrollTop > 56) return true
+      if (prev && scrollTop < 14) return false
+      return prev
     })
   }
   const [activeSignals, setActiveSignals] = useState(new Set())
@@ -2029,11 +2011,20 @@ export default function Dashboard({ data, error }) {
           <CopyListButton stocks={entryStocks} />
         </div>
 
-        {/* Collapsible secondary controls — height tied directly to scroll progress via JS */}
+        {/* Collapsible secondary controls — smooth snap collapse on scroll (CSS transition) */}
         <div
           ref={headerInnerRef}
-          style={{ overflow: 'hidden', willChange: 'height, opacity' }}
+          style={{
+            overflow: 'hidden',
+            height: headerH == null ? 'auto' : (headerCollapsed ? 0 : headerH),
+            opacity: headerCollapsed ? 0 : 1,
+            transform: headerCollapsed ? 'translateY(-6px)' : 'translateY(0)',
+            pointerEvents: headerCollapsed ? 'none' : 'auto',
+            transition: 'height 0.46s cubic-bezier(0.22,1,0.36,1), opacity 0.34s ease, transform 0.46s cubic-bezier(0.22,1,0.36,1)',
+            willChange: 'height, opacity, transform',
+          }}
         >
+        <div ref={headerContentRef}>
         {/* Scan execution date hint + data quality badge */}
         {(data.last_scan_exec_date || data.generated_at || data.dataQuality) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingRight: 2, marginBottom: 4, flexWrap: 'wrap' }}>
@@ -2321,6 +2312,7 @@ export default function Dashboard({ data, error }) {
           </div>
         )}
 
+        </div>{/* /natural-height content wrapper */}
         </div>{/* /collapsible secondary controls */}
       </div>
 
@@ -2529,6 +2521,10 @@ export default function Dashboard({ data, error }) {
               </span>
             )}
           </div>
+          <div
+            key={`${viewTab}|${page}|${activeSector || ''}|${sortField}|${sortDir}|${searchQuery.trim()}`}
+            className="view-swap"
+          >
           {viewTab === 'heatmap' ? (
             <SectorHeatmap
               stocks={stocks}
@@ -2559,6 +2555,7 @@ export default function Dashboard({ data, error }) {
               liveData={liveData}
             />
           )}
+          </div>
           {/* Show-more button when result is capped at top 20 */}
           {filterCapActive && (
             <div style={{ padding: '10px 20px 4px', textAlign: 'center' }}>
