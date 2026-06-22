@@ -375,6 +375,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
     const dx = Math.abs(t.clientX - subTouchRef.current.startX)
     const dy = Math.abs(t.clientY - subTouchRef.current.startY)
     if (dx > 6 || dy > 6) { subTouchRef.current.moved = true; clearTimeout(subTouchRef.current.lpTimer) }
+    if (!locked) return // Not locked: browser scrolls natively
     if (dx > dy && dx > 5) {
       e.stopPropagation()
       handleMove(t.clientX, subTouchRef.current.svgEl)
@@ -393,7 +394,7 @@ function SubChartSVG({ bars, label, lines, histSeries, hBands, hoveredIdx, onHov
   return (
     <svg
       viewBox={`0 0 ${W} ${H + PT + 4}`}
-      style={{ width: W, display: 'block', background: 'var(--ios-bg2)', borderTop: '0.5px solid var(--ios-sep)', marginTop: 2, touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+      style={{ width: W, display: 'block', background: 'var(--ios-bg2)', borderTop: '0.5px solid var(--ios-sep)', marginTop: 2, touchAction: locked ? 'none' : 'pan-x pan-y', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
       onMouseMove={e => handleMove(e.clientX, e.currentTarget)}
       onMouseLeave={() => onHoverIdx?.(null)}
       onTouchStart={handleTouchStart}
@@ -628,12 +629,14 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     const dx = Math.abs(t.clientX - touchRef.current.startX)
     const dy = Math.abs(t.clientY - touchRef.current.startY)
     if (dx > 6 || dy > 6) { touchRef.current.moved = true; clearTimeout(touchRef.current.lpTimer) }
+    if (!locked) return // Not locked: touchAction pan-x pan-y lets browser scroll natively
+    // Locked: crosshair follows finger, prevent scroll
     if (dx > dy && dx > 5) {
       e.stopPropagation()
       touchRef.current.active = true
       setBar(getIdx(t.clientX, touchRef.current.svgEl))
     } else if (dy > 8 && !touchRef.current.active) {
-      if (!locked) { setHovered(null); onHoverIdx?.(null) }
+      setHovered(null); onHoverIdx?.(null)
     }
   }
   const handleTouchEnd = () => {
@@ -686,7 +689,7 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
   return (
     <svg
       viewBox={`0 0 ${W + rightExt} ${H + PT + 18}`}
-      style={{ width: W + rightExt, display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+      style={{ width: W + rightExt, display: 'block', background: 'var(--ios-bg)', borderRadius: '10px 10px 0 0', cursor: 'crosshair', touchAction: locked ? 'none' : 'pan-x pan-y', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
@@ -976,6 +979,7 @@ function VolumeSubChart({ bars, hoveredIdx, onHoverIdx, onLock, locked, chartW: 
     const dx = Math.abs(t.clientX - subTouchRef.current.startX)
     const dy = Math.abs(t.clientY - subTouchRef.current.startY)
     if (dx > 6 || dy > 6) { subTouchRef.current.moved = true; clearTimeout(subTouchRef.current.lpTimer) }
+    if (!locked) return // Not locked: browser scrolls natively
     if (dx > dy && dx > 5) { e.stopPropagation(); handleMove(t.clientX, subTouchRef.current.svgEl) }
   }
   const handleTouchEnd = () => {
@@ -988,7 +992,7 @@ function VolumeSubChart({ bars, hoveredIdx, onHoverIdx, onLock, locked, chartW: 
   return (
     <svg
       viewBox={`0 0 ${W} ${H + 4}`}
-      style={{ width: W, display: 'block', background: 'var(--ios-bg2)', borderTop: '0.5px solid var(--ios-sep)', marginTop: 2, touchAction: 'pan-y', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+      style={{ width: W, display: 'block', background: 'var(--ios-bg2)', borderTop: '0.5px solid var(--ios-sep)', marginTop: 2, touchAction: locked ? 'none' : 'pan-x pan-y', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
       onMouseMove={e => handleMove(e.clientX, e.currentTarget)}
       onMouseLeave={() => onHoverIdx?.(null)}
       onTouchStart={handleTouchStart}
@@ -1695,8 +1699,8 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
         )}
       </div>
 
-      {/* Scrollable chart area — all SVG charts share one horizontal scroll container */}
-      <div ref={scrollRef} style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', borderRadius: 10, marginBottom: 2 }}>
+      {/* Scrollable chart area — locked = freeze scroll so crosshair is the only interaction */}
+      <div ref={scrollRef} style={{ overflowX: lockedIdx != null ? 'hidden' : 'auto', WebkitOverflowScrolling: 'touch', borderRadius: 10, marginBottom: 2 }}>
         {/* Main candlestick chart */}
         {bars.length >= 2 ? (
           <CandleSVG
