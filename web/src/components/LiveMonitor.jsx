@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { useLivePrices } from '../hooks/useLivePrices'
+import { flashPriceEl, animateListRows } from '../utils/animeUtils.js'
 import StockDetailModal from './StockDetailModal'
 
 const PORTFOLIO_KEY = 'tw_portfolio_positions'
@@ -73,6 +74,31 @@ function IndexBar({ indices, loading }) {
   )
 }
 
+// ── Flash price number — anime.js scale+shadow when value changes ────────
+function FlashPrice({ value, formatter, color, style }) {
+  const ref    = useRef(null)
+  const prevRef = useRef(null)
+  useEffect(() => {
+    if (value == null) return
+    if (prevRef.current != null && prevRef.current !== value && ref.current)
+      flashPriceEl(ref.current, value > prevRef.current)
+    prevRef.current = value
+  }, [value])
+  return (
+    <span ref={ref} style={{ borderRadius: 4, display: 'inline-block', color, ...style }}>
+      {formatter ? formatter(value) : value}
+    </span>
+  )
+}
+
+// ── Stagger hook: animates [data-row] children when item key changes ──────
+function useStaggerRows(containerRef, key) {
+  useLayoutEffect(() => {
+    if (containerRef.current) animateListRows(containerRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+}
+
 // ── Stock row ─────────────────────────────────────────────────────────────
 function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, showRemove }) {
   const upColor   = '#FF453A'
@@ -85,6 +111,7 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
 
   return (
     <div
+      data-row
       onClick={() => onSelect({ stock_id: id, name, ...(scan || {}) })}
       style={{
         display: 'flex', alignItems: 'center', padding: '11px 14px', cursor: 'pointer',
@@ -135,8 +162,8 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
         <div>
           {live ? (
             <>
-              <div style={{ fontSize: 20, fontWeight: 800, color, fontFamily: 'var(--font-mono)', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
-                {fmtP(live.price)}
+              <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
+                <FlashPrice value={live.price} formatter={fmtP} color={color} />
               </div>
               {pct != null && (
                 <div style={{ fontSize: 13, fontWeight: 700, color, marginTop: 1 }}>
@@ -398,6 +425,17 @@ export default function LiveMonitor({ data }) {
       .sort(sortFn)
   , [scanStocks, liveData, monSet, posSet, sortFn])
 
+  // Stagger: animate rows when list identity (IDs + scope) changes, not on every price tick
+  const watchListRef = useRef(null)
+  const portListRef  = useRef(null)
+  const scanListRef  = useRef(null)
+  const watchKey = monitorList.join(',') + '|' + sortBy
+  const portKey  = Object.keys(positions).join(',') + '|' + sortBy
+  const scanKey  = scanScope + '|' + scanStocks.map(s => s.stock_id).join(',')
+  useStaggerRows(watchListRef, watchKey)
+  useStaggerRows(portListRef,  portKey)
+  useStaggerRows(scanListRef,  scanKey)
+
   const openDetail = async (stock) => {
     setSelectedStock(stock)
     if (!historiesRef.current) {
@@ -515,7 +553,7 @@ export default function LiveMonitor({ data }) {
               }}>＋ 新增自選股</button>
             </div>
           ) : (
-            <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
+            <div ref={watchListRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
               {watchItems.map((item, i) => (
                 <StockRow key={item.id} {...item} isLast={i === watchItems.length - 1} onSelect={openDetail} onRemove={removeFromMonitor} showRemove />
               ))}
@@ -544,7 +582,7 @@ export default function LiveMonitor({ data }) {
                 <div style={{ fontSize: 11, color: 'var(--ios-label3)' }}>等待持倉報價…</div>
               </div>
             ) : (
-              <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
+              <div ref={portListRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
                 <PortfolioSummary items={portItems} />
                 {portItems.map((item, i) => (
                   <StockRow key={item.id} {...item} isLast={i === portItems.length - 1} onSelect={openDetail} showRemove={false} />
@@ -578,7 +616,7 @@ export default function LiveMonitor({ data }) {
                 {scanScope === 'entry' ? '今日尚無進場訊號' : '掃描股票均已在自選或持倉中'}
               </div>
             ) : (
-              <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
+              <div ref={scanListRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
                 {scanItems.map((item, i) => (
                   <StockRow key={item.id} {...item} isLast={i === scanItems.length - 1} onSelect={openDetail} showRemove={false} />
                 ))}

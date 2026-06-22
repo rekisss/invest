@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import Overview from './components/Overview.jsx'
+import { animateTabIn } from './utils/animeUtils.js'
 
 // Lazy-load non-landing tabs so the initial bundle only contains Overview
 const Dashboard = lazy(() => import('./components/Dashboard.jsx'))
@@ -37,8 +38,22 @@ const TAB_TITLES = {
   ai:        'AI 助手',
 }
 
+// Wrapper that spring-animates in from left/right using anime.js on every mount
+function AnimatedTabPanel({ direction, onDone, style, children }) {
+  const ref = useRef(null)
+  useLayoutEffect(() => {
+    animateTabIn(ref.current, direction, onDone)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return (
+    <div ref={ref} style={{ ...style, opacity: direction ? 0 : 1 }}>
+      {children}
+    </div>
+  )
+}
+
 export default function App() {
-  const [tabIdx, setTabIdx] = useState(0)  // 總覽 as default tab
+  const [tabIdx, setTabIdx] = useState(0)
   const [apiKey, setApiKey] = useState(() => sessionStorage.getItem('anthropic_key') || '')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -57,10 +72,10 @@ export default function App() {
   }, [theme])
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark')
-  const themeIcon = theme === 'dark' ? '🌙' : '☀️'
-  const themeLabel = theme === 'dark' ? '深色' : '淺色'
+  const themeIcon  = theme === 'dark' ? '🌙' : '☀️'
 
-  const [slideDir, setSlideDir] = useState(null) // 'left' | 'right'
+  // slideDir tracks the direction of the last tab switch; cleared once animation completes
+  const [slideDir, setSlideDir] = useState(null)
 
   const tab = TABS[tabIdx].key
 
@@ -81,7 +96,6 @@ export default function App() {
 
   useEffect(() => { loadData(false) }, [loadData])
 
-  // Navigate to studio tab when StockDetailModal's 🎯 button fires this event
   useEffect(() => {
     const handler = () => setTabIdx(TABS.findIndex(t => t.key === 'studio'))
     window.addEventListener('navigate-to-studio', handler)
@@ -103,7 +117,6 @@ export default function App() {
     }).format(d)
   })()
 
-  // GeminiStudio is rendered separately (always-mounted) so discussions survive tab switches.
   const tabContent = (() => {
     if (loading) return null
     switch (tab) {
@@ -113,7 +126,7 @@ export default function App() {
       case 'monitor':    return <LiveMonitor data={data} />
       case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} />
       case 'predict':    return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />
-      case 'studio':     return null  // rendered always-mounted below
+      case 'studio':     return null
       case 'quota':      return <QuotaPanel quota={data?.quota} generatedAt={data?.generated_at} />
       case 'ai':         return <AgentPanel
         apiKey={apiKey}
@@ -125,24 +138,11 @@ export default function App() {
     }
   })()
 
-  // Slide-in animation — iOS spring easing, 0.28s
-  const panelAnim = slideDir === 'right'
-    ? 'slideInFromRight 0.28s cubic-bezier(0.22,1,0.36,1) both'
-    : slideDir === 'left'
-    ? 'slideInFromLeft 0.28s cubic-bezier(0.22,1,0.36,1) both'
-    : 'none'
+  const panelStyle = { flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'transparent' }}>
-<style>{`
-        @keyframes slideInFromRight {
-          from { transform: translateX(60px); opacity: 0; }
-          to   { transform: translateX(0);    opacity: 1; }
-        }
-        @keyframes slideInFromLeft {
-          from { transform: translateX(-60px); opacity: 0; }
-          to   { transform: translateX(0);     opacity: 1; }
-        }
+      <style>{`
         @keyframes titleReveal {
           from { opacity: 0; transform: translateY(8px); filter: blur(6px); letter-spacing: 0.5px; }
           to   { opacity: 1; transform: translateY(0);   filter: blur(0);   letter-spacing: -0.6px; }
@@ -197,11 +197,7 @@ export default function App() {
       </div>
 
       {/* ── Content ──────────────────────────────────────────────── */}
-      <div
-        style={{
-          flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-        }}
-      >
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {loading && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 12 }}>
             <div style={{ width: 32, height: 32, border: '3px solid var(--ios-fill3)', borderTop: '3px solid var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
@@ -211,13 +207,11 @@ export default function App() {
 
         {/* Animated panel — all tabs except studio */}
         {!loading && tab !== 'studio' && (
-          <div
+          <AnimatedTabPanel
             key={tab}
-            style={{
-              flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-              animation: panelAnim,
-            }}
-            onAnimationEnd={() => setSlideDir(null)}
+            direction={slideDir}
+            onDone={() => setSlideDir(null)}
+            style={panelStyle}
           >
             <Suspense fallback={
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
@@ -226,27 +220,27 @@ export default function App() {
             }>
               {tabContent}
             </Suspense>
-          </div>
+          </AnimatedTabPanel>
         )}
 
-        {/* GeminiStudio — always mounted once data loads; hidden via display:none when inactive
-            so in-progress API calls and discussion state survive tab switches */}
+        {/* GeminiStudio — always mounted once data loads; hidden via display:none when inactive */}
         {!loading && (
-          <div
-            style={{
-              flex: 1, overflow: 'hidden', display: tab === 'studio' ? 'flex' : 'none',
-              flexDirection: 'column',
-              animation: tab === 'studio' ? panelAnim : 'none',
-            }}
-            onAnimationEnd={tab === 'studio' ? () => setSlideDir(null) : undefined}
-          >
-            <Suspense fallback={
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                <div style={{ width: 28, height: 28, border: '3px solid var(--ios-fill3)', borderTop: '3px solid var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-              </div>
-            }>
-              <GeminiStudio data={data} />
-            </Suspense>
+          <div style={{ ...panelStyle, display: tab === 'studio' ? 'flex' : 'none' }}>
+            {tab === 'studio' ? (
+              <AnimatedTabPanel key="studio-visible" direction={slideDir} onDone={() => setSlideDir(null)} style={panelStyle}>
+                <Suspense fallback={
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                    <div style={{ width: 28, height: 28, border: '3px solid var(--ios-fill3)', borderTop: '3px solid var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                  </div>
+                }>
+                  <GeminiStudio data={data} />
+                </Suspense>
+              </AnimatedTabPanel>
+            ) : (
+              <Suspense fallback={null}>
+                <GeminiStudio data={data} />
+              </Suspense>
+            )}
           </div>
         )}
       </div>
