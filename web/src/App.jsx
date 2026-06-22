@@ -111,6 +111,35 @@ export default function App() {
     setTabIdx(newIdx)
   }
 
+  // ── Drag across the bottom tab bar to switch tabs (connected feel) ──
+  const tabbarRef = useRef(null)
+  const tabDragRef = useRef({ active: false, x0: 0, y0: 0, moved: false })
+
+  const idxFromClientX = (clientX) => {
+    const el = tabbarRef.current
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    const idx = Math.floor(((clientX - r.left) / r.width) * TABS.length)
+    return Math.max(0, Math.min(TABS.length - 1, idx))
+  }
+
+  const onTabTouchStart = (e) => {
+    const t = e.touches[0]
+    tabDragRef.current = { active: true, x0: t.clientX, y0: t.clientY, moved: false }
+  }
+  const onTabTouchMove = (e) => {
+    const d = tabDragRef.current
+    if (!d.active) return
+    const t = e.touches[0]
+    // Only treat as a horizontal drag once it's clearly sideways (lets vertical scroll pass)
+    if (!d.moved && Math.abs(t.clientX - d.x0) < 12) return
+    if (Math.abs(t.clientX - d.x0) < Math.abs(t.clientY - d.y0)) return
+    d.moved = true
+    const idx = idxFromClientX(t.clientX)
+    if (idx != null && idx !== tabIdx) goToTab(idx)
+  }
+  const onTabTouchEnd = () => { tabDragRef.current.active = false }
+
   const formattedTime = (() => {
     if (!data?.generated_at) return null
     const d = new Date(data.generated_at)
@@ -249,8 +278,15 @@ export default function App() {
         )}
       </div>
 
-      {/* ── iOS Tab Bar ──────────────────────────────────────────── */}
-      <div className="ios-tabbar">
+      {/* ── iOS Tab Bar (drag across to switch) ───────────────────── */}
+      <div
+        className="ios-tabbar"
+        ref={tabbarRef}
+        style={{ touchAction: 'pan-y' }}
+        onTouchStart={onTabTouchStart}
+        onTouchMove={onTabTouchMove}
+        onTouchEnd={onTabTouchEnd}
+      >
         {TABS.map((t, i) => {
           const active = tabIdx === i
           return (
@@ -259,12 +295,6 @@ export default function App() {
               className={`ios-tab-btn${active ? ' active' : ''}`}
               onClick={() => goToTab(i)}
             >
-              {active && (
-                <span style={{
-                  position: 'absolute', top: 1, left: '50%', transform: 'translateX(-50%)',
-                  width: 18, height: 2.5, borderRadius: 9999, background: 'var(--ios-blue)',
-                }} />
-              )}
               <span style={{
                 fontSize: 21, lineHeight: 1,
                 opacity: active ? 1 : 0.4,
