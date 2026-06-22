@@ -1,7 +1,8 @@
-import { useState, useMemo, memo, useEffect, useRef } from 'react'
+import { useState, useMemo, memo, useEffect, useRef, useCallback } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 gsap.registerPlugin(useGSAP)
+import StockDetailModal from './StockDetailModal'
 
 /* ── Live Market Constants ───────────────────────────────────────── */
 const LIVE_CACHE_KEY = 'live_mkt_v1'
@@ -611,7 +612,7 @@ function inferSector(stockId) {
   return '其他'
 }
 
-function SectorHeatmap({ stocks }) {
+function SectorHeatmap({ stocks, onStockClick }) {
   const [selectedSector, setSelectedSector] = useState(null)
   if (!stocks || stocks.length === 0) return null
 
@@ -725,12 +726,16 @@ function SectorHeatmap({ stocks }) {
             const hasSignal = !!s.entry_signal
             const rs = s.sector_rs_rank != null ? Math.round(s.sector_rs_rank) : null
             return (
-              <div key={s.stock_id} style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 14px',
-                borderBottom: i < sectorStockList.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
-                background: hasSignal ? 'rgba(48,209,88,0.04)' : 'transparent',
-              }}>
+              <div key={s.stock_id}
+                onClick={() => onStockClick && onStockClick(s)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 14px',
+                  borderBottom: i < sectorStockList.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
+                  background: hasSignal ? 'rgba(48,209,88,0.04)' : 'transparent',
+                  cursor: onStockClick ? 'pointer' : 'default',
+                  WebkitTapHighlightColor: 'transparent',
+                }}>
                 <span style={{ fontSize: 11, color: 'var(--ios-label4)', minWidth: 18, textAlign: 'right', fontFamily: 'monospace' }}>{i + 1}</span>
                 {hasSignal && <span style={{ fontSize: 9, background: 'rgba(48,209,88,0.18)', color: '#30D158', borderRadius: 4, padding: '1px 5px', fontWeight: 700, flexShrink: 0 }}>進場</span>}
                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'monospace', flexShrink: 0 }}>{s.stock_id}</span>
@@ -739,6 +744,7 @@ function SectorHeatmap({ stocks }) {
                 <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', flexShrink: 0, color: ret > 0 ? 'var(--ios-red)' : ret < 0 ? 'var(--ios-green)' : 'var(--ios-label3)' }}>
                   {ret > 0 ? '+' : ''}{(ret * 100).toFixed(1)}%
                 </span>
+                {onStockClick && <span style={{ fontSize: 9, color: 'var(--ios-label4)', flexShrink: 0 }}>›</span>}
               </div>
             )
           })}
@@ -764,6 +770,42 @@ export default function Overview({ data, error }) {
     const extras = (scan.filter_stocks || []).filter(s => !topIds.has(String(s.stock_id)))
     return [...(scan.top_stocks || []), ...extras]
   }, [scan])
+
+  // Stock detail modal state (triggered by sector heatmap stock clicks)
+  const ovHistoriesRef = useRef(null)
+  const [ovSelectedStock, setOvSelectedStock] = useState(null)
+  const [ovCompareHistories, setOvCompareHistories] = useState(null)
+  const [ovHistoryDates, setOvHistoryDates] = useState(null)
+
+  const openStockDetail = useCallback(async (stockObj) => {
+    setOvSelectedStock({ ...stockObj })
+    if (!ovHistoriesRef.current) {
+      try {
+        const base = import.meta.env.BASE_URL || '/'
+        const h = await fetch(`${base}stock_histories.json`).then(r => r.ok ? r.json() : null)
+        ovHistoriesRef.current = h || {}
+        if (h?.stocks) setOvCompareHistories(h.stocks)
+        if (Array.isArray(h?.dates)) setOvHistoryDates(h.dates)
+      } catch { ovHistoriesRef.current = {} }
+    }
+    const h = ovHistoriesRef.current
+    const id = String(stockObj.stock_id)
+    const kline = h?.stocks?.[id]
+    const scanHist = h?.scan_stocks?.[id]
+    const dates = h?.dates || []
+    let priceHistory = null
+    if (kline?.c) {
+      priceHistory = dates.map((t, i) => kline.c[i] == null ? null : {
+        time: t, open: kline.o?.[i] ?? kline.c[i], high: kline.h?.[i] ?? kline.c[i],
+        low: kline.l?.[i] ?? kline.c[i], close: kline.c[i], volume: kline.v?.[i] ?? 0,
+      }).filter(Boolean)
+    } else if (Array.isArray(scanHist) && scanHist.length >= 2) {
+      priceHistory = scanHist.map(b => ({ time: b[0], open: b[1], high: b[2], low: b[3], close: b[4], volume: b[5] }))
+    }
+    if (priceHistory) {
+      setOvSelectedStock(prev => prev?.stock_id === stockObj.stock_id ? { ...prev, price_history: priceHistory } : prev)
+    }
+  }, [])
 
   if (error && !data) {
     return (
@@ -839,7 +881,7 @@ export default function Overview({ data, error }) {
         <WatchlistAlerts stocks={stocks} />
 
         {/* Feature 4: Sector heatmap — all scan stocks */}
-        {allScanStocks.length > 0 && <SectorHeatmap stocks={allScanStocks} />}
+        {allScanStocks.length > 0 && <SectorHeatmap stocks={allScanStocks} onStockClick={openStockDetail} />}
 
         {/* Feature 5: AI daily briefing from scan ai_picks_text */}
         <AIBriefing scan={scan} entryCount={entryStocks.length} totalStocks={stocks.length} />
@@ -855,6 +897,18 @@ export default function Overview({ data, error }) {
         <RiskFactors factors={risk?.factors} />
 
       </div>
+
+      {/* Stock detail modal — opened from sector heatmap */}
+      {ovSelectedStock && (
+        <StockDetailModal
+          stock={ovSelectedStock}
+          notionInfo={null}
+          onClose={() => setOvSelectedStock(null)}
+          allScans={data?.scans}
+          compareHistories={ovCompareHistories}
+          historyDates={ovHistoryDates}
+        />
+      )}
     </div>
   )
 }

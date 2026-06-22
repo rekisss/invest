@@ -679,9 +679,9 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
   // K-line patterns for each bar
   const patterns = showPatterns ? bars.map((_, i) => detectCandlePattern(bars, i)) : null
 
-  // Right-axis extension: 36px when CDP or MA labels visible
+  // Right-axis extension: just enough for the 42px badge (ends at W+8) plus 6px breathing room
   const hasRightLabels = cdpSeries || (maLines && maLines.length > 0)
-  const rightExt = hasRightLabels ? 52 : 0
+  const rightExt = hasRightLabels ? 14 : 0
 
   return (
     <svg
@@ -1315,7 +1315,7 @@ function StrategyBacktestPanel({ bars, onPick, activeId }) {
 
 const PARAM_DEFAULTS = { rsiPeriod: 14, kdN: 9, kdM: 3, macdFast: 12, macdSlow: 26, macdSig: 9, bbPeriod: 20, bbMult: 2.0 }
 
-function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, compareId, compareHistories, historyDates }) {
+function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loading, compareId, compareHistories, historyDates }) {
   const cnyesUrl = `https://www.cnyes.com/twstock/${stockId}`
   const wantgooUrl = `https://www.wantgoo.com/stock/${stockId}`
 
@@ -1717,8 +1717,14 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, com
             historyDates={historyDates}
           />
         ) : (
-          <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
-            暫無歷史 K 線資料
+          <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10, flexDirection: 'column', gap: 8 }}>
+            {loading ? (
+              <>
+                <div style={{ width: 22, height: 22, border: '2.5px solid var(--ios-fill2)', borderTopColor: 'var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                <span>載入 K 線中…</span>
+                <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+              </>
+            ) : '暫無歷史 K 線資料'}
           </div>
         )}
 
@@ -2344,52 +2350,78 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
         </div>
 
         {/* Feature 1: Compare stock input panel */}
-        {showCompareInput && (
-          <div style={{
-            marginBottom: 12, padding: '10px 12px',
-            background: 'var(--ios-bg2)', borderRadius: 10,
-            border: '0.5px solid var(--ios-sep)',
-            display: 'flex', gap: 8, alignItems: 'center',
-          }}>
-            <input
-              value={compareInput}
-              onChange={e => setCompareInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  const id = compareInput.trim()
-                  if (id && compareHistories?.[id]) { setCompareStockId(id); setShowCompareInput(false) }
-                }
-              }}
-              placeholder="輸入股票代號，如 0050"
-              style={{
-                flex: 1, padding: '7px 10px', fontSize: 13, borderRadius: 8,
-                background: 'var(--ios-fill3)', border: '0.5px solid var(--ios-sep)',
-                color: 'var(--ios-label)', outline: 'none',
-              }}
-            />
-            <button
-              onClick={() => {
-                const id = compareInput.trim()
-                if (id && compareHistories?.[id]) { setCompareStockId(id); setShowCompareInput(false) }
-              }}
-              style={{
-                padding: '7px 14px', fontSize: 12, fontWeight: 700,
-                background: 'var(--ios-blue)', color: '#fff',
-                border: 'none', borderRadius: 8, cursor: 'pointer',
-              }}
-            >確認</button>
-            {compareStockId && (
-              <button
-                onClick={() => { setCompareStockId(''); setCompareInput(''); setShowCompareInput(false) }}
-                style={{
-                  padding: '7px 10px', fontSize: 12,
-                  background: 'var(--ios-fill3)', color: 'var(--ios-red)',
-                  border: 'none', borderRadius: 8, cursor: 'pointer',
-                }}
-              >清除</button>
-            )}
-          </div>
-        )}
+        {showCompareInput && (() => {
+          const q = compareInput.trim().toUpperCase()
+          // Build a quick name lookup from allScans latest date
+          const latestScan = allScans ? Object.values(allScans).sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0] : null
+          const nameMap = {}
+          ;[...(latestScan?.top_stocks || []), ...(latestScan?.filter_stocks || [])].forEach(x => { nameMap[String(x.stock_id)] = x.name || '' })
+          // Candidates: all ids in compareHistories that match the query
+          const candidates = compareHistories
+            ? Object.keys(compareHistories)
+                .filter(id => !q || id.includes(q) || (nameMap[id] || '').includes(compareInput.trim()))
+                .filter(id => id !== String(s.stock_id))
+                .slice(0, 8)
+            : []
+          const confirmId = id => { if (id && compareHistories?.[id]) { setCompareStockId(id); setCompareInput(id); setShowCompareInput(false) } }
+          return (
+            <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--ios-bg2)', borderRadius: 10, border: '0.5px solid var(--ios-sep)' }}>
+              <div style={{ fontSize: 10, color: 'var(--ios-label4)', marginBottom: 6 }}>選擇比較股票（K 線百分比疊加）</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  autoFocus
+                  value={compareInput}
+                  onChange={e => setCompareInput(e.target.value.toUpperCase())}
+                  onKeyDown={e => { if (e.key === 'Enter') confirmId(compareInput.trim()) }}
+                  placeholder="輸入代號，如 0050"
+                  style={{ flex: 1, padding: '7px 10px', fontSize: 13, borderRadius: 8, background: 'var(--ios-fill3)', border: '0.5px solid var(--ios-sep)', color: 'var(--ios-label)', outline: 'none' }}
+                />
+                <button onClick={() => confirmId(compareInput.trim())} style={{ padding: '7px 14px', fontSize: 12, fontWeight: 700, background: 'var(--ios-blue)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>確認</button>
+                {compareStockId && (
+                  <button onClick={() => { setCompareStockId(''); setCompareInput(''); setShowCompareInput(false) }} style={{ padding: '7px 10px', fontSize: 12, background: 'var(--ios-fill3)', color: 'var(--ios-red)', border: 'none', borderRadius: 8, cursor: 'pointer' }}>清除</button>
+                )}
+              </div>
+              {/* Autocomplete suggestions */}
+              {candidates.length > 0 && (
+                <div style={{ marginTop: 6, borderRadius: 8, border: '0.5px solid var(--ios-sep)', overflow: 'hidden', maxHeight: 200, overflowY: 'auto' }}>
+                  {candidates.map((id, i) => (
+                    <div key={id} onClick={() => confirmId(id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', cursor: 'pointer', background: compareStockId === id ? 'rgba(10,132,255,0.1)' : i % 2 === 0 ? 'var(--ios-bg2)' : 'var(--ios-bg)', borderBottom: i < candidates.length - 1 ? '0.5px solid var(--ios-sep)' : 'none' }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'monospace', minWidth: 40 }}>{id}</span>
+                      <span style={{ fontSize: 12, color: 'var(--ios-label)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nameMap[id] || ''}</span>
+                      {compareStockId === id && <span style={{ fontSize: 10, color: 'var(--ios-blue)', fontWeight: 700 }}>✓ 已選</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })()}
+        {/* Compare summary badge — shown when compare is active */}
+        {compareStockId && !showCompareInput && (() => {
+          const ph = s.price_history
+          const cData = compareHistories?.[compareStockId]
+          if (!ph || !cData || !historyDates) return null
+          // Compute last 30-day pct change for both
+          const pct30 = (arr) => {
+            if (!arr || arr.length < 2) return null
+            const last = arr[arr.length - 1]
+            const ref = arr[Math.max(0, arr.length - 30)]
+            return ((last - ref) / ref * 100)
+          }
+          const mainCloses = ph.map(b => b.close)
+          const cmpCloses = historyDates.map((_, i) => cData.c?.[i]).filter(v => v != null)
+          const mainPct = pct30(mainCloses)
+          const cmpPct = pct30(cmpCloses)
+          return (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10, padding: '7px 12px', background: 'var(--ios-bg2)', borderRadius: 10, border: '0.5px solid var(--ios-sep)', alignItems: 'center', fontSize: 11 }}>
+              <span style={{ color: 'var(--ios-label3)' }}>近30日：</span>
+              <span style={{ fontWeight: 700, fontFamily: 'monospace', color: mainPct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)' }}>{s.stock_id} {mainPct != null ? `${mainPct >= 0 ? '+' : ''}${mainPct.toFixed(1)}%` : '—'}</span>
+              <span style={{ color: 'var(--ios-label4)' }}>vs</span>
+              <span style={{ fontWeight: 700, fontFamily: 'monospace', color: '#FF9F0A' }}>{compareStockId} {cmpPct != null ? `${cmpPct >= 0 ? '+' : ''}${cmpPct.toFixed(1)}%` : '—'}</span>
+              <button onClick={() => setShowCompareInput(true)} style={{ marginLeft: 'auto', fontSize: 10, background: 'none', border: 'none', color: 'var(--ios-blue)', cursor: 'pointer', padding: 0 }}>換股</button>
+            </div>
+          )
+        })()}
 
         {/* Feature 4: Score trend across dates */}
         {allScans && (() => {
@@ -2438,7 +2470,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
 
         {/* K 線圖 + 指標子圖 */}
         <Section title="K 線圖 &amp; 技術指標">
-          <KLineChart key={s.stock_id} stockId={s.stock_id} priceHistory={s.price_history} priceHistoryWk={s.price_history_wk} priceHistoryMo={s.price_history_mo} compareId={compareStockId || null} compareHistories={compareHistories} historyDates={historyDates} />
+          <KLineChart key={s.stock_id} stockId={s.stock_id} priceHistory={s.price_history} priceHistoryWk={s.price_history_wk} priceHistoryMo={s.price_history_mo} loading={!!s.price_history_loading} compareId={compareStockId || null} compareHistories={compareHistories} historyDates={historyDates} />
         </Section>
 
         {/* Notion 連結 */}

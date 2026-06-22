@@ -63,18 +63,26 @@ function ProbTrend({ history }) {
   useGSAP(() => {
     const el = lineRef.current
     if (!el) return
+    let started = false
+    let raf = null
     let io = null
-    const raf = requestAnimationFrame(() => {
+    const startAnim = () => {
+      if (started) return
       const len = el.getTotalLength()
       if (!len) return
+      started = true
+      io?.disconnect()
       gsap.set(el, { strokeDasharray: len, strokeDashoffset: len })
-      const tw = gsap.to(el, { strokeDashoffset: 0, duration: 1.4, ease: 'power2.out', paused: true, delay: 0.15 })
-      io = new IntersectionObserver(es => {
-        if (es[0].isIntersecting) { tw.play(); io.disconnect() }
-      }, { threshold: 0.2 })
-      io.observe(el)
-    })
-    return () => { cancelAnimationFrame(raf); io?.disconnect() }
+      gsap.to(el, { strokeDashoffset: 0, duration: 1.4, ease: 'power2.out', delay: 0.15 })
+    }
+    // Try immediately (handles already-visible case)
+    raf = requestAnimationFrame(startAnim)
+    // Also watch for visibility (handles hidden-tab case where SVG length is 0 until visible)
+    io = new IntersectionObserver(es => {
+      if (es[0].isIntersecting) requestAnimationFrame(startAnim)
+    }, { threshold: 0.2 })
+    io.observe(el)
+    return () => { if (raf) cancelAnimationFrame(raf); io?.disconnect() }
   }, { dependencies: [pts.length] })
 
   if (pts.length < 3) return null
