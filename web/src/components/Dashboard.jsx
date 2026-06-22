@@ -193,7 +193,7 @@ function AnimatedScoreBar({ normScore, scoreColor }) {
   )
 }
 
-function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {} }) {
+function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {}, sectorMode = false, rankOffset = 0 }) {
 
   if (!stocks || stocks.length === 0) {
     return (
@@ -260,8 +260,8 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
             >
               {/* Row 1: ID + Name + Signal tag */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-                <span style={{ fontSize: 10, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)', minWidth: 18 }}>
-                  {String(idx + 1).padStart(2, '0')}
+                <span style={{ fontSize: 10, color: sectorMode ? 'var(--ios-blue)' : 'var(--ios-label4)', fontFamily: 'var(--font-mono)', minWidth: 18, fontWeight: sectorMode ? 700 : 400 }}>
+                  {String(rankOffset + idx + 1).padStart(2, '0')}
                 </span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
                   {s.stock_id}
@@ -350,6 +350,11 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
 
               {/* Row 3: Real indicator numbers */}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'nowrap', overflow: 'hidden' }}>
+                {sectorMode && s.sector_rs_rank > 0 && (
+                  <span style={{ fontSize: 11, color: '#0A84FF', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', fontWeight: 700 }}>
+                    類股RS <strong>{Math.round(s.sector_rs_rank)}%</strong>
+                  </span>
+                )}
                 <span style={{ fontSize: 11, color: rsiColor, fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                   RSI <strong>{rsi.toFixed(0)}</strong>
                 </span>
@@ -2285,30 +2290,52 @@ export default function Dashboard({ data, error }) {
           </div>
         )}
 
-        {/* Sector filter chips */}
-        {viewTab !== 'limitdown' && availableSectors.length > 0 && (
-          <div style={{ marginTop: 6, display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none', alignItems: 'center' }}>
-            <span style={{ fontSize: 10, color: 'var(--ios-label3)', fontWeight: 700, flexShrink: 0 }}>類股</span>
-            {availableSectors.map(({ sec, count }) => {
-              const isActive = activeSector === sec
-              return (
-                <button key={sec} onClick={() => setActiveSector(isActive ? null : sec)} style={{
-                  flexShrink: 0, fontSize: 10, fontWeight: 600,
-                  padding: '3px 8px', borderRadius: 9999, cursor: 'pointer',
-                  border: isActive ? '1px solid rgba(10,132,255,0.6)' : '1px solid var(--ios-sep)',
-                  background: isActive ? 'rgba(10,132,255,0.18)' : 'var(--ios-bg3)',
-                  color: isActive ? 'var(--ios-blue)' : 'var(--ios-label3)',
-                  transition: 'all 0.15s',
-                  whiteSpace: 'nowrap',
-                }}>
-                  {sec} <span style={{ opacity: 0.6 }}>{count}</span>
-                </button>
-              )
-            })}
-          </div>
-        )}
         </div>{/* /collapsible secondary controls */}
       </div>
+
+      {/* ── Sector Selector Strip (always visible) ───────────────── */}
+      {viewTab !== 'limitdown' && availableSectors.length > 0 && (
+        <div style={{ padding: '0 12px 8px', display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', flexShrink: 0 }}>
+          {activeSector && (
+            <button
+              onClick={() => setActiveSector(null)}
+              style={{
+                flexShrink: 0, fontSize: 11, fontWeight: 700,
+                padding: '5px 10px', borderRadius: 9999, cursor: 'pointer',
+                border: '1px solid rgba(255,69,58,0.4)',
+                background: 'rgba(255,69,58,0.1)',
+                color: 'var(--ios-red)',
+                whiteSpace: 'nowrap',
+              }}
+            >✕ 全部</button>
+          )}
+          {availableSectors.map(({ sec, count }) => {
+            const isActive = activeSector === sec
+            return (
+              <button
+                key={sec}
+                onClick={() => {
+                  const newSec = isActive ? null : sec
+                  setActiveSector(newSec)
+                  if (newSec) { setSortField('sector_rs_rank'); setSortDir('desc') }
+                }}
+                style={{
+                  flexShrink: 0, fontSize: 11, fontWeight: 600,
+                  padding: '5px 11px', borderRadius: 9999, cursor: 'pointer',
+                  border: isActive ? '1.5px solid var(--ios-blue)' : '0.5px solid var(--ios-sep)',
+                  background: isActive ? 'rgba(10,132,255,0.18)' : 'var(--ios-bg2)',
+                  color: isActive ? 'var(--ios-blue)' : 'var(--ios-label2)',
+                  transition: 'all 0.15s',
+                  whiteSpace: 'nowrap',
+                  boxShadow: isActive ? '0 0 0 2px rgba(10,132,255,0.12)' : 'none',
+                }}
+              >
+                {sec} <span style={{ fontSize: 10, opacity: 0.55 }}>{count}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* ── Scrollable Content ───────────────────────────────────── */}
       <div ref={listScrollRef} onScroll={handleListScroll} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -2430,6 +2457,13 @@ export default function Dashboard({ data, error }) {
 
         {/* Main stock table */}
         <div style={{ marginTop: 12 }}>
+          {/* Sector ranking banner */}
+          {activeSector && (
+            <div style={{ padding: '4px 16px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)' }}>📊 {activeSector}</span>
+              <span style={{ fontSize: 11, color: 'var(--ios-label3)' }}>{filteredAndSorted.length} 支 · 依類股RS排名</span>
+            </div>
+          )}
           <div style={{ padding: '0 20px 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
             {entryStocks.length > 0 && viewTab === 'all' && !searchQuery && (() => {
               const total = scan.total_scanned || stocks.length
@@ -2489,6 +2523,8 @@ export default function Dashboard({ data, error }) {
               toggleWatchlist={toggleWatchlist}
               persistentMap={persistentMap}
               scoreDeltaMap={scoreDeltaMap}
+              sectorMode={!!activeSector}
+              rankOffset={page * PAGE_SIZE}
             />
           )}
           {/* Show-more button when result is capped at top 20 */}
