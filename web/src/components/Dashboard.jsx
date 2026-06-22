@@ -93,11 +93,11 @@ function GradeBadge({ grade }) {
 const BASE = import.meta.env.BASE_URL
 
 /* ── CustomWatchlistTab — ⭐ tab with manual stock tracking ──────── */
-function CustomTrackCard({ stockId, liveQuote, scanStock, onRemove, onSelect }) {
+function CustomTrackCard({ stockId, liveQuote, scanStock, lastSeen, savedName, onRemove, onSelect }) {
   const price = liveQuote?.price
   const pct   = liveQuote?.pct
   const [pressed, setPressed] = useState(false)
-  const displayName = scanStock?.name || ''
+  const displayName = scanStock?.name || savedName || ''
   const pColor = pct == null ? 'var(--ios-label3)' : pct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)'
   return (
     <div
@@ -113,10 +113,11 @@ function CustomTrackCard({ stockId, liveQuote, scanStock, onRemove, onSelect }) 
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-label)' }}>{stockId}</span>
           {displayName && <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>{displayName}</span>}
-          {scanStock && <span style={{ fontSize: 9, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.12)', borderRadius: 4, padding: '1px 5px', marginLeft: 2 }}>在掃描</span>}
+          {scanStock && <span style={{ fontSize: 9, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.12)', borderRadius: 4, padding: '1px 5px' }}>今日在掃描</span>}
+          {!scanStock && lastSeen && <span style={{ fontSize: 9, color: 'var(--ios-orange)', background: 'rgba(255,159,10,0.12)', borderRadius: 4, padding: '1px 5px' }}>最後見 {lastSeen.slice(5)}</span>}
         </div>
         {!liveQuote && (
           <div style={{ fontSize: 10, color: 'var(--ios-label4)', marginTop: 2 }}>盤中才顯示即時價</div>
@@ -149,15 +150,46 @@ function CustomWatchlistTab({
   watchlistStocks, customTrack, allScanStocks, liveData,
   onAdd, onRemove, onSelect,
   notionMap, watchlist, toggleWatchlist, persistentMap, scoreDeltaMap, globalMaxScore, rankOffset,
+  watchlistInfo, scans, dates,
 }) {
   const [input, setInput] = useState('')
   const [shake, setShake] = useState(false)
+  const [showDropouts, setShowDropouts] = useState(false)
 
   const scanMap = useMemo(() => {
     const m = {}
     for (const s of allScanStocks) m[String(s.stock_id)] = s
     return m
   }, [allScanStocks])
+
+  // Build lastSeen map: stock_id → most recent scan date it appeared in top_stocks
+  const lastSeenMap = useMemo(() => {
+    if (!scans || !dates) return {}
+    const map = {}
+    for (const d of [...dates].sort()) {
+      for (const s of (scans[d]?.top_stocks || [])) {
+        map[String(s.stock_id)] = d
+      }
+    }
+    return map
+  }, [scans, dates])
+
+  // Stocks that appeared in last 5 scan dates but NOT in the latest scan — potential gap alerts
+  const recentDropouts = useMemo(() => {
+    if (!scans || !dates || dates.length < 2) return []
+    const sortedDesc = [...dates].sort((a, b) => b.localeCompare(a))
+    const latestDate = sortedDesc[0]
+    const latestIds = new Set((scans[latestDate]?.top_stocks || []).map(s => String(s.stock_id)))
+    const prevDates = sortedDesc.slice(1, 6)
+    const seen = {}
+    for (const d of prevDates) {
+      for (const s of (scans[d]?.top_stocks || [])) {
+        const sid = String(s.stock_id)
+        if (!latestIds.has(sid) && !seen[sid]) seen[sid] = { ...s, stock_id: sid, lastSeen: d }
+      }
+    }
+    return Object.values(seen).sort((a, b) => b.lastSeen.localeCompare(a.lastSeen))
+  }, [scans, dates])
 
   const handleAdd = () => {
     const id = input.trim().replace(/\D/g, '')
@@ -228,6 +260,8 @@ function CustomWatchlistTab({
                       stockId={s.stock_id}
                       liveQuote={liveData[String(s.stock_id)]}
                       scanStock={null}
+                      lastSeen={lastSeenMap[String(s.stock_id)]}
+                      savedName={(watchlistInfo || {})[String(s.stock_id)]?.name || s.name}
                       onRemove={id => toggleWatchlist(id)}
                       onSelect={null}
                     />
@@ -267,6 +301,66 @@ function CustomWatchlistTab({
           <div style={{ fontSize: 13, color: 'var(--ios-label3)' }}>點選股票列右側的 ☆ 加入，或上方輸入代號追蹤</div>
         </div>
       ) : null}
+
+      {/* ── 近期掉出前50偵測 ── */}
+      {recentDropouts.length > 0 && (
+        <div style={{ padding: '6px 14px 16px', borderTop: '0.5px solid var(--ios-sep)', marginTop: 6 }}>
+          <button
+            onClick={() => setShowDropouts(v => !v)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+              background: 'none', border: 'none', padding: '6px 0', cursor: 'pointer',
+            }}
+          >
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)' }}>
+              近期掉出前50（{recentDropouts.length} 支）
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--ios-label4)', marginLeft: 'auto' }}>
+              {showDropouts ? '▲ 收起' : '▼ 展開'}
+            </span>
+          </button>
+          {showDropouts && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 4 }}>
+              {recentDropouts.map(s => (
+                <div key={s.stock_id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  background: 'var(--ios-bg2)', borderRadius: 12, padding: '9px 12px',
+                  border: '0.5px solid var(--ios-sep)',
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-label)' }}>{s.stock_id}</span>
+                      <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>{s.name}</span>
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--ios-orange)', marginTop: 1 }}>最後見於 {s.lastSeen}</div>
+                  </div>
+                  {liveData[String(s.stock_id)] && (() => {
+                    const q = liveData[String(s.stock_id)]
+                    const c = q.pct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)'
+                    return (
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: c, fontFamily: 'var(--font-mono)' }}>
+                          {q.price >= 100 ? q.price.toFixed(0) : q.price.toFixed(2)}
+                        </div>
+                        <div style={{ fontSize: 10, color: c }}>{q.pct >= 0 ? '+' : ''}{(q.pct * 100).toFixed(2)}%</div>
+                      </div>
+                    )
+                  })()}
+                  <button
+                    onClick={() => onAdd(String(s.stock_id))}
+                    style={{
+                      flexShrink: 0, fontSize: 11, fontWeight: 700, padding: '4px 9px',
+                      borderRadius: 8, border: '0.5px solid var(--ios-blue)',
+                      background: customTrack.has(String(s.stock_id)) ? 'rgba(10,132,255,0.15)' : 'none',
+                      color: 'var(--ios-blue)', cursor: 'pointer',
+                    }}
+                  >{customTrack.has(String(s.stock_id)) ? '已追蹤' : '+ 追蹤'}</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -2922,10 +3016,13 @@ export default function Dashboard({ data, error }) {
               notionMap={notionMap}
               watchlist={watchlist}
               toggleWatchlist={toggleWatchlist}
+              watchlistInfo={watchlistInfo}
               persistentMap={persistentMap}
               scoreDeltaMap={scoreDeltaMap}
               globalMaxScore={globalMaxScore}
               rankOffset={page * PAGE_SIZE}
+              scans={data?.scans}
+              dates={data?.dates}
             />
           ) : (
             <WatchlistView
