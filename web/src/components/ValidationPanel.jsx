@@ -182,9 +182,10 @@ export default function ValidationPanel({ data }) {
     }
     const { scans, dates, aggregateLatest } = data
 
-    // Latest TOP 20 from aggregateLatest (the authoritative top 20 after aggregate)
-    const top20   = aggregateLatest?.top_stocks || scans[dates[0]]?.top_stocks?.slice(0, 20) || []
-    const scanDate = aggregateLatest?.date?.slice(0, 10) || dates[0]
+    // Use scans[dates[0]].top_stocks for correct normalized grades (aggregateLatest
+    // marks nearly all TOP 20 as grade A, bypassing the per-stock CSV grades).
+    const top20   = scans[dates[0]]?.top_stocks?.slice(0, 20) || aggregateLatest?.top_stocks || []
+    const scanDate = dates[0] || aggregateLatest?.date?.slice(0, 10)
 
     // Batch stats for the latest top 20
     const bWith = top20.filter(s => s.return_5d != null)
