@@ -612,6 +612,7 @@ function inferSector(stockId) {
 }
 
 function SectorHeatmap({ stocks }) {
+  const [selectedSector, setSelectedSector] = useState(null)
   if (!stocks || stocks.length === 0) return null
 
   const sectorMap = {}
@@ -635,7 +636,8 @@ function SectorHeatmap({ stocks }) {
     return ret >= 0 ? `rgba(255,59,48,${a})` : `rgba(48,209,88,${a})`
   }
 
-  function tileBorder(ret) {
+  function tileBorder(ret, active) {
+    if (active) return 'var(--ios-blue)'
     const t = Math.max(0, Math.min(1, Math.abs(ret) / 0.05))
     const a = 0.18 + t * 0.5
     return ret > 0.002 ? `rgba(255,59,48,${a})` : ret < -0.002 ? `rgba(48,209,88,${a})` : 'var(--ios-sep)'
@@ -647,24 +649,46 @@ function SectorHeatmap({ stocks }) {
     return 'var(--ios-label3)'
   }
 
+  // Top 20 stocks in the selected sector sorted by entry_signal → sector_rs_rank → day_return
+  const sectorStockList = selectedSector
+    ? (sectorMap[selectedSector] || [])
+        .slice()
+        .sort((a, b) => {
+          const aS = a.entry_signal ? 1 : 0, bS = b.entry_signal ? 1 : 0
+          if (bS !== aS) return bS - aS
+          const aR = a.sector_rs_rank ?? a.rs_score ?? 0
+          const bR = b.sector_rs_rank ?? b.rs_score ?? 0
+          if (bR !== aR) return bR - aR
+          return (b.day_return || 0) - (a.day_return || 0)
+        })
+        .slice(0, 20)
+    : []
+
   return (
     <div className="glass-panel" style={{ overflow: 'hidden' }}>
       <div style={{ padding: '10px 14px 10px', borderBottom: '1px solid var(--ios-sep)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-label)' }}>🗂 板塊熱力圖</span>
-        <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>紅=漲 綠=跌（台灣慣例）</span>
+        <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>
+          {selectedSector ? (
+            <button onClick={() => setSelectedSector(null)} style={{ background: 'none', border: 'none', color: 'var(--ios-blue)', fontSize: 10, cursor: 'pointer', padding: 0 }}>← 返回</button>
+          ) : '紅=漲 綠=跌（台灣慣例）'}
+        </span>
       </div>
-      <div style={{ padding: '10px 12px 12px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+      <div style={{ padding: '10px 12px 8px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         {sectors.map(({ name, count, avgReturn, signalCount }) => {
           const miniBarW = Math.round(Math.min(1, Math.abs(avgReturn) / 0.05) * 32)
+          const isActive = selectedSector === name
           return (
-            <div key={name} style={{
-              background: tileBg(avgReturn),
+            <div key={name} onClick={() => setSelectedSector(prev => prev === name ? null : name)} style={{
+              background: isActive ? 'rgba(10,132,255,0.12)' : tileBg(avgReturn),
               borderRadius: 12,
               padding: '9px 7px 7px',
               display: 'flex', flexDirection: 'column', alignItems: 'center',
-              border: `1px solid ${tileBorder(avgReturn)}`,
+              border: `1.5px solid ${tileBorder(avgReturn, isActive)}`,
               minHeight: 72,
               position: 'relative',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
             }}>
               {signalCount > 0 && (
                 <div style={{ position: 'absolute', top: 6, right: 7, display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -672,15 +696,15 @@ function SectorHeatmap({ stocks }) {
                   <span style={{ fontSize: 8, color: '#30D158', fontWeight: 700 }}>{signalCount}</span>
                 </div>
               )}
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ios-label)', textAlign: 'center', marginBottom: 5, lineHeight: 1.2 }}>{name}</div>
-              <div style={{ fontSize: 17, fontWeight: 800, color: retColor(avgReturn), fontFamily: 'monospace', letterSpacing: '-0.5px', lineHeight: 1 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: isActive ? 'var(--ios-blue)' : 'var(--ios-label)', textAlign: 'center', marginBottom: 5, lineHeight: 1.2 }}>{name}</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: isActive ? 'var(--ios-blue)' : retColor(avgReturn), fontFamily: 'monospace', letterSpacing: '-0.5px', lineHeight: 1 }}>
                 {avgReturn >= 0 ? '+' : ''}{(avgReturn * 100).toFixed(1)}%
               </div>
               <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                 <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>{count} 支</span>
                 {miniBarW > 0 && (
                   <div style={{ width: 36, height: 2, background: 'var(--ios-fill2)', borderRadius: 1, overflow: 'hidden' }}>
-                    <div style={{ width: miniBarW, height: '100%', background: retColor(avgReturn), opacity: 0.65 }} />
+                    <div style={{ width: miniBarW, height: '100%', background: isActive ? 'var(--ios-blue)' : retColor(avgReturn), opacity: 0.65 }} />
                   </div>
                 )}
               </div>
@@ -688,6 +712,38 @@ function SectorHeatmap({ stocks }) {
           )
         })}
       </div>
+
+      {/* Expanded sector stock list */}
+      {selectedSector && sectorStockList.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--ios-sep)' }}>
+          <div style={{ padding: '8px 14px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-blue)' }}>📊 {selectedSector} · 前{sectorStockList.length}名</span>
+            <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>依 RS 排名</span>
+          </div>
+          {sectorStockList.map((s, i) => {
+            const ret = s.day_return || 0
+            const hasSignal = !!s.entry_signal
+            const rs = s.sector_rs_rank != null ? Math.round(s.sector_rs_rank) : null
+            return (
+              <div key={s.stock_id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 14px',
+                borderBottom: i < sectorStockList.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
+                background: hasSignal ? 'rgba(48,209,88,0.04)' : 'transparent',
+              }}>
+                <span style={{ fontSize: 11, color: 'var(--ios-label4)', minWidth: 18, textAlign: 'right', fontFamily: 'monospace' }}>{i + 1}</span>
+                {hasSignal && <span style={{ fontSize: 9, background: 'rgba(48,209,88,0.18)', color: '#30D158', borderRadius: 4, padding: '1px 5px', fontWeight: 700, flexShrink: 0 }}>進場</span>}
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'monospace', flexShrink: 0 }}>{s.stock_id}</span>
+                <span style={{ fontSize: 12, color: 'var(--ios-label)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                {rs != null && <span style={{ fontSize: 10, color: 'var(--ios-label3)', flexShrink: 0 }}>RS{rs}%</span>}
+                <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', flexShrink: 0, color: ret > 0 ? 'var(--ios-red)' : ret < 0 ? 'var(--ios-green)' : 'var(--ios-label3)' }}>
+                  {ret > 0 ? '+' : ''}{(ret * 100).toFixed(1)}%
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -701,6 +757,13 @@ export default function Overview({ data, error }) {
   const stocks = scan.top_stocks || []
   const top5 = stocks.slice(0, 5)
   const maxScore = stocks.length > 0 ? Math.max(...stocks.map(s => s.entry_score || 0), 1) : 2000
+
+  // Merge all scanned stocks for heatmap: rich top_stocks first, then slim filter_stocks extras
+  const allScanStocks = useMemo(() => {
+    const topIds = new Set((scan.top_stocks || []).map(s => String(s.stock_id)))
+    const extras = (scan.filter_stocks || []).filter(s => !topIds.has(String(s.stock_id)))
+    return [...(scan.top_stocks || []), ...extras]
+  }, [scan])
 
   if (error && !data) {
     return (
@@ -775,8 +838,8 @@ export default function Overview({ data, error }) {
         {/* Feature 2: Watchlist alerts — entry signals or big drops */}
         <WatchlistAlerts stocks={stocks} />
 
-        {/* Feature 4: Sector heatmap */}
-        {stocks.length > 0 && <SectorHeatmap stocks={stocks} />}
+        {/* Feature 4: Sector heatmap — all scan stocks */}
+        {allScanStocks.length > 0 && <SectorHeatmap stocks={allScanStocks} />}
 
         {/* Feature 5: AI daily briefing from scan ai_picks_text */}
         <AIBriefing scan={scan} entryCount={entryStocks.length} totalStocks={stocks.length} />
