@@ -9,6 +9,7 @@ const AgentPanel = lazy(() => import('./components/AgentPanel.jsx'))
 const QuotaPanel = lazy(() => import('./components/QuotaPanel.jsx'))
 const Portfolio = lazy(() => import('./components/Portfolio.jsx'))
 const GeminiStudio = lazy(() => import('./components/GeminiStudio.jsx'))
+const LiveMonitor = lazy(() => import('./components/LiveMonitor.jsx'))
 
 const BASE = import.meta.env.BASE_URL || '/'
 
@@ -16,6 +17,7 @@ const TABS = [
   { key: 'overview',   label: '總覽', icon: '⚡' },
   { key: 'dashboard',  label: '掃描', icon: '📊' },
   { key: 'portfolio',  label: '持倉', icon: '💼' },
+  { key: 'monitor',    label: '盯盤', icon: '📈' },
   { key: 'news',       label: '新聞', icon: '📰' },
   { key: 'predict',    label: '預測', icon: '🔮' },
   { key: 'studio',     label: '圓桌', icon: '🎯' },
@@ -27,6 +29,7 @@ const TAB_TITLES = {
   overview:  '今日總覽',
   dashboard: '掃描結果',
   portfolio: '持倉追蹤',
+  monitor:   '即時盯盤',
   news:      '市場新聞',
   predict:   '盤前預測',
   studio:    'AI 圓桌研究室',
@@ -107,6 +110,7 @@ export default function App() {
       case 'overview':   return <Overview data={data} error={error} />
       case 'dashboard':  return <Dashboard data={data} error={error} />
       case 'portfolio':  return <Portfolio data={data} />
+      case 'monitor':    return <LiveMonitor data={data} />
       case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} />
       case 'predict':    return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />
       case 'studio':     return null  // rendered always-mounted below
