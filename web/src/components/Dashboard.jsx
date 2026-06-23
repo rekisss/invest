@@ -229,7 +229,7 @@ function CustomWatchlistTab({
             borderRadius: 10, padding: '8px 14px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
           }}
         >追蹤</button>
-        {customIds.length > 0 && (
+        {(customIds.length > 0 || watchlistStocks.length > 0) && (
           <CopyAllButton ids={[...new Set([...customIds, ...watchlistStocks.map(s => String(s.stock_id))])]} />
         )}
       </div>
