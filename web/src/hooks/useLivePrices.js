@@ -126,7 +126,7 @@ const V7_HOSTS = ['query2.finance.yahoo.com', 'query1.finance.yahoo.com']
 
 // ── Tier 4: GitHub Actions price cache (server-side, no CORS issues) ─────
 const CACHE_URL     = 'https://raw.githubusercontent.com/rekisss/invest/data/live_prices.json'
-const CACHE_MAX_AGE = 10 * 60 * 1000  // reject if older than 10 minutes
+const CACHE_MAX_AGE = 30 * 60 * 1000  // reject if older than 30 min (covers post-market users)
 
 export async function fetchPriceCache(ids) {
   try {
