@@ -1234,24 +1234,37 @@ console.log(`K-line: injected into stocks across ${recentDates.length} dates`)
 
 // Compute return_1d (next-day forward return) from kline data, then inject into scan stocks.
 // Uses kline daily bars first, falls back to priceHistoryMap (scan-date closes).
+// Find the next bar with a valid (non-zero) close, looking up to 5 bars forward.
+// This handles halted days and holidays where the immediate next bar is missing or zero.
+function nextValidClose(bars, fromIdx) {
+  for (let j = fromIdx + 1; j < bars.length && j <= fromIdx + 5; j++) {
+    if ((bars[j].close ?? 0) > 0) return bars[j].close
+  }
+  return null
+}
+
 const klineReturn1dMap = {}
 for (const [sid, entry] of Object.entries(klineMap)) {
   const bars = getKlineBars(entry, '1d')
   if (!bars || bars.length < 2) continue
   klineReturn1dMap[sid] = {}
-  for (let i = 0; i + 1 < bars.length; i++) {
-    const cur = bars[i], nxt = bars[i + 1]
-    if (cur.time && cur.close > 0 && nxt.close > 0)
-      klineReturn1dMap[sid][cur.time] = Math.round((nxt.close - cur.close) / cur.close * 10000) / 10000
+  for (let i = 0; i < bars.length; i++) {
+    const cur = bars[i]
+    if (!cur.time || cur.close <= 0) continue
+    const nxtClose = nextValidClose(bars, i)
+    if (nxtClose != null)
+      klineReturn1dMap[sid][cur.time] = Math.round((nxtClose - cur.close) / cur.close * 10000) / 10000
   }
 }
 const scanReturn1dMap = {}
 for (const [sid, bars] of Object.entries(priceHistoryMap)) {
-  for (let i = 0; i + 1 < bars.length; i++) {
-    const cur = bars[i], nxt = bars[i + 1]
-    if (cur.time && cur.close > 0 && nxt.close > 0) {
+  for (let i = 0; i < bars.length; i++) {
+    const cur = bars[i]
+    if (!cur.time || cur.close <= 0) continue
+    const nxtClose = nextValidClose(bars, i)
+    if (nxtClose != null) {
       if (!scanReturn1dMap[sid]) scanReturn1dMap[sid] = {}
-      scanReturn1dMap[sid][cur.time] = Math.round((nxt.close - cur.close) / cur.close * 10000) / 10000
+      scanReturn1dMap[sid][cur.time] = Math.round((nxtClose - cur.close) / cur.close * 10000) / 10000
     }
   }
 }
