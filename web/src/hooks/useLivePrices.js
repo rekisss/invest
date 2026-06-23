@@ -1,7 +1,9 @@
 // Real-time Taiwan stock prices via Yahoo Finance API (CORS-friendly)
 // - Primary:  query2.finance.yahoo.com  (v7 batch, 20 symbols/req)
 // - Fallback: query1.finance.yahoo.com  (same endpoint, different CDN pool)
-// - Last resort: v8 chart API per-symbol for any that still miss
+// - Tier 3:   v8 chart API per-symbol for any still-missing symbols
+// - Tier 4:   GitHub Actions price cache (raw.githubusercontent.com/rekisss/invest/data/live_prices.json)
+//             Updated every 3 min during market hours by the 盤中即時報價快取 workflow
 // - Polls every 30s; outside market hours returns last-close snapshot
 
 import { useState, useEffect, useMemo } from 'react'
@@ -122,6 +124,43 @@ async function tryV8Single(symbol, timeout = 8000) {
 
 const V7_HOSTS = ['query2.finance.yahoo.com', 'query1.finance.yahoo.com']
 
+// ── Tier 4: GitHub Actions price cache (server-side, no CORS issues) ─────
+const CACHE_URL     = 'https://raw.githubusercontent.com/rekisss/invest/data/live_prices.json'
+const CACHE_MAX_AGE = 10 * 60 * 1000  // reject if older than 10 minutes
+
+export async function fetchPriceCache(ids) {
+  try {
+    const r = await fetch(CACHE_URL, { signal: AbortSignal.timeout(6000) })
+    if (!r.ok) return { stocks: {}, indices: null }
+    const json = await r.json()
+    if (!json?.prices || !json?.updatedAt) return { stocks: {}, indices: null }
+    if (Date.now() - new Date(json.updatedAt).getTime() > CACHE_MAX_AGE)
+      return { stocks: {}, indices: null }
+
+    const toTime = iso => iso
+      ? new Date(iso).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' })
+      : ''
+
+    const stocks = {}
+    for (const id of ids) {
+      const p = json.prices[id]
+      if (!p) continue
+      stocks[id] = { ...p, time: toTime(p.time), isSnapshot: true }
+    }
+
+    const i_t00 = json.prices['_idx_t00']
+    const i_o00 = json.prices['_idx_o00']
+    const indices = (i_t00 || i_o00) ? {
+      ...(i_t00 ? { t00: { ...i_t00, time: toTime(i_t00.time) } } : {}),
+      ...(i_o00 ? { o00: { ...i_o00, time: toTime(i_o00.time) } } : {}),
+    } : null
+
+    return { stocks, indices }
+  } catch (e) {
+    return { stocks: {}, indices: null }
+  }
+}
+
 async function fetchYahooBatch(ids) {
   const result = {}
   const CHUNK = 20
@@ -226,7 +265,17 @@ export function useLivePrices(stockIds, { pollInterval = 30000 } = {}) {
             setLastUpdate(new Date())
             setError(null)
           } else {
-            setError('無法取得報價（Yahoo Finance 暫時無回應，請稍後重試）')
+            // Tier 4: GH Actions cache — server-side fetch every 3 min, no CORS issues
+            const { stocks: cached } = await fetchPriceCache(ids)
+            if (!cancelled) {
+              if (Object.keys(cached).length > 0) {
+                setPrices(prev => ({ ...prev, ...cached }))
+                setLastUpdate(new Date())
+                setError('快取報價（每3分鐘更新）')
+              } else {
+                setError('無法取得報價（Yahoo Finance 暫時無回應，請稍後重試）')
+              }
+            }
           }
         }
       } catch (e) {

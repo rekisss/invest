@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
-import { useLivePrices, fetchIndices } from '../hooks/useLivePrices'
+import { useLivePrices, fetchIndices, fetchPriceCache } from '../hooks/useLivePrices'
 import { flashPriceEl, animateListRows } from '../utils/animeUtils.js'
 import StockDetailModal from './StockDetailModal'
 
@@ -401,13 +401,18 @@ export default function LiveMonitor({ data }) {
 
   const countdown = useCountdown(liveTime)
 
-  // Separate index fetch via Yahoo Finance (CORS-friendly)
+  // Separate index fetch via Yahoo Finance → GH Actions cache fallback
   useEffect(() => {
     let cancelled = false
     const run = async () => {
       if (!cancelled) setIdxLoading(true)
       try {
-        const result = await fetchIndices()
+        let result = await fetchIndices()
+        if (!result) {
+          // Fallback to GH Actions cache for index data
+          const { indices: cached } = await fetchPriceCache([])
+          result = cached
+        }
         if (!cancelled && result) setIndices(result)
       } catch {} finally {
         if (!cancelled) setIdxLoading(false)
