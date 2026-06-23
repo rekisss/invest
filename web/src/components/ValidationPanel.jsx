@@ -57,6 +57,17 @@ function parseSignals(entry_reason) {
   return [...pri, ...rest].slice(0, 4)
 }
 
+// Most recent past Friday (= "上週五"). If today is Friday, returns last week's Friday.
+// Returns an ISO date string (YYYY-MM-DD) in Taiwan time.
+function lastFridayISO(todayTW) {
+  const [y, m, d] = todayTW.split('-').map(Number)
+  const dt  = new Date(Date.UTC(y, m - 1, d))
+  let back  = (dt.getUTCDay() - 5 + 7) % 7  // days back to the most recent Friday (0 if today is Fri)
+  if (back === 0) back = 7                   // today is Friday → use last week's Friday
+  dt.setUTCDate(dt.getUTCDate() - back)
+  return dt.toISOString().slice(0, 10)
+}
+
 // ── Stock card ────────────────────────────────────────────────────────────
 function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
   const cfg = GRADE_CFG[stock.grade] || GRADE_CFG.D
@@ -358,10 +369,17 @@ export default function ValidationPanel({ data }) {
     const { scans, dates, aggregateLatest } = data
 
     const todayTW   = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
+    // `dates` is newest-first; keep that order so the latest date renders on the left.
     const validDates = dates.filter(d => d < todayTW)
 
     const top20    = scans[validDates[0]]?.top_stocks?.slice(0, 20) || aggregateLatest?.top_stocks || []
     const scanDate = validDates[0] || aggregateLatest?.date?.slice(0, 10)
+
+    // Validation window: only dates from last Friday onward (most recent week of picks).
+    // Falls back to the newest 5 scans if nothing is recent enough (e.g. stale data).
+    const cutoff = lastFridayISO(todayTW)
+    let windowDates = validDates.filter(d => d >= cutoff)
+    if (!windowDates.length) windowDates = validDates.slice(0, 5)
 
     const bWith  = top20.filter(s => s.return_5d != null)
     const b1With = top20.filter(s => s.return_1d != null)
@@ -378,11 +396,11 @@ export default function ValidationPanel({ data }) {
       exits:      top20.filter(s => s.base_exit_signal).length,
     }
 
-    // All observations across all dates (oldest → newest in validDates; reverse for chart)
-    const sortedDates = [...validDates].reverse()
+    // Validation dates, newest-first (latest renders on the left). Windowed to last Friday+.
+    const sortedDates = windowDates
     const allObs = []
-    for (const date of validDates) {
-      for (const s of (scans[date]?.top_stocks || [])) {
+    for (const date of windowDates) {
+      for (const s of (scans[date]?.top_stocks || []).slice(0, 20)) {
         allObs.push({ date, ...s, r5d: s.return_5d, r1d: s.return_1d })
       }
     }
@@ -729,8 +747,9 @@ export default function ValidationPanel({ data }) {
       </div>
 
       {/* ── 歷史驗證 section ── */}
-      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-label)', marginBottom: 10, paddingTop: 4, borderTop: '0.5px solid var(--ios-sep)' }}>
-        歷史驗證
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 10, paddingTop: 4, borderTop: '0.5px solid var(--ios-sep)' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-label)' }}>歷史驗證</span>
+        <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>近一週（上週五起）· 最新在左</span>
       </div>
 
       {/* Summary stat cards */}
