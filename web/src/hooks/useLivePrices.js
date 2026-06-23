@@ -8,7 +8,8 @@ import { useState, useEffect, useMemo } from 'react'
 function isOTCStock(stockId) {
   const n = parseInt(String(stockId), 10)
   return (n >= 4200 && n <= 4999) || (n >= 5000 && n <= 5999) ||
-         (n >= 6000 && n <= 6999) || (n >= 8000 && n <= 8999) || (n >= 9200 && n <= 9999)
+         (n >= 6000 && n <= 6999) || (n >= 7000 && n <= 7999) ||
+         (n >= 8000 && n <= 8999) || (n >= 9200 && n <= 9999)
 }
 
 export function isTWSEOpen() {
@@ -32,7 +33,8 @@ export function getTWSESession() {
   return 'closed'                   // after 13:30
 }
 
-async function fetchTWSEBatch(ids) {
+// snapshot=true: market closed, use y (prev close) when z is '-'
+async function fetchTWSEBatch(ids, snapshot = false) {
   const result = {}
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50)
@@ -46,21 +48,24 @@ async function fetchTWSEBatch(ids) {
       const data = await r.json()
       for (const item of data.msgArray || []) {
         const z = parseFloat(item.z)
-        if (isNaN(z) || z <= 0) continue   // '-' = no trade yet
         const y = parseFloat(item.y)
+        const live = !isNaN(z) && z > 0
+        const price = live ? z : (snapshot && !isNaN(y) && y > 0 ? y : null)
+        if (price == null) continue
         const h = parseFloat(item.h)
         const l = parseFloat(item.l)
         const o = parseFloat(item.o)
         const v = parseFloat(item.v)
         result[item.c] = {
-          price:     z,
+          price,
           prevClose: isNaN(y) ? null : y,
-          pct:       (!isNaN(y) && y > 0) ? (z - y) / y : null,
+          pct:       live && !isNaN(y) && y > 0 ? (z - y) / y : null,
           high:      isNaN(h) ? null : h,
           low:       isNaN(l) ? null : l,
           open:      isNaN(o) ? null : o,
           volume:    isNaN(v) ? 0 : v,
           time:      item.t || '',
+          isSnapshot: !live,
         }
       }
     } catch { /* network/CORS error — skip chunk, return what we have */ }
@@ -99,15 +104,14 @@ export function useLivePrices(stockIds, { pollInterval = 30000 } = {}) {
 
     let cancelled = false
 
-    const run = async () => {
+    const run = async (snapshot = false) => {
       const open = isTWSEOpen()
       const sess = getTWSESession()
       if (!cancelled) { setIsOpen(open); setSession(sess) }
-      if (!open) return
 
       if (!cancelled) setLoading(true)
       try {
-        const result = await fetchTWSEBatch(ids)
+        const result = await fetchTWSEBatch(ids, snapshot)
         if (!cancelled && Object.keys(result).length > 0) {
           setPrices(prev => ({ ...prev, ...result }))
           setLastUpdate(new Date())
@@ -120,8 +124,11 @@ export function useLivePrices(stockIds, { pollInterval = 30000 } = {}) {
       }
     }
 
-    run()
-    const t = setInterval(run, pollInterval)
+    const open = isTWSEOpen()
+    // Always fetch once on mount — snapshot mode outside market hours to get prev-close
+    run(!open)
+    if (!open) return  // don't poll when market is closed
+    const t = setInterval(() => run(false), pollInterval)
     return () => { cancelled = true; clearInterval(t) }
   }, [idsKey, pollInterval])
 

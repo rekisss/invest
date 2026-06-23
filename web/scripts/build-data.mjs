@@ -1017,6 +1017,40 @@ async function fetchTWSEInstitutional(dateYYYYMMDD) {
   }
 }
 
+// ── Taiwan stock industry category map from TWSE / TPEX open data ────────────
+// Both TWSE (上市) and TPEX (上櫃) are tried; failures are silently swallowed.
+async function fetchTaiwanIndustryMap() {
+  const map = {}
+  // TWSE listed (上市)
+  try {
+    const txt = await fetchUrl('https://opendata.twse.com.tw/v1/company/stockList', 10000)
+    const data = JSON.parse(txt)
+    if (Array.isArray(data)) {
+      for (const item of data) {
+        const id  = (item['公司代號'] || item['stockSymbol'] || item['code'] || '').trim()
+        const cat = (item['產業別']   || item['industryType'] || item['industry'] || '').trim()
+        if (id && cat) map[id] = cat
+      }
+    }
+    console.log(`Industry map (TWSE): ${Object.keys(map).length} entries`)
+  } catch (e) { console.warn('TWSE industry fetch skipped:', e.message) }
+  // TPEX listed (上櫃) — catches most 6xxx/7xxx/8xxx stocks
+  try {
+    const txt = await fetchUrl('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis', 10000)
+    const data = JSON.parse(txt)
+    const before = Object.keys(map).length
+    if (Array.isArray(data)) {
+      for (const item of data) {
+        const id  = (item['SecuritiesCompanyCode'] || item['股票代號'] || '').trim()
+        const cat = (item['IndustryCategory'] || item['產業別'] || '').trim()
+        if (id && cat && !map[id]) map[id] = cat
+      }
+    }
+    console.log(`Industry map (TPEX): +${Object.keys(map).length - before} entries, total=${Object.keys(map).length}`)
+  } catch (e) { console.warn('TPEX industry fetch skipped:', e.message) }
+  return map
+}
+
 // ── Last scan execution date (from _attempted_ filenames) ────────────────────
 function getLastScanExecDate() {
   if (!existsSync(SCAN_DIR)) return null
@@ -1497,6 +1531,24 @@ if (latestDataDate && isFresh) {
   } else {
     console.log('  TWSE T86 無資料（可能盤後尚未公布或非交易日）')
   }
+}
+
+// ── Enrich industry_category from TWSE/TPEX open data ────────────────────────
+const industryMap = await fetchTaiwanIndustryMap()
+if (Object.keys(industryMap).length > 0) {
+  let filled = 0
+  for (const d of dates) {
+    for (const arr of [scans[d]?.top_stocks, scans[d]?.filter_stocks, scans[d]?.persistent]) {
+      if (!arr) continue
+      for (const stock of arr) {
+        if (!stock.industry_category) {
+          const cat = industryMap[String(stock.stock_id)]
+          if (cat) { stock.industry_category = cat; filled++ }
+        }
+      }
+    }
+  }
+  console.log(`Industry enrichment: ${filled} stocks filled`)
 }
 
 writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality }), 'utf-8')

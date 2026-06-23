@@ -887,6 +887,7 @@ function BBPositionBar({ bbPctB, width = 56 }) {
 /* ── Feature 3: Sector Heatmap ───────────────────────────────────── */
 function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
   const [heatTab, setHeatTab] = useState('strong')
+  const [heatCopied, setHeatCopied] = useState(false)
   const tileGridRef = useRef(null)
 
   // Animate tiles in with stagger when tab switches
@@ -957,6 +958,26 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
             </span>
           )}
         </div>
+        {/* Copy top 20 stocks button */}
+        {stocks.length > 0 && (() => {
+          const top20 = [...stocks].sort((a, b) => (b.entry_score || 0) - (a.entry_score || 0)).slice(0, 20)
+          return (
+            <button
+              onClick={() => {
+                navigator.clipboard?.writeText(top20.map(s => s.stock_id).join(','))
+                setHeatCopied(true)
+                setTimeout(() => setHeatCopied(false), 1500)
+              }}
+              title="複製前20支股號"
+              style={{
+                flexShrink: 0, background: heatCopied ? 'rgba(22,214,126,0.15)' : 'var(--ios-fill3)',
+                color: heatCopied ? 'var(--ios-green)' : 'var(--ios-label3)',
+                border: 'none', borderRadius: 8, padding: '4px 9px',
+                fontSize: 12, cursor: 'pointer', transition: 'all 0.2s',
+              }}
+            >{heatCopied ? '✓' : '📋'}</button>
+          )
+        })()}
         {/* Segmented tab control — sliding indicator */}
         <div style={{
           display: 'flex', background: 'var(--ios-fill3)', borderRadius: 10,
@@ -3040,6 +3061,11 @@ export default function Dashboard({ data, error }) {
             {searchQuery && (
               <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>
                 找到 {filteredAndSorted.length} 支
+              </span>
+            )}
+            {viewTab !== 'heatmap' && viewTab !== 'watchlist' && displayList.length > 0 && (
+              <span style={{ marginLeft: 'auto' }}>
+                <CopyAllButton ids={displayList.slice(0, 20).map(s => String(s.stock_id))} />
               </span>
             )}
           </div>

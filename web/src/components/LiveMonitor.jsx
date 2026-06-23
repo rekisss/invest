@@ -104,10 +104,18 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
   const upColor   = '#FF3340'
   const downColor = '#16D67E'
   const pct       = live?.pct ?? null
+  const isSnap    = live?.isSnapshot ?? false
   const color     = pct == null ? 'var(--ios-label)' : pct >= 0 ? upColor : downColor
-  const pnlPct    = position && live ? (live.price - position.buyPrice) / position.buyPrice * 100 : null
-  const pnlAmt    = position && live ? (live.price - position.buyPrice) * position.qty           : null
+  const pnlPct    = position && live?.price ? (live.price - position.buyPrice) / position.buyPrice * 100 : null
+  const pnlAmt    = position && live?.price ? (live.price - position.buyPrice) * position.qty           : null
   const pnlColor  = pnlPct == null ? 'var(--ios-label3)' : pnlPct >= 0 ? upColor : downColor
+
+  // Fallback info from scan data when no live price yet
+  const scanClose   = scan?.close || null
+  const scanScore   = scan?.entry_score || null
+  const scanSignals = scan?.entry_reason
+    ? scan.entry_reason.split(',').map(s => s.trim()).filter(Boolean).slice(0, 3)
+    : []
 
   return (
     <div
@@ -139,14 +147,19 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
             <span style={{ fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '1px 5px', color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.12)' }}>持倉</span>
           )}
         </div>
-        {/* Sub-row: OHLV + P&L */}
+        {/* Sub-row: live OHLV / scan signals / P&L */}
         <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--ios-label4)', flexWrap: 'wrap', marginTop: 2 }}>
-          {live?.open  != null && <span>開 {fmtP(live.open)}</span>}
-          {live?.high  != null && <span style={{ color: upColor }}>高 {fmtP(live.high)}</span>}
-          {live?.low   != null && <span style={{ color: downColor }}>低 {fmtP(live.low)}</span>}
-          {live?.volume > 0    && <span>量 {Math.round(live.volume / 1000).toLocaleString()}張</span>}
-          {live?.time          && <span>{live.time}</span>}
-          {position && live && pnlAmt != null && (
+          {live && !isSnap && live.open  != null && <span>開 {fmtP(live.open)}</span>}
+          {live && !isSnap && live.high  != null && <span style={{ color: upColor }}>高 {fmtP(live.high)}</span>}
+          {live && !isSnap && live.low   != null && <span style={{ color: downColor }}>低 {fmtP(live.low)}</span>}
+          {live && !isSnap && live.volume > 0    && <span>量 {Math.round(live.volume / 1000).toLocaleString()}張</span>}
+          {live && !isSnap && live.time          && <span>{live.time}</span>}
+          {/* Scan signals shown when no live data */}
+          {!live && scanSignals.map(sig => (
+            <span key={sig} style={{ color: '#FF9F0A', fontWeight: 600 }}>{sig}</span>
+          ))}
+          {!live && scanScore != null && <span>分 {scanScore}</span>}
+          {position && live?.price && pnlAmt != null && (
             <span style={{ color: pnlColor, fontWeight: 700 }}>
               持倉 {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
               <span style={{ fontWeight: 500, marginLeft: 3 }}>({pnlAmt >= 0 ? '+' : ''}{Math.round(pnlAmt).toLocaleString()})</span>
@@ -163,19 +176,27 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
           {live ? (
             <>
               <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
-                <FlashPrice value={live.price} formatter={fmtP} color={color} />
+                <FlashPrice value={live.price} formatter={fmtP} color={isSnap ? 'var(--ios-label2)' : color} />
               </div>
-              {pct != null && (
+              {!isSnap && pct != null && (
                 <div style={{ fontSize: 13, fontWeight: 700, color, marginTop: 1 }}>
                   {pct >= 0 ? '+' : ''}{(pct * 100).toFixed(2)}%
                 </div>
               )}
-              {live.prevClose != null && (
+              {isSnap && (
+                <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 1 }}>上次收盤</div>
+              )}
+              {!isSnap && live.prevClose != null && (
                 <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 1 }}>昨 {fmtP(live.prevClose)}</div>
               )}
             </>
+          ) : scanClose ? (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ios-label2)', fontFamily: 'var(--font-mono)' }}>{fmtP(scanClose)}</div>
+              <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 1 }}>掃描收盤</div>
+            </div>
           ) : (
-            <div style={{ fontSize: 11, color: 'var(--ios-label4)' }}>待報價</div>
+            <div style={{ fontSize: 11, color: 'var(--ios-label4)' }}>—</div>
           )}
         </div>
         {showRemove && (
@@ -572,18 +593,14 @@ export default function LiveMonitor({ data }) {
             onToggle={() => toggleCollapsed('port')}
           />
           {!collapsed.port && (
-            !mktOpen ? (
-              <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '14px 16px', textAlign: 'center', color: 'var(--ios-label3)', fontSize: 12, boxShadow: 'var(--shadow-card)' }}>
-                盤後無即時報價，請至「持倉」頁查看收盤損益
-              </div>
-            ) : portItems.every(e => !e.live) ? (
+            portItems.every(e => !e.live) && mktOpen && liveLoading ? (
               <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '20px', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
                 <div style={{ width: 20, height: 20, border: '2px solid var(--ios-fill3)', borderTop: '2px solid var(--ios-blue)', borderRadius: '50%', animation: 'monSpin 0.8s linear infinite', margin: '0 auto 8px' }} />
                 <div style={{ fontSize: 11, color: 'var(--ios-label3)' }}>等待持倉報價…</div>
               </div>
             ) : (
               <div ref={portListRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
-                <PortfolioSummary items={portItems} />
+                {mktOpen && <PortfolioSummary items={portItems} />}
                 {portItems.map((item, i) => (
                   <StockRow key={item.id} {...item} isLast={i === portItems.length - 1} onSelect={openDetail} showRemove={false} />
                 ))}
@@ -603,20 +620,17 @@ export default function LiveMonitor({ data }) {
             onToggle={() => toggleCollapsed('scan')}
           />
           {!collapsed.scan && (
-            !mktOpen ? (
-              <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '24px 16px', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>📴</div>
-                <div style={{ fontSize: 13, color: 'var(--ios-label2)', fontWeight: 600 }}>
-                  {mktSession === 'pre' ? '等待開盤（09:00 開始更新）' : '盤後停止更新'}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginTop: 4 }}>明日 09:00 自動恢復即時行情</div>
-              </div>
-            ) : scanItems.length === 0 ? (
+            scanItems.length === 0 ? (
               <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '20px', textAlign: 'center', color: 'var(--ios-label3)', fontSize: 13, boxShadow: 'var(--shadow-card)' }}>
                 {scanScope === 'entry' ? '今日尚無進場訊號' : '掃描股票均已在自選或持倉中'}
               </div>
             ) : (
               <div ref={scanListRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
+                {!mktOpen && (
+                  <div style={{ padding: '8px 14px', background: 'rgba(255,159,10,0.07)', borderBottom: '0.5px solid var(--ios-sep)', fontSize: 10, color: 'var(--ios-orange)' }}>
+                    {mktSession === 'pre' ? '⏰ 開盤前 — 顯示掃描收盤價，09:00 起即時更新' : '⚫ 已收盤 — 顯示掃描收盤價'}
+                  </div>
+                )}
                 {scanItems.map((item, i) => (
                   <StockRow key={item.id} {...item} isLast={i === scanItems.length - 1} onSelect={openDetail} showRemove={false} />
                 ))}
