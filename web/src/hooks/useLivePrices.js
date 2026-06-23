@@ -1,11 +1,11 @@
-// Real-time Taiwan stock prices via TWSE 即時行情 API
-// - Batches up to 50 stocks per request (free, no API key)
-// - Polls every 30s while market is open (09:00–13:30 Taiwan time, Mon–Fri)
-// - Returns empty prices outside market hours
+// Real-time Taiwan stock prices via Yahoo Finance API (CORS-friendly)
+// - Batches up to 20 stocks per request
+// - Polls every 30s during market hours (09:00–13:30 Taiwan time, Mon–Fri)
+// - Outside market hours: fetches once for latest available (prev-close) prices
 
 import { useState, useEffect, useMemo } from 'react'
 
-function isOTCStock(stockId) {
+export function isOTCStock(stockId) {
   const n = parseInt(String(stockId), 10)
   return (n >= 4200 && n <= 4999) || (n >= 5000 && n <= 5999) ||
          (n >= 6000 && n <= 6999) || (n >= 7000 && n <= 7999) ||
@@ -18,8 +18,7 @@ export function isTWSEOpen() {
   const day = tw.getDay()
   if (day === 0 || day === 6) return false
   const min = tw.getHours() * 60 + tw.getMinutes()
-  // 09:00 = 540, 13:30 = 810
-  return min >= 540 && min <= 810
+  return min >= 540 && min <= 810  // 09:00–13:30
 }
 
 export function getTWSESession() {
@@ -28,69 +27,108 @@ export function getTWSESession() {
   const day = tw.getDay()
   if (day === 0 || day === 6) return 'weekend'
   const min = tw.getHours() * 60 + tw.getMinutes()
-  if (min < 540) return 'pre'       // before 09:00
-  if (min <= 810) return 'open'     // 09:00–13:30
-  return 'closed'                   // after 13:30
+  if (min < 540)  return 'pre'
+  if (min <= 810) return 'open'
+  return 'closed'
 }
 
-// snapshot=true: market closed, use y (prev close) when z is '-'
-async function fetchTWSEBatch(ids, snapshot = false) {
+// Yahoo Finance symbol: TWSE → "2330.TW", OTC/TPEX → "6175.TWO"
+function toYahooSymbol(id) {
+  return `${id}${isOTCStock(id) ? '.TWO' : '.TW'}`
+}
+function fromYahooSymbol(sym) {
+  return sym.replace(/\.(TW|TWO)$/, '')
+}
+
+async function fetchYahooBatch(ids) {
   const result = {}
-  for (let i = 0; i < ids.length; i += 50) {
-    const chunk = ids.slice(i, i + 50)
-    const exCh = chunk.map(id => `${isOTCStock(id) ? 'otc' : 'tse'}_${id}.tw`).join('|')
+  const CHUNK = 20
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK)
+    const symbols = chunk.map(toYahooSymbol).join(',')
     try {
       const r = await fetch(
-        `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${exCh}&json=1&delay=0`,
-        { signal: AbortSignal.timeout(8000) }
+        `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketChangePercent,regularMarketHigh,regularMarketLow,regularMarketOpen,regularMarketVolume,regularMarketTime,marketState`,
+        { signal: AbortSignal.timeout(10000) }
       )
       if (!r.ok) continue
-      const data = await r.json()
-      for (const item of data.msgArray || []) {
-        const z = parseFloat(item.z)
-        const y = parseFloat(item.y)
-        const live = !isNaN(z) && z > 0
-        const price = live ? z : (snapshot && !isNaN(y) && y > 0 ? y : null)
-        if (price == null) continue
-        const h = parseFloat(item.h)
-        const l = parseFloat(item.l)
-        const o = parseFloat(item.o)
-        const v = parseFloat(item.v)
-        result[item.c] = {
+      const json = await r.json()
+      for (const item of json?.quoteResponse?.result || []) {
+        const id = fromYahooSymbol(item.symbol || '')
+        if (!id) continue
+        const price = item.regularMarketPrice
+        const prev  = item.regularMarketPreviousClose ?? null
+        if (!price) continue
+        // During Taiwan market hours price is live; outside it's last close
+        const isSnapshot = item.marketState !== 'REGULAR'
+        result[id] = {
           price,
-          prevClose: isNaN(y) ? null : y,
-          pct:       live && !isNaN(y) && y > 0 ? (z - y) / y : null,
-          high:      isNaN(h) ? null : h,
-          low:       isNaN(l) ? null : l,
-          open:      isNaN(o) ? null : o,
-          volume:    isNaN(v) ? 0 : v,
-          time:      item.t || '',
-          isSnapshot: !live,
+          prevClose: prev,
+          pct:       prev ? (price - prev) / prev : null,
+          high:      item.regularMarketHigh  ?? null,
+          low:       item.regularMarketLow   ?? null,
+          open:      item.regularMarketOpen  ?? null,
+          volume:    item.regularMarketVolume ?? 0,
+          time:      item.regularMarketTime
+                       ? new Date(item.regularMarketTime * 1000)
+                           .toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' })
+                       : '',
+          isSnapshot,
         }
       }
-    } catch { /* network/CORS error — skip chunk, return what we have */ }
+    } catch (e) {
+      console.warn('Yahoo quote batch failed:', e.message)
+    }
   }
   return result
+}
+
+// Index fetch: 加權指數 ^TWII, 櫃買指數 ^TPX
+export async function fetchIndices() {
+  try {
+    const r = await fetch(
+      'https://query1.finance.yahoo.com/v7/finance/quote?symbols=%5ETWII,%5ETPEX&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketChangePercent,regularMarketTime',
+      { signal: AbortSignal.timeout(8000) }
+    )
+    if (!r.ok) return null
+    const json = await r.json()
+    const out = {}
+    for (const item of json?.quoteResponse?.result || []) {
+      const price = item.regularMarketPrice
+      const prev  = item.regularMarketPreviousClose ?? null
+      if (!price) continue
+      // Map Yahoo symbols to the keys the IndexBar expects
+      const key = item.symbol === '^TWII' ? 't00' : 'o00'
+      out[key] = {
+        price,
+        prevClose: prev,
+        change: prev != null ? price - prev : null,
+        pct:    prev ? (price - prev) / prev : null,
+        time:   item.regularMarketTime
+                  ? new Date(item.regularMarketTime * 1000)
+                      .toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' })
+                  : '',
+      }
+    }
+    return Object.keys(out).length ? out : null
+  } catch (e) {
+    console.warn('Index fetch failed:', e.message)
+    return null
+  }
 }
 
 /**
  * useLivePrices(stockIds, { pollInterval })
  *
  * Returns { prices, isOpen, session, lastUpdate, loading, error }
- *   prices: { [stockId]: { price, prevClose, pct, high, low, open, volume, time } }
- *   isOpen: boolean — true during 09:00–13:30 Taiwan time
- *   session: 'pre' | 'open' | 'closed' | 'weekend'
- *   lastUpdate: Date | null
- *   loading: boolean
- *   error: string | null
  */
 export function useLivePrices(stockIds, { pollInterval = 30000 } = {}) {
-  const [prices, setPrices]       = useState({})
-  const [isOpen, setIsOpen]       = useState(() => isTWSEOpen())
-  const [session, setSession]     = useState(() => getTWSESession())
+  const [prices, setPrices]         = useState({})
+  const [isOpen, setIsOpen]         = useState(() => isTWSEOpen())
+  const [session, setSession]       = useState(() => getTWSESession())
   const [lastUpdate, setLastUpdate] = useState(null)
-  const [loading, setLoading]     = useState(false)
-  const [error, setError]         = useState(null)
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState(null)
 
   const idsKey = useMemo(
     () => [...new Set((stockIds || []).map(String).filter(Boolean))].sort().join(','),
@@ -104,18 +142,21 @@ export function useLivePrices(stockIds, { pollInterval = 30000 } = {}) {
 
     let cancelled = false
 
-    const run = async (snapshot = false) => {
+    const run = async () => {
       const open = isTWSEOpen()
       const sess = getTWSESession()
       if (!cancelled) { setIsOpen(open); setSession(sess) }
-
       if (!cancelled) setLoading(true)
       try {
-        const result = await fetchTWSEBatch(ids, snapshot)
-        if (!cancelled && Object.keys(result).length > 0) {
-          setPrices(prev => ({ ...prev, ...result }))
-          setLastUpdate(new Date())
-          setError(null)
+        const result = await fetchYahooBatch(ids)
+        if (!cancelled) {
+          if (Object.keys(result).length > 0) {
+            setPrices(prev => ({ ...prev, ...result }))
+            setLastUpdate(new Date())
+            setError(null)
+          } else {
+            setError('無法取得報價（Yahoo Finance 暫時無回應）')
+          }
         }
       } catch (e) {
         if (!cancelled) setError(e.message)
@@ -124,11 +165,9 @@ export function useLivePrices(stockIds, { pollInterval = 30000 } = {}) {
       }
     }
 
-    const open = isTWSEOpen()
-    // Always fetch once on mount — snapshot mode outside market hours to get prev-close
-    run(!open)
-    if (!open) return  // don't poll when market is closed
-    const t = setInterval(() => run(false), pollInterval)
+    run()  // always fetch once on mount
+    if (!isTWSEOpen()) return  // outside market hours: one-shot only
+    const t = setInterval(run, pollInterval)
     return () => { cancelled = true; clearInterval(t) }
   }, [idsKey, pollInterval])
 

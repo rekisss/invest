@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
-import { useLivePrices } from '../hooks/useLivePrices'
+import { useLivePrices, fetchIndices } from '../hooks/useLivePrices'
 import { flashPriceEl, animateListRows } from '../utils/animeUtils.js'
 import StockDetailModal from './StockDetailModal'
 
@@ -385,37 +385,20 @@ export default function LiveMonitor({ data }) {
   const { prices: liveData, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: liveLoading }
     = useLivePrices(allIds)
 
-  // Separate index fetch
+  // Separate index fetch via Yahoo Finance (CORS-friendly)
   useEffect(() => {
-    if (!mktOpen) return
     let cancelled = false
     const run = async () => {
       if (!cancelled) setIdxLoading(true)
       try {
-        const r = await fetch(
-          'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_t00.tw|otc_o00.tw&json=1&delay=0',
-          { signal: AbortSignal.timeout(8000) }
-        )
-        if (!r.ok) return
-        const json = await r.json()
-        const result = {}
-        for (const item of json.msgArray || []) {
-          const z = parseFloat(item.z), y = parseFloat(item.y)
-          if (isNaN(z) || z <= 0) continue
-          result[item.c] = {
-            price: z,
-            prevClose: isNaN(y) ? null : y,
-            change: isNaN(y) ? null : z - y,
-            pct: (!isNaN(y) && y > 0) ? (z - y) / y : null,
-            time: item.t || '',
-          }
-        }
-        if (!cancelled) setIndices(result)
+        const result = await fetchIndices()
+        if (!cancelled && result) setIndices(result)
       } catch {} finally {
         if (!cancelled) setIdxLoading(false)
       }
     }
     run()
+    if (!mktOpen) return
     const t = setInterval(run, 30000)
     return () => { cancelled = true; clearInterval(t) }
   }, [mktOpen])
