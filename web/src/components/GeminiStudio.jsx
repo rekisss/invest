@@ -225,17 +225,27 @@ function buildStrategyBrief(data) {
   const allGrades  = {}
   let totalPicks = 0
 
+  // Extract readable signal keyword from entry_reason (first clause, ≤15 chars)
+  // entry_signal is a boolean flag; the actual reason string is entry_reason
+  const sigKey = s => {
+    const r = s.entry_reason
+    if (!r || typeof r !== 'string') return null
+    return r.split(/[，,、；;+＋]/)[0].trim().slice(0, 15) || null
+  }
+
   const dateRows = []
   dates.forEach(d => {
-    const scan   = data.scans[d] || {}
-    const stocks = [...(scan.top_stocks || []), ...(scan.filter_stocks || [])]
-    totalPicks  += stocks.length
+    const scan = data.scans[d] || {}
+    // Use only top_stocks (精選高分股) — filter_stocks is the broad ~千支篩選池，不代表策略精選
+    const stocks = scan.top_stocks || []
+    totalPicks += stocks.length
+
     const grades  = {}
     const signals = {}
     stocks.forEach(s => {
       const g = s.grade
       if (g) { grades[g] = (grades[g] || 0) + 1; allGrades[g] = (allGrades[g] || 0) + 1 }
-      const sig = s.entry_signal
+      const sig = sigKey(s)
       if (sig) { signals[sig] = (signals[sig] || 0) + 1; allSignals[sig] = (allSignals[sig] || 0) + 1 }
     })
     const gradeStr = Object.entries(grades).sort().map(([g, n]) => `${g}:${n}`).join(' ')
@@ -243,7 +253,7 @@ function buildStrategyBrief(data) {
     dateRows.push(`${d}：${stocks.length}檔 ${gradeStr ? `[${gradeStr}]` : ''} ${topSig ? `| ${topSig}` : ''}`)
   })
 
-  lines.push('\n【逐日精選狀況】')
+  lines.push('\n【逐日精選狀況（top_stocks 精選）】')
   dateRows.slice(0, 7).forEach(r => lines.push(r))
   if (dateRows.length > 7) lines.push(`（另 ${dateRows.length - 7} 日已計入統計）`)
 
@@ -251,14 +261,28 @@ function buildStrategyBrief(data) {
   const topSigs  = Object.entries(allSignals).sort((a, b) => b[1] - a[1]).slice(0, 6)
   const gradeDist = Object.entries(allGrades).sort().map(([g, n]) => `${g}:${n}`).join(' ')
 
-  lines.push(`\n【整體統計（${dates.length}日）】`)
+  lines.push(`\n【整體統計（${dates.length}日，精選池）】`)
   lines.push(`平均精選 ${avg} 檔/日 | 合計 ${totalPicks} 檔次`)
   if (gradeDist) lines.push(`評級分布：${gradeDist}`)
   if (topSigs.length) {
-    lines.push(`入選信號頻率 TOP${topSigs.length}：`)
+    lines.push(`入選理由關鍵詞 TOP${topSigs.length}：`)
     topSigs.forEach(([s, n]) => {
       const pct = totalPicks > 0 ? Math.round(n / totalPicks * 100) : 0
       lines.push(`  ${s}：${n}次 (${pct}%)`)
+    })
+  } else {
+    lines.push('入選理由：缺（top_stocks 中無 entry_reason 欄位）')
+  }
+
+  // Latest aggregate picks — concrete examples for the agents to analyze
+  const aggStocks = data?.aggregateLatest?.top_stocks || []
+  if (aggStocks.length) {
+    lines.push(`\n【最新精選 TOP${Math.min(aggStocks.length, 10)} 範例（aggregateLatest）】`)
+    aggStocks.slice(0, 10).forEach(s => {
+      const score  = s.entry_score != null ? ` 分數${Math.round(s.entry_score)}` : ''
+      const grade  = s.grade ? ` [${s.grade}]` : ''
+      const reason = typeof s.entry_reason === 'string' ? ` | ${s.entry_reason.slice(0, 35)}` : ''
+      lines.push(`  ${s.stock_id} ${s.name || ''}${grade}${score}${reason}`)
     })
   }
 
