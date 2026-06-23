@@ -1,0 +1,159 @@
+name: 盤中即時報價快取 (每3分鐘)
+
+on:
+  schedule:
+    # Every 3 minutes during Taiwan market hours (01:00–05:30 UTC = 09:00–13:30 CST), Mon–Fri
+    - cron: '*/3 1-5 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cache-prices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch live prices
+        run: |
+          node - << 'NODESCRIPT'
+          const https = require('https');
+          const fs    = require('fs');
+
+          // Common stocks always fetched regardless of scan data
+          const ALWAYS = [
+            '2330','2317','2303','2454','2412','2382','2357','2308','2002','1301',
+            '1303','2882','2881','2886','2891','2884','2892','2885','2887','5880',
+            '3481','2408','3034','3008','2409','2603','2609','2615','2618','2610',
+            '6505','4904','1718','2059','2327','2474','3711','2301','2376','6669',
+            '6770','2379','4938','3231','5483','2492','3533','6415','6456','2049',
+          ];
+
+          function isOTC(id) {
+            const n = parseInt(id, 10);
+            return (n >= 4200 && n <= 4999) || (n >= 5000 && n <= 5999) ||
+                   (n >= 6000 && n <= 6999) || (n >= 7000 && n <= 7999) ||
+                   (n >= 8000 && n <= 8999) || (n >= 9200 && n <= 9999);
+          }
+          function toYahoo(id) { return `${id}${isOTC(id) ? '.TWO' : '.TW'}`; }
+
+          function fetchJson(url) {
+            return new Promise((resolve, reject) => {
+              const req = https.get(url, {
+                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GitHubActions/price-cache)' },
+                timeout: 12000,
+              }, res => {
+                let d = '';
+                res.on('data', c => d += c);
+                res.on('end', () => { try { resolve(JSON.parse(d)); } catch(e) { reject(e); } });
+                res.on('error', reject);
+              });
+              req.on('error', reject);
+              req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+            });
+          }
+
+          async function main() {
+            let ids = [...ALWAYS];
+
+            // Augment with latest scan stock list from deployed Pages
+            try {
+              const data = await fetchJson('https://rekisss.github.io/invest/data.json');
+              const latest = (data?.dates || []).slice().sort().reverse()[0];
+              if (latest) {
+                const top = (data.scans?.[latest]?.top_stocks || [])
+                  .slice(0, 120).map(s => String(s.stock_id));
+                ids = [...new Set([...ids, ...top])];
+              }
+              console.log(`Stock list: ${ids.length} symbols (${top?.length || 0} from scan)`);
+            } catch(e) {
+              console.warn('data.json fetch failed:', e.message);
+            }
+
+            const prices = {};
+            const CHUNK  = 20;
+            const HOSTS  = ['query2.finance.yahoo.com', 'query1.finance.yahoo.com'];
+
+            for (let i = 0; i < ids.length; i += CHUNK) {
+              const chunk   = ids.slice(i, i + CHUNK);
+              const symbols = chunk.map(toYahoo).join(',');
+
+              for (const host of HOSTS) {
+                try {
+                  const url = `https://${host}/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketHigh,regularMarketLow,regularMarketOpen,regularMarketVolume,regularMarketTime,marketState`;
+                  const json = await fetchJson(url);
+                  const items = json?.quoteResponse?.result || [];
+                  if (!items.length) continue;
+                  for (const item of items) {
+                    const id = (item.symbol || '').replace(/\.(TW|TWO)$/, '');
+                    const price = item.regularMarketPrice;
+                    if (!id || !price) continue;
+                    const prev = item.regularMarketPreviousClose ?? null;
+                    prices[id] = {
+                      price, prevClose: prev,
+                      pct:    prev ? (price - prev) / prev : null,
+                      high:   item.regularMarketHigh   ?? null,
+                      low:    item.regularMarketLow    ?? null,
+                      open:   item.regularMarketOpen   ?? null,
+                      volume: item.regularMarketVolume ?? 0,
+                      time:   item.regularMarketTime
+                                ? new Date(item.regularMarketTime * 1000).toISOString()
+                                : '',
+                      isSnapshot: item.marketState !== 'REGULAR',
+                    };
+                  }
+                  if (chunk.some(id => prices[id])) break;
+                } catch(e) {
+                  console.warn(`${host} chunk ${i/CHUNK+1} error:`, e.message);
+                }
+              }
+            }
+
+            // Indices
+            for (const host of HOSTS) {
+              try {
+                const url = `https://${host}/v7/finance/quote?symbols=%5ETWII,%5ETPEX&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketTime`;
+                const json = await fetchJson(url);
+                for (const item of json?.quoteResponse?.result || []) {
+                  const price = item.regularMarketPrice;
+                  if (!price) continue;
+                  const prev = item.regularMarketPreviousClose ?? null;
+                  const key  = item.symbol === '^TWII' ? '_idx_t00' : '_idx_o00';
+                  prices[key] = {
+                    price, prevClose: prev,
+                    change: prev != null ? price - prev : null,
+                    pct:    prev ? (price - prev) / prev : null,
+                    time:   item.regularMarketTime
+                              ? new Date(item.regularMarketTime * 1000).toISOString()
+                              : '',
+                  };
+                }
+                if (prices['_idx_t00']) break;
+              } catch(e) {
+                console.warn(`Index ${host} error:`, e.message);
+              }
+            }
+
+            const stockCount = Object.keys(prices).filter(k => !k.startsWith('_')).length;
+            console.log(`Cached: ${stockCount} stocks, indices: ${!!prices['_idx_t00']}`);
+
+            fs.writeFileSync('live_prices.json', JSON.stringify({
+              updatedAt: new Date().toISOString(),
+              prices,
+            }));
+          }
+
+          main().catch(e => { console.error(e); process.exit(1); });
+          NODESCRIPT
+
+      - name: Commit
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add live_prices.json
+          git diff --staged --quiet || git commit -m "prices $(TZ=Asia/Taipei date '+%H:%M:%S')"
+          git push origin data
