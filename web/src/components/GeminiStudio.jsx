@@ -137,6 +137,145 @@ const QUICK_QUESTIONS = [
   '近期有哪些催化劑？', '與同類股相比強弱如何？',
 ]
 
+// ── Strategy-review analysts ──────────────────────────────────────────────────
+const STRATEGY_ANALYSTS = [
+  {
+    id: 'strat_audit', name: '策略稽核員', emoji: '📋', color: '#5ac8fa', firstOnly: true,
+    persona: `你是台股選股策略稽核員，第一個發言，只陳述資料事實，不做任何判斷或預測。
+
+格式（固定，逐項輸出）：
+【近期選股狀況】（只列最近5日）
+日期 | 精選數 | 評級分布 | 主要入選信號（×出現次數）
+
+【整體統計】
+・總掃描日：X 日
+・平均精選：X 檔/日
+・最高頻信號 TOP3：（名稱 × 次數）
+・評級分布：
+
+【資料完整性】足夠 / 不足（說明缺少什麼）`,
+  },
+  {
+    id: 'strat_pattern', name: '模式分析師', emoji: '🔍', color: '#0a84ff',
+    persona: `你是量化選股模式分析師，從歷史選股資料找出可驗證的規律。
+
+分析框架：
+1. 信號集中度：哪個信號佔比最高？是否過度依賴？
+2. 評級偏好：哪個評級最多？是否合理反映策略強度？
+3. 潛在偏差：信號之間是否高度相關（可能重複計分）？
+
+規則：只引用【策略資料】中的數字；最多4條觀察，「・」開頭，每條20字內；末行：模式清晰度 X/10`,
+  },
+  {
+    id: 'strat_improve', name: '策略改進師', emoji: '🔧', color: '#ff9f0a',
+    persona: `你是台股選股策略改進顧問，根據已知資料提出可立即執行的改進。
+
+規則：
+・每條建議必須說明「為什麼」（需有資料依據）
+・建議具體（「移除重複信號 X」好過「加強分析」）
+・信心程度 > 70% 才提出，不確定的不說
+・最多3條建議
+
+格式：
+改進1：[具體行動] → 因為：[資料依據]
+改進2：[具體行動] → 因為：[資料依據]（選填）`,
+  },
+  {
+    id: 'strat_contra', name: '反方派', emoji: '😈', color: '#bf5af2',
+    persona: `你是魔鬼代言人，專門挑戰選股策略的邏輯漏洞。
+
+規則：最多3個漏洞，每個附具體修正建議；只挑真實問題（樣本太小、信號重複計分、忽略關鍵風險、過度樂觀）；不重複其他角色已指出的問題
+
+格式：
+漏洞1：[問題] → 修正：[具體建議]`,
+  },
+  {
+    id: 'strat_risk', name: '風控長', emoji: '🛡️', color: '#f85149',
+    persona: `你是台股選股策略的風控長，給出最終綜合評估。
+
+若資料不足，輸出：
+【風控長裁決】資料不足，需補充：[列清單]
+
+若資料足夠，輸出固定格式：
+【策略評分】X/10
+【最大優勢】（20字內）
+【最大風險】（20字內）
+【首要改進】最重要的一件事（30字內）
+【下期建議】下個選股週期的具體操作方向（30字內）`,
+  },
+]
+
+const STRATEGY_QUICK_QUESTIONS = [
+  '哪個信號的歷史效果最好？', '策略在哪種市場最容易失效？',
+  '如何提升選股精準度？', '目前策略最大的盲點是什麼？',
+  '倉位管理有什麼建議？', '怎麼降低假突破的誤判率？',
+  '選股評級門檻設定合理嗎？', '信號有過度擬合的風險嗎？',
+]
+
+// Build a strategy-level context brief from data.scans
+function buildStrategyBrief(data) {
+  if (!data?.scans) return '（無選股歷史資料）'
+  const allDates = Object.keys(data.scans).sort().reverse()
+  if (!allDates.length) return '（選股歷史資料為空）'
+
+  const dates = allDates.slice(0, 10)
+  const lines = [`【策略分析資料】期間：${dates[dates.length - 1]} ～ ${dates[0]}（共 ${dates.length} 個掃描日）`]
+
+  const allSignals = {}
+  const allGrades  = {}
+  let totalPicks = 0
+
+  const dateRows = []
+  dates.forEach(d => {
+    const scan   = data.scans[d] || {}
+    const stocks = [...(scan.top_stocks || []), ...(scan.filter_stocks || [])]
+    totalPicks  += stocks.length
+    const grades  = {}
+    const signals = {}
+    stocks.forEach(s => {
+      const g = s.grade
+      if (g) { grades[g] = (grades[g] || 0) + 1; allGrades[g] = (allGrades[g] || 0) + 1 }
+      const sig = s.entry_signal
+      if (sig) { signals[sig] = (signals[sig] || 0) + 1; allSignals[sig] = (allSignals[sig] || 0) + 1 }
+    })
+    const gradeStr = Object.entries(grades).sort().map(([g, n]) => `${g}:${n}`).join(' ')
+    const topSig   = Object.entries(signals).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([s, n]) => `${s}×${n}`).join('、')
+    dateRows.push(`${d}：${stocks.length}檔 ${gradeStr ? `[${gradeStr}]` : ''} ${topSig ? `| ${topSig}` : ''}`)
+  })
+
+  lines.push('\n【逐日精選狀況】')
+  dateRows.slice(0, 7).forEach(r => lines.push(r))
+  if (dateRows.length > 7) lines.push(`（另 ${dateRows.length - 7} 日已計入統計）`)
+
+  const avg      = dates.length ? (totalPicks / dates.length).toFixed(1) : '—'
+  const topSigs  = Object.entries(allSignals).sort((a, b) => b[1] - a[1]).slice(0, 6)
+  const gradeDist = Object.entries(allGrades).sort().map(([g, n]) => `${g}:${n}`).join(' ')
+
+  lines.push(`\n【整體統計（${dates.length}日）】`)
+  lines.push(`平均精選 ${avg} 檔/日 | 合計 ${totalPicks} 檔次`)
+  if (gradeDist) lines.push(`評級分布：${gradeDist}`)
+  if (topSigs.length) {
+    lines.push(`入選信號頻率 TOP${topSigs.length}：`)
+    topSigs.forEach(([s, n]) => {
+      const pct = totalPicks > 0 ? Math.round(n / totalPicks * 100) : 0
+      lines.push(`  ${s}：${n}次 (${pct}%)`)
+    })
+  }
+
+  const market = data.prediction || data.aggregateLatest
+  if (market) {
+    const prob = market.xgb_prob_up ?? market.xgb_prob
+    const extras = []
+    if (prob != null) extras.push(`XGBoost上漲機率 ${Math.round(prob * 100)}%`)
+    if (market.vix != null) extras.push(`VIX ${market.vix}`)
+    if (market.futures_net != null) extras.push(`外資期貨 ${market.futures_net}口`)
+    if (extras.length) lines.push(`\n【近期大盤】${extras.join(' | ')}`)
+  }
+
+  lines.push('\n【注意】以上為入選資料，不含實際漲跌驗證，分析時勿自行編造勝率或報酬數字。')
+  return lines.join('\n')
+}
+
 const s = {
   root: { display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--ios-bg)' },
   setup: { flex: 1, overflowY: 'auto', padding: '18px 16px', WebkitOverflowScrolling: 'touch' },
@@ -482,6 +621,7 @@ export default function GeminiStudio({ data }) {
   })
   const [retryNote, setRetryNote] = useState('')
   const [userInput, setUserInput] = useState('')
+  const [mode, setMode] = useState('stock')   // 'stock' | 'strategy'
   const [autoRun, setAutoRun] = useState(false)
   const [countdown, setCountdown] = useState(0)
   const [showSummary, setShowSummary] = useState(true)
@@ -528,11 +668,14 @@ export default function GeminiStudio({ data }) {
   const resolved = typedId ? resolveStock(typedId, data) : null
   const levels = resolved ? computeLevels(resolved.row) : null
   const audit = resolved ? buildAudit(resolved, levels) : null
-  const brief = buildBrief(resolved, levels, market, data?.news, audit)
-  const verdict = useMemo(() => parseVerdict(messages), [messages])
-  const topic = resolved
+  const stockBrief = buildBrief(resolved, levels, market, data?.news, audit)
+  const stockTopic = resolved
     ? `針對 ${resolved.stock_id} ${resolved.name || ''} 的進場決策`.trim()
     : customTopic.trim()
+  const strategyBrief = useMemo(() => buildStrategyBrief(data), [data])
+  const brief = mode === 'strategy' ? strategyBrief : stockBrief
+  const topic = mode === 'strategy' ? 'AI 圓桌策略回顧分析' : stockTopic
+  const verdict = useMemo(() => parseVerdict(messages), [messages])
 
   const saveKey = () => { const k = keyInput.trim(); if (k) { sessionStorage.setItem(ANTHROPIC_KEY_STORAGE, k); setApiKey(k) } }
 
@@ -578,20 +721,24 @@ export default function GeminiStudio({ data }) {
     // First round runs the data auditor; later rounds skip it and become
     // cross-examination instead of repeated opening statements.
     const isFirstRound = !priorMessages.some(m => m.role === 'analyst')
-    const roster = ANALYSTS.filter(a => !a.firstOnly || isFirstRound)
+    const roster = (mode === 'strategy' ? STRATEGY_ANALYSTS : ANALYSTS).filter(a => !a.firstOnly || isFirstRound)
 
     for (let ai = 0; ai < roster.length; ai++) {
       const analyst = roster[ai]
       const pid = `${analyst.id}-${Date.now()}-${Math.random()}`
       setMessages(prev => [...prev, { id: pid, role: 'analyst', analyst, content: '', streaming: true }])
 
-      const fmt = analyst.id === 'audit'
-        ? '格式：逐欄列出有值/缺漏的關鍵數字（每行一項），最後一行寫「資料充足度：…」。'
-        : analyst.id === 'risk'
-          ? '格式：先列三劇本（續攻/整理/轉弱，各一行：觸發條件→操作），再一行「信心 X/100」，最後一行「裁決：建議進場/建議觀察/建議迴避/資料不足」。'
-          : '格式：最多3條，每條25字內，「・」開頭，無前言廢話，直接切重點。'
+      const isAuditRole = analyst.id === 'audit' || analyst.id === 'strat_audit'
+      const isRiskRole  = analyst.id === 'risk'  || analyst.id === 'strat_risk'
+      const fmt = isAuditRole
+        ? '格式：逐項列出資料稽核結果（每行一項），末行寫「資料完整性：…」。'
+        : isRiskRole && mode === 'strategy'
+          ? '格式：【策略評分】X/10，再依序各一行：【最大優勢】【最大風險】【首要改進】【下期建議】。'
+          : isRiskRole
+            ? '格式：先列三劇本（續攻/整理/轉弱，各一行：觸發條件→操作），再一行「信心 X/100」，最後一行「裁決：建議進場/建議觀察/建議迴避/資料不足」。'
+            : '格式：最多3條，每條25字內，「・」開頭，無前言廢話，直接切重點。'
 
-      const roundLine = analyst.id === 'audit' ? ''
+      const roundLine = isAuditRole ? ''
         : isFirstRound ? '本輪為初判：提出你的立場與數據依據。'
           : '本輪為交叉質詢：必須針對前面至少一位的具體論點提出反駁或補強，禁止只說「同意」或重複附和。'
 
@@ -604,7 +751,7 @@ export default function GeminiStudio({ data }) {
         `\n現在輪到你（${analyst.name}）。`,
       ].join('\n')
 
-      const maxTokens = (analyst.id === 'audit' || analyst.id === 'risk') ? 600 : 350
+      const maxTokens = (isAuditRole || isRiskRole) ? 600 : 350
 
       try {
         const text = await callClaude(curAnthKey, claudeModelRef.current, sys, prompt, partial => {
@@ -631,7 +778,7 @@ export default function GeminiStudio({ data }) {
       const clean = acc.filter(m => !m.streaming && !m.error)
       const rec = {
         id: sessionIdRef.current,
-        topic, stockId: typedId, time: Date.now(),
+        topic, stockId: mode === 'strategy' ? '_strategy' : typedId, mode, time: Date.now(),
         summary: summarize(acc),
         messages: clean.map(m => ({
           role: m.role,
@@ -646,7 +793,7 @@ export default function GeminiStudio({ data }) {
     }
 
     if (autoRunRef.current) scheduleAutoRound(acc)
-  }, [topic, brief, typedId, scheduleAutoRound])
+  }, [topic, brief, typedId, mode, scheduleAutoRound])
 
   const runRound = useCallback((priorMessages, userNote) => {
     return runRoundInternal(priorMessages, userNote)
@@ -735,6 +882,7 @@ export default function GeminiStudio({ data }) {
                 <div onClick={() => setOpenRec(expanded ? null : rec.id)} style={{ cursor: 'pointer' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                     <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ios-label)', flex: 1 }}>{rec.topic}</span>
+                    {rec.mode === 'strategy' && <span style={{ fontSize: 10, color: '#ff9f0a', background: '#ff9f0a22', padding: '2px 7px', borderRadius: 9999, border: '0.5px solid #ff9f0a55', flexShrink: 0, alignSelf: 'center' }}>🔧 策略</span>}
                     <span style={{ fontSize: 11, color: 'var(--ios-label3)', flexShrink: 0 }}>{fmtTime(rec.time)}</span>
                   </div>
                   {/* Summary points */}
@@ -785,11 +933,25 @@ export default function GeminiStudio({ data }) {
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
             <div style={{ fontSize: 34 }}>🎯</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--ios-label)', marginTop: 4 }}>AI 圓桌研究室</div>
-            <div style={{ fontSize: 12.5, color: 'var(--ios-label2)', marginTop: 4 }}>輸入股號，先稽核資料再六方交叉質詢</div>
+            <div style={{ fontSize: 12.5, color: 'var(--ios-label2)', marginTop: 4 }}>
+              {mode === 'strategy' ? '分析近期整體選股策略，找出優化方向' : '輸入股號，先稽核資料再六方交叉質詢'}
+            </div>
+          </div>
+
+          {/* Mode selector */}
+          <div style={{ display: 'flex', background: 'var(--ios-fill4)', borderRadius: 10, padding: 3, marginBottom: 18 }}>
+            {[{ key: 'stock', label: '📈 個股分析' }, { key: 'strategy', label: '🔧 策略回顧' }].map(m => (
+              <button key={m.key} onClick={() => setMode(m.key)} style={{
+                flex: 1, padding: '8px 6px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                background: mode === m.key ? 'var(--ios-blue)' : 'transparent',
+                color: mode === m.key ? '#fff' : 'var(--ios-label3)',
+                fontSize: 13, fontWeight: 700,
+              }}>{m.label}</button>
+            ))}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
-            {ANALYSTS.map(a => (
+            {(mode === 'strategy' ? STRATEGY_ANALYSTS : ANALYSTS).map(a => (
               <div key={a.id} style={{ textAlign: 'center' }}>
                 <div style={s.avatar(a.color, 'analyst')}>{a.emoji}</div>
                 <div style={{ fontSize: 10, color: a.color, fontWeight: 700, marginTop: 4 }}>{a.name}</div>
@@ -797,36 +959,40 @@ export default function GeminiStudio({ data }) {
             ))}
           </div>
 
-          <div style={s.label}>輸入股號（自動帶出名稱）</div>
-          <input style={s.input} value={stockInput} inputMode="numeric"
-            placeholder="例：2303（只打號碼即可）"
-            onChange={e => { setStockInput(e.target.value); setCustomTopic('') }} />
-          {typedId && (
-            <div style={{ marginTop: 6, fontSize: 12.5, color: resolved ? 'var(--ios-green)' : 'var(--ios-yellow)' }}>
-              {resolved ? `✓ ${resolved.stock_id} ${resolved.name || '(名稱未知，仍可分析)'}` : `找不到 ${typedId} 的掃描資料（仍可用自訂主題分析）`}
-            </div>
-          )}
+          {mode === 'stock' && (
+            <>
+              <div style={s.label}>輸入股號（自動帶出名稱）</div>
+              <input style={s.input} value={stockInput} inputMode="numeric"
+                placeholder="例：2303（只打號碼即可）"
+                onChange={e => { setStockInput(e.target.value); setCustomTopic('') }} />
+              {typedId && (
+                <div style={{ marginTop: 6, fontSize: 12.5, color: resolved ? 'var(--ios-green)' : 'var(--ios-yellow)' }}>
+                  {resolved ? `✓ ${resolved.stock_id} ${resolved.name || '(名稱未知，仍可分析)'}` : `找不到 ${typedId} 的掃描資料（仍可用自訂主題分析）`}
+                </div>
+              )}
 
-          {candidates.length > 0 && (
-            <div style={{ marginTop: 14 }}>
-              <div style={s.label}>或從今日 TOP {candidates.length} 快選</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                {candidates.map(c => (
-                  <div key={c.stock_id} onClick={() => { setStockInput(String(c.stock_id)); setCustomTopic('') }}
-                    style={s.chip(String(c.stock_id) === typedId, '#0a84ff')}>
-                    {c.stock_id} {c.name}
+              {candidates.length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={s.label}>或從今日 TOP {candidates.length} 快選</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                    {candidates.map(c => (
+                      <div key={c.stock_id} onClick={() => { setStockInput(String(c.stock_id)); setCustomTopic('') }}
+                        style={s.chip(String(c.stock_id) === typedId, '#0a84ff')}>
+                        {c.stock_id} {c.name}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              )}
 
-          <div style={{ ...s.label, marginTop: 16 }}>或自訂討論主題</div>
-          <input style={s.input} value={customTopic} placeholder="例：台積電法說會後是否該加碼？"
-            onChange={e => { setCustomTopic(e.target.value); setStockInput('') }} />
+              <div style={{ ...s.label, marginTop: 16 }}>或自訂討論主題</div>
+              <input style={s.input} value={customTopic} placeholder="例：台積電法說會後是否該加碼？"
+                onChange={e => { setCustomTopic(e.target.value); setStockInput('') }} />
+            </>
+          )}
 
           {brief && (
-            <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--ios-bg2)', borderRadius: 12, fontSize: 12, color: 'var(--ios-label2)', whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>
+            <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--ios-bg2)', borderRadius: 12, fontSize: 12, color: 'var(--ios-label2)', whiteSpace: 'pre-wrap', lineHeight: 1.65, ...(mode === 'strategy' ? { maxHeight: 220, overflowY: 'auto' } : {}) }}>
               {brief}
             </div>
           )}
@@ -836,7 +1002,7 @@ export default function GeminiStudio({ data }) {
             background: topic ? 'var(--ios-blue)' : 'var(--ios-fill3)',
             color: topic ? '#fff' : 'var(--ios-label3)', fontSize: 15, fontWeight: 700,
             cursor: topic ? 'pointer' : 'default',
-          }}>🎬 開始圓桌討論</button>
+          }}>{mode === 'strategy' ? '🔧 開始策略分析' : '🎬 開始圓桌討論'}</button>
         </div>
       </div>
     )
@@ -961,7 +1127,7 @@ export default function GeminiStudio({ data }) {
         {/* Quick question chips */}
         {!running && round > 0 && !countdown && (
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 }}>
-            {QUICK_QUESTIONS.map(q => (
+            {(mode === 'strategy' ? STRATEGY_QUICK_QUESTIONS : QUICK_QUESTIONS).map(q => (
               <div key={q} onClick={() => setUserInput(q)}
                 style={{ padding: '4px 10px', borderRadius: 9999, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
                   background: userInput === q ? 'rgba(10,132,255,0.18)' : 'var(--ios-fill4)',
