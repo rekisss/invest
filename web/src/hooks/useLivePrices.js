@@ -127,24 +127,20 @@ async function fetchYahooBatch(ids) {
   const CHUNK = 20
 
   for (let i = 0; i < ids.length; i += CHUNK) {
-    const chunk    = ids.slice(i, i + CHUNK)
-    const symbols  = chunk.map(toYahooSymbol).join(',')
-    let   chunkHit = false
+    const chunk = ids.slice(i, i + CHUNK)
 
-    // Try v7 on each host in order
+    // Each host gets only the symbols still missing from result
     for (const host of V7_HOSTS) {
-      const r = await tryV7Batch(host, symbols)
-      if (Object.keys(r).length > 0) {
-        Object.assign(result, r)
-        chunkHit = true
-        break
-      }
+      const missing = chunk.filter(id => !result[id])
+      if (!missing.length) break
+      const r = await tryV7Batch(host, missing.map(toYahooSymbol).join(','))
+      Object.assign(result, r)
     }
 
-    // v8 per-symbol fallback for anything still missing
-    if (!chunkHit) {
-      await Promise.all(chunk.map(async id => {
-        if (result[id]) return
+    // v8 per-symbol fallback for anything still missing after both v7 hosts
+    const stillMissing = chunk.filter(id => !result[id])
+    if (stillMissing.length) {
+      await Promise.all(stillMissing.map(async id => {
         const r = await tryV8Single(toYahooSymbol(id))
         if (r) result[id] = r
       }))
