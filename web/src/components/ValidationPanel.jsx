@@ -200,7 +200,7 @@ function DateBarChart({ byDate, byDate1d = {}, sortedDates }) {
             const col = r == null ? 'var(--ios-label4)' : r > 0 ? '#FF3340' : r < 0 ? '#16D67E' : 'var(--ios-label3)'
             return (
               <text key={`1d-${date}`} x={x} y={H + 25} fontSize={7.5} textAnchor="middle" fill={col} fontWeight={r != null ? '700' : '400'}>
-                {r == null ? '—' : (r >= 0 ? '+' : '') + (r * 100).toFixed(0) + '%'}
+                {r == null ? '—' : (r >= 0 ? '+' : '') + (r * 100).toFixed(1) + '%'}
               </text>
             )
           })}
