@@ -1,5 +1,75 @@
 [
   {
+    "date": "2026-06-23",
+    "generated_at": "08:04",
+    "xgb_prob_up": 0.695,
+    "xgb_label": "看多",
+    "market_data": {
+      "vix": null,
+      "sp500_ret": null,
+      "nasdaq_ret": null,
+      "sox_ret": null,
+      "tsm_adr_ret": null,
+      "futures_net": -70290.0,
+      "night_change": 352.0,
+      "pcr": null,
+      "taiex_rsi": 70.18720367416276,
+      "macd_hist": 195.88230042984515,
+      "dist_ma20": 6.556861586341234,
+      "dist_ma60": 18.983410770313757,
+      "taiex_ret_5d": 8.221366014662923,
+      "taiex_ret_20d": 13.279815452914633,
+      "buyback_count": 0,
+      "disposition_count": 60,
+      "jpy_ret": null,
+      "arkk_ret": null,
+      "hyg_ret": null,
+      "night_trend": "↓ 走弱",
+      "market_revenue_yoy": 0.0937,
+      "market_foreign_holding_chg": 2.6438
+    },
+    "ai_insight": "# 今日操盤要點\n\n・夜盤走弱452點但AI權值撐盤機率69%，加權指數技術面超買（RSI70）易有回檔壓力，宜逢高減碼或觀望為主。\n\n・外資期貨大幅淨賣70,290口與現貨淨買形成背離，籌碼面有潛在調整風險，應密切留意處置股60支的連鎖跌停效應。\n\n・指數距MA60已高漲19%處於極端位置，建議以短線操作取代長抱，優先關注AI類股能否接續上漲或轉向整理。",
+    "regime": {
+      "label": "range_bound",
+      "label_zh": "😴 區間震盪日",
+      "win_rate": 54.0
+    },
+    "scenario": {
+      "main_scenario": "無強烈方向訊號，台股可能在區間內震盪，注意盤中族群輪動",
+      "best_strategy": "區間操作 / 選強勢族群個股 / 勿重押方向",
+      "danger_signals": [
+        "外資空單極重（-70,290口），軋空風險高",
+        "夜盤缺口 +352pt 過大，易反轉"
+      ],
+      "forbidden_actions": [
+        "禁止追多缺口超過200pt",
+        "禁止反彈高點追多（軋空陷阱）"
+      ]
+    },
+    "risk": {
+      "level": "medium",
+      "score": 0.4,
+      "factors": [
+        {
+          "name": "外資空單極重",
+          "description": "-70,290口，軋空/崩潰雙向風險",
+          "action": "避免重押方向"
+        },
+        {
+          "name": "夜盤大缺口",
+          "description": "夜盤 +352pt，開盤後可能快速反轉",
+          "action": "禁止追缺口超過200pt"
+        }
+      ]
+    },
+    "news_sentiment": {
+      "market_impact": 0.3,
+      "key_events": [],
+      "bullish_count": 0,
+      "bearish_count": 0
+    }
+  },
+  {
     "date": "2026-06-22",
     "generated_at": "08:04",
     "xgb_prob_up": 0.698,
