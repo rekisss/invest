@@ -166,8 +166,7 @@ export function useLivePrices(stockIds, { pollInterval = 30000 } = {}) {
     }
 
     run()  // always fetch once on mount
-    if (!isTWSEOpen()) return  // outside market hours: one-shot only
-    const t = setInterval(run, pollInterval)
+    const t = setInterval(run, pollInterval)  // poll 24/7 — Yahoo returns last-close outside hours
     return () => { cancelled = true; clearInterval(t) }
   }, [idsKey, pollInterval])
 
