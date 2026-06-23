@@ -560,9 +560,9 @@ export default function ValidationPanel({ data }) {
         if (Array.isArray(scanRec) && scanRec.length >= 2)
           history = scanRec.map(b => ({ time: b[0], open: b[1], high: b[2], low: b[3], close: b[4], volume: b[5] }))
       }
-      setSelectedStock(prev => prev ? { ...prev, price_history: history, price_history_loading: false } : null)
+      setSelectedStock(prev => prev?.stock_id === stock.stock_id ? { ...prev, price_history: history, price_history_loading: false } : prev)
     } catch {
-      setSelectedStock(prev => prev ? { ...prev, price_history: null, price_history_loading: false } : null)
+      setSelectedStock(prev => prev?.stock_id === stock.stock_id ? { ...prev, price_history: null, price_history_loading: false } : prev)
     }
   }
 
@@ -572,7 +572,7 @@ export default function ValidationPanel({ data }) {
   }, [])
 
   if (!data) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--ios-label3)' }}>載入中⋯</div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--ios-label3)', fontSize: 14 }}>尚無資料</div>
   )
 
   const isViewingHistory = histDate != null

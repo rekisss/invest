@@ -238,8 +238,30 @@ export default function App() {
           </div>
         )}
 
+        {/* Full error screen — initial load failed */}
+        {!loading && !data && error && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, padding: 24, textAlign: 'center' }}>
+            <div style={{ fontSize: 44 }}>📡</div>
+            <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--ios-label)' }}>無法載入資料</div>
+            <div style={{ fontSize: 14, color: 'var(--ios-label2)', maxWidth: 260, lineHeight: 1.5 }}>請確認網路連線後重試</div>
+            <div style={{ fontSize: 11, color: 'var(--ios-red)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{error}</div>
+            <button
+              onClick={() => loadData(false)}
+              style={{ marginTop: 8, fontSize: 14, color: '#fff', background: 'var(--ios-blue)', border: 'none', borderRadius: 10, padding: '8px 24px', cursor: 'pointer', fontWeight: 600 }}
+            >重試</button>
+          </div>
+        )}
+
+        {/* Refresh-failed banner — data available but latest refresh errored */}
+        {!loading && data && error && (
+          <div style={{ background: 'rgba(255,51,64,0.1)', borderBottom: '0.5px solid rgba(255,51,64,0.2)', padding: '5px 16px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <span style={{ fontSize: 11, color: '#FF3340', flex: 1 }}>⚠️ 刷新失敗：{error}</span>
+            <button onClick={() => loadData(false)} style={{ fontSize: 10, color: '#FF3340', background: 'none', border: '0.5px solid rgba(255,51,64,0.35)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', flexShrink: 0 }}>重試</button>
+          </div>
+        )}
+
         {/* Animated panel — all tabs except studio */}
-        {!loading && tab !== 'studio' && (
+        {!loading && !!data && tab !== 'studio' && (
           <AnimatedTabPanel
             key={tab}
             direction={slideDir}
@@ -257,7 +279,7 @@ export default function App() {
         )}
 
         {/* GeminiStudio — always mounted once data loads; hidden via display:none when inactive */}
-        {!loading && (
+        {!loading && !!data && (
           <div style={{ ...panelStyle, display: tab === 'studio' ? 'flex' : 'none' }}>
             {tab === 'studio' ? (
               <AnimatedTabPanel key="studio-visible" direction={slideDir} onDone={() => setSlideDir(null)} style={panelStyle}>
