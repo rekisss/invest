@@ -2096,12 +2096,10 @@ export default function Dashboard({ data, error }) {
   const handleListScroll = (e) => {
     const scrollTop = e.currentTarget.scrollTop
     const el = headerInnerRef.current
-    const listEl = listScrollRef.current
     if (!el || headerH == null) return
 
     if (scrollTop <= 2) {
-      // Ignore the synthetic scroll event fired by our own scrollTop=0 reset during snap-close
-      if (headerAnimatingRef.current) return
+      if (headerAnimatingRef.current) return  // ignore events during snap-close
       // Back at top: spring header open
       el.style.transition = 'height 0.42s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease, transform 0.42s cubic-bezier(0.22,1,0.36,1)'
       el.style.height = `${headerH}px`
@@ -2112,26 +2110,17 @@ export default function Dashboard({ data, error }) {
       return
     }
 
-    // First scroll while header still open: snap-close the header,
-    // then block content scrolling until the animation finishes.
+    // First scroll while header still open: snap-close the header.
+    // Content keeps scrolling freely — no lock, no reset.
     if (!headerCollapsed && !headerAnimatingRef.current) {
       headerAnimatingRef.current = true
-      el.style.transition = 'height 0.36s cubic-bezier(0.22,1,0.36,1), opacity 0.24s ease, transform 0.36s cubic-bezier(0.22,1,0.36,1)'
+      el.style.transition = 'height 0.32s cubic-bezier(0.22,1,0.36,1), opacity 0.22s ease, transform 0.32s cubic-bezier(0.22,1,0.36,1)'
       el.style.height = '0px'
       el.style.opacity = '0'
       el.style.transform = 'translateY(-8px)'
       el.style.pointerEvents = 'none'
       setHeaderCollapsed(true)
-
-      // Reset content scroll to top and lock it for the animation duration
-      if (listEl) {
-        listEl.scrollTop = 0
-        listEl.style.overflowY = 'hidden'
-      }
-      setTimeout(() => {
-        headerAnimatingRef.current = false
-        if (listEl) listEl.style.overflowY = 'auto'
-      }, 380)
+      setTimeout(() => { headerAnimatingRef.current = false }, 350)
     }
   }
   const [activeSignals, setActiveSignals] = useState(new Set())
