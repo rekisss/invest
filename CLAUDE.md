@@ -11,6 +11,12 @@
 - 所有對 Dashboard / NewsFeed / PredictionPanel 的改動必須是**加法**（新增元件、新增欄位），不改現有邏輯
 - 不刪除現有功能
 
+### 動畫一律使用 anime.js
+- 所有動畫**一律使用 anime.js**（https://github.com/juliangarnier/anime ，目前 v4，`import { animate, stagger, spring } from 'animejs'`）
+- 不要新增其他動畫函式庫；既有的 GSAP 用法可保留，但新動畫優先用 anime.js
+- 共用 helper 放在 `web/src/utils/animeUtils.js`
+- 進場動畫用 `useLayoutEffect` 並在動畫前先以指令式設定初始狀態（`el.style.transform = ...`），避免首幀閃爍；SVG 用 `transformBox: 'fill-box'` + `transformOrigin` 控制縮放原點
+
 ### GitHub Actions
 - 不改 `.github/workflows/` 的 Python 相關 workflow（`full_market_scan.yml`, `full_market_aggregate.yml`, `premarket_predict.yml` 等）
 - `deploy-pages.yml` 和 `ci.yml` 可以動
