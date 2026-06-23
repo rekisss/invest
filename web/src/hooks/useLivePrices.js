@@ -1,7 +1,8 @@
 // Real-time Taiwan stock prices via Yahoo Finance API (CORS-friendly)
-// - Batches up to 20 stocks per request
-// - Polls every 30s during market hours (09:00–13:30 Taiwan time, Mon–Fri)
-// - Outside market hours: fetches once for latest available (prev-close) prices
+// - Primary:  query2.finance.yahoo.com  (v7 batch, 20 symbols/req)
+// - Fallback: query1.finance.yahoo.com  (same endpoint, different CDN pool)
+// - Last resort: v8 chart API per-symbol for any that still miss
+// - Polls every 30s; outside market hours returns last-close snapshot
 
 import { useState, useEffect, useMemo } from 'react'
 
@@ -40,81 +41,155 @@ function fromYahooSymbol(sym) {
   return sym.replace(/\.(TW|TWO)$/, '')
 }
 
-async function fetchYahooBatch(ids) {
+// Parse a raw Yahoo v7 quote item into our internal shape
+function parseQuoteItem(item) {
+  const price = item.regularMarketPrice
+  const prev  = item.regularMarketPreviousClose ?? null
+  if (!price) return null
+  return {
+    price,
+    prevClose: prev,
+    pct:       prev ? (price - prev) / prev : null,
+    high:      item.regularMarketHigh   ?? null,
+    low:       item.regularMarketLow    ?? null,
+    open:      item.regularMarketOpen   ?? null,
+    volume:    item.regularMarketVolume ?? 0,
+    time:      item.regularMarketTime
+                 ? new Date(item.regularMarketTime * 1000)
+                     .toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' })
+                 : '',
+    isSnapshot: item.marketState !== 'REGULAR',
+  }
+}
+
+// Attempt a Yahoo Finance v7 batch fetch on one host; returns parsed map or {}
+async function tryV7Batch(host, symbols, timeout = 10000) {
   const result = {}
-  const CHUNK = 20
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const chunk = ids.slice(i, i + CHUNK)
-    const symbols = chunk.map(toYahooSymbol).join(',')
-    try {
-      const r = await fetch(
-        `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketChangePercent,regularMarketHigh,regularMarketLow,regularMarketOpen,regularMarketVolume,regularMarketTime,marketState`,
-        { signal: AbortSignal.timeout(10000) }
-      )
-      if (!r.ok) continue
-      const json = await r.json()
-      for (const item of json?.quoteResponse?.result || []) {
-        const id = fromYahooSymbol(item.symbol || '')
-        if (!id) continue
-        const price = item.regularMarketPrice
-        const prev  = item.regularMarketPreviousClose ?? null
-        if (!price) continue
-        // During Taiwan market hours price is live; outside it's last close
-        const isSnapshot = item.marketState !== 'REGULAR'
-        result[id] = {
-          price,
-          prevClose: prev,
-          pct:       prev ? (price - prev) / prev : null,
-          high:      item.regularMarketHigh  ?? null,
-          low:       item.regularMarketLow   ?? null,
-          open:      item.regularMarketOpen  ?? null,
-          volume:    item.regularMarketVolume ?? 0,
-          time:      item.regularMarketTime
-                       ? new Date(item.regularMarketTime * 1000)
-                           .toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' })
-                       : '',
-          isSnapshot,
-        }
-      }
-    } catch (e) {
-      console.warn('Yahoo quote batch failed:', e.message)
+  try {
+    const r = await fetch(
+      `https://${host}/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketChangePercent,regularMarketHigh,regularMarketLow,regularMarketOpen,regularMarketVolume,regularMarketTime,marketState`,
+      { signal: AbortSignal.timeout(timeout) }
+    )
+    if (!r.ok) {
+      console.warn(`Yahoo v7 ${host} → ${r.status}`)
+      return result
     }
+    const json = await r.json()
+    for (const item of json?.quoteResponse?.result || []) {
+      const id = fromYahooSymbol(item.symbol || '')
+      if (!id) continue
+      const parsed = parseQuoteItem(item)
+      if (parsed) result[id] = parsed
+    }
+  } catch (e) {
+    console.warn(`Yahoo v7 ${host} error:`, e.message)
   }
   return result
 }
 
-// Index fetch: 加權指數 ^TWII, 櫃買指數 ^TPX
-export async function fetchIndices() {
+// Last-resort: v8 chart for a single symbol — bypasses v7 rate-limit pool
+async function tryV8Single(symbol, timeout = 8000) {
   try {
     const r = await fetch(
-      'https://query1.finance.yahoo.com/v7/finance/quote?symbols=%5ETWII,%5ETPEX&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketChangePercent,regularMarketTime',
-      { signal: AbortSignal.timeout(8000) }
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d&includePrePost=false`,
+      { signal: AbortSignal.timeout(timeout) }
     )
     if (!r.ok) return null
     const json = await r.json()
-    const out = {}
-    for (const item of json?.quoteResponse?.result || []) {
-      const price = item.regularMarketPrice
-      const prev  = item.regularMarketPreviousClose ?? null
-      if (!price) continue
-      // Map Yahoo symbols to the keys the IndexBar expects
-      const key = item.symbol === '^TWII' ? 't00' : 'o00'
-      out[key] = {
-        price,
-        prevClose: prev,
-        change: prev != null ? price - prev : null,
-        pct:    prev ? (price - prev) / prev : null,
-        time:   item.regularMarketTime
-                  ? new Date(item.regularMarketTime * 1000)
-                      .toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' })
-                  : '',
-      }
+    const meta = json?.chart?.result?.[0]?.meta
+    if (!meta?.regularMarketPrice) return null
+    const price = meta.regularMarketPrice
+    const prev  = meta.previousClose ?? meta.chartPreviousClose ?? null
+    return {
+      price,
+      prevClose: prev,
+      pct:       prev ? (price - prev) / prev : null,
+      high:      meta.regularMarketDayHigh  ?? null,
+      low:       meta.regularMarketDayLow   ?? null,
+      open:      meta.regularMarketOpen     ?? null,
+      volume:    meta.regularMarketVolume   ?? 0,
+      time:      meta.regularMarketTime
+                   ? new Date(meta.regularMarketTime * 1000)
+                       .toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' })
+                   : '',
+      isSnapshot: meta.marketState !== 'REGULAR',
     }
-    return Object.keys(out).length ? out : null
   } catch (e) {
-    console.warn('Index fetch failed:', e.message)
+    console.warn(`Yahoo v8 ${symbol} error:`, e.message)
     return null
   }
+}
+
+const V7_HOSTS = ['query2.finance.yahoo.com', 'query1.finance.yahoo.com']
+
+async function fetchYahooBatch(ids) {
+  const result = {}
+  const CHUNK = 20
+
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk    = ids.slice(i, i + CHUNK)
+    const symbols  = chunk.map(toYahooSymbol).join(',')
+    let   chunkHit = false
+
+    // Try v7 on each host in order
+    for (const host of V7_HOSTS) {
+      const r = await tryV7Batch(host, symbols)
+      if (Object.keys(r).length > 0) {
+        Object.assign(result, r)
+        chunkHit = true
+        break
+      }
+    }
+
+    // v8 per-symbol fallback for anything still missing
+    if (!chunkHit) {
+      await Promise.all(chunk.map(async id => {
+        if (result[id]) return
+        const r = await tryV8Single(toYahooSymbol(id))
+        if (r) result[id] = r
+      }))
+    }
+  }
+
+  return result
+}
+
+// Index fetch: 加權指數 ^TWII, 櫃買指數 ^TPEX
+export async function fetchIndices() {
+  const IDX_SYMBOLS = '%5ETWII,%5ETPEX'
+  const IDX_FIELDS  = 'regularMarketPrice,regularMarketPreviousClose,regularMarketChangePercent,regularMarketTime'
+
+  for (const host of V7_HOSTS) {
+    try {
+      const r = await fetch(
+        `https://${host}/v7/finance/quote?symbols=${IDX_SYMBOLS}&fields=${IDX_FIELDS}`,
+        { signal: AbortSignal.timeout(8000) }
+      )
+      if (!r.ok) continue
+      const json = await r.json()
+      const out  = {}
+      for (const item of json?.quoteResponse?.result || []) {
+        const price = item.regularMarketPrice
+        const prev  = item.regularMarketPreviousClose ?? null
+        if (!price) continue
+        const key = item.symbol === '^TWII' ? 't00' : 'o00'
+        out[key] = {
+          price,
+          prevClose: prev,
+          change: prev != null ? price - prev : null,
+          pct:    prev ? (price - prev) / prev : null,
+          time:   item.regularMarketTime
+                    ? new Date(item.regularMarketTime * 1000)
+                        .toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' })
+                    : '',
+        }
+      }
+      if (Object.keys(out).length) return out
+    } catch (e) {
+      console.warn(`Index fetch ${host} error:`, e.message)
+    }
+  }
+  return null
 }
 
 /**
@@ -155,7 +230,7 @@ export function useLivePrices(stockIds, { pollInterval = 30000 } = {}) {
             setLastUpdate(new Date())
             setError(null)
           } else {
-            setError('無法取得報價（Yahoo Finance 暫時無回應）')
+            setError('無法取得報價（Yahoo Finance 暫時無回應，請稍後重試）')
           }
         }
       } catch (e) {
@@ -166,7 +241,7 @@ export function useLivePrices(stockIds, { pollInterval = 30000 } = {}) {
     }
 
     run()  // always fetch once on mount
-    const t = setInterval(run, pollInterval)  // poll 24/7 — Yahoo returns last-close outside hours
+    const t = setInterval(run, pollInterval)  // poll 24/7
     return () => { cancelled = true; clearInterval(t) }
   }, [idsKey, pollInterval])
 
