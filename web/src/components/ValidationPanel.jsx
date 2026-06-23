@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect, useCallback } from 'react'
+import { useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react'
 import { animate, stagger, spring } from 'animejs'
 import { useLivePrices, isTWSEOpen } from '../hooks/useLivePrices'
 import StockDetailModal from './StockDetailModal'
@@ -168,14 +168,41 @@ function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
 
 // ── Clickable date bar chart ──────────────────────────────────────────────
 function DateBarChart({ byDate, byDate1d = {}, sortedDates, activeDate, onDateClick }) {
-  const valid = sortedDates.filter(d => byDate[d])
-  if (!valid.length) return null
-  const maxR  = Math.max(...valid.map(d => Math.abs(byDate[d].avgReturn || 0)), 0.01)
-  const H     = 90
+  const svgRef = useRef(null)
+  const valid  = sortedDates.filter(d => byDate[d])
+  const validKey = valid.join(',')
+
+  const maxR   = Math.max(...valid.map(d => Math.abs(byDate[d].avgReturn || 0)), 0.01)
+  // Geometry: TOP reserves headroom so the tallest bar's value label is never clipped.
+  const TOP    = 18
+  const H      = 88                 // bar zone height
+  const BASE_Y = TOP + H - 4        // zero baseline
+  const MAXBAR = H - 14             // cap bar height, leaving room for the top label
   const BAR_W = 22, SPACING = 32, PAD = 6
   const totalW = valid.length * SPACING + PAD * 2
   const has1d  = valid.some(d => byDate1d[d])
-  const svgH   = H + (has1d ? 46 : 34)
+  const svgH   = BASE_Y + (has1d ? 44 : 30)
+
+  // Grow bars from the baseline + fade in value labels (anime.js, staggered)
+  useLayoutEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const bars = el.querySelectorAll('.vbar')
+    bars.forEach(b => { b.style.transform = 'scaleY(0)' })
+    if (bars.length) animate(bars, {
+      scaleY: [0, 1],
+      delay: stagger(45, { start: 60 }),
+      ease: spring({ stiffness: 290, damping: 21, mass: 0.85 }),
+    })
+    const labels = el.querySelectorAll('.vlabel')
+    labels.forEach(l => { l.style.opacity = '0' })
+    if (labels.length) animate(labels, {
+      opacity: [0, 1], translateY: [5, 0],
+      duration: 420, delay: stagger(45, { start: 240 }), ease: 'outQuad',
+    })
+  }, [validKey])
+
+  if (!valid.length) return null
 
   return (
     <div>
@@ -186,33 +213,38 @@ function DateBarChart({ byDate, byDate1d = {}, sortedDates, activeDate, onDateCl
         {onDateClick && <span style={{ fontSize: 9, color: 'var(--ios-blue)', marginLeft: 'auto' }}>點柱查看</span>}
       </div>
       <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
-        <svg viewBox={`0 0 ${totalW} ${svgH}`} style={{ width: Math.max(totalW, 280), height: svgH, display: 'block' }}>
+        <svg ref={svgRef} viewBox={`0 0 ${totalW} ${svgH}`} preserveAspectRatio="xMinYMid meet" style={{ width: Math.max(totalW, 280), height: svgH, display: 'block' }}>
           {valid.map((date, i) => {
             const s   = byDate[date]
             const r   = s.avgReturn || 0
-            const bH  = Math.max(4, Math.abs(r) / maxR * (H - 10))
+            const bH  = Math.max(4, Math.abs(r) / maxR * MAXBAR)
             const x   = PAD + i * SPACING
-            const y   = r >= 0 ? H - 4 - bH : H - 4
+            const y   = r >= 0 ? BASE_Y - bH : BASE_Y
             const col = r >= 0 ? '#FF3340' : '#16D67E'
             const isActive = date === activeDate
             return (
               <g key={date} onClick={() => onDateClick?.(date)} style={{ cursor: onDateClick ? 'pointer' : 'default' }}>
-                {isActive && <rect x={x - 3} y={4} width={BAR_W + 6} height={H - 6} rx={6} fill="rgba(10,132,255,0.12)" />}
-                <rect x={x} y={y} width={BAR_W} height={bH} rx={4} fill={col} opacity={isActive ? 1 : 0.8} />
-                <text x={x + BAR_W / 2} y={H + 12} fontSize={7.5} textAnchor="middle" style={{ fill: isActive ? '#0A84FF' : 'var(--ios-label3)' }} fontWeight={isActive ? '700' : '400'}>{date.slice(5)}</text>
-                {s.winRate != null && <text x={x + BAR_W / 2} y={H + 22} fontSize={7} textAnchor="middle" fill={winColor(s.winRate)} fontWeight="700">{Math.round(s.winRate * 100)}%</text>}
-                <text x={x + BAR_W / 2} y={r >= 0 ? y - 3 : y + bH + 9} fontSize={7} textAnchor="middle" fill={col} fontWeight="700">{(r * 100).toFixed(0)}%</text>
+                {isActive && <rect x={x - 3} y={2} width={BAR_W + 6} height={BASE_Y} rx={6} fill="rgba(10,132,255,0.12)" />}
+                <rect
+                  className="vbar"
+                  x={x} y={y} width={BAR_W} height={bH} rx={4} fill={col}
+                  opacity={isActive ? 1 : 0.82}
+                  style={{ transformBox: 'fill-box', transformOrigin: 'center bottom' }}
+                />
+                <text x={x + BAR_W / 2} y={BASE_Y + 14} fontSize={7.5} textAnchor="middle" style={{ fill: isActive ? '#0A84FF' : 'var(--ios-label3)' }} fontWeight={isActive ? '700' : '400'}>{date.slice(5)}</text>
+                {s.winRate != null && <text x={x + BAR_W / 2} y={BASE_Y + 24} fontSize={7} textAnchor="middle" fill={winColor(s.winRate)} fontWeight="700">{Math.round(s.winRate * 100)}%</text>}
+                <text className="vlabel" x={x + BAR_W / 2} y={r >= 0 ? y - 4 : y + bH + 9} fontSize={7} textAnchor="middle" fill={col} fontWeight="700">{(r * 100).toFixed(0)}%</text>
               </g>
             )
           })}
-          <line x1={PAD} y1={H - 4} x2={totalW - PAD} y2={H - 4} stroke="var(--ios-sep)" strokeWidth={0.5} />
+          <line x1={PAD} y1={BASE_Y} x2={totalW - PAD} y2={BASE_Y} stroke="var(--ios-sep)" strokeWidth={0.5} />
           {has1d && valid.map((date, i) => {
             const d1  = byDate1d[date]
             const r   = d1?.avgReturn ?? null
             const x   = PAD + i * SPACING + BAR_W / 2
             const col = r == null ? 'var(--ios-label4)' : r > 0 ? '#FF3340' : r < 0 ? '#16D67E' : 'var(--ios-label3)'
             return (
-              <text key={`1d-${date}`} x={x} y={H + 34} fontSize={7.5} textAnchor="middle" fill={col} fontWeight={r != null ? '700' : '400'}>
+              <text key={`1d-${date}`} x={x} y={BASE_Y + 36} fontSize={7.5} textAnchor="middle" fill={col} fontWeight={r != null ? '700' : '400'}>
                 {r == null ? '—' : (r >= 0 ? '+' : '') + (r * 100).toFixed(1) + '%'}
               </text>
             )
@@ -236,6 +268,27 @@ function CumulativePnLChart({ sortedDates, byDate }) {
     }
     return out
   }, [sortedDates, byDate])
+
+  const lineRef = useRef(null)
+  const dotRef  = useRef(null)
+  const areaRef = useRef(null)
+  const pathKey = pts.map(p => p.v.toFixed(3)).join(',')
+
+  // Draw the line on (stroke-dashoffset), fade the area, then pop the end dot
+  useLayoutEffect(() => {
+    const line = lineRef.current
+    if (line) {
+      const len = line.getTotalLength()
+      line.style.strokeDasharray  = String(len)
+      line.style.strokeDashoffset = String(len)
+      animate(line, { strokeDashoffset: [len, 0], duration: 1100, ease: 'inOutCubic' })
+    }
+    if (areaRef.current) animate(areaRef.current, { opacity: [0, 0.12], duration: 900, delay: 350, ease: 'outQuad' })
+    if (dotRef.current)  {
+      dotRef.current.style.opacity = '0'
+      animate(dotRef.current, { opacity: [0, 1], scale: [0, 1], duration: 420, delay: 1000, ease: spring({ stiffness: 360, damping: 14 }) })
+    }
+  }, [pathKey])
 
   if (pts.length < 2) return null
 
@@ -266,13 +319,14 @@ function CumulativePnLChart({ sortedDates, byDate }) {
         )}
         {/* area */}
         <path
+          ref={areaRef}
           d={`${path} L${sx(pts.length - 1)},${sy(minV)} L${sx(0)},${sy(minV)} Z`}
           fill={color} opacity={0.12}
         />
         {/* line */}
-        <path d={path} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+        <path ref={lineRef} d={path} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
         {/* end dot */}
-        <circle cx={sx(pts.length - 1)} cy={sy(last.v)} r={2.5} fill={color} />
+        <circle ref={dotRef} cx={sx(pts.length - 1)} cy={sy(last.v)} r={2.5} fill={color} style={{ transformBox: 'fill-box', transformOrigin: 'center' }} />
       </svg>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
         <span style={{ fontSize: 8, color: 'var(--ios-label4)' }}>最早</span>
@@ -292,24 +346,46 @@ function SignalTable({ bySignal }) {
       .sort((a, b) => b.wr - a.wr || b.total - a.total)
   ), [bySignal])
 
+  const tableRef = useRef(null)
+  const visible  = expanded ? rows : rows.slice(0, 6)
+  const visibleKey = visible.map(r => r.sig).join(',')
+
+  // Grow win-rate bars from the left + fade rows in (anime.js, staggered)
+  useLayoutEffect(() => {
+    const el = tableRef.current
+    if (!el) return
+    const fills = el.querySelectorAll('.sigbar')
+    fills.forEach(f => { f.style.transform = 'scaleX(0)' })
+    if (fills.length) animate(fills, {
+      scaleX: [0, 1],
+      delay: stagger(40, { start: 80 }),
+      ease: spring({ stiffness: 260, damping: 24, mass: 0.9 }),
+    })
+    const labels = el.querySelectorAll('.sigrow')
+    labels.forEach(l => { l.style.opacity = '0' })
+    if (labels.length) animate(labels, {
+      opacity: [0, 1], translateX: [-6, 0],
+      duration: 360, delay: stagger(40, { start: 40 }), ease: 'outQuad',
+    })
+  }, [visibleKey])
+
   if (!rows.length) return null
-  const visible = expanded ? rows : rows.slice(0, 6)
 
   return (
-    <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '12px 12px', marginBottom: 12, border: '0.5px solid var(--ios-sep)' }}>
+    <div ref={tableRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '12px 12px', marginBottom: 12, border: '0.5px solid var(--ios-sep)' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ios-label)' }}>信號勝率（≥3次）</span>
         <span style={{ marginLeft: 'auto', fontSize: 8, color: 'var(--ios-label4)' }}>勝率 / 均報酬</span>
       </div>
       {visible.map(r => (
-        <div key={r.sig} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <div key={r.sig} className="sigrow" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
           <span style={{
             fontSize: 9, color: 'var(--ios-label3)', background: 'var(--ios-fill3)',
             padding: '2px 5px', borderRadius: 4, flexShrink: 0, minWidth: 60,
           }}>{SIGNAL_LABELS[r.sig] || r.sig}</span>
           <span style={{ fontSize: 8, color: 'var(--ios-label4)', flexShrink: 0, minWidth: 22 }}>{r.total}次</span>
-          <div style={{ flex: 1, height: 4, background: 'var(--ios-fill3)', borderRadius: 2 }}>
-            <div style={{ width: `${Math.round(r.wr * 100)}%`, height: '100%', background: winColor(r.wr), borderRadius: 2 }} />
+          <div style={{ flex: 1, height: 4, background: 'var(--ios-fill3)', borderRadius: 2, overflow: 'hidden' }}>
+            <div className="sigbar" style={{ width: `${Math.round(r.wr * 100)}%`, height: '100%', background: winColor(r.wr), borderRadius: 2, transformOrigin: 'left center' }} />
           </div>
           <span style={{ fontSize: 11, fontWeight: 700, color: winColor(r.wr), minWidth: 32, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{fmtRate(r.wr)}</span>
           <span style={{ fontSize: 11, fontWeight: 700, color: retColor(r.avg), minWidth: 44, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{fmtPct(r.avg)}</span>
@@ -350,6 +426,7 @@ function GradeRow({ grade, stats }) {
 export default function ValidationPanel({ data }) {
   const listRef    = useRef(null)
   const statsRef   = useRef(null)
+  const batchRef   = useRef(null)
   const historiesRef = useRef(null)
   const winRateRef = useRef(null)
   const avgR5Ref   = useRef(null)
@@ -516,6 +593,18 @@ export default function ValidationPanel({ data }) {
     animate(listRef.current, { opacity: [0.3, 1], duration: 200, ease: 'outQuad' })
   }, [histDate])
 
+  // Pop the headline stat columns in on first load and whenever the date changes
+  useEffect(() => {
+    if (!batchRef.current) return
+    const cols = batchRef.current.querySelectorAll('.vstat')
+    if (!cols.length) return
+    animate(cols, {
+      opacity: [0, 1], translateY: [8, 0], scale: [0.9, 1],
+      delay: stagger(50, { start: 20 }),
+      ease: spring({ stiffness: 340, damping: 26, mass: 0.8 }),
+    })
+  }, [histDate])
+
   // Animate stat blocks
   useEffect(() => {
     if (!statsRef.current) return
@@ -665,28 +754,28 @@ export default function ValidationPanel({ data }) {
 
       {/* ── Batch summary (shows for every selected date) ── */}
       <div style={{ marginBottom: 12 }}>
-        <div style={{ display: 'flex', gap: 8, background: 'var(--ios-bg2)', borderRadius: 14, padding: '10px 14px', border: '0.5px solid var(--ios-sep)' }}>
-          <div style={{ flex: 1, textAlign: 'center' }}>
+        <div ref={batchRef} style={{ display: 'flex', gap: 8, background: 'var(--ios-bg2)', borderRadius: 14, padding: '10px 14px', border: '0.5px solid var(--ios-sep)' }}>
+          <div className="vstat" style={{ flex: 1, textAlign: 'center' }}>
             <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>5日勝率</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: winColor(displayStats.winRate) }}>{fmtRate(displayStats.winRate)}</div>
           </div>
           <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
-          <div style={{ flex: 1, textAlign: 'center' }}>
+          <div className="vstat" style={{ flex: 1, textAlign: 'center' }}>
             <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均5日報</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: retColor(displayStats.avgR5d) }}>{fmtPct(displayStats.avgR5d)}</div>
           </div>
           <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
-          <div style={{ flex: 1, textAlign: 'center' }}>
+          <div className="vstat" style={{ flex: 1, textAlign: 'center' }}>
             <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>隔日勝率</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: winColor(displayStats.winRate1d) }}>{fmtRate(displayStats.winRate1d)}</div>
           </div>
           <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
-          <div style={{ flex: 1, textAlign: 'center' }}>
+          <div className="vstat" style={{ flex: 1, textAlign: 'center' }}>
             <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均隔日報</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: retColor(displayStats.avgR1d) }}>{fmtPct(displayStats.avgR1d)}</div>
           </div>
           <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
-          <div style={{ flex: 1, textAlign: 'center' }}>
+          <div className="vstat" style={{ flex: 1, textAlign: 'center' }}>
             <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>精選檔數</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ios-label)' }}>{displayStats.total}</div>
           </div>
