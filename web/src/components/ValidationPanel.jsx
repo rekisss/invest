@@ -164,14 +164,15 @@ function DateBarChart({ byDate, byDate1d = {}, sortedDates, activeDate, onDateCl
   const BAR_W = 22, SPACING = 32, PAD = 6
   const totalW = valid.length * SPACING + PAD * 2
   const has1d  = valid.some(d => byDate1d[d])
-  const svgH   = H + (has1d ? 36 : 24)
+  const svgH   = H + (has1d ? 46 : 34)
 
   return (
     <div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 4 }}>
         <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>柱: 5日均酬</span>
-        {has1d && <span style={{ fontSize: 9, color: 'var(--ios-orange)' }}>下方: 隔日均酬</span>}
-        {onDateClick && <span style={{ fontSize: 9, color: 'var(--ios-blue)', marginLeft: 'auto' }}>點柱查看該日</span>}
+        <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>小: 5日勝率</span>
+        {has1d && <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>底: 隔日均酬</span>}
+        {onDateClick && <span style={{ fontSize: 9, color: 'var(--ios-blue)', marginLeft: 'auto' }}>點柱查看</span>}
       </div>
       <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
         <svg viewBox={`0 0 ${totalW} ${svgH}`} style={{ width: Math.max(totalW, 280), height: svgH, display: 'block' }}>
@@ -188,6 +189,7 @@ function DateBarChart({ byDate, byDate1d = {}, sortedDates, activeDate, onDateCl
                 {isActive && <rect x={x - 3} y={4} width={BAR_W + 6} height={H - 6} rx={6} fill="rgba(10,132,255,0.12)" />}
                 <rect x={x} y={y} width={BAR_W} height={bH} rx={4} fill={col} opacity={isActive ? 1 : 0.8} />
                 <text x={x + BAR_W / 2} y={H + 12} fontSize={7.5} textAnchor="middle" style={{ fill: isActive ? '#0A84FF' : 'var(--ios-label3)' }} fontWeight={isActive ? '700' : '400'}>{date.slice(5)}</text>
+                {s.winRate != null && <text x={x + BAR_W / 2} y={H + 22} fontSize={7} textAnchor="middle" fill={winColor(s.winRate)} fontWeight="700">{Math.round(s.winRate * 100)}%</text>}
                 <text x={x + BAR_W / 2} y={r >= 0 ? y - 3 : y + bH + 9} fontSize={7} textAnchor="middle" fill={col} fontWeight="700">{(r * 100).toFixed(0)}%</text>
               </g>
             )
@@ -199,7 +201,7 @@ function DateBarChart({ byDate, byDate1d = {}, sortedDates, activeDate, onDateCl
             const x   = PAD + i * SPACING + BAR_W / 2
             const col = r == null ? 'var(--ios-label4)' : r > 0 ? '#FF3340' : r < 0 ? '#16D67E' : 'var(--ios-label3)'
             return (
-              <text key={`1d-${date}`} x={x} y={H + 25} fontSize={7.5} textAnchor="middle" fill={col} fontWeight={r != null ? '700' : '400'}>
+              <text key={`1d-${date}`} x={x} y={H + 34} fontSize={7.5} textAnchor="middle" fill={col} fontWeight={r != null ? '700' : '400'}>
                 {r == null ? '—' : (r >= 0 ? '+' : '') + (r * 100).toFixed(1) + '%'}
               </text>
             )
@@ -395,19 +397,30 @@ export default function ValidationPanel({ data }) {
       byG[g].returns.push(o.r5d)
     }
 
-    // By-date stats (5d & 1d)
+    // By-date stats (5d & 1d) — limited to top 20 to match the displayed card list
     const byDate   = {}
     const byDate1d = {}
     for (const date of sortedDates) {
-      const top5 = (scans[date]?.top_stocks || []).filter(s => s.return_5d != null)
+      const allTop = (scans[date]?.top_stocks || []).slice(0, 20)
+      const top5   = allTop.filter(s => s.return_5d != null)
       if (top5.length) {
-        const r5s = top5.map(s => s.return_5d)
-        byDate[date] = { total: top5.length, wins: top5.filter(s => s.return_5d > 0).length, avgReturn: r5s.reduce((a, v) => a + v, 0) / r5s.length }
+        const wins5 = top5.filter(s => s.return_5d > 0).length
+        const r5s   = top5.map(s => s.return_5d)
+        byDate[date] = {
+          total: top5.length, wins: wins5,
+          winRate: wins5 / top5.length,
+          avgReturn: r5s.reduce((a, v) => a + v, 0) / r5s.length,
+        }
       }
-      const top1 = (scans[date]?.top_stocks || []).filter(s => s.return_1d != null)
+      const top1 = allTop.filter(s => s.return_1d != null)
       if (top1.length) {
-        const r1s = top1.map(s => s.return_1d)
-        byDate1d[date] = { total: top1.length, wins: top1.filter(s => s.return_1d > 0).length, avgReturn: r1s.reduce((a, v) => a + v, 0) / r1s.length }
+        const wins1 = top1.filter(s => s.return_1d > 0).length
+        const r1s   = top1.map(s => s.return_1d)
+        byDate1d[date] = {
+          total: top1.length, wins: wins1,
+          winRate: wins1 / top1.length,
+          avgReturn: r1s.reduce((a, v) => a + v, 0) / r1s.length,
+        }
       }
     }
 
@@ -443,6 +456,24 @@ export default function ValidationPanel({ data }) {
     }
     return gradeFilter ? base.filter(s => s.grade === gradeFilter) : base
   }, [top20, histDate, gradeFilter, data])
+
+  // Per-date stats for whatever date is selected (or latest batch)
+  const displayStats = useMemo(() => {
+    if (!histDate) return batchStats
+    const d5     = byDate[histDate]
+    const d1     = byDate1d[histDate]
+    const allTop = data?.scans?.[histDate]?.top_stocks?.slice(0, 20) || []
+    return {
+      total:     allTop.length,
+      verified:  d5?.total ?? 0,
+      pending:   allTop.length - (d5?.total ?? 0),
+      winRate:   d5 ? d5.winRate : null,
+      avgR5d:    d5?.avgReturn ?? null,
+      winRate1d: d1 ? d1.winRate : null,
+      avgR1d:    d1?.avgReturn ?? null,
+      exits:     allTop.filter(s => s.base_exit_signal).length,
+    }
+  }, [histDate, byDate, byDate1d, data, batchStats])
 
   // Live prices (current scan only)
   const marketOpen = isTWSEOpen()
@@ -614,44 +645,48 @@ export default function ValidationPanel({ data }) {
         </div>
       )}
 
-      {/* ── Batch summary ── */}
-      {!isViewingHistory && (
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', gap: 8, background: 'var(--ios-bg2)', borderRadius: 14, padding: '10px 14px', border: '0.5px solid var(--ios-sep)' }}>
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>5日勝率</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: winColor(batchStats.winRate) }}>{fmtRate(batchStats.winRate)}</div>
-            </div>
-            <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均5日報</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: retColor(batchStats.avgR5d) }}>{fmtPct(batchStats.avgR5d)}</div>
-            </div>
-            <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>隔日勝率</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: winColor(batchStats.winRate1d) }}>{fmtRate(batchStats.winRate1d)}</div>
-            </div>
-            <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均隔日報</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: retColor(batchStats.avgR1d) }}>{fmtPct(batchStats.avgR1d)}</div>
-            </div>
-            <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
-            <div style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>精選檔數</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ios-label)' }}>{batchStats.total}</div>
-            </div>
+      {/* ── Batch summary (shows for every selected date) ── */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 8, background: 'var(--ios-bg2)', borderRadius: 14, padding: '10px 14px', border: '0.5px solid var(--ios-sep)' }}>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>5日勝率</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: winColor(displayStats.winRate) }}>{fmtRate(displayStats.winRate)}</div>
+          </div>
+          <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均5日報</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: retColor(displayStats.avgR5d) }}>{fmtPct(displayStats.avgR5d)}</div>
+          </div>
+          <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>隔日勝率</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: winColor(displayStats.winRate1d) }}>{fmtRate(displayStats.winRate1d)}</div>
+          </div>
+          <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均隔日報</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: retColor(displayStats.avgR1d) }}>{fmtPct(displayStats.avgR1d)}</div>
+          </div>
+          <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>精選檔數</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ios-label)' }}>{displayStats.total}</div>
           </div>
         </div>
-      )}
+        {isViewingHistory && displayStats.pending > 0 && (
+          <div style={{ fontSize: 9, color: 'var(--ios-label4)', textAlign: 'center', marginTop: 4 }}>
+            已驗 {displayStats.verified} / 待驗 {displayStats.pending}
+          </div>
+        )}
+      </div>
 
       {/* ── Grade filter ── */}
-      {!isViewingHistory && top20.some(s => s.grade) && (
+      {displayStocks.some(s => s.grade) && (
         <div style={{ display: 'flex', gap: 5, marginBottom: 8, flexWrap: 'wrap' }}>
           {['A','B','C','D'].map(g => {
             const cfg = GRADE_CFG[g]
-            const count = top20.filter(s => s.grade === g).length
+            const gradeBase = isViewingHistory ? (data?.scans?.[histDate]?.top_stocks?.slice(0, 20) || []) : top20
+            const count = gradeBase.filter(s => s.grade === g).length
             if (!count) return null
             const active = gradeFilter === g
             return (
