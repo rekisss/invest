@@ -99,6 +99,20 @@ function useStaggerRows(containerRef, key) {
   }, [key])
 }
 
+// ── Countdown to next poll ────────────────────────────────────────────────
+function useCountdown(lastUpdate, intervalMs = 30000) {
+  const [secs, setSecs] = useState(null)
+  useEffect(() => {
+    if (!lastUpdate) return
+    const base = lastUpdate.getTime()
+    const tick = () => setSecs(Math.max(0, Math.ceil((intervalMs - ((Date.now() - base) % intervalMs)) / 1000)))
+    tick()
+    const t = setInterval(tick, 1000)
+    return () => clearInterval(t)
+  }, [lastUpdate, intervalMs])
+  return secs
+}
+
 // ── Stock row ─────────────────────────────────────────────────────────────
 function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, showRemove }) {
   const upColor   = '#FF3340'
@@ -180,7 +194,7 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
               </div>
               {!isSnap && pct != null && (
                 <div style={{ fontSize: 13, fontWeight: 700, color, marginTop: 1 }}>
-                  {pct >= 0 ? '+' : ''}{(pct * 100).toFixed(2)}%
+                  {pct >= 0 ? '▲' : '▼'} {Math.abs(pct * 100).toFixed(2)}%
                 </div>
               )}
               {isSnap && (
@@ -382,8 +396,10 @@ export default function LiveMonitor({ data }) {
     ...scanStocks.map(s => String(s.stock_id)),
   ])], [monitorList, positions, scanStocks])
 
-  const { prices: liveData, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: liveLoading }
+  const { prices: liveData, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: liveLoading, error: liveError }
     = useLivePrices(allIds)
+
+  const countdown = useCountdown(liveTime)
 
   // Separate index fetch via Yahoo Finance (CORS-friendly)
   useEffect(() => {
@@ -473,7 +489,19 @@ export default function LiveMonitor({ data }) {
 
   return (
     <>
-    <style>{`@keyframes monSpin { to { transform: rotate(360deg) } }`}</style>
+    <style>{`
+      @keyframes monSpin    { to { transform: rotate(360deg) } }
+      @keyframes livePulse  {
+        0%   { box-shadow: 0 0 0 0   rgba(22,214,126,0.8); }
+        70%  { box-shadow: 0 0 0 6px rgba(22,214,126,0); }
+        100% { box-shadow: 0 0 0 0   rgba(22,214,126,0); }
+      }
+      @keyframes snapPulse  {
+        0%   { box-shadow: 0 0 0 0   rgba(10,132,255,0.7); }
+        70%  { box-shadow: 0 0 0 5px rgba(10,132,255,0); }
+        100% { box-shadow: 0 0 0 0   rgba(10,132,255,0); }
+      }
+    `}</style>
     <div style={{ padding: '10px 16px 80px', overflowY: 'auto', height: '100%', WebkitOverflowScrolling: 'touch' }}>
 
       {/* ── Market status ───────────────────────────────────────── */}
@@ -495,15 +523,35 @@ export default function LiveMonitor({ data }) {
               {liveTime.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </div>
           )}
-          <div style={{ fontSize: 10, marginTop: 2, color: liveLoading ? 'var(--ios-blue)' : 'var(--ios-label4)', display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
-            {liveLoading && <span style={{ display: 'inline-block', width: 10, height: 10, border: '1.5px solid var(--ios-fill3)', borderTop: '1.5px solid var(--ios-blue)', borderRadius: '50%', animation: 'monSpin 0.8s linear infinite' }} />}
-            {liveLoading ? '更新中…' : mktOpen ? '每 30 秒更新' : '收盤停止更新'}
+          <div style={{ fontSize: 10, marginTop: 3, display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end' }}>
+            {liveLoading ? (
+              <>
+                <span style={{ display: 'inline-block', width: 9, height: 9, border: '1.5px solid var(--ios-fill3)', borderTop: '1.5px solid var(--ios-blue)', borderRadius: '50%', animation: 'monSpin 0.7s linear infinite' }} />
+                <span style={{ color: 'var(--ios-blue)', fontWeight: 600 }}>更新中…</span>
+              </>
+            ) : liveTime ? (
+              <>
+                <span style={{
+                  display: 'inline-block', width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                  background: mktOpen ? '#16D67E' : 'var(--ios-blue)',
+                  animation: `${mktOpen ? 'livePulse' : 'snapPulse'} 2s ease-out infinite`,
+                }} />
+                <span style={{ color: 'var(--ios-label3)', fontWeight: 600 }}>
+                  {countdown != null && countdown > 0 ? `${countdown}s 後更新` : '更新中…'}
+                </span>
+              </>
+            ) : (
+              <span style={{ color: 'var(--ios-label4)' }}>等待報價…</span>
+            )}
           </div>
+          {liveError && (
+            <div style={{ fontSize: 9, color: '#FF3B30', marginTop: 2 }}>{liveError}</div>
+          )}
         </div>
       </div>
 
-      {/* ── Index bar (market hours only) ─────────────────────── */}
-      {mktOpen && <IndexBar indices={indices} loading={idxLoading} />}
+      {/* ── Index bar ─────────────────────────────────────────── */}
+      <IndexBar indices={indices} loading={idxLoading} />
 
       {/* ── Sort + scope controls ─────────────────────────────── */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
