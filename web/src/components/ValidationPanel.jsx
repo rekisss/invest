@@ -167,51 +167,45 @@ function DateBarChart({ byDate, byDate1d = {}, sortedDates }) {
   const H = 90
   const BAR_W = 22, SPACING = 32, PAD = 6
   const totalW = valid.length * SPACING + PAD * 2
+  const has1d = valid.some(d => byDate1d[d])
+  const svgH = H + (has1d ? 36 : 24)
   return (
-    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
-      <svg viewBox={`0 0 ${totalW} ${H + 24}`} style={{ width: Math.max(totalW, 280), height: H + 24, display: 'block' }}>
-        {valid.map((date, i) => {
-          const s = byDate[date]
-          const r = s.avgReturn || 0
-          const bH = Math.max(4, Math.abs(r) / maxR * (H - 10))
-          const x = PAD + i * SPACING
-          const y  = r >= 0 ? H - 4 - bH : H - 4
-          const col = r >= 0 ? '#FF3340' : '#16D67E'
-          return (
-            <g key={date}>
-              <rect x={x} y={y} width={BAR_W} height={bH} rx={4} fill={col} opacity={0.85} />
-              <text x={x + BAR_W / 2} y={H + 12} fontSize={7.5} textAnchor="middle" style={{ fill: 'var(--ios-label3)' }}>{date.slice(5)}</text>
-              <text x={x + BAR_W / 2} y={r >= 0 ? y - 3 : y + bH + 9} fontSize={7} textAnchor="middle" fill={col} fontWeight="700">{(r * 100).toFixed(0)}%</text>
-            </g>
-          )
-        })}
-        {/* 1-day return dots overlay */}
-        {valid.map((date, i) => {
-          const d1 = byDate1d[date]
-          if (!d1) return null
-          const r = d1.avgReturn || 0
-          const x = PAD + i * SPACING + BAR_W / 2
-          const bH1 = Math.max(4, Math.abs(r) / maxR * (H - 10))
-          const cy = r >= 0 ? H - 4 - bH1 : H - 4 + bH1
-          const col = r >= 0 ? '#FF9F0A' : '#5AC8FA'
-          return <circle key={date} cx={x} cy={Math.min(cy, H - 6)} r={3.5} fill={col} opacity={0.9} />
-        })}
-        {/* Connect the dots */}
-        {(() => {
-          const pts = valid.map((date, i) => {
+    <div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 4 }}>
+        <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>柱: 5日均酬</span>
+        {has1d && <span style={{ fontSize: 9, color: 'var(--ios-orange)' }}>下方數字: 隔日均酬</span>}
+      </div>
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+        <svg viewBox={`0 0 ${totalW} ${svgH}`} style={{ width: Math.max(totalW, 280), height: svgH, display: 'block' }}>
+          {valid.map((date, i) => {
+            const s = byDate[date]
+            const r = s.avgReturn || 0
+            const bH = Math.max(4, Math.abs(r) / maxR * (H - 10))
+            const x = PAD + i * SPACING
+            const y  = r >= 0 ? H - 4 - bH : H - 4
+            const col = r >= 0 ? '#FF3340' : '#16D67E'
+            return (
+              <g key={date}>
+                <rect x={x} y={y} width={BAR_W} height={bH} rx={4} fill={col} opacity={0.85} />
+                <text x={x + BAR_W / 2} y={H + 12} fontSize={7.5} textAnchor="middle" style={{ fill: 'var(--ios-label3)' }}>{date.slice(5)}</text>
+                <text x={x + BAR_W / 2} y={r >= 0 ? y - 3 : y + bH + 9} fontSize={7} textAnchor="middle" fill={col} fontWeight="700">{(r * 100).toFixed(0)}%</text>
+              </g>
+            )
+          })}
+          <line x1={PAD} y1={H - 4} x2={totalW - PAD} y2={H - 4} stroke="var(--ios-sep)" strokeWidth={0.5} />
+          {has1d && valid.map((date, i) => {
             const d1 = byDate1d[date]
-            if (!d1) return null
-            const r = d1.avgReturn || 0
+            const r = d1?.avgReturn ?? null
             const x = PAD + i * SPACING + BAR_W / 2
-            const bH1 = Math.max(4, Math.abs(r) / maxR * (H - 10))
-            const cy = r >= 0 ? H - 4 - bH1 : H - 4 + bH1
-            return `${x},${Math.min(cy, H - 6)}`
-          }).filter(Boolean)
-          if (pts.length < 2) return null
-          return <polyline points={pts.join(' ')} fill="none" stroke="#FF9F0A" strokeWidth={1} opacity={0.5} strokeDasharray="3,2" />
-        })()}
-        <line x1={PAD} y1={H - 4} x2={totalW - PAD} y2={H - 4} stroke="var(--ios-sep)" strokeWidth={0.5} />
-      </svg>
+            const col = r == null ? 'var(--ios-label4)' : r > 0 ? '#FF3340' : r < 0 ? '#16D67E' : 'var(--ios-label3)'
+            return (
+              <text key={`1d-${date}`} x={x} y={H + 25} fontSize={7.5} textAnchor="middle" fill={col} fontWeight={r != null ? '700' : '400'}>
+                {r == null ? '—' : (r >= 0 ? '+' : '') + (r * 100).toFixed(0) + '%'}
+              </text>
+            )
+          })}
+        </svg>
+      </div>
     </div>
   )
 }
