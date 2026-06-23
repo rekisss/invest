@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { useMemo, useRef, useState, useEffect, useCallback } from 'react'
 import { animate, stagger, spring } from 'animejs'
 import { useLivePrices, isTWSEOpen } from '../hooks/useLivePrices'
 import StockDetailModal from './StockDetailModal'
@@ -37,7 +37,6 @@ const SIGNAL_LABELS = {
   stronger_than_market:   '強於大盤',
 }
 
-// Priority order for signal tags (show top 4)
 const SIGNAL_PRIORITY = [
   'breakout_20d','bb_squeeze_breakout','volume_break','macd_golden_cross',
   'kd_golden_cross','foreign_buy_3d','invest_trust_buy_2d','is_sector_leader',
@@ -53,12 +52,12 @@ const retColor = r => r == null ? 'var(--ios-label3)' : r > 0 ? '#FF3340' : r < 
 function parseSignals(entry_reason) {
   if (!entry_reason) return []
   const raw = entry_reason.split(',').map(s => s.trim()).filter(Boolean)
-  // Sort by priority
-  const pri = raw.filter(k => SIGNAL_PRIORITY.includes(k)).sort((a, b) => SIGNAL_PRIORITY.indexOf(a) - SIGNAL_PRIORITY.indexOf(b))
+  const pri  = raw.filter(k => SIGNAL_PRIORITY.includes(k)).sort((a, b) => SIGNAL_PRIORITY.indexOf(a) - SIGNAL_PRIORITY.indexOf(b))
   const rest = raw.filter(k => !SIGNAL_PRIORITY.includes(k))
   return [...pri, ...rest].slice(0, 4)
 }
 
+// ── Stock card ────────────────────────────────────────────────────────────
 function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
   const cfg = GRADE_CFG[stock.grade] || GRADE_CFG.D
   const signals = parseSignals(stock.entry_reason)
@@ -89,7 +88,7 @@ function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
         ...style,
       }}
     >
-      {/* Row 1: rank + grade + name + price */}
+      {/* Row 1 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
         <span style={{ fontSize: 10, color: 'var(--ios-label4)', minWidth: 16, textAlign: 'center', fontWeight: 700 }}>{rank}</span>
         <span style={{
@@ -106,9 +105,8 @@ function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
         </span>
       </div>
 
-      {/* Row 2: signals + returns */}
+      {/* Row 2 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {/* Signal tags */}
         <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
           {signals.map(key => (
             <span key={key} style={{
@@ -123,17 +121,13 @@ function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
             </span>
           )}
         </div>
-
-        {/* Return badges */}
         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
-          {/* Live return (when market open and histDate == null) */}
           {showLive && liveReturn != null ? (
             <div style={{ textAlign: 'center', minWidth: 42 }}>
               <div style={{ fontSize: 7.5, color: 'var(--ios-label4)', marginBottom: 1 }}>今→</div>
               <div style={{ fontSize: 12, fontWeight: 700, color: retColor(liveReturn) }}>{fmtPct(liveReturn)}</div>
             </div>
           ) : (
-            /* Next-day return */
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 7.5, color: 'var(--ios-label4)', marginBottom: 1 }}>隔日</div>
               {r1 != null
@@ -142,15 +136,16 @@ function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
               }
             </div>
           )}
-          {/* 5D return */}
           <div style={{ textAlign: 'center', minWidth: 42 }}>
             <div style={{ fontSize: 7.5, color: 'var(--ios-label4)', marginBottom: 1 }}>5日</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: retColor(r5) }}>{fmtPct(r5)}</div>
+            {r5 != null
+              ? <div style={{ fontSize: 12, fontWeight: 700, color: retColor(r5) }}>{fmtPct(r5)}</div>
+              : <div style={{ fontSize: 9, fontWeight: 700, color: '#FF9F0A', background: 'rgba(255,159,10,0.1)', borderRadius: 4, padding: '2px 4px', marginTop: 1 }}>待驗</div>
+            }
           </div>
         </div>
       </div>
 
-      {/* Exit warning */}
       {hasExit && (
         <div style={{ marginTop: 5, fontSize: 9, color: '#FF3340', fontWeight: 600 }}>
           ⚠️ 出場信號：{stock.base_exit_reason || '已觸發'}
@@ -160,43 +155,48 @@ function StockCard({ stock, rank, livePrice, showLive, style, onClick }) {
   )
 }
 
-function DateBarChart({ byDate, byDate1d = {}, sortedDates }) {
+// ── Clickable date bar chart ──────────────────────────────────────────────
+function DateBarChart({ byDate, byDate1d = {}, sortedDates, activeDate, onDateClick }) {
   const valid = sortedDates.filter(d => byDate[d])
   if (!valid.length) return null
-  const maxR = Math.max(...valid.map(d => Math.abs(byDate[d].avgReturn || 0)), 0.01)
-  const H = 90
+  const maxR  = Math.max(...valid.map(d => Math.abs(byDate[d].avgReturn || 0)), 0.01)
+  const H     = 90
   const BAR_W = 22, SPACING = 32, PAD = 6
   const totalW = valid.length * SPACING + PAD * 2
-  const has1d = valid.some(d => byDate1d[d])
-  const svgH = H + (has1d ? 36 : 24)
+  const has1d  = valid.some(d => byDate1d[d])
+  const svgH   = H + (has1d ? 36 : 24)
+
   return (
     <div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 4 }}>
         <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>柱: 5日均酬</span>
-        {has1d && <span style={{ fontSize: 9, color: 'var(--ios-orange)' }}>下方數字: 隔日均酬</span>}
+        {has1d && <span style={{ fontSize: 9, color: 'var(--ios-orange)' }}>下方: 隔日均酬</span>}
+        {onDateClick && <span style={{ fontSize: 9, color: 'var(--ios-blue)', marginLeft: 'auto' }}>點柱查看該日</span>}
       </div>
       <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
         <svg viewBox={`0 0 ${totalW} ${svgH}`} style={{ width: Math.max(totalW, 280), height: svgH, display: 'block' }}>
           {valid.map((date, i) => {
-            const s = byDate[date]
-            const r = s.avgReturn || 0
-            const bH = Math.max(4, Math.abs(r) / maxR * (H - 10))
-            const x = PAD + i * SPACING
-            const y  = r >= 0 ? H - 4 - bH : H - 4
+            const s   = byDate[date]
+            const r   = s.avgReturn || 0
+            const bH  = Math.max(4, Math.abs(r) / maxR * (H - 10))
+            const x   = PAD + i * SPACING
+            const y   = r >= 0 ? H - 4 - bH : H - 4
             const col = r >= 0 ? '#FF3340' : '#16D67E'
+            const isActive = date === activeDate
             return (
-              <g key={date}>
-                <rect x={x} y={y} width={BAR_W} height={bH} rx={4} fill={col} opacity={0.85} />
-                <text x={x + BAR_W / 2} y={H + 12} fontSize={7.5} textAnchor="middle" style={{ fill: 'var(--ios-label3)' }}>{date.slice(5)}</text>
+              <g key={date} onClick={() => onDateClick?.(date)} style={{ cursor: onDateClick ? 'pointer' : 'default' }}>
+                {isActive && <rect x={x - 3} y={4} width={BAR_W + 6} height={H - 6} rx={6} fill="rgba(10,132,255,0.12)" />}
+                <rect x={x} y={y} width={BAR_W} height={bH} rx={4} fill={col} opacity={isActive ? 1 : 0.8} />
+                <text x={x + BAR_W / 2} y={H + 12} fontSize={7.5} textAnchor="middle" style={{ fill: isActive ? '#0A84FF' : 'var(--ios-label3)' }} fontWeight={isActive ? '700' : '400'}>{date.slice(5)}</text>
                 <text x={x + BAR_W / 2} y={r >= 0 ? y - 3 : y + bH + 9} fontSize={7} textAnchor="middle" fill={col} fontWeight="700">{(r * 100).toFixed(0)}%</text>
               </g>
             )
           })}
           <line x1={PAD} y1={H - 4} x2={totalW - PAD} y2={H - 4} stroke="var(--ios-sep)" strokeWidth={0.5} />
           {has1d && valid.map((date, i) => {
-            const d1 = byDate1d[date]
-            const r = d1?.avgReturn ?? null
-            const x = PAD + i * SPACING + BAR_W / 2
+            const d1  = byDate1d[date]
+            const r   = d1?.avgReturn ?? null
+            const x   = PAD + i * SPACING + BAR_W / 2
             const col = r == null ? 'var(--ios-label4)' : r > 0 ? '#FF3340' : r < 0 ? '#16D67E' : 'var(--ios-label3)'
             return (
               <text key={`1d-${date}`} x={x} y={H + 25} fontSize={7.5} textAnchor="middle" fill={col} fontWeight={r != null ? '700' : '400'}>
@@ -210,6 +210,109 @@ function DateBarChart({ byDate, byDate1d = {}, sortedDates }) {
   )
 }
 
+// ── Cumulative PnL line chart ─────────────────────────────────────────────
+function CumulativePnLChart({ sortedDates, byDate }) {
+  const pts = useMemo(() => {
+    const dated = [...sortedDates].filter(d => byDate[d]).reverse()
+    if (dated.length < 2) return []
+    let v = 1
+    const out = [{ date: '', v: 1 }]
+    for (const d of dated) {
+      v *= (1 + (byDate[d].avgReturn || 0))
+      out.push({ date: d, v })
+    }
+    return out
+  }, [sortedDates, byDate])
+
+  if (pts.length < 2) return null
+
+  const W = 300, H = 56, PAD_X = 4, PAD_Y = 6
+  const minV = Math.min(...pts.map(p => p.v))
+  const maxV = Math.max(...pts.map(p => p.v))
+  const rangeV = Math.max(maxV - minV, 0.01)
+  const sx = i => PAD_X + i / (pts.length - 1) * (W - PAD_X * 2)
+  const sy = v => H - PAD_Y - ((v - minV) / rangeV) * (H - PAD_Y * 2)
+
+  const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(i).toFixed(1)},${sy(p.v).toFixed(1)}`).join(' ')
+  const last  = pts[pts.length - 1]
+  const total = last.v - 1
+  const color = total >= 0 ? '#FF3340' : '#16D67E'
+  const baseY = sy(1)
+
+  return (
+    <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '10px 12px', marginBottom: 12, border: '0.5px solid var(--ios-sep)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 5 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ios-label)' }}>累積策略報酬</span>
+        <span style={{ marginLeft: 6, fontSize: 9, color: 'var(--ios-label4)' }}>（每批TOP20均酬複利）</span>
+        <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, color, fontFamily: 'var(--font-mono)' }}>{fmtPct(total)}</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: H, display: 'block' }}>
+        {/* baseline 1.0 */}
+        {baseY >= PAD_Y && baseY <= H - PAD_Y && (
+          <line x1={PAD_X} y1={baseY} x2={W - PAD_X} y2={baseY} stroke="var(--ios-sep)" strokeWidth={0.5} strokeDasharray="3,2" />
+        )}
+        {/* area */}
+        <path
+          d={`${path} L${sx(pts.length - 1)},${sy(minV)} L${sx(0)},${sy(minV)} Z`}
+          fill={color} opacity={0.12}
+        />
+        {/* line */}
+        <path d={path} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+        {/* end dot */}
+        <circle cx={sx(pts.length - 1)} cy={sy(last.v)} r={2.5} fill={color} />
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+        <span style={{ fontSize: 8, color: 'var(--ios-label4)' }}>最早</span>
+        <span style={{ fontSize: 8, color: 'var(--ios-label4)' }}>{last.date}</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Signal effectiveness table ────────────────────────────────────────────
+function SignalTable({ bySignal }) {
+  const [expanded, setExpanded] = useState(false)
+  const rows = useMemo(() => (
+    Object.entries(bySignal)
+      .map(([sig, d]) => ({ sig, ...d, wr: d.total ? d.wins / d.total : 0, avg: d.total ? d.sumR / d.total : 0 }))
+      .filter(r => r.total >= 3)
+      .sort((a, b) => b.wr - a.wr || b.total - a.total)
+  ), [bySignal])
+
+  if (!rows.length) return null
+  const visible = expanded ? rows : rows.slice(0, 6)
+
+  return (
+    <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '12px 12px', marginBottom: 12, border: '0.5px solid var(--ios-sep)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ios-label)' }}>信號勝率（≥3次）</span>
+        <span style={{ marginLeft: 'auto', fontSize: 8, color: 'var(--ios-label4)' }}>勝率 / 均報酬</span>
+      </div>
+      {visible.map(r => (
+        <div key={r.sig} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <span style={{
+            fontSize: 9, color: 'var(--ios-label3)', background: 'var(--ios-fill3)',
+            padding: '2px 5px', borderRadius: 4, flexShrink: 0, minWidth: 60,
+          }}>{SIGNAL_LABELS[r.sig] || r.sig}</span>
+          <span style={{ fontSize: 8, color: 'var(--ios-label4)', flexShrink: 0, minWidth: 22 }}>{r.total}次</span>
+          <div style={{ flex: 1, height: 4, background: 'var(--ios-fill3)', borderRadius: 2 }}>
+            <div style={{ width: `${Math.round(r.wr * 100)}%`, height: '100%', background: winColor(r.wr), borderRadius: 2 }} />
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, color: winColor(r.wr), minWidth: 32, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{fmtRate(r.wr)}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: retColor(r.avg), minWidth: 44, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{fmtPct(r.avg)}</span>
+        </div>
+      ))}
+      {rows.length > 6 && (
+        <button
+          onClick={() => setExpanded(e => !e)}
+          style={{ width: '100%', marginTop: 2, fontSize: 10, color: 'var(--ios-blue)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0' }}
+        >{expanded ? '收起' : `展開全部 (${rows.length})`}</button>
+      )}
+    </div>
+  )
+}
+
+// ── Grade row ─────────────────────────────────────────────────────────────
 function GradeRow({ grade, stats }) {
   const cfg = GRADE_CFG[grade] || GRADE_CFG.D
   if (!stats || stats.total === 0) return null
@@ -224,58 +327,46 @@ function GradeRow({ grade, stats }) {
         <span style={{ fontSize: 12, fontWeight: 700, color: retColor(avg), minWidth: 50, textAlign: 'right' }}>{fmtPct(avg)}</span>
       </div>
       <div style={{ height: 4, background: 'var(--ios-fill3)', borderRadius: 2, overflow: 'hidden' }}>
-        <div style={{ width: `${Math.round(wr*100)}%`, height: '100%', background: winColor(wr), borderRadius: 2 }} />
+        <div style={{ width: `${Math.round(wr * 100)}%`, height: '100%', background: winColor(wr), borderRadius: 2 }} />
       </div>
     </div>
   )
 }
 
-const HIST_KEY = 'tw_val_history'
-
-function loadHistory() {
-  try { return JSON.parse(localStorage.getItem(HIST_KEY) || '{}') } catch { return {} }
-}
-
-function saveHistory(dateStr, top20) {
-  try {
-    const existing = loadHistory()
-    existing[dateStr] = top20
-    // Keep only last 30 dates to avoid bloat
-    const keys = Object.keys(existing).sort().slice(-30)
-    const trimmed = {}
-    for (const k of keys) trimmed[k] = existing[k]
-    localStorage.setItem(HIST_KEY, JSON.stringify(trimmed))
-  } catch { /* ignore quota errors */ }
-}
-
+// ── Main ──────────────────────────────────────────────────────────────────
 export default function ValidationPanel({ data }) {
-  const listRef      = useRef(null)
-  const statsRef     = useRef(null)
+  const listRef    = useRef(null)
+  const statsRef   = useRef(null)
   const historiesRef = useRef(null)
-  const winRateRef   = useRef(null)
-  const avgR5Ref     = useRef(null)
+  const winRateRef = useRef(null)
+  const avgR5Ref   = useRef(null)
 
   const [selectedStock, setSelectedStock] = useState(null)
-  const [histDate, setHistDate] = useState(null)
-  const [gradeFilter, setGradeFilter] = useState(null)
+  const [histDate,      setHistDate]      = useState(null)
+  const [gradeFilter,   setGradeFilter]   = useState(null)
 
-  const { top20, scanDate, batchStats, byGrade, byDate, byDate1d, summary, sortedDates } = useMemo(() => {
+  const {
+    top20, scanDate, batchStats,
+    byGrade, byDate, byDate1d, bySignal,
+    summary, sortedDates,
+  } = useMemo(() => {
     if (!data?.scans || !data?.dates) {
-      return { top20: [], scanDate: null, batchStats: {}, byGrade: {}, byDate: {}, byDate1d: {}, summary: {}, sortedDates: [] }
+      return { top20: [], scanDate: null, batchStats: {}, byGrade: {}, byDate: {}, byDate1d: {}, bySignal: {}, summary: {}, sortedDates: [] }
     }
     const { scans, dates, aggregateLatest } = data
 
-    // Exclude today (Taiwan time) — today's scan hasn't been verified by 5-day return yet
-    const todayTW = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
+    const todayTW   = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())
     const validDates = dates.filter(d => d < todayTW)
 
-    const top20   = scans[validDates[0]]?.top_stocks?.slice(0, 20) || aggregateLatest?.top_stocks || []
+    const top20    = scans[validDates[0]]?.top_stocks?.slice(0, 20) || aggregateLatest?.top_stocks || []
     const scanDate = validDates[0] || aggregateLatest?.date?.slice(0, 10)
 
     const bWith  = top20.filter(s => s.return_5d != null)
     const b1With = top20.filter(s => s.return_1d != null)
     const batchStats = {
       total:      top20.length,
+      verified:   bWith.length,
+      pending:    top20.length - bWith.length,
       wins5d:     bWith.filter(s => s.return_5d > 0).length,
       winRate:    bWith.length ? bWith.filter(s => s.return_5d > 0).length / bWith.length : null,
       avgR5d:     bWith.length ? bWith.reduce((a, s) => a + s.return_5d, 0) / bWith.length : null,
@@ -285,14 +376,16 @@ export default function ValidationPanel({ data }) {
       exits:      top20.filter(s => s.base_exit_signal).length,
     }
 
-    const allObs = []
+    // All observations across all dates (oldest → newest in validDates; reverse for chart)
     const sortedDates = [...validDates].reverse()
+    const allObs = []
     for (const date of validDates) {
       for (const s of (scans[date]?.top_stocks || [])) {
         allObs.push({ date, ...s, r5d: s.return_5d, r1d: s.return_1d })
       }
     }
 
+    // By-grade stats (5d)
     const byG = {}
     for (const o of allObs.filter(o => o.r5d != null)) {
       const g = o.grade || 'D'
@@ -302,122 +395,106 @@ export default function ValidationPanel({ data }) {
       byG[g].returns.push(o.r5d)
     }
 
-    const byDate = {}
+    // By-date stats (5d & 1d)
+    const byDate   = {}
+    const byDate1d = {}
     for (const date of sortedDates) {
-      const top = (scans[date]?.top_stocks || []).filter(s => s.return_5d != null)
-      if (!top.length) continue
-      const r5s = top.map(s => s.return_5d)
-      byDate[date] = {
-        total: top.length,
-        wins: top.filter(s => s.return_5d > 0).length,
-        avgReturn: r5s.reduce((a, v) => a + v, 0) / r5s.length,
+      const top5 = (scans[date]?.top_stocks || []).filter(s => s.return_5d != null)
+      if (top5.length) {
+        const r5s = top5.map(s => s.return_5d)
+        byDate[date] = { total: top5.length, wins: top5.filter(s => s.return_5d > 0).length, avgReturn: r5s.reduce((a, v) => a + v, 0) / r5s.length }
+      }
+      const top1 = (scans[date]?.top_stocks || []).filter(s => s.return_1d != null)
+      if (top1.length) {
+        const r1s = top1.map(s => s.return_1d)
+        byDate1d[date] = { total: top1.length, wins: top1.filter(s => s.return_1d > 0).length, avgReturn: r1s.reduce((a, v) => a + v, 0) / r1s.length }
       }
     }
 
-    const byDate1d = {}
-    for (const date of sortedDates) {
-      const top = (scans[date]?.top_stocks || []).filter(s => s.return_1d != null)
-      if (!top.length) continue
-      const r1s = top.map(s => s.return_1d)
-      byDate1d[date] = {
-        total: top.length,
-        wins:  top.filter(s => s.return_1d > 0).length,
-        avgReturn: r1s.reduce((a, v) => a + v, 0) / r1s.length,
+    // By-signal win rate (5d)
+    const bySignal = {}
+    for (const o of allObs.filter(o => o.r5d != null)) {
+      for (const sig of (o.entry_reason || '').split(',').map(s => s.trim()).filter(Boolean)) {
+        if (!bySignal[sig]) bySignal[sig] = { total: 0, wins: 0, sumR: 0 }
+        bySignal[sig].total++
+        if (o.r5d > 0) bySignal[sig].wins++
+        bySignal[sig].sumR += o.r5d
       }
     }
 
     const all5d = allObs.filter(o => o.r5d != null)
     const summary = {
-      scans: sortedDates.filter(d => byDate[d]).length,
-      total: all5d.length,
+      scans:   sortedDates.filter(d => byDate[d]).length,
+      total:   all5d.length,
       winRate: all5d.length ? all5d.filter(o => o.r5d > 0).length / all5d.length : null,
-      avgR5: all5d.length ? all5d.reduce((a, o) => a + o.r5d, 0) / all5d.length : null,
+      avgR5:   all5d.length ? all5d.reduce((a, o) => a + o.r5d, 0) / all5d.length : null,
     }
 
-    return { top20, scanDate, batchStats, byGrade: byG, byDate, byDate1d, summary, sortedDates }
+    return { top20, scanDate, batchStats, byGrade: byG, byDate, byDate1d, bySignal, summary, sortedDates }
   }, [data])
 
-  // Persist top20 to localStorage
-  useEffect(() => {
-    if (top20.length > 0 && scanDate) {
-      const hist = loadHistory()
-      if (!hist[scanDate]) {
-        saveHistory(scanDate, top20)
-      }
-    }
-  }, [top20, scanDate])
-
-  // Saved history dates for the pill row
-  const [histDates, setHistDates] = useState([])
-  useEffect(() => {
-    const hist = loadHistory()
-    setHistDates(Object.keys(hist).sort().reverse())
-  }, [top20, scanDate])
-
-  // Determine which stocks to show
+  // displayStocks: prefer data.scans for history (more up-to-date than localStorage)
   const displayStocks = useMemo(() => {
-    const base = histDate == null ? top20 : (loadHistory()[histDate] || [])
+    let base
+    if (histDate == null) {
+      base = top20
+    } else {
+      base = data?.scans?.[histDate]?.top_stocks?.slice(0, 20) || []
+    }
     return gradeFilter ? base.filter(s => s.grade === gradeFilter) : base
-  }, [top20, histDate, gradeFilter])
+  }, [top20, histDate, gradeFilter, data])
 
-  // Live prices (only for current scan, not history)
+  // Live prices (current scan only)
   const marketOpen = isTWSEOpen()
-  const liveIds = histDate == null ? top20.map(s => String(s.stock_id)) : []
+  const liveIds    = histDate == null ? top20.map(s => String(s.stock_id)) : []
   const { prices: livePrices } = useLivePrices(liveIds)
   const showLive = histDate == null && marketOpen
 
-  // Anime.js: stagger cards when displayStocks changes
+  // Animate cards on list change
   useEffect(() => {
     if (!listRef.current) return
     const cards = listRef.current.querySelectorAll('.stock-card')
     if (!cards.length) return
     animate(cards, {
-      opacity: [0, 1],
-      translateY: [20, 0],
-      delay: stagger(40, { start: 20 }),
+      opacity: [0, 1], translateY: [16, 0],
+      delay: stagger(36, { start: 10 }),
       ease: spring({ stiffness: 320, damping: 26, mass: 0.85 }),
     })
   }, [displayStocks])
 
-  // Fade list container on history date change
   useEffect(() => {
     if (!listRef.current) return
-    animate(listRef.current, { opacity: [0.3, 1], duration: 220, ease: 'outQuad' })
+    animate(listRef.current, { opacity: [0.3, 1], duration: 200, ease: 'outQuad' })
   }, [histDate])
 
-  // Anime.js: scale-in stat blocks
+  // Animate stat blocks
   useEffect(() => {
     if (!statsRef.current) return
     const blocks = statsRef.current.querySelectorAll('.stat-block')
     if (!blocks.length) return
     animate(blocks, {
-      opacity: [0, 1],
-      scale: [0.88, 1],
+      opacity: [0, 1], scale: [0.88, 1],
       delay: stagger(55, { start: 60 }),
       ease: spring({ stiffness: 360, damping: 28, mass: 0.8 }),
     })
   }, [summary.scans])
 
-  // Anime.js number counter: winRate
+  // Animated number: win rate
   useEffect(() => {
     if (!winRateRef.current || summary.winRate == null) return
     const obj = { val: 0 }
     animate(obj, {
-      val: summary.winRate * 100,
-      duration: 900,
-      ease: 'outCubic',
+      val: summary.winRate * 100, duration: 900, ease: 'outCubic',
       onUpdate: () => { if (winRateRef.current) winRateRef.current.textContent = Math.round(obj.val) + '%' },
     })
   }, [summary.winRate])
 
-  // Anime.js number counter: avgR5
+  // Animated number: avg 5d
   useEffect(() => {
     if (!avgR5Ref.current || summary.avgR5 == null) return
     const obj = { val: 0 }
     animate(obj, {
-      val: summary.avgR5 * 100,
-      duration: 900,
-      ease: 'outCubic',
+      val: summary.avgR5 * 100, duration: 900, ease: 'outCubic',
       onUpdate: () => {
         if (avgR5Ref.current) {
           const v = obj.val
@@ -427,17 +504,8 @@ export default function ValidationPanel({ data }) {
     })
   }, [summary.avgR5])
 
-  // Open stock detail modal
   const handleStockClick = async (stock) => {
-    const baseStock = {
-      ...stock,
-      stock_id: stock.stock_id,
-      name: stock.name,
-      close: livePrices[String(stock.stock_id)]?.price ?? stock.close,
-      price_history_loading: true,
-    }
-    setSelectedStock(baseStock)
-
+    setSelectedStock({ ...stock, stock_id: stock.stock_id, name: stock.name, close: livePrices[String(stock.stock_id)]?.price ?? stock.close, price_history_loading: true })
     try {
       if (!historiesRef.current) {
         const base = BASE.endsWith('/') ? BASE : BASE + '/'
@@ -447,8 +515,6 @@ export default function ValidationPanel({ data }) {
       const h = historiesRef.current
       const sid = String(stock.stock_id)
       let history = null
-
-      // Try OHLCV kline history (stocks section: {o,h,l,c,v} aligned to dates array)
       const rec = h.stocks?.[sid]
       if (rec && Array.isArray(h.dates) && rec.c) {
         const bars = []
@@ -458,38 +524,50 @@ export default function ValidationPanel({ data }) {
         }
         if (bars.length >= 2) history = bars
       }
-
-      // Fall back to scan_stocks (compact [date,o,h,l,c,v] tuples)
       if (!history) {
         const scanRec = h.scan_stocks?.[sid]
-        if (Array.isArray(scanRec) && scanRec.length >= 2) {
+        if (Array.isArray(scanRec) && scanRec.length >= 2)
           history = scanRec.map(b => ({ time: b[0], open: b[1], high: b[2], low: b[3], close: b[4], volume: b[5] }))
-        }
       }
-
       setSelectedStock(prev => prev ? { ...prev, price_history: history, price_history_loading: false } : null)
     } catch {
       setSelectedStock(prev => prev ? { ...prev, price_history: null, price_history_loading: false } : null)
     }
   }
 
+  const handleDateClick = useCallback((date) => {
+    setHistDate(prev => prev === date ? null : date)
+    setGradeFilter(null)
+  }, [])
+
   if (!data) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--ios-label3)' }}>載入中⋯</div>
   )
 
   const isViewingHistory = histDate != null
+  // All scan dates available for date pills (from data.scans, not localStorage)
+  const allScanDates = sortedDates.filter(d => data?.scans?.[d]?.top_stocks?.length > 0)
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '0 14px 32px' }}>
 
-      {/* ── 最新精選 TOP 20 ── */}
+      {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, marginBottom: 8 }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--ios-label)' }}>
           {isViewingHistory ? '查歷史' : '精選 TOP 20'}
         </span>
         {(isViewingHistory ? histDate : scanDate) && (
-          <span style={{ fontSize: 10, background: isViewingHistory ? 'rgba(255,159,10,0.15)' : 'rgba(10,132,255,0.15)', color: isViewingHistory ? '#FF9F0A' : '#0A84FF', borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>
+          <span style={{
+            fontSize: 10, borderRadius: 6, padding: '2px 8px', fontWeight: 600,
+            background: isViewingHistory ? 'rgba(255,159,10,0.15)' : 'rgba(10,132,255,0.15)',
+            color: isViewingHistory ? '#FF9F0A' : '#0A84FF',
+          }}>
             {isViewingHistory ? histDate : scanDate}
+          </span>
+        )}
+        {!isViewingHistory && batchStats.pending > 0 && batchStats.verified > 0 && (
+          <span style={{ fontSize: 9, color: 'var(--ios-label4)', background: 'var(--ios-fill3)', borderRadius: 5, padding: '2px 6px' }}>
+            已驗 {batchStats.verified} / 待驗 {batchStats.pending}
           </span>
         )}
         {!isViewingHistory && batchStats.exits > 0 && (
@@ -499,20 +577,18 @@ export default function ValidationPanel({ data }) {
         )}
         {isViewingHistory && (
           <button
-            onClick={() => setHistDate(null)}
+            onClick={() => { setHistDate(null); setGradeFilter(null) }}
             style={{ marginLeft: 'auto', fontSize: 10, color: '#0A84FF', background: 'rgba(10,132,255,0.12)', border: '0.5px solid rgba(10,132,255,0.3)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}
-          >
-            回最新
-          </button>
+          >回最新</button>
         )}
       </div>
 
-      {/* History date pills */}
-      {histDates.length > 0 && (
+      {/* ── Date pills (all scan dates from data.scans) ── */}
+      {allScanDates.length > 0 && (
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', marginBottom: 10 }}>
           <div style={{ display: 'flex', gap: 6, paddingBottom: 2, width: 'max-content' }}>
             <button
-              onClick={() => setHistDate(null)}
+              onClick={() => { setHistDate(null); setGradeFilter(null) }}
               style={{
                 fontSize: 10, padding: '4px 10px', borderRadius: 20, border: '0.5px solid',
                 cursor: 'pointer', fontWeight: 600, flexShrink: 0,
@@ -521,10 +597,10 @@ export default function ValidationPanel({ data }) {
                 color: histDate == null ? '#0A84FF' : 'var(--ios-label3)',
               }}
             >最新</button>
-            {histDates.map(d => (
+            {allScanDates.map(d => (
               <button
                 key={d}
-                onClick={() => setHistDate(d)}
+                onClick={() => handleDateClick(d)}
                 style={{
                   fontSize: 10, padding: '4px 10px', borderRadius: 20, border: '0.5px solid',
                   cursor: 'pointer', fontWeight: 600, flexShrink: 0,
@@ -538,7 +614,7 @@ export default function ValidationPanel({ data }) {
         </div>
       )}
 
-      {/* Batch summary row */}
+      {/* ── Batch summary ── */}
       {!isViewingHistory && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', gap: 8, background: 'var(--ios-bg2)', borderRadius: 14, padding: '10px 14px', border: '0.5px solid var(--ios-sep)' }}>
@@ -570,7 +646,7 @@ export default function ValidationPanel({ data }) {
         </div>
       )}
 
-      {/* Grade filter pills */}
+      {/* ── Grade filter ── */}
       {!isViewingHistory && top20.some(s => s.grade) && (
         <div style={{ display: 'flex', gap: 5, marginBottom: 8, flexWrap: 'wrap' }}>
           {['A','B','C','D'].map(g => {
@@ -600,28 +676,24 @@ export default function ValidationPanel({ data }) {
         </div>
       )}
 
-      {/* Stock cards */}
+      {/* ── Stock cards ── */}
       <div ref={listRef} style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 18 }}>
         {displayStocks.length === 0 && (
-          <div style={{ textAlign: 'center', color: 'var(--ios-label3)', fontSize: 13, padding: '24px 0' }}>尚無精選資料</div>
+          <div style={{ textAlign: 'center', color: 'var(--ios-label3)', fontSize: 13, padding: '24px 0' }}>
+            {isViewingHistory ? `${histDate} 尚無資料` : '尚無精選資料'}
+          </div>
         )}
         {displayStocks.map((s, i) => {
           const livePrice = showLive ? (livePrices[String(s.stock_id)]?.price ?? null) : null
           return (
             <div key={`${s.stock_id}-${i}`} className="stock-card" style={{ opacity: 0 }}>
-              <StockCard
-                stock={s}
-                rank={i + 1}
-                livePrice={livePrice}
-                showLive={showLive}
-                onClick={() => handleStockClick(s)}
-              />
+              <StockCard stock={s} rank={i + 1} livePrice={livePrice} showLive={showLive} onClick={() => handleStockClick(s)} />
             </div>
           )
         })}
       </div>
 
-      {/* ── 歷史驗證 ── */}
+      {/* ── 歷史驗證 section ── */}
       <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-label)', marginBottom: 10, paddingTop: 4, borderTop: '0.5px solid var(--ios-sep)' }}>
         歷史驗證
       </div>
@@ -641,24 +713,36 @@ export default function ValidationPanel({ data }) {
           }}>
             <div style={{ fontSize: 7, color: 'var(--ios-label4)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</div>
             {elRef ? (
-              <div ref={elRef} style={{ fontSize: 13, fontWeight: 700, color: color || 'var(--ios-label)', lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div ref={elRef} style={{ fontSize: 13, fontWeight: 700, color: color || 'var(--ios-label)', lineHeight: 1 }}>
                 {label === '歷史勝率' ? fmtRate(summary.winRate) : fmtPct(summary.avgR5)}
               </div>
             ) : (
-              <div style={{ fontSize: 13, fontWeight: 700, color: color || 'var(--ios-label)', lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: color || 'var(--ios-label)', lineHeight: 1 }}>{value}</div>
             )}
           </div>
         ))}
       </div>
 
-      {/* Per-date chart */}
+      {/* Cumulative PnL */}
+      <CumulativePnLChart sortedDates={sortedDates} byDate={byDate} />
+
+      {/* Per-date bar chart (clickable) */}
       <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '12px 12px', marginBottom: 12, border: '0.5px solid var(--ios-sep)' }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ios-label)', marginBottom: 7 }}>逐日均5日報酬</div>
-        <DateBarChart byDate={byDate} byDate1d={byDate1d} sortedDates={sortedDates} />
+        <DateBarChart
+          byDate={byDate}
+          byDate1d={byDate1d}
+          sortedDates={sortedDates}
+          activeDate={histDate}
+          onDateClick={handleDateClick}
+        />
         {!Object.keys(byDate).length && (
           <div style={{ textAlign: 'center', color: 'var(--ios-label3)', fontSize: 11, padding: '12px 0' }}>尚無資料</div>
         )}
       </div>
+
+      {/* Signal effectiveness */}
+      <SignalTable bySignal={bySignal} />
 
       {/* Grade breakdown */}
       <div style={{ background: 'var(--ios-bg2)', borderRadius: 14, padding: '12px 12px', border: '0.5px solid var(--ios-sep)' }}>
