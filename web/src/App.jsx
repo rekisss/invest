@@ -190,6 +190,16 @@ export default function App() {
     prevScanDateRef.current = latestDate
   }, [data])
 
+  // Auto-refresh every 5 min when data is stale (days_behind > 1) or scan count is low
+  useEffect(() => {
+    if (!data?.dataQuality) return
+    const dq = data.dataQuality
+    const needsRefresh = (dq.days_behind != null && dq.days_behind > 1) || (dq.total_stocks > 0 && dq.total_stocks < 500)
+    if (!needsRefresh) return
+    const id = setInterval(() => loadData(true), 5 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [data, loadData])
+
   // Animate toast in whenever it appears
   useEffect(() => {
     if (toast && toastRef.current) {
@@ -251,7 +261,7 @@ export default function App() {
     switch (tab) {
       case 'overview':   return <Overview data={data} error={error} />
       case 'dashboard':  return <Dashboard data={data} error={error} />
-      case 'validate':   return <ValidationPanel data={data} />
+      case 'validate':   return <ValidationPanel data={data} onRefresh={() => loadData(true)} />
       case 'portfolio':  return <Portfolio data={data} />
       case 'monitor':    return <LiveMonitor data={data} />
       case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} data={data} />

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react'
 import { animate, stagger, spring } from 'animejs'
 import { useLivePrices, isTWSEOpen } from '../hooks/useLivePrices'
+import { useDataValidation } from '../hooks/useDataValidation'
 import StockDetailModal from './StockDetailModal'
 
 const BASE = import.meta.env.BASE_URL || '/'
@@ -422,8 +423,61 @@ function GradeRow({ grade, stats }) {
   )
 }
 
+// ── Data quality banner ────────────────────────────────────────────────────
+function DataQualityBanner({ validation, onRefresh }) {
+  if (!validation) return null
+  const { status, issues, latestDataDate, totalStocks, buildTime, daysBehind } = validation
+
+  const buildTimeStr = buildTime
+    ? new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(buildTime))
+    : null
+
+  const statusColor = status === 'error' ? '#FF3340' : status === 'warning' ? '#FF9F0A' : '#16D67E'
+  const statusIcon  = status === 'error' ? '✗' : status === 'warning' ? '⚠' : '✓'
+  const statusLabel = status === 'error' ? '資料異常' : status === 'warning' ? '需注意' : '資料正常'
+
+  return (
+    <div style={{ marginBottom: 10, borderRadius: 12, border: `0.5px solid ${statusColor}40`, background: `${statusColor}0d`, padding: '8px 12px', fontSize: 11 }}>
+      {/* Top row: status + date + stock count + refresh */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: issues.length ? 5 : 0 }}>
+        <span style={{ fontWeight: 700, color: statusColor, minWidth: 16 }}>{statusIcon}</span>
+        <span style={{ fontWeight: 700, color: statusColor }}>{statusLabel}</span>
+        {latestDataDate && (
+          <span style={{ color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)' }}>{latestDataDate}</span>
+        )}
+        {totalStocks > 0 && (
+          <span style={{ color: 'var(--ios-label4)' }}>{totalStocks.toLocaleString()} 支</span>
+        )}
+        {daysBehind != null && daysBehind > 0 && (
+          <span style={{ color: '#FF9F0A', fontWeight: 600 }}>落後 {daysBehind} 日</span>
+        )}
+        {buildTimeStr && (
+          <span style={{ color: 'var(--ios-label4)', marginLeft: 'auto' }}>建置 {buildTimeStr}</span>
+        )}
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.1)', border: '0.5px solid rgba(10,132,255,0.3)', borderRadius: 7, padding: '3px 10px', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}
+          >重新整理</button>
+        )}
+      </div>
+
+      {/* Issue rows */}
+      {issues.map((issue, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, paddingTop: 4, borderTop: i === 0 ? `0.5px solid ${statusColor}25` : undefined, marginTop: i === 0 ? 2 : 0 }}>
+          <span style={{ color: issue.severity === 'error' ? '#FF3340' : '#FF9F0A', fontWeight: 700, flexShrink: 0 }}>
+            {issue.severity === 'error' ? '✗' : '⚠'}
+          </span>
+          <span style={{ color: 'var(--ios-label2)', fontWeight: 600, flexShrink: 0 }}>{issue.label}：</span>
+          <span style={{ color: 'var(--ios-label3)', lineHeight: 1.5, flex: 1 }}>{issue.detail}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────
-export default function ValidationPanel({ data }) {
+export default function ValidationPanel({ data, onRefresh }) {
   const listRef    = useRef(null)
   const statsRef   = useRef(null)
   const batchRef   = useRef(null)
@@ -434,6 +488,8 @@ export default function ValidationPanel({ data }) {
   const [selectedStock, setSelectedStock] = useState(null)
   const [histDate,      setHistDate]      = useState(null)
   const [gradeFilter,   setGradeFilter]   = useState(null)
+
+  const dataValidation = useDataValidation(data)
 
   const {
     top20, scanDate, batchStats,
@@ -451,10 +507,11 @@ export default function ValidationPanel({ data }) {
 
     // Prefer selectable_stocks (A/B/C grade only) — D-grade excluded from 精選 display
     const _latestScan = scans[validDates[0]]
-    const top20    = (_latestScan?.selectable_stocks?.length
-                       ? _latestScan.selectable_stocks
-                       : _latestScan?.top_stocks?.filter(s => s.grade !== 'D' && s.grade !== 'X') || [])
-                       .slice(0, 20) || aggregateLatest?.top_stocks || []
+    const _selectables = (_latestScan?.selectable_stocks?.length
+      ? _latestScan.selectable_stocks
+      : _latestScan?.top_stocks?.filter(s => s.grade !== 'D' && s.grade !== 'X') || []).slice(0, 20)
+    // Only fall back to aggregateLatest when _selectables is genuinely empty (no valid scan yet)
+    const top20    = _selectables.length ? _selectables : (aggregateLatest?.top_stocks || []).slice(0, 20)
     const scanDate = validDates[0] || aggregateLatest?.date?.slice(0, 10)
 
     // Validation window: only dates from last Friday onward (most recent week of picks).
@@ -698,6 +755,9 @@ export default function ValidationPanel({ data }) {
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '0 14px 32px' }}>
+
+      {/* ── Data quality banner ── */}
+      <DataQualityBanner validation={dataValidation} onRefresh={onRefresh} />
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, marginBottom: 8 }}>

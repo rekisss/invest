@@ -1547,6 +1547,78 @@ if (latestDataDate && isFresh) {
   }
 }
 
+// ── Price cross-validation: compare scan CSV close vs TWSE/TPEX official ─────
+// Detects cases where FinMind data differs from TWSE official post-market data.
+// Only runs when data is fresh (same-day or T+1) — older scans can't be validated
+// against today's TWSE endpoint.
+if (isFresh && topStocks.length > 0) {
+  console.log('Price cross-validation: fetching TWSE STOCK_DAY_ALL...')
+  try {
+    const twseBody = await fetchUrl('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL', 12000)
+    const twseArr  = JSON.parse(twseBody)
+    const twsePriceMap = {}
+    if (Array.isArray(twseArr)) {
+      for (const row of twseArr) {
+        const sid  = (row.Code || row['證券代號'] || '').trim()
+        const raw  = (row.ClosingPrice || row['收盤價'] || '').replace(/,/g, '')
+        const p    = parseFloat(raw)
+        if (sid && !isNaN(p) && p > 0) twsePriceMap[sid] = p
+      }
+    }
+    // Also check TPEX (上櫃)
+    try {
+      const tpexBody = await fetchUrl('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes', 10000)
+      const tpexArr  = JSON.parse(tpexBody)
+      if (Array.isArray(tpexArr)) {
+        for (const row of tpexArr) {
+          const sid = (row.SecuritiesCompanyCode || row['SecuritiesCompanyCode'] || '').trim()
+          const raw = (row.Close || row['收盤價'] || '').replace(/,/g, '')
+          const p   = parseFloat(raw)
+          if (sid && !isNaN(p) && p > 0 && !twsePriceMap[sid]) twsePriceMap[sid] = p
+        }
+      }
+    } catch (e2) { console.warn('  TPEX price fetch skipped:', e2.message) }
+
+    const mismatches = []
+    let checked = 0
+    for (const stock of topStocks) {
+      const twseClose = twsePriceMap[String(stock.stock_id)]
+      const scanClose = toNum(stock.close)
+      if (!twseClose || !scanClose) continue
+      checked++
+      const diffPct = Math.abs(scanClose - twseClose) / twseClose * 100
+      if (diffPct > 2) mismatches.push({
+        stock_id: stock.stock_id,
+        name: stock.name || '',
+        scan_close: scanClose,
+        twse_close: twseClose,
+        diff_pct: Math.round(diffPct * 10) / 10,
+      })
+    }
+    const sortedMismatches = mismatches.sort((a, b) => b.diff_pct - a.diff_pct).slice(0, 10)
+    dataQuality.price_validation = {
+      ok: mismatches.length === 0,
+      checked,
+      total_in_twse: Object.keys(twsePriceMap).length,
+      mismatches: sortedMismatches,
+      source: 'twse+tpex_opendata',
+    }
+    if (mismatches.length > 0) {
+      console.log(`  Price cross-validation: ${mismatches.length}/${checked} stocks differ >2% from TWSE`)
+      for (const m of sortedMismatches.slice(0, 3)) {
+        console.log(`    ${m.stock_id} ${m.name}: scan=${m.scan_close} TWSE=${m.twse_close} diff=${m.diff_pct}%`)
+      }
+    } else {
+      console.log(`  Price cross-validation: ${checked} stocks checked, all within 2% of TWSE`)
+    }
+  } catch (e) {
+    console.warn('  Price cross-validation skipped:', e.message)
+    dataQuality.price_validation = { ok: null, checked: 0, mismatches: [], error: e.message }
+  }
+} else {
+  dataQuality.price_validation = { ok: null, checked: 0, mismatches: [], skipped: !isFresh ? 'stale_data' : 'no_stocks' }
+}
+
 // ── Enrich industry_category from TWSE/TPEX open data ────────────────────────
 const industryMap = await fetchTaiwanIndustryMap()
 if (Object.keys(industryMap).length > 0) {
