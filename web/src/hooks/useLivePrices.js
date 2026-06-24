@@ -60,17 +60,20 @@ export async function fetchTWSEOfficial(ids) {
   const tpexIds = ids.filter(id =>  isOTCStock(id))
   const fetches = []
 
-  if (twseIds.length) fetches.push(
-    fetch(TWSE_URL, { signal: AbortSignal.timeout(10000) })
-      .then(r => r.ok ? r.json() : []).catch(() => [])
-  )
-  if (tpexIds.length) fetches.push(
-    fetch(TPEX_URL, { signal: AbortSignal.timeout(10000) })
-      .then(r => r.ok ? r.json() : []).catch(() => [])
-  )
+  let twseFetchIdx = -1, tpexFetchIdx = -1
+  if (twseIds.length) { twseFetchIdx = fetches.length; fetches.push(
+    fetch(TWSE_URL, { signal: AbortSignal.timeout(12000) })
+      .then(r => r.ok ? r.json() : null).catch(() => null)
+  )}
+  if (tpexIds.length) { tpexFetchIdx = fetches.length; fetches.push(
+    fetch(TPEX_URL, { signal: AbortSignal.timeout(12000) })
+      .then(r => r.ok ? r.json() : null).catch(() => null)
+  )}
 
   try {
-    const [twseData = [], tpexData = []] = await Promise.all(fetches)
+    const rawResults = await Promise.all(fetches)
+    const twseData = (twseFetchIdx >= 0 && Array.isArray(rawResults[twseFetchIdx])) ? rawResults[twseFetchIdx] : []
+    const tpexData = (tpexFetchIdx >= 0 && Array.isArray(rawResults[tpexFetchIdx])) ? rawResults[tpexFetchIdx] : []
 
     for (const item of twseData) {
       const id = item.Code
@@ -196,7 +199,7 @@ export async function fetchPriceCache(ids) {
  * During market hours: polls official TWSE/TPEX API every 60 s.
  * After close: fetches once (prices are final), then stops polling.
  */
-export function useLivePrices(stockIds, { pollInterval = 60000 } = {}) {
+export function useLivePrices(stockIds, { pollInterval = 60000, refreshTrigger = 0 } = {}) {
   const [prices, setPrices]         = useState({})
   const [isOpen, setIsOpen]         = useState(() => isTWSEOpen())
   const [session, setSession]       = useState(() => getTWSESession())
@@ -255,7 +258,7 @@ export function useLivePrices(stockIds, { pollInterval = 60000 } = {}) {
             if      (s === 'pre')     setError('盤前（09:00 開盤後即時更新）')
             else if (s === 'weekend') setError('休市（週末）')
             else if (s === 'open')    setError('等待報價…')
-            else                      setError('收盤快取暫無資料')
+            else                      setError('收盤報價暫時無法取得，可點「刷新」重試')
           }
         }
       } catch (e) {
@@ -269,7 +272,7 @@ export function useLivePrices(stockIds, { pollInterval = 60000 } = {}) {
     // Only poll during market hours
     const t = isTWSEOpen() ? setInterval(run, pollInterval) : null
     return () => { cancelled = true; if (t) clearInterval(t) }
-  }, [idsKey, pollInterval])
+  }, [idsKey, pollInterval, refreshTrigger])
 
   return { prices, isOpen, session, lastUpdate, loading, error }
 }

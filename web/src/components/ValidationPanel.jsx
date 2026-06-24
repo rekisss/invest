@@ -761,7 +761,10 @@ export default function ValidationPanel({ data }) {
           </div>
           <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
           <div className="vstat" style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>均5日報</div>
+            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2, lineHeight: 1.3 }}>
+              均5日報
+              <div style={{ fontSize: 6, color: 'var(--ios-label4)', opacity: 0.65 }}>掃描日起算</div>
+            </div>
             <div style={{ fontSize: 20, fontWeight: 800, color: retColor(displayStats.avgR5d) }}>{fmtPct(displayStats.avgR5d)}</div>
           </div>
           <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
