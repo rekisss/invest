@@ -661,6 +661,7 @@ export default function LiveMonitor({ data }) {
   useStaggerRows(scanListRef,  scanKey)
 
   const openDetail = async (stock) => {
+    addRecentlyViewed(String(stock.stock_id), stock.name || nameMap[String(stock.stock_id)] || String(stock.stock_id))
     setSelectedStock(stock)
     if (!historiesRef.current) {
       try {
@@ -844,7 +845,7 @@ export default function LiveMonitor({ data }) {
           ) : (
             <div ref={watchListRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
               {watchItems.map((item, i) => (
-                <StockRow key={item.id} {...item} isLast={i === watchItems.length - 1} onSelect={openDetail} onRemove={removeFromMonitor} showRemove />
+                <StockRow key={item.id} {...item} isLast={i === watchItems.length - 1} onSelect={openDetail} onRemove={removeFromMonitor} showRemove onAlertChange={reloadAlerts} />
               ))}
             </div>
           )
@@ -870,7 +871,7 @@ export default function LiveMonitor({ data }) {
               <div ref={portListRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
                 {mktOpen && <PortfolioSummary items={portItems} />}
                 {portItems.map((item, i) => (
-                  <StockRow key={item.id} {...item} isLast={i === portItems.length - 1} onSelect={openDetail} showRemove={false} />
+                  <StockRow key={item.id} {...item} isLast={i === portItems.length - 1} onSelect={openDetail} showRemove={false} onAlertChange={reloadAlerts} />
                 ))}
               </div>
             )
@@ -900,7 +901,7 @@ export default function LiveMonitor({ data }) {
                   </div>
                 )}
                 {scanItems.map((item, i) => (
-                  <StockRow key={item.id} {...item} isLast={i === scanItems.length - 1} onSelect={openDetail} showRemove={false} />
+                  <StockRow key={item.id} {...item} isLast={i === scanItems.length - 1} onSelect={openDetail} showRemove={false} onAlertChange={reloadAlerts} />
                 ))}
               </div>
             )
