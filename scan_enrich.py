@@ -382,6 +382,7 @@ def _assign_grades(df: pd.DataFrame) -> pd.DataFrame:
     condition_count  = _col("condition_count")
     rsi14            = _col("rsi14", 50)
     return_5d        = _col("return_5d") * 100          # convert to %
+    return_3d        = _col("return_3d", 0.0) * 100 if "return_3d" in df.columns else _col("return_5d") * 60
     volume_ratio     = _col("volume_ratio", 1.0)
     foreign_streak   = _col("foreign_buy_streak")
     trust_streak     = _col("invest_trust_streak")
@@ -389,32 +390,50 @@ def _assign_grades(df: pd.DataFrame) -> pd.DataFrame:
     limit_down       = _col("limit_down_streak")
     sector_breadth   = _col("sector_breadth_60", 50)    # default 50% if not enriched
     margin_chg       = _col("margin_change_5d")
+    # above_ema60 gate: stocks below EMA60 cannot be B or A — EMA60 is a trend gate, not a signal
+    above_ema60      = df["above_ema60"].astype(bool) if "above_ema60" in df.columns else pd.Series(True, index=df.index)
+    # EMA20 proximity: close > EMA20 is required for quality entries
+    close_above_ema20 = (
+        (df["close"] > df["ema20"]).astype(bool)
+        if ("close" in df.columns and "ema20" in df.columns)
+        else pd.Series(True, index=df.index)
+    )
+    # Overextension from EMA20: dist > 10% = overheated, reduce grade
+    dist_ema20 = pd.Series(0.0, index=df.index)
+    if "close" in df.columns and "ema20" in df.columns:
+        safe_ema20 = pd.to_numeric(df["ema20"], errors="coerce").replace(0, np.nan)
+        dist_ema20 = ((pd.to_numeric(df["close"], errors="coerce") - safe_ema20) / safe_ema20).fillna(0.0) * 100
 
     # X: immediate exclusion
     x_mask = (limit_down >= 1) | (f_score.between(0, 2)) | (volume_ratio < 0.3)
     g[x_mask] = "X"
 
-    # D: base (already set)
-    # C: overbought / overextended
-    c_mask = (~x_mask) & ((return_5d >= 20) | (rsi14 >= 80))
+    # D: base (already set) — includes all stocks below EMA60 that aren't X
+    # C: overbought / overextended — only for stocks above EMA60
+    c_mask = (~x_mask) & above_ema60 & ((return_5d >= 20) | (rsi14 >= 80) | (dist_ema20 >= 15))
     g[c_mask] = "C"
 
     # B: valid entry but with at least one caution flag
+    # Requires: above EMA60, entry_signal, at least one minor risk flag
     b_mask = (
-        (~x_mask) & (~c_mask) & entry_signal
+        (~x_mask) & (~c_mask) & above_ema60 & entry_signal
         & (condition_count >= 6)
-        & ((rsi14 >= 75) | (return_5d >= 12) | (margin_chg > 5) | (volume_ratio < 1.0))
+        & (
+            (rsi14 >= 75) | (return_5d >= 12) | (margin_chg > 5)
+            | (volume_ratio < 1.0) | (~close_above_ema20) | (dist_ema20 >= 10)
+        )
     )
     g[b_mask] = "B"
 
-    # A: cleanest entry — all conditions tight, institutional confirmation, sector healthy
+    # A: cleanest entry — above EMA20 & EMA60, RSI in healthy zone, institutional confirmation
     institutional_ok = (foreign_streak >= 2) | (trust_streak >= 2)
     a_mask = (
-        (~x_mask) & (~c_mask) & entry_signal
+        (~x_mask) & (~c_mask) & (~b_mask) & above_ema60 & entry_signal
         & (condition_count >= 7)
-        & (rsi14 < 75)
+        & (rsi14 >= 50) & (rsi14 < 75)   # RSI in healthy range — not weak, not overbought
         & (return_5d < 12)
-        & (volume_ratio >= 1.5)
+        & (volume_ratio >= 1.3)            # lowered from 1.5 to allow more genuine setups
+        & close_above_ema20                # must be above short-term trend
         & institutional_ok
         & (sector_breadth >= 40)
     )
