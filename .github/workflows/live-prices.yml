@@ -4,6 +4,8 @@ on:
   schedule:
     # Every 3 minutes during Taiwan market hours (01:00–05:30 UTC = 09:00–13:30 CST), Mon–Fri
     - cron: '*/3 1-5 * * 1-5'
+    # Once at 06:00 UTC (14:00 CST) to capture final closing prices for next-day pre-market display
+    - cron: '0 6 * * 2-6'
   workflow_dispatch:
 
 permissions:
@@ -22,7 +24,6 @@ jobs:
         run: |
           node - << 'NODESCRIPT'
           const https = require('https');
-          const http  = require('http');
           const fs    = require('fs');
 
           // Common stocks always fetched regardless of scan data
@@ -44,15 +45,11 @@ jobs:
           function parseNum(s) { return parseFloat(String(s ?? '').replace(/,/g, '')) || null; }
           function parseVol(s) { return parseInt(String(s  ?? '').replace(/,/g, '')) || 0; }
 
-          function fetchJson(url, extraHeaders = {}) {
+          function fetchJson(url) {
             return new Promise((resolve, reject) => {
-              const lib = url.startsWith('https') ? https : http;
-              const req = lib.get(url, {
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (compatible; GitHubActions/price-cache)',
-                  ...extraHeaders,
-                },
-                timeout: 12000,
+              const req = https.get(url, {
+                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GitHubActions/price-cache)' },
+                timeout: 15000,
               }, res => {
                 let d = '';
                 res.on('data', c => d += c);
@@ -66,75 +63,33 @@ jobs:
 
           async function main() {
             let ids = [...ALWAYS];
+            let scanTop = [];
 
             // Augment with latest scan stock list from deployed Pages
             try {
               const data = await fetchJson('https://rekisss.github.io/invest/data.json');
               const latest = (data?.dates || []).slice().sort().reverse()[0];
               if (latest) {
-                const top = (data.scans?.[latest]?.top_stocks || [])
+                scanTop = (data.scans?.[latest]?.top_stocks || [])
                   .slice(0, 120).map(s => String(s.stock_id));
-                ids = [...new Set([...ids, ...top])];
-                console.log(`Stock list: ${ids.length} symbols (${top.length} from scan)`);
+                ids = [...new Set([...ids, ...scanTop])];
               }
+              console.log(`Stock list: ${ids.length} symbols (${scanTop.length} from scan)`);
             } catch(e) {
               console.warn('data.json fetch failed:', e.message);
             }
 
             const prices = {};
-            const CHUNK  = 20;
-            const HOSTS  = ['query2.finance.yahoo.com', 'query1.finance.yahoo.com'];
+            const twseIds = ids.filter(id => !isOTC(id));
+            const tpexIds = ids.filter(id =>  isOTC(id));
 
-            // ── Tier 1: Yahoo Finance ───────────────────────────────────────────
-            for (let i = 0; i < ids.length; i += CHUNK) {
-              const chunk   = ids.slice(i, i + CHUNK);
-              const symbols = chunk.map(toYahoo).join(',');
-
-              for (const host of HOSTS) {
-                try {
-                  const url = `https://${host}/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketHigh,regularMarketLow,regularMarketOpen,regularMarketVolume,regularMarketTime,marketState`;
-                  const json = await fetchJson(url);
-                  const items = json?.quoteResponse?.result || [];
-                  if (!items.length) continue;
-                  for (const item of items) {
-                    const id = (item.symbol || '').replace(/\.(TW|TWO)$/, '');
-                    const price = item.regularMarketPrice;
-                    if (!id || !price) continue;
-                    const prev = item.regularMarketPreviousClose ?? null;
-                    prices[id] = {
-                      price, prevClose: prev,
-                      pct:    prev ? (price - prev) / prev : null,
-                      high:   item.regularMarketHigh   ?? null,
-                      low:    item.regularMarketLow    ?? null,
-                      open:   item.regularMarketOpen   ?? null,
-                      volume: item.regularMarketVolume ?? 0,
-                      time:   item.regularMarketTime
-                                ? new Date(item.regularMarketTime * 1000).toISOString()
-                                : '',
-                      isSnapshot: item.marketState !== 'REGULAR',
-                    };
-                  }
-                  if (chunk.some(id => prices[id])) break;
-                } catch(e) {
-                  console.warn(`Yahoo ${host} chunk ${Math.floor(i/CHUNK)+1} error:`, e.message);
-                }
-              }
-            }
-
-            const yahooCount = Object.keys(prices).filter(k => !k.startsWith('_')).length;
-            console.log(`Yahoo: ${yahooCount} stocks fetched`);
-
-            // ── Tier 2: TWSE/TPEX Official API (fallback for Yahoo failures) ──
-            const missing     = ids.filter(id => !prices[id]);
-            const missingTWSE = missing.filter(id => !isOTC(id));
-            const missingTPEX = missing.filter(id =>  isOTC(id));
-
-            if (missingTWSE.length > 0) {
+            // ── Tier 1: TWSE/TPEX Official OpenAPI (primary — no auth, no IP blocking) ──
+            if (twseIds.length > 0) {
               try {
                 const data = await fetchJson('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL');
-                const missingSet = new Set(missingTWSE);
+                const idSet = new Set(twseIds);
                 for (const item of (data || [])) {
-                  if (!missingSet.has(item.Code)) continue;
+                  if (!idSet.has(item.Code)) continue;
                   const price  = parseNum(item.ClosingPrice);
                   const change = parseNum(item.Change);
                   if (!price) continue;
@@ -150,20 +105,20 @@ jobs:
                     isSnapshot: true,
                   };
                 }
-                const twseFilled = missingTWSE.filter(id => prices[id]).length;
-                console.log(`TWSE fallback: filled ${twseFilled}/${missingTWSE.length} missing`);
+                const twseFilled = twseIds.filter(id => prices[id]).length;
+                console.log(`TWSE: filled ${twseFilled}/${twseIds.length}`);
               } catch(e) {
                 console.warn('TWSE official API error:', e.message);
               }
             }
 
-            if (missingTPEX.length > 0) {
+            if (tpexIds.length > 0) {
               try {
                 const data = await fetchJson('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes');
-                const missingSet = new Set(missingTPEX);
+                const idSet = new Set(tpexIds);
                 for (const item of (data || [])) {
                   const id = item.SecuritiesCompanyCode ?? item.Code;
-                  if (!id || !missingSet.has(id)) continue;
+                  if (!id || !idSet.has(id)) continue;
                   const price  = parseNum(item.Close ?? item.ClosingPrice);
                   const change = parseNum(item.Change);
                   if (!price) continue;
@@ -179,14 +134,57 @@ jobs:
                     isSnapshot: true,
                   };
                 }
-                const tpexFilled = missingTPEX.filter(id => prices[id]).length;
-                console.log(`TPEX fallback: filled ${tpexFilled}/${missingTPEX.length} missing`);
+                const tpexFilled = tpexIds.filter(id => prices[id]).length;
+                console.log(`TPEX: filled ${tpexFilled}/${tpexIds.length}`);
               } catch(e) {
                 console.warn('TPEX official API error:', e.message);
               }
             }
 
-            // ── Indices: 加權指數 ^TWII, 櫃買指數 ^TPEX ─────────────────────
+            // ── Tier 2: Yahoo Finance (fills remaining gaps, provides real-time ticks) ──
+            const HOSTS = ['query2.finance.yahoo.com', 'query1.finance.yahoo.com'];
+            const CHUNK = 20;
+            // Try Yahoo for anything still missing (official APIs sometimes lag)
+            const stillMissing = ids.filter(id => !prices[id]);
+            if (stillMissing.length > 0) {
+              for (let i = 0; i < stillMissing.length; i += CHUNK) {
+                const chunk   = stillMissing.slice(i, i + CHUNK);
+                const symbols = chunk.map(toYahoo).join(',');
+                for (const host of HOSTS) {
+                  try {
+                    const url = `https://${host}/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketHigh,regularMarketLow,regularMarketOpen,regularMarketVolume,regularMarketTime,marketState`;
+                    const json = await fetchJson(url);
+                    const items = json?.quoteResponse?.result || [];
+                    if (!items.length) continue;
+                    for (const item of items) {
+                      const id = (item.symbol || '').replace(/\.(TW|TWO)$/, '');
+                      const price = item.regularMarketPrice;
+                      if (!id || !price) continue;
+                      const prev = item.regularMarketPreviousClose ?? null;
+                      prices[id] = {
+                        price, prevClose: prev,
+                        pct:    prev ? (price - prev) / prev : null,
+                        high:   item.regularMarketHigh   ?? null,
+                        low:    item.regularMarketLow    ?? null,
+                        open:   item.regularMarketOpen   ?? null,
+                        volume: item.regularMarketVolume ?? 0,
+                        time:   item.regularMarketTime
+                                  ? new Date(item.regularMarketTime * 1000).toISOString()
+                                  : '',
+                        isSnapshot: item.marketState !== 'REGULAR',
+                      };
+                    }
+                    if (chunk.some(id => prices[id])) break;
+                  } catch(e) {
+                    console.warn(`Yahoo ${host} error:`, e.message);
+                  }
+                }
+              }
+              const yahooFilled = stillMissing.filter(id => prices[id]).length;
+              console.log(`Yahoo: filled ${yahooFilled}/${stillMissing.length} remaining gaps`);
+            }
+
+            // ── Indices: 加權指數 ^TWII, 櫃買指數 ^TPEX (Yahoo only) ──────────
             for (const host of HOSTS) {
               try {
                 const url = `https://${host}/v7/finance/quote?symbols=%5ETWII,%5ETPEX&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketTime`;
