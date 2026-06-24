@@ -1,15 +1,18 @@
-// Live Taiwan stock prices — reads GitHub Actions price cache only
+// Live Taiwan stock prices — hybrid approach
 //
-// The `live-prices.yml` workflow runs every 3 min during market hours
-// (09:00–13:30 Taiwan) and saves to the `data` branch as live_prices.json.
-// This hook reads only that cache — no browser-side API calls, no CORS issues.
+// Primary:  Browser fetches TWSE/TPEX official OpenAPI directly (CORS-friendly, truly real-time)
+// Fallback: GitHub Actions price cache (live-prices.yml, updated every 3 min during open)
+//           Used when official APIs are temporarily unavailable
+//
+// Poll interval: 60 s during market open, no poll after close (prices are final)
 
 import { useState, useEffect, useMemo } from 'react'
 
-// Use GitHub API (not raw.githubusercontent.com) to bypass CDN caching.
-// The API always returns the current committed content.
-// Accept: application/vnd.github.raw+json returns raw file bytes directly.
 const CACHE_URL = 'https://api.github.com/repos/rekisss/invest/contents/live_prices.json?ref=data'
+
+const TWSE_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
+const TPEX_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'
+const TWSE_IDX = 'https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX'
 
 export function isOTCStock(stockId) {
   const n = parseInt(String(stockId), 10)
@@ -46,12 +49,102 @@ function sameTWDay(a, b) {
          ta.getDate()     === tb.getDate()
 }
 
-/**
- * Fetch the GH Actions price cache.
- * ids: stock IDs to extract (pass [] to get indices only).
- * Always returns whatever data exists. isStale=true means the cache is older than expected.
- * Returns { stocks, indices, updatedAt, isStale }
- */
+function parseNum(s) { return parseFloat(String(s ?? '').replace(/,/g, '')) || null }
+function parseVol(s) { return parseInt(String(s  ?? '').replace(/,/g, '')) || 0 }
+
+// ── Tier 1: TWSE/TPEX Official OpenAPI (browser, CORS-friendly) ──────────────
+export async function fetchTWSEOfficial(ids) {
+  const result  = {}
+  const idSet   = new Set(ids)
+  const twseIds = ids.filter(id => !isOTCStock(id))
+  const tpexIds = ids.filter(id =>  isOTCStock(id))
+  const fetches = []
+
+  if (twseIds.length) fetches.push(
+    fetch(TWSE_URL, { signal: AbortSignal.timeout(10000) })
+      .then(r => r.ok ? r.json() : []).catch(() => [])
+  )
+  if (tpexIds.length) fetches.push(
+    fetch(TPEX_URL, { signal: AbortSignal.timeout(10000) })
+      .then(r => r.ok ? r.json() : []).catch(() => [])
+  )
+
+  try {
+    const [twseData = [], tpexData = []] = await Promise.all(fetches)
+
+    for (const item of twseData) {
+      const id = item.Code
+      if (!idSet.has(id)) continue
+      const price  = parseNum(item.ClosingPrice)
+      const change = parseNum(item.Change)
+      if (!price) continue
+      const prev = (change != null && !isNaN(change)) ? price - change : null
+      result[id] = {
+        price, prevClose: prev,
+        pct:    prev ? change / prev : null,
+        high:   parseNum(item.HighestPrice),
+        low:    parseNum(item.LowestPrice),
+        open:   parseNum(item.OpeningPrice),
+        volume: parseVol(item.TradeVolume),
+        time:   new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' }),
+        isSnapshot: false,
+      }
+    }
+
+    for (const item of tpexData) {
+      const id = item.SecuritiesCompanyCode ?? item.Code
+      if (!idSet.has(id)) continue
+      const price  = parseNum(item.Close ?? item.ClosingPrice)
+      const change = parseNum(item.Change)
+      if (!price) continue
+      const prev = (change != null && !isNaN(change)) ? price - change : null
+      result[id] = {
+        price, prevClose: prev,
+        pct:    prev ? change / prev : null,
+        high:   parseNum(item.High ?? item.HighestPrice),
+        low:    parseNum(item.Low  ?? item.LowestPrice),
+        open:   parseNum(item.Open ?? item.OpeningPrice),
+        volume: parseVol(item.TradeVolume),
+        time:   new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' }),
+        isSnapshot: false,
+      }
+    }
+  } catch (e) {
+    console.warn('TWSE/TPEX official API error:', e.message)
+  }
+  return result
+}
+
+// ── Index fetch: TWSE MI_INDEX (browser, CORS-friendly) ───────────────────────
+export async function fetchIndices() {
+  try {
+    const r = await fetch(TWSE_IDX, { signal: AbortSignal.timeout(8000) })
+    if (!r.ok) return null
+    const data = await r.json()
+    const out = {}
+    for (const item of (data || [])) {
+      const name = item.Index || item.指數名稱 || ''
+      if (!(name.includes('發行量加權') || name.includes('加權股價指數'))) continue
+      const price = parseNum(item.ClosingIndex || item.收盤指數)
+      const prev  = parseNum(item.PreviousClosingIndex || item.前收指數)
+      const chg   = parseNum(item.Change || item.漲跌點數)
+      if (!price) continue
+      const p = prev || (chg != null ? price - chg : null)
+      out['t00'] = {
+        price, prevClose: p,
+        change: chg ?? (p ? price - p : null),
+        pct:    p ? (price - p) / p : null,
+        time:   new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' }),
+      }
+    }
+    return Object.keys(out).length ? out : null
+  } catch (e) {
+    console.warn('TWSE MI_INDEX error:', e.message)
+    return null
+  }
+}
+
+// ── Tier 2: GitHub Actions cache (fallback) ───────────────────────────────────
 export async function fetchPriceCache(ids) {
   try {
     const r = await fetch(CACHE_URL, {
@@ -64,14 +157,11 @@ export async function fetchPriceCache(ids) {
 
     const cacheDate = new Date(json.updatedAt)
     const now       = new Date()
+    const isToday   = sameTWDay(cacheDate, now)
     const ageMs     = now - cacheDate
     const open      = isTWSEOpen()
-    const isToday   = sameTWDay(cacheDate, now)
 
-    // Mark as stale if data is too old for current context, but still return it
-    const isStale = open
-      ? ageMs > 5 * 60 * 1000                        // during open: stale after 5 min
-      : !isToday                                      // after close: stale if not today
+    const isStale = open ? ageMs > 5 * 60 * 1000 : !isToday
 
     const toTime = iso => iso
       ? new Date(iso).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' })
@@ -81,7 +171,6 @@ export async function fetchPriceCache(ids) {
     for (const id of ids) {
       const p = json.prices[id]
       if (!p) continue
-      // isSnapshot: true only for previous-day data — today's TWSE snapshot is still "live" for display purposes
       stocks[id] = { ...p, time: toTime(p.time), isSnapshot: !isToday }
     }
 
@@ -99,19 +188,15 @@ export async function fetchPriceCache(ids) {
   }
 }
 
-// Fetch index data (加權指數 / 櫃買指數) from the GH Actions cache
-export async function fetchIndices() {
-  const { indices } = await fetchPriceCache([])
-  return indices
-}
-
 /**
  * useLivePrices(stockIds, { pollInterval })
  *
  * Returns { prices, isOpen, session, lastUpdate, loading, error }
- * Polls the GH Actions cache every 3 minutes (matching the workflow update frequency).
+ *
+ * During market hours: polls official TWSE/TPEX API every 60 s.
+ * After close: fetches once (prices are final), then stops polling.
  */
-export function useLivePrices(stockIds, { pollInterval = 3 * 60 * 1000 } = {}) {
+export function useLivePrices(stockIds, { pollInterval = 60000 } = {}) {
   const [prices, setPrices]         = useState({})
   const [isOpen, setIsOpen]         = useState(() => isTWSEOpen())
   const [session, setSession]       = useState(() => getTWSESession())
@@ -130,32 +215,48 @@ export function useLivePrices(stockIds, { pollInterval = 3 * 60 * 1000 } = {}) {
     if (!ids.length) return
 
     let cancelled = false
+    let didFetchOnce = false
 
     const run = async () => {
-      if (!cancelled) {
-        setIsOpen(isTWSEOpen())
-        setSession(getTWSESession())
-        setLoading(true)
-      }
+      const open = isTWSEOpen()
+      const sess = getTWSESession()
+      if (!cancelled) { setIsOpen(open); setSession(sess) }
+
+      // After close, only fetch once to get final prices
+      if (!open && didFetchOnce) return
+      didFetchOnce = true
+
+      if (!cancelled) setLoading(true)
       try {
-        const { stocks, updatedAt, isStale } = await fetchPriceCache(ids)
+        // Tier 1: TWSE/TPEX official (real-time, browser CORS-friendly)
+        const official = await fetchTWSEOfficial(ids)
         if (cancelled) return
-        if (Object.keys(stocks).length > 0) {
-          setPrices(prev => ({ ...prev, ...stocks }))
+
+        if (Object.keys(official).length > 0) {
+          setPrices(prev => ({ ...prev, ...official }))
           setLastUpdate(new Date())
-          if (isStale && updatedAt) {
-            const dateStr = updatedAt.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric' })
-            const timeStr = updatedAt.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' })
-            setError(`資料來自 ${dateStr} ${timeStr}（後台更新中）`)
-          } else {
-            setError(null)
-          }
+          setError(open ? null : '今日收盤')
         } else {
-          const sess = getTWSESession()
-          if      (sess === 'pre')     setError('盤前（09:00 開盤後後台自動更新）')
-          else if (sess === 'weekend') setError('休市（週末）')
-          else if (sess === 'open')    setError('等待後台更新（每3分鐘）…')
-          else                         setError('收盤快取暫無資料')
+          // Tier 2: GH Actions cache fallback
+          const { stocks: cached, updatedAt, isStale } = await fetchPriceCache(ids)
+          if (cancelled) return
+          if (Object.keys(cached).length > 0) {
+            setPrices(prev => ({ ...prev, ...cached }))
+            setLastUpdate(new Date())
+            if (isStale && updatedAt) {
+              const dateStr = updatedAt.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric' })
+              const timeStr = updatedAt.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' })
+              setError(`快取報價 ${dateStr} ${timeStr}`)
+            } else {
+              setError('快取報價（官方 API 暫時無回應）')
+            }
+          } else {
+            const s = getTWSESession()
+            if      (s === 'pre')     setError('盤前（09:00 開盤後即時更新）')
+            else if (s === 'weekend') setError('休市（週末）')
+            else if (s === 'open')    setError('等待報價…')
+            else                      setError('收盤快取暫無資料')
+          }
         }
       } catch (e) {
         if (!cancelled) setError(e.message)
@@ -165,8 +266,9 @@ export function useLivePrices(stockIds, { pollInterval = 3 * 60 * 1000 } = {}) {
     }
 
     run()
-    const t = setInterval(run, pollInterval)
-    return () => { cancelled = true; clearInterval(t) }
+    // Only poll during market hours
+    const t = isTWSEOpen() ? setInterval(run, pollInterval) : null
+    return () => { cancelled = true; if (t) clearInterval(t) }
   }, [idsKey, pollInterval])
 
   return { prices, isOpen, session, lastUpdate, loading, error }
