@@ -1,9 +1,6 @@
 [
   "rsi14",
   "adx14",
-  "stoch_k",
-  "stoch_d",
-  "williams_r",
   "cci20",
   "mfi14",
   "volume_ratio",
@@ -34,5 +31,11 @@
   "williams_r_recovery",
   "cci_momentum",
   "mfi_strong",
-  "stronger_than_market"
+  "stronger_than_market",
+  "foreign_buy_streak",
+  "invest_trust_streak",
+  "dealer_buy_streak",
+  "foreign_buy_3d",
+  "invest_trust_buy_2d",
+  "dealer_buy_3d"
 ]
