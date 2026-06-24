@@ -1,10 +1,14 @@
-// Real-time Taiwan stock prices via Yahoo Finance API (CORS-friendly)
-// - Primary:  query2.finance.yahoo.com  (v7 batch, 20 symbols/req)
-// - Fallback: query1.finance.yahoo.com  (same endpoint, different CDN pool)
-// - Tier 3:   v8 chart API per-symbol for any still-missing symbols
-// - Tier 4:   GitHub Actions price cache (raw.githubusercontent.com/rekisss/invest/data/live_prices.json)
-//             Updated every 3 min during market hours by the 盤中即時報價快取 workflow
-// - Polls every 30s; outside market hours returns last-close snapshot
+// Real-time Taiwan stock prices — multi-tier fetch with parallel fallbacks
+//
+// Tier 1a: TWSE Official OpenAPI  (openapi.twse.com.tw) — CORS-friendly, no key needed
+// Tier 1b: TPEX Official OpenAPI  (tpex.org.tw)         — OTC stocks, CORS-friendly
+//          ↑ Tiers 1a/1b run in parallel with Yahoo; results are merged
+// Tier 2:  Yahoo Finance v7 batch (query2 → query1 CDN pool, 20 symbols/req)
+// Tier 3:  Yahoo Finance v8 chart per-symbol (bypasses v7 rate-limit pool)
+// Tier 4:  GitHub Actions price cache (raw.githubusercontent.com/rekisss/invest/data/live_prices.json)
+//          Updated every 3 min during market hours; accepted up to 8 h after market close
+//
+// Polls every 30 s. Yahoo + TWSE/TPEX run in parallel; cache is last resort.
 
 import { useState, useEffect, useMemo } from 'react'
 
@@ -72,10 +76,7 @@ async function tryV7Batch(host, symbols, timeout = 10000) {
       `https://${host}/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketChangePercent,regularMarketHigh,regularMarketLow,regularMarketOpen,regularMarketVolume,regularMarketTime,marketState`,
       { signal: AbortSignal.timeout(timeout) }
     )
-    if (!r.ok) {
-      console.warn(`Yahoo v7 ${host} → ${r.status}`)
-      return result
-    }
+    if (!r.ok) { console.warn(`Yahoo v7 ${host} → ${r.status}`); return result }
     const json = await r.json()
     for (const item of json?.quoteResponse?.result || []) {
       const id = fromYahooSymbol(item.symbol || '')
@@ -124,9 +125,97 @@ async function tryV8Single(symbol, timeout = 8000) {
 
 const V7_HOSTS = ['query2.finance.yahoo.com', 'query1.finance.yahoo.com']
 
-// ── Tier 4: GitHub Actions price cache (server-side, no CORS issues) ─────
-const CACHE_URL     = 'https://raw.githubusercontent.com/rekisss/invest/data/live_prices.json'
-const CACHE_MAX_AGE = 30 * 60 * 1000  // reject if older than 30 min (covers post-market users)
+// ── Tier 1: Taiwan Official OpenAPI (CORS-friendly, no API key) ────────────
+// TWSE: openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL  (上市)
+// TPEX: www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes     (上櫃)
+// Both return snapshot prices updated during market hours; works post-market too.
+
+const TWSE_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
+const TPEX_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'
+
+function parseNum(s) { return parseFloat(String(s ?? '').replace(/,/g, '')) || null }
+function parseVol(s) { return parseInt(String(s  ?? '').replace(/,/g, '')) || 0 }
+
+export async function fetchTWSEOfficial(ids) {
+  const result  = {}
+  const idSet   = new Set(ids)
+  const twseIds = ids.filter(id => !isOTCStock(id))
+  const tpexIds = ids.filter(id =>  isOTCStock(id))
+
+  const fetches = []
+  if (twseIds.length) fetches.push(
+    fetch(TWSE_URL, { signal: AbortSignal.timeout(8000) })
+      .then(r => r.ok ? r.json() : [])
+      .catch(() => [])
+  )
+  if (tpexIds.length) fetches.push(
+    fetch(TPEX_URL, { signal: AbortSignal.timeout(8000) })
+      .then(r => r.ok ? r.json() : [])
+      .catch(() => [])
+  )
+
+  try {
+    const [twseData = [], tpexData = []] = await Promise.all(fetches)
+
+    // TWSE: { Code, Name, OpeningPrice, HighestPrice, LowestPrice, ClosingPrice, Change, TradeVolume }
+    for (const item of twseData) {
+      const id = item.Code
+      if (!idSet.has(id)) continue
+      const price  = parseNum(item.ClosingPrice)
+      const change = parseNum(item.Change)        // may be '+10' / '-5' / '0'
+      if (!price) continue
+      const prev = (change != null && !isNaN(change)) ? price - change : null
+      result[id] = {
+        price, prevClose: prev,
+        pct:    prev ? change / prev : null,
+        high:   parseNum(item.HighestPrice),
+        low:    parseNum(item.LowestPrice),
+        open:   parseNum(item.OpeningPrice),
+        volume: parseVol(item.TradeVolume),
+        time:   '', isSnapshot: true,
+      }
+    }
+
+    // TPEX: { SecuritiesCompanyCode, Close, Change, High, Low, Open, TradeVolume }
+    // Field names differ by API version; try both common naming conventions
+    for (const item of tpexData) {
+      const id = item.SecuritiesCompanyCode ?? item.Code
+      if (!idSet.has(id)) continue
+      const price  = parseNum(item.Close ?? item.ClosingPrice)
+      const change = parseNum(item.Change)
+      if (!price) continue
+      const prev = (change != null && !isNaN(change)) ? price - change : null
+      result[id] = {
+        price, prevClose: prev,
+        pct:    prev ? change / prev : null,
+        high:   parseNum(item.High ?? item.HighestPrice),
+        low:    parseNum(item.Low  ?? item.LowestPrice),
+        open:   parseNum(item.Open ?? item.OpeningPrice),
+        volume: parseVol(item.TradeVolume),
+        time:   '', isSnapshot: true,
+      }
+    }
+  } catch (e) {
+    console.warn('TWSE/TPEX official API error:', e.message)
+  }
+  return result
+}
+
+// ── Tier 4: GitHub Actions price cache ────────────────────────────────────
+const CACHE_URL = 'https://raw.githubusercontent.com/rekisss/invest/data/live_prices.json'
+// Context-aware max age:
+//   Market open  → accept only if < 5 min (cache updated every 3 min by GH Actions)
+//   Market closed → accept if same Taiwan-calendar-day and < 8 h (closing prices don't change)
+const CACHE_MAX_AGE_OPEN   = 5  * 60 * 1000
+const CACHE_MAX_AGE_CLOSED = 8  * 60 * 60 * 1000
+
+function sameTWDay(a, b) {
+  const fmt = d => new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }))
+  const ta = fmt(a), tb = fmt(b)
+  return ta.getFullYear() === tb.getFullYear() &&
+         ta.getMonth()    === tb.getMonth()    &&
+         ta.getDate()     === tb.getDate()
+}
 
 export async function fetchPriceCache(ids) {
   try {
@@ -134,7 +223,15 @@ export async function fetchPriceCache(ids) {
     if (!r.ok) return { stocks: {}, indices: null }
     const json = await r.json()
     if (!json?.prices || !json?.updatedAt) return { stocks: {}, indices: null }
-    if (Date.now() - new Date(json.updatedAt).getTime() > CACHE_MAX_AGE)
+
+    const cacheDate = new Date(json.updatedAt)
+    const now       = new Date()
+    const ageMs     = now - cacheDate
+    const maxAge    = isTWSEOpen() ? CACHE_MAX_AGE_OPEN : CACHE_MAX_AGE_CLOSED
+
+    // During market hours: strict freshness. After close: same-day cache is always valid.
+    if (isTWSEOpen() && ageMs > maxAge) return { stocks: {}, indices: null }
+    if (!isTWSEOpen() && (ageMs > maxAge || !sameTWDay(now, cacheDate)))
       return { stocks: {}, indices: null }
 
     const toTime = iso => iso
@@ -168,7 +265,6 @@ async function fetchYahooBatch(ids) {
   for (let i = 0; i < ids.length; i += CHUNK) {
     const chunk = ids.slice(i, i + CHUNK)
 
-    // Each host gets only the symbols still missing from result
     for (const host of V7_HOSTS) {
       const missing = chunk.filter(id => !result[id])
       if (!missing.length) break
@@ -176,7 +272,6 @@ async function fetchYahooBatch(ids) {
       Object.assign(result, r)
     }
 
-    // v8 per-symbol fallback for anything still missing after both v7 hosts
     const stillMissing = chunk.filter(id => !result[id])
     if (stillMissing.length) {
       await Promise.all(stillMissing.map(async id => {
@@ -209,8 +304,7 @@ export async function fetchIndices() {
         if (!price) continue
         const key = item.symbol === '^TWII' ? 't00' : 'o00'
         out[key] = {
-          price,
-          prevClose: prev,
+          price, prevClose: prev,
           change: prev != null ? price - prev : null,
           pct:    prev ? (price - prev) / prev : null,
           time:   item.regularMarketTime
@@ -258,22 +352,38 @@ export function useLivePrices(stockIds, { pollInterval = 30000 } = {}) {
       if (!cancelled) { setIsOpen(open); setSession(sess) }
       if (!cancelled) setLoading(true)
       try {
-        const result = await fetchYahooBatch(ids)
+        // Tier 1+2: Run TWSE/TPEX official API and Yahoo Finance in parallel.
+        // Yahoo takes precedence (real-time tick); TWSE/TPEX fills any gaps.
+        const [officialResult, yahooResult] = await Promise.allSettled([
+          fetchTWSEOfficial(ids),
+          fetchYahooBatch(ids),
+        ])
+        const official = officialResult.status === 'fulfilled' ? officialResult.value : {}
+        const yahoo    = yahooResult.status    === 'fulfilled' ? yahooResult.value    : {}
+
+        // Merge: Yahoo wins on overlap (fresher tick data); official fills missing
+        const result = { ...official, ...yahoo }
+
         if (!cancelled) {
           if (Object.keys(result).length > 0) {
             setPrices(prev => ({ ...prev, ...result }))
             setLastUpdate(new Date())
-            setError(null)
+            // Show source hint only when falling back to snapshot-only
+            const yahooCount    = Object.keys(yahoo).length
+            const officialOnly  = Object.keys(result).filter(id => !yahoo[id]).length
+            setError(yahooCount > 0 ? null
+              : officialOnly > 0 ? '官方快照報價（非即時）'
+              : null)
           } else {
-            // Tier 4: GH Actions cache — server-side fetch every 3 min, no CORS issues
+            // Tier 4: GH Actions cache — server-side fetch, no CORS issues
             const { stocks: cached } = await fetchPriceCache(ids)
             if (!cancelled) {
               if (Object.keys(cached).length > 0) {
                 setPrices(prev => ({ ...prev, ...cached }))
                 setLastUpdate(new Date())
-                setError('快取報價（每3分鐘更新）')
+                setError('快取報價（GH Actions，每3分鐘更新）')
               } else {
-                setError('無法取得報價（Yahoo Finance 暫時無回應，請稍後重試）')
+                setError('無法取得報價（所有資料源暫時無回應，請稍後重試）')
               }
             }
           }
@@ -285,8 +395,8 @@ export function useLivePrices(stockIds, { pollInterval = 30000 } = {}) {
       }
     }
 
-    run()  // always fetch once on mount
-    const t = setInterval(run, pollInterval)  // poll 24/7
+    run()
+    const t = setInterval(run, pollInterval)
     return () => { cancelled = true; clearInterval(t) }
   }, [idsKey, pollInterval])
 
