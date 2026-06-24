@@ -1998,10 +1998,13 @@ export default function Dashboard({ data, error }) {
     return sorted.includes(todayTW) ? todayTW : (sorted[0] || null)
   })
   const [selectedStock, setSelectedStock] = useState(null)
-  const [viewTab, setViewTab] = useState('all')
+  const [selectedStockIndex, setSelectedStockIndex] = useState(0)
+  const [selectedStockList, setSelectedStockList] = useState([])
+  // Feature 8: persist filter/sort state
+  const [viewTab, setViewTab] = useState(() => localStorage.getItem('dash_viewTab') || 'all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortField, setSortField] = useState('entry_score')
-  const [sortDir, setSortDir] = useState('desc')
+  const [sortField, setSortField] = useState(() => localStorage.getItem('dash_sortField') || 'entry_score')
+  const [sortDir, setSortDir] = useState(() => localStorage.getItem('dash_sortDir') || 'desc')
   const [page, setPage] = useState(0)
   const notionMap = data?.notionMap || {}
 
@@ -2164,6 +2167,25 @@ export default function Dashboard({ data, error }) {
   }
   const [activeSector, setActiveSector] = useState(null)
   const [activeTrendType, setActiveTrendType] = useState(null)
+
+  // Feature 8: persist filter/sort state to localStorage
+  useEffect(() => { try { localStorage.setItem('dash_viewTab', viewTab) } catch {} }, [viewTab])
+  useEffect(() => { try { localStorage.setItem('dash_sortField', sortField) } catch {} }, [sortField])
+  useEffect(() => { try { localStorage.setItem('dash_sortDir', sortDir) } catch {} }, [sortDir])
+
+  // Feature 9: scroll position memory
+  const savedScrollRef = useRef(null)
+  useEffect(() => {
+    if (selectedStock) {
+      savedScrollRef.current = listScrollRef.current?.scrollTop ?? null
+    } else if (savedScrollRef.current != null) {
+      const top = savedScrollRef.current
+      savedScrollRef.current = null
+      requestAnimationFrame(() => {
+        listScrollRef.current?.scrollTo({ top })
+      })
+    }
+  }, [selectedStock])
 
   // ── 即時報價 — must be called before any conditional return ─────────────
   // Compute entry stock IDs from the latest scan date (or empty when no data).

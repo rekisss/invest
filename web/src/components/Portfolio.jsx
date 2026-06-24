@@ -225,6 +225,8 @@ export default function Portfolio({ data }) {
   const [historyDates, setHistoryDates] = useState(null)
   const historiesRef = useRef(null)  // lazy-loaded stock_histories.json cache
   const containerRef = useRef(null)
+  const [groupExpanded, setGroupExpanded] = useState({ profit: true, loss: true })
+  const [copyLabel, setCopyLabel] = useState('📋 複製')
 
   // ── Live prices via TWSE 即時行情 (replaces Yahoo Finance one-shot fetch) ──
   const posKey = Object.keys(positions).sort().join(',')
@@ -336,6 +338,48 @@ export default function Portfolio({ data }) {
     return b.cost - a.cost
   }), [entries, sortBy])
 
+  // Feature 13: group positions by profit/loss
+  const profitEntries = useMemo(() =>
+    sorted.filter(e => e.pnlPct != null ? e.pnlPct >= 0 : (e.curPrice ?? e.p.buyPrice) >= e.p.buyPrice)
+      .sort((a, b) => (b.pnlPct ?? 0) - (a.pnlPct ?? 0)),
+    [sorted])
+  const lossEntries = useMemo(() =>
+    sorted.filter(e => e.pnlPct != null ? e.pnlPct < 0 : false)
+      .sort((a, b) => (a.pnlPct ?? 0) - (b.pnlPct ?? 0)),
+    [sorted])
+  const winRateNum   = profitEntries.length
+  const totalCount   = entries.length
+  const winRatePct   = totalCount > 0 ? winRateNum / totalCount : 0
+
+  // Feature 14: export portfolio to clipboard
+  const handleCopy = () => {
+    const today = new Date()
+    const dateStr = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`
+    const sep = '─────────────────────'
+    const lines = [
+      `持倉摘要 (${dateStr})`,
+      sep,
+      ...sorted.map(e => {
+        const cp = e.curPrice ?? e.p.buyPrice
+        const ret = e.pnlPct != null ? `${e.pnlPct >= 0 ? '+' : ''}${e.pnlPct.toFixed(1)}%` : '--'
+        const lots = (e.p.qty / 1000).toFixed(e.p.qty % 1000 === 0 ? 0 : 2)
+        const name = (e.p.name || '').padEnd(6, '　')
+        const idPart = String(e.id).padEnd(5)
+        return `${idPart} ${name} 成本${fmt(e.p.buyPrice, 1)}  現價${fmt(cp, 1)}  ${ret.padStart(7)}  ${lots}張`
+      }),
+      sep,
+      `總市值 ${fmtNum(Math.round(totalValue))}`,
+      `總損益 ${totalPnL >= 0 ? '+' : ''}${fmtNum(Math.round(totalPnL))}`,
+    ]
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      setCopyLabel('✓ 已複製')
+      setTimeout(() => setCopyLabel('📋 複製'), 2000)
+    }).catch(() => {
+      setCopyLabel('複製失敗')
+      setTimeout(() => setCopyLabel('📋 複製'), 2000)
+    })
+  }
+
   const totalCost  = entries.reduce((s, e) => s + e.cost, 0)
   const totalValue = entries.reduce((s, e) => s + e.curVal, 0)
   const totalPnL   = totalValue - totalCost
@@ -440,7 +484,7 @@ export default function Portfolio({ data }) {
 
       {/* ── Sort bar ─────────────────────────────────── */}
       {entries.length > 1 && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           {[['pnlPct', '報酬率'], ['daysHeld', '持有天數'], ['cost', '成本']].map(([key, label]) => (
             <button key={key} onClick={() => setSortBy(key)} style={{
               background: sortBy === key ? 'var(--ios-blue)' : 'var(--ios-fill4)',
@@ -451,6 +495,11 @@ export default function Portfolio({ data }) {
               boxShadow: sortBy === key ? '0 2px 8px rgba(10,132,255,0.25)' : 'none',
             }}>{sortBy === key ? `↓ ${label}` : label}</button>
           ))}
+          <button onClick={handleCopy} style={{
+            marginLeft: 'auto', background: 'var(--ios-fill4)', border: '0.5px solid var(--ios-sep)',
+            borderRadius: 8, padding: '5px 12px', fontSize: 11, color: copyLabel.startsWith('✓') ? 'var(--ios-green)' : 'var(--ios-label2)',
+            cursor: 'pointer', fontWeight: 500, transition: 'color 0.2s',
+          }}>{copyLabel}</button>
         </div>
       )}
 

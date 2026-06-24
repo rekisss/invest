@@ -2239,11 +2239,18 @@ function Section({ title, children }) {
 
 // ── Main modal ───────────────────────────────────────────────────────────────
 
-export default function StockDetailModal({ stock, notionInfo, onClose, allScans, compareHistories, historyDates }) {
+export default function StockDetailModal({ stock, stocks, initialIndex = 0, notionInfo, onClose, allScans, compareHistories, historyDates }) {
+  // Feature 4: multi-stock navigation
+  const stockList = stocks?.length ? stocks : (stock ? [stock] : [])
+  const [idx, setIdx] = useState(initialIndex ?? 0)
+  // Sync idx when parent changes initialIndex (new stock selected from outside)
+  useEffect(() => { setIdx(initialIndex ?? 0) }, [initialIndex])
+  const s_nav = stockList[idx] ?? stockList[0] ?? stock
+
   // Compute technical indicators from price_history for non-top-50 stocks.
   // Top-50 stocks already have pre-computed values from Python scan; slim stocks don't.
   // This fills all the "—" rows using the OHLCV bars we now carry for every scanned stock.
-  const ph = stock?.price_history
+  const ph = s_nav?.price_history
   const ci = useMemo(() => {
     if (!ph || ph.length < 26) return {}
     const closes = ph.map(b => b.close)
@@ -2292,30 +2299,67 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
   const [closing, setClosing] = useState(false)
   const swipeRef = useRef(null)
   const scoreRef = useRef(null)
+  const panelRef = useRef(null)
   // Feature 1: K-line comparison
   const [compareStockId, setCompareStockId] = useState('')
   const [compareInput, setCompareInput]     = useState('')
   const [showCompareInput, setShowCompareInput] = useState(false)
-  useEffect(() => { setSwipeX(0); setClosing(false); setCompareStockId(''); setCompareInput(''); setShowCompareInput(false) }, [stock?.stock_id])
+  // Feature 7: sector peers collapse state
+  const [peersExpanded, setPeersExpanded] = useState(false)
+  useEffect(() => { setSwipeX(0); setClosing(false); setCompareStockId(''); setCompareInput(''); setShowCompareInput(false); setPeersExpanded(false) }, [s_nav?.stock_id])
+
+  // Feature 18: track recently viewed
+  useEffect(() => {
+    if (!s_nav?.stock_id) return
+    const stored = JSON.parse(localStorage.getItem('recentlyViewed') || '[]')
+    const filtered = stored.filter(x => x.id !== s_nav.stock_id)
+    const updated = [{ id: s_nav.stock_id, name: s_nav.name || '' }, ...filtered].slice(0, 5)
+    localStorage.setItem('recentlyViewed', JSON.stringify(updated))
+  }, [s_nav?.stock_id])
 
   useGSAP(() => {
-    if (!scoreRef.current || !stock?.entry_score) return
+    if (!scoreRef.current || !s_nav?.entry_score) return
     const obj = { val: 0 }
     gsap.to(obj, {
-      val: stock.entry_score,
+      val: s_nav.entry_score,
       duration: 0.85,
       ease: 'power3.out',
       delay: 0.38,
       onUpdate() { if (scoreRef.current) scoreRef.current.textContent = Math.round(obj.val) },
     })
-  }, { dependencies: [stock?.stock_id] })
+  }, { dependencies: [s_nav?.stock_id] })
 
-  if (!stock) return null
-  const s = stock
-  const n = notionInfo || null
-  const scoreColor = s.entry_score >= 1000 ? 'var(--ios-yellow)' : s.entry_score >= 700 ? 'var(--ios-orange)' : 'var(--ios-label)'
+  // Feature 4: navigation helpers
+  const goToPrev = () => {
+    if (idx <= 0) return
+    setIdx(i => i - 1)
+    setClosing(false)
+    if (panelRef.current) panelRef.current.scrollTo(0, 0)
+  }
+  const goToNext = () => {
+    if (idx >= stockList.length - 1) return
+    setIdx(i => i + 1)
+    setClosing(false)
+    if (panelRef.current) panelRef.current.scrollTo(0, 0)
+  }
 
   const doClose = () => { setClosing(true); setTimeout(onClose, 260) }
+
+  // Feature 6: keyboard shortcuts
+  useEffect(() => {
+    const handler = e => {
+      if (e.key === 'Escape') { doClose() }
+      else if (e.key === 'ArrowLeft' && stockList.length > 1 && idx > 0) { goToPrev() }
+      else if (e.key === 'ArrowRight' && stockList.length > 1 && idx < stockList.length - 1) { goToNext() }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  })
+
+  if (!s_nav && !stock) return null
+  const s = s_nav
+  const n = notionInfo || null
+  const scoreColor = s.entry_score >= 1000 ? 'var(--ios-yellow)' : s.entry_score >= 700 ? 'var(--ios-orange)' : 'var(--ios-label)'
 
   const handleDragStart = e => {
     swipeRef.current = { x0: e.touches[0].clientX, t0: Date.now() }
@@ -2357,6 +2401,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
 
       {/* Panel */}
       <div
+        ref={panelRef}
         onClick={e => e.stopPropagation()}
         style={{
           width: 'min(460px, 100vw)',
@@ -2405,6 +2450,34 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
             )}
           </div>
           <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexShrink: 0 }}>
+            {/* Feature 4: prev/next navigation arrows */}
+            {stockList.length > 1 && (<>
+              <button
+                onClick={goToPrev}
+                disabled={idx === 0}
+                title="上一支"
+                style={{
+                  background: 'var(--ios-fill3)', border: 'none', color: 'var(--ios-label2)',
+                  borderRadius: 9999, width: 28, height: 28, cursor: idx === 0 ? 'default' : 'pointer',
+                  fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  opacity: idx === 0 ? 0.35 : 1,
+                }}
+              >‹</button>
+              <span style={{ fontSize: 11, color: 'var(--ios-label3)', fontVariantNumeric: 'tabular-nums', minWidth: 32, textAlign: 'center' }}>
+                {idx + 1} / {stockList.length}
+              </span>
+              <button
+                onClick={goToNext}
+                disabled={idx === stockList.length - 1}
+                title="下一支"
+                style={{
+                  background: 'var(--ios-fill3)', border: 'none', color: 'var(--ios-label2)',
+                  borderRadius: 9999, width: 28, height: 28, cursor: idx === stockList.length - 1 ? 'default' : 'pointer',
+                  fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  opacity: idx === stockList.length - 1 ? 0.35 : 1,
+                }}
+              >›</button>
+            </>)}
             {/* Feature 1: Compare button */}
             <button
               onClick={() => setShowCompareInput(v => !v)}
@@ -2500,6 +2573,67 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
             )}
           </div>
         </div>
+
+        {/* Feature 7: Sector peer comparison */}
+        {(() => {
+          if (!s.industry_category) return null
+          const latestScanDate = allScans ? Object.keys(allScans).sort().reverse()[0] : null
+          const peers = latestScanDate
+            ? (allScans[latestScanDate]?.top_stocks || [])
+                .filter(p => p.industry_category === s.industry_category && String(p.stock_id) !== String(s.stock_id))
+                .sort((a, b) => b.entry_score - a.entry_score)
+                .slice(0, 5)
+            : []
+          if (!peers.length) return null
+          return (
+            <div style={{ marginBottom: 12, borderRadius: 12, border: '0.5px solid var(--ios-sep)', overflow: 'hidden' }}>
+              <button
+                onClick={() => setPeersExpanded(v => !v)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '10px 14px', background: 'var(--ios-bg2)', border: 'none', cursor: 'pointer',
+                  color: 'var(--ios-label)', fontSize: 13, fontWeight: 600, textAlign: 'left',
+                }}
+              >
+                <span>📊 類股 {s.industry_category} 同業（{peers.length}）</span>
+                <span style={{ fontSize: 11, color: 'var(--ios-label3)', marginLeft: 8 }}>{peersExpanded ? '▲' : '▼'}</span>
+              </button>
+              {peersExpanded && (
+                <div style={{ background: 'var(--ios-bg)' }}>
+                  {peers.map((p, i) => {
+                    const scoreC = p.entry_score >= 1000 ? 'var(--ios-yellow)' : p.entry_score >= 700 ? 'var(--ios-orange)' : 'var(--ios-label3)'
+                    return (
+                      <div
+                        key={p.stock_id}
+                        onClick={() => document.dispatchEvent(new CustomEvent('openStockDetail', { detail: p }))}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px',
+                          cursor: 'pointer',
+                          borderTop: i > 0 ? '0.5px solid var(--ios-sep)' : 'none',
+                          background: p.entry_signal ? 'rgba(22,214,126,0.05)' : 'transparent',
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'monospace' }}>{p.stock_id}</span>
+                          {p.name && <span style={{ fontSize: 11, color: 'var(--ios-label2)', marginLeft: 6 }}>{p.name}</span>}
+                        </div>
+                        {p.market_rs_rank != null && (
+                          <span style={{ fontSize: 10, color: 'var(--ios-label3)' }}>RS {Math.round(p.market_rs_rank)}%</span>
+                        )}
+                        <span style={{ fontSize: 11, fontWeight: 700, color: scoreC, background: `${scoreC}18`, borderRadius: 6, padding: '2px 7px', border: `0.5px solid ${scoreC}40` }}>
+                          {Math.round(p.entry_score)}
+                        </span>
+                        {p.entry_signal && (
+                          <span style={{ fontSize: 9, color: '#16D67E', fontWeight: 700, background: 'rgba(22,214,126,0.12)', borderRadius: 4, padding: '1px 5px' }}>進場</span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Feature 1: Compare stock input panel */}
         {showCompareInput && (() => {
