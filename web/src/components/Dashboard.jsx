@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
-import { useLivePrices } from '../hooks/useLivePrices'
+import { useLivePrices, isTWSEOpen } from '../hooks/useLivePrices'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { animate, stagger, spring } from 'animejs'
@@ -748,7 +748,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 </div>
                 {(s.close != null || liveData[s.stock_id]) && (
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    {liveData[s.stock_id] ? (
+                    {marketOpen && liveData[s.stock_id] ? (
                       <>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
                           <span style={{ fontSize: 8, color: '#16D67E', fontWeight: 900, lineHeight: 1 }}>◉</span>
@@ -2298,6 +2298,7 @@ export default function Dashboard({ data, error }) {
     }
     return [...ids]
   }, [data, customTrack, watchlist])
+  const marketOpen = isTWSEOpen()
   const { prices: liveData } = useLivePrices(liveStockIds)
 
   if (error || !data || !data.dates || data.dates.length === 0) {

@@ -233,8 +233,10 @@ export default function Portfolio({ data }) {
   const posIds = useMemo(() => Object.keys(positions), [posKey])
   const { prices: livePriceData, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: livePriceLoading } = useLivePrices(posIds)
   const livePrices = useMemo(
-    () => Object.fromEntries(Object.entries(livePriceData).map(([id, d]) => [id, d.price])),
-    [livePriceData]
+    () => mktOpen
+      ? Object.fromEntries(Object.entries(livePriceData).map(([id, d]) => [id, d.price]))
+      : {},
+    [livePriceData, mktOpen]
   )
 
   useGSAP(() => {
