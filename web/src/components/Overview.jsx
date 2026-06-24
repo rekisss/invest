@@ -186,6 +186,101 @@ function LiveMarketStrip() {
   )
 }
 
+/* ── Feature 19: Market Sentiment (Fear & Greed) Indicator ──────── */
+function MarketSentiment({ data }) {
+  const latestScan = useMemo(() => {
+    if (!data?.scans) return null
+    const dates = Object.keys(data.scans).sort()
+    if (!dates.length) return null
+    return data.scans[dates[dates.length - 1]]
+  }, [data?.scans])
+
+  const { score, label, scanDate } = useMemo(() => {
+    if (!latestScan) return { score: 50, label: '中性', scanDate: null }
+
+    const topStocks = latestScan.top_stocks || []
+    const entryPct = latestScan.total_scanned > 0
+      ? (latestScan.entry_count / latestScan.total_scanned) * 100
+      : 0
+    const avgRSI = topStocks.length
+      ? topStocks.reduce((s, x) => s + (x.rsi14 || 50), 0) / topStocks.length
+      : 50
+    const avgMRS = topStocks.length
+      ? topStocks.reduce((s, x) => s + (x.market_rs_rank || 50), 0) / topStocks.length
+      : 50
+    const foreignBuyPct = topStocks.length
+      ? topStocks.filter(x => x.foreign_buy_streak > 0).length / topStocks.length * 100
+      : 50
+
+    const sc = Math.round(
+      (Math.min(entryPct * 5, 100) * 0.3) +
+      (Math.min(Math.max(avgRSI - 30, 0) / 40 * 100, 100) * 0.25) +
+      (avgMRS * 0.25) +
+      (foreignBuyPct * 0.2)
+    )
+
+    const lbl = sc < 30 ? '極度悲觀'
+      : sc < 45 ? '悲觀'
+      : sc < 55 ? '中性'
+      : sc < 70 ? '樂觀'
+      : '極度樂觀'
+
+    // Get scan date from the latest scan key
+    const dates = data?.scans ? Object.keys(data.scans).sort() : []
+    const scanDate = dates.length ? dates[dates.length - 1] : null
+
+    return { score: Math.max(0, Math.min(100, sc)), label: lbl, scanDate }
+  }, [latestScan, data?.scans])
+
+  if (!latestScan) return null
+
+  const labelColor = score < 30 ? '#16D67E'    // deep fear = green (bear)
+    : score < 45 ? '#4ADE80'
+    : score < 55 ? '#FF9F0A'
+    : score < 70 ? '#FF6B6B'
+    : '#FF3340'                                  // extreme greed = red (bull)
+
+  return (
+    <div className="glass-panel" style={{ padding: '12px 14px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', textTransform: 'uppercase', letterSpacing: 0.8 }}>市場情緒</span>
+        {scanDate && <span style={{ fontSize: 9, color: 'var(--ios-label4)', fontFamily: 'monospace' }}>掃描日 {scanDate}</span>}
+      </div>
+
+      {/* Score + label row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <span style={{ fontSize: 32, fontWeight: 800, fontFamily: 'monospace', color: labelColor, lineHeight: 1 }}>{score}</span>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: labelColor }}>{label}</div>
+          <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 2 }}>恐慌貪婪指數 0–100</div>
+        </div>
+      </div>
+
+      {/* Gradient bar with marker */}
+      <div style={{ position: 'relative', height: 10, borderRadius: 9999, background: 'linear-gradient(to right, #16D67E, #FFD60A, #FF3340)', marginBottom: 4 }}>
+        {/* White triangle marker */}
+        <div style={{
+          position: 'absolute',
+          top: -3,
+          left: `calc(${score}% - 6px)`,
+          width: 0, height: 0,
+          borderLeft: '6px solid transparent',
+          borderRight: '6px solid transparent',
+          borderTop: '9px solid var(--ios-label)',
+          filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.5))',
+        }} />
+      </div>
+
+      {/* Bar labels */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+        <span style={{ fontSize: 9, color: '#16D67E', fontWeight: 600 }}>極度悲觀</span>
+        <span style={{ fontSize: 9, color: '#FFD60A', fontWeight: 600 }}>中性</span>
+        <span style={{ fontSize: 9, color: '#FF3340', fontWeight: 600 }}>極度樂觀</span>
+      </div>
+    </div>
+  )
+}
+
 /* ── SVG Direction Gauge ─────────────────────────────────────────── */
 const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
   const { pct, isBull, isBear, color, confidence, cx, cy, r, nx, ny, nx2, ny2 } = useMemo(() => {
@@ -933,6 +1028,9 @@ export default function Overview({ data, error }) {
 
         {/* Live Market Strip: real-time SPX/SOX/NDX + USD/TWD */}
         <LiveMarketStrip />
+
+        {/* Feature 19: Market sentiment fear & greed indicator */}
+        <MarketSentiment data={data} />
 
         {/* Row 2: US Market + Risk Signals */}
         <MarketSignalsCard marketData={marketData} asof={pred?.generated_at} />

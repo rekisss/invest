@@ -509,7 +509,24 @@ function AnimatedScoreBar({ normScore, scoreColor }) {
   )
 }
 
+// Feature 12: Portfolio quick-add helper
+function addToPortfolio(s, buyPrice, qty) {
+  try {
+    const existing = JSON.parse(localStorage.getItem('tw_portfolio_positions') || '{}')
+    existing[s.stock_id] = {
+      stock_id: s.stock_id, name: s.name || '',
+      buyPrice: parseFloat(buyPrice), qty: parseInt(qty),
+      buyDate: new Date().toISOString().slice(0, 10), note: '',
+    }
+    localStorage.setItem('tw_portfolio_positions', JSON.stringify(existing))
+  } catch {}
+}
+
 function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {}, sectorMode = false, rankOffset = 0, liveData = {} }) {
+  const [portfolioFormId, setPortfolioFormId] = useState(null)
+  const [portfolioBuyPrice, setPortfolioBuyPrice] = useState('')
+  const [portfolioQty, setPortfolioQty] = useState('1')
+  const [portfolioAdded, setPortfolioAdded] = useState(null)
 
   if (!stocks || stocks.length === 0) {
     return (
@@ -2872,6 +2889,34 @@ export default function Dashboard({ data, error }) {
       {/* ── Scrollable Content ───────────────────────────────────── */}
       <div ref={listScrollRef} onScroll={handleListScroll} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
 
+        {/* Feature 10: Today's scan summary bar */}
+        {scan && (() => {
+          const entryCount = scan.entry_count || stocks.filter(s => s.entry_signal).length
+          const topScore = Math.max(...(stocks || []).map(s => s.entry_score || 0), 0)
+          const foreignBuyCount = (stocks || []).filter(s => s.foreign_buy_streak > 0).length
+          const totalScanned = scan.total_scanned || 0
+          const chips = [
+            { label: `${entryCount} 支進場信號`, color: '#16D67E' },
+            { label: `最高分 ${Math.round(topScore)}`, color: '#0A84FF' },
+            { label: `外資買 ${foreignBuyCount} 支`, color: '#FF9F0A' },
+            ...(totalScanned > 0 ? [{ label: `掃描 ${totalScanned} 支`, color: 'var(--ios-label3)' }] : []),
+          ]
+          return (
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '10px 14px 0', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', marginBottom: 0 }}>
+              {chips.map((c, i) => (
+                <span key={i} style={{
+                  flexShrink: 0, fontSize: 12, fontWeight: 600,
+                  background: 'var(--ios-bg2)',
+                  border: '0.5px solid var(--ios-sep)',
+                  borderRadius: 8, padding: '3px 10px',
+                  color: c.color,
+                  whiteSpace: 'nowrap',
+                }}>{c.label}</span>
+              ))}
+            </div>
+          )
+        })()}
+
         {/* Market summary banner */}
         {pred && (() => {
           const isBull = pred.xgb_label === '偏多', isBear = pred.xgb_label === '偏空'
@@ -3128,7 +3173,12 @@ export default function Dashboard({ data, error }) {
             <WatchlistView
               stocks={pagedStocks}
               globalMaxScore={globalMaxScore}
-              onSelect={setSelectedStock}
+              onSelect={s => {
+                setSelectedStock(s)
+                const idx = displayList.findIndex(x => x.stock_id === s.stock_id)
+                setSelectedStockIndex(idx >= 0 ? idx : 0)
+                setSelectedStockList(displayList)
+              }}
               notionMap={notionMap}
               watchlist={watchlist}
               toggleWatchlist={toggleWatchlist}
@@ -3217,6 +3267,8 @@ export default function Dashboard({ data, error }) {
 
       <StockDetailModal
         stock={selectedStock}
+        stocks={selectedStockList}
+        initialIndex={selectedStockIndex}
         notionInfo={selectedStock ? notionMap[selectedStock.stock_id] : null}
         onClose={() => setSelectedStock(null)}
         allScans={data?.scans}

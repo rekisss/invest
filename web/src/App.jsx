@@ -211,6 +211,22 @@ export default function App() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'transparent' }}>
+      {/* ── Scan update toast ────────────────────────────────────────── */}
+      {toast && (
+        <div ref={toastRef} style={{
+          position: 'fixed', top: 'calc(env(safe-area-inset-top) + 12px)',
+          left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--ios-green)', color: '#fff',
+          padding: '8px 18px', borderRadius: 20,
+          fontSize: 13, fontWeight: 600,
+          zIndex: 9999, pointerEvents: 'none',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+          whiteSpace: 'nowrap',
+        }}>
+          📊 {toast}
+        </div>
+      )}
+
       <style>{`
         @keyframes titleReveal {
           from { opacity: 0; transform: translateY(8px); filter: blur(6px); letter-spacing: 0.5px; }

@@ -2601,7 +2601,7 @@ export default function StockDetailModal({ stock, stocks, initialIndex = 0, noti
               {peersExpanded && (
                 <div style={{ background: 'var(--ios-bg)' }}>
                   {peers.map((p, i) => {
-                    const scoreC = p.entry_score >= 1000 ? 'var(--ios-yellow)' : p.entry_score >= 700 ? 'var(--ios-orange)' : 'var(--ios-label3)'
+                    const scoreHex = p.entry_score >= 1000 ? '#FFD60A' : p.entry_score >= 700 ? '#FF9F0A' : '#8E8E93'
                     return (
                       <div
                         key={p.stock_id}
@@ -2620,7 +2620,7 @@ export default function StockDetailModal({ stock, stocks, initialIndex = 0, noti
                         {p.market_rs_rank != null && (
                           <span style={{ fontSize: 10, color: 'var(--ios-label3)' }}>RS {Math.round(p.market_rs_rank)}%</span>
                         )}
-                        <span style={{ fontSize: 11, fontWeight: 700, color: scoreC, background: `${scoreC}18`, borderRadius: 6, padding: '2px 7px', border: `0.5px solid ${scoreC}40` }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: scoreHex, background: `${scoreHex}28`, borderRadius: 6, padding: '2px 7px', border: `0.5px solid ${scoreHex}60` }}>
                           {Math.round(p.entry_score)}
                         </span>
                         {p.entry_signal && (

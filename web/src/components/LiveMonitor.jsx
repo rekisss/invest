@@ -583,6 +583,46 @@ export default function LiveMonitor({ data }) {
     return () => { cancelled = true; clearInterval(t) }
   }, [mktOpen])
 
+  useEffect(() => {
+    document.body.classList.toggle('livemonitor-fullscreen', fullscreen)
+    return () => document.body.classList.remove('livemonitor-fullscreen')
+  }, [fullscreen])
+
+  const prevPricesRef = useRef({})
+  useEffect(() => {
+    const currentPrices = liveData
+    const prev = prevPricesRef.current
+    const fired = []
+    alerts.forEach(alert => {
+      if (alert.triggered) return
+      const live = currentPrices[alert.stock_id]
+      if (!live?.price) return
+      const prevLive = prev[alert.stock_id]
+      if (!prevLive?.price) return
+      const hit = alert.direction === 'above'
+        ? live.price >= alert.targetPrice && prevLive.price < alert.targetPrice
+        : live.price <= alert.targetPrice && prevLive.price > alert.targetPrice
+      if (hit) fired.push(alert.stock_id)
+    })
+    if (fired.length) {
+      const next = alerts.map(a => fired.includes(a.stock_id) ? { ...a, triggered: true } : a)
+      saveAlerts(next)
+      setAlerts(next)
+      fired.forEach(sid => {
+        const a = alerts.find(x => x.stock_id === sid)
+        if (!a) return
+        const price = currentPrices[sid]?.price
+        const msg = `${a.name || sid} 已${a.direction === 'above' ? '突破' : '跌破'} ${a.targetPrice}（現價 ${fmtP(price)}）`
+        setToasts(t => [...t, { id: Date.now() + Math.random(), msg }])
+      })
+    }
+    prevPricesRef.current = currentPrices
+  }, [liveData])
+
+  const reloadAlerts = useCallback(() => setAlerts(loadAlerts()), [])
+
+  const activeAlertCount = alerts.filter(a => !a.triggered).length
+
   const sortFn = useCallback((a, b) => {
     if (sortBy === 'pct') return (b.live?.pct ?? -Infinity) - (a.live?.pct ?? -Infinity)
     if (sortBy === 'vol') return (b.live?.volume || 0) - (a.live?.volume || 0)
@@ -665,8 +705,22 @@ export default function LiveMonitor({ data }) {
         70%  { box-shadow: 0 0 0 5px rgba(10,132,255,0); }
         100% { box-shadow: 0 0 0 0   rgba(10,132,255,0); }
       }
+      .livemonitor-fullscreen #tab-bar,
+      .livemonitor-fullscreen [data-tab-bar] { display: none !important; }
     `}</style>
-    <div style={{ padding: '10px 16px 80px', overflowY: 'auto', height: '100%', WebkitOverflowScrolling: 'touch' }}>
+
+    {toasts.map(t => (
+      <Toast key={t.id} message={t.msg} onDone={() => setToasts(prev => prev.filter(x => x.id !== t.id))} />
+    ))}
+
+    <div style={{
+      padding: '10px 16px 80px', overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+      height: fullscreen ? '100vh' : '100%',
+      position: fullscreen ? 'fixed' : 'relative',
+      inset: fullscreen ? 0 : 'auto',
+      zIndex: fullscreen ? 9990 : 'auto',
+      background: fullscreen ? 'var(--ios-bg)' : 'transparent',
+    }}>
 
       {/* ── Market status ───────────────────────────────────────── */}
       <div style={{
@@ -676,12 +730,30 @@ export default function LiveMonitor({ data }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: sessionColor, letterSpacing: '-0.3px' }}>
-            {SESSION_LABEL[mktSession] || '—'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: sessionColor, letterSpacing: '-0.3px' }}>
+              {SESSION_LABEL[mktSession] || '—'}
+            </div>
+            {activeAlertCount > 0 && (
+              <span style={{
+                fontSize: 10, fontWeight: 800, borderRadius: 99, padding: '2px 7px',
+                background: 'rgba(255,159,10,0.18)', color: '#FF9F0A',
+              }}>🔔 {activeAlertCount}</span>
+            )}
           </div>
           <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 2 }}>台股 09:00–13:30 週一至週五</div>
         </div>
-        <div style={{ textAlign: 'right' }}>
+        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          <button
+            onClick={() => setFullscreen(v => !v)}
+            style={{
+              padding: '4px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700,
+              border: '1px solid var(--ios-sep)', cursor: 'pointer',
+              background: fullscreen ? 'rgba(255,59,48,0.10)' : 'var(--ios-fill3)',
+              color: fullscreen ? '#FF3B30' : 'var(--ios-label2)',
+            }}
+          >{fullscreen ? '✕ 離開' : '⛶ 專注'}</button>
+          <div style={{ textAlign: 'right' }}>
           {liveTime && (
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ios-label)', fontFamily: 'var(--font-mono)' }}>
               {liveTime.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -711,6 +783,7 @@ export default function LiveMonitor({ data }) {
           {liveError && (
             <div style={{ fontSize: 9, color: '#FF3B30', marginTop: 2 }}>{liveError}</div>
           )}
+          </div>
         </div>
       </div>
 

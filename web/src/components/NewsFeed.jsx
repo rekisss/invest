@@ -682,7 +682,7 @@ function CustomRulePanel({ customRules, onRulesChange, onClose }) {
   )
 }
 
-function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
+function NewsItem({ item, isOpen, onToggle, customRules = [], nameMap = {} }) {
   const allRules = [...KEYWORD_RULES, ...customRules]
   const mainTag = item.tags?.[0]
   const rule = mainTag ? allRules.find(r => r.tag === mainTag) : null
@@ -729,6 +729,7 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
               {item.source && `${item.source} · `}{timeAgo(item.published)}
             </span>
           </div>
+          <StockTagChips title={item.title} summary={item.summary} nameMap={nameMap} />
         </div>
         <span style={{ color: 'var(--ios-label4)', fontSize: 11, flexShrink: 0, marginTop: 2 }}>{isOpen ? '▲' : '▼'}</span>
       </div>
@@ -826,7 +827,54 @@ function NewsItem({ item, isOpen, onToggle, customRules = [] }) {
   )
 }
 
-export default function NewsFeed({ staticNews, refreshSignal }) {
+// ── Feature 17: Stock tag chips ──────────────────────────────────────────────
+function StockTagChips({ title, summary, nameMap }) {
+  const text = (title || '') + ' ' + (summary || '')
+  const codes = []
+  const seen = new Set()
+  const re = /\b([2-9]\d{3})\b/g
+  let m
+  while ((m = re.exec(text)) !== null) {
+    const code = m[1]
+    const n = parseInt(code, 10)
+    if (n >= 2020 && n <= 2035) continue // skip years
+    if (!nameMap[code]) continue // only show codes that exist in scan data
+    if (seen.has(code)) continue
+    seen.add(code)
+    codes.push(code)
+  }
+  if (codes.length === 0) return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
+      {codes.map(stockId => (
+        <span
+          key={stockId}
+          onClick={e => {
+            e.stopPropagation()
+            document.dispatchEvent(new CustomEvent('openStockDetail', { detail: { stock_id: stockId } }))
+          }}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 3,
+            padding: '1px 6px',
+            background: 'rgba(10,132,255,0.12)',
+            color: 'var(--ios-blue)',
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: 'pointer',
+            margin: '0 2px',
+            border: '1px solid rgba(10,132,255,0.25)',
+            fontFamily: 'monospace',
+          }}
+        >
+          {stockId}{nameMap[stockId] ? ` ${nameMap[stockId]}` : ''}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+export default function NewsFeed({ staticNews, refreshSignal, data }) {
   const [rawNews, setRawNews] = useState(staticNews || [])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -839,6 +887,18 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
   const [showCustomPanel, setShowCustomPanel] = useState(false)
   const [nowTs, setNowTs] = useState(Date.now())
   const clockRef = useRef(null)
+
+  // Feature 17: Build stock name lookup from scan data
+  const nameMap = useMemo(() => {
+    if (!data?.scans) return {}
+    const map = {}
+    for (const scan of Object.values(data.scans)) {
+      for (const s of [...(scan.top_stocks || []), ...(scan.filter_stocks || [])]) {
+        if (s.stock_id && s.name) map[s.stock_id] = s.name
+      }
+    }
+    return map
+  }, [data?.scans])
 
   // Scroll-collapse refs (same pattern as Dashboard.jsx)
   const newsHeaderInnerRef = useRef(null)
@@ -1132,6 +1192,7 @@ export default function NewsFeed({ staticNews, refreshSignal }) {
             isOpen={openIdx === i}
             onToggle={() => setOpenIdx(openIdx === i ? null : i)}
             customRules={customRules}
+            nameMap={nameMap}
           />
         ))}
         <div style={{ height: 32 }} />
