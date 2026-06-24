@@ -27,8 +27,8 @@ from sklearn.metrics import (
 # Scale-free (no normalization needed for tree models):
 _FEATURE_COLS = [
     # Oscillators (0–100 or bounded range)
-    "rsi14", "adx14", "stoch_k", "stoch_d",
-    "williams_r", "cci20", "mfi14",
+    # stoch_k, stoch_d, williams_r removed — highly correlated with rsi14/cci20, add noise
+    "rsi14", "adx14", "cci20", "mfi14",
     # Volume & Bollinger (already relative)
     "volume_ratio", "bb_pct_b", "bb_bandwidth",
     # Return-based (already %)
@@ -139,7 +139,8 @@ def time_split(X: pd.DataFrame, y: pd.Series, dates: pd.Series,
 def train(X_train: pd.DataFrame, y_train: pd.Series) -> xgb.XGBClassifier:
     neg = (y_train == 0).sum()
     pos = (y_train == 1).sum()
-    scale_pos_weight = neg / max(pos, 1)
+    # Cap at 2.0 — full ratio (~3-4x) over-boosts positives, collapsing precision
+    scale_pos_weight = min(neg / max(pos, 1), 2.0)
     print(f"   Class balance — pos: {pos}, neg: {neg}, scale_pos_weight: {scale_pos_weight:.2f}")
 
     model = xgb.XGBClassifier(
@@ -148,6 +149,9 @@ def train(X_train: pd.DataFrame, y_train: pd.Series) -> xgb.XGBClassifier:
         learning_rate=0.05,
         subsample=0.8,
         colsample_bytree=0.8,
+        min_child_weight=10,   # prevents splits on tiny leaf samples (reduces overfit)
+        gamma=0.1,             # minimum gain to split (prunes weak splits)
+        reg_alpha=0.05,        # L1 regularization
         scale_pos_weight=scale_pos_weight,
         eval_metric="auc",
         early_stopping_rounds=30,
@@ -174,6 +178,17 @@ def evaluate(model: xgb.XGBClassifier, X_test: pd.DataFrame, y_test: pd.Series) 
     print(f"\n   Test AUC-ROC  : {auc:.4f}")
     print(f"   Precision@0.5 : {precision:.4f}")
     print(f"   Recall@0.5    : {recall:.4f}")
+
+    # Precision / recall at higher confidence thresholds
+    thresholds = {}
+    print("\n   Precision / Recall at higher thresholds (勝率分析):")
+    for thr in (0.55, 0.60, 0.65, 0.70):
+        p = precision_score(y_test, (proba >= thr).astype(int), zero_division=0)
+        r = recall_score(y_test,    (proba >= thr).astype(int), zero_division=0)
+        n = int((proba >= thr).sum())
+        print(f"      @{thr:.2f}  precision={p:.4f}  recall={r:.4f}  signals={n}")
+        thresholds[str(thr)] = {"precision": p, "recall": r, "signals": n}
+
     print()
     print(classification_report(y_test, pred, target_names=["下跌/持平", "漲>3%"]))
 
@@ -185,7 +200,7 @@ def evaluate(model: xgb.XGBClassifier, X_test: pd.DataFrame, y_test: pd.Series) 
     for feat, imp in importance.head(10).items():
         print(f"      {feat:<35} {imp:.4f}")
 
-    return {"auc": auc, "precision": precision, "recall": recall}
+    return {"auc": auc, "precision": precision, "recall": recall, "thresholds": thresholds}
 
 
 def save_model(model: xgb.XGBClassifier, target: str,

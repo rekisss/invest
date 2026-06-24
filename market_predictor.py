@@ -322,7 +322,8 @@ class MarketPredictor:
         if inst_df is not None and not inst_df.empty:
             df = self._merge_external(df, inst_df, _INST_FEATURES)
 
-        df["target"] = (df["close"].shift(-self.horizon) > df["close"]).astype(float)
+        # Require ≥0.3% gain to count as "up" — filters near-zero noise
+        df["target"] = (df["close"].shift(-self.horizon) > df["close"] * 1.003).astype(float)
         feat_cols = (
             _BASE_FEATURES
             + [c for c in _US_FEATURES if c in df.columns]
