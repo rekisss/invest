@@ -6,7 +6,10 @@
 
 import { useState, useEffect, useMemo } from 'react'
 
-const CACHE_URL = 'https://raw.githubusercontent.com/rekisss/invest/data/live_prices.json'
+// Use GitHub API (not raw.githubusercontent.com) to bypass CDN caching.
+// The API always returns the current committed content.
+// Accept: application/vnd.github.raw+json returns raw file bytes directly.
+const CACHE_URL = 'https://api.github.com/repos/rekisss/invest/contents/live_prices.json?ref=data'
 
 export function isOTCStock(stockId) {
   const n = parseInt(String(stockId), 10)
@@ -51,8 +54,10 @@ function sameTWDay(a, b) {
  */
 export async function fetchPriceCache(ids) {
   try {
-    // Cache-bust via query string so browser/CDN doesn't serve a stale file
-    const r = await fetch(`${CACHE_URL}?t=${Date.now()}`, { signal: AbortSignal.timeout(10000) })
+    const r = await fetch(CACHE_URL, {
+      headers: { Accept: 'application/vnd.github.raw+json' },
+      signal: AbortSignal.timeout(10000),
+    })
     if (!r.ok) return { stocks: {}, indices: null }
     const json = await r.json()
     if (!json?.prices || !json?.updatedAt) return { stocks: {}, indices: null }
