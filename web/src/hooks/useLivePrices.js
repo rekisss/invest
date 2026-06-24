@@ -66,11 +66,12 @@ export async function fetchPriceCache(ids) {
     const now       = new Date()
     const ageMs     = now - cacheDate
     const open      = isTWSEOpen()
+    const isToday   = sameTWDay(cacheDate, now)
 
     // Mark as stale if data is too old for current context, but still return it
     const isStale = open
       ? ageMs > 5 * 60 * 1000                        // during open: stale after 5 min
-      : !sameTWDay(now, cacheDate)                    // after close: stale if not today
+      : !isToday                                      // after close: stale if not today
 
     const toTime = iso => iso
       ? new Date(iso).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' })
@@ -80,7 +81,8 @@ export async function fetchPriceCache(ids) {
     for (const id of ids) {
       const p = json.prices[id]
       if (!p) continue
-      stocks[id] = { ...p, time: toTime(p.time), isSnapshot: true }
+      // isSnapshot: true only for previous-day data — today's TWSE snapshot is still "live" for display purposes
+      stocks[id] = { ...p, time: toTime(p.time), isSnapshot: !isToday }
     }
 
     const i_t00 = json.prices['_idx_t00']

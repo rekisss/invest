@@ -184,28 +184,59 @@ jobs:
               console.log(`Yahoo: filled ${yahooFilled}/${stillMissing.length} remaining gaps`);
             }
 
-            // ── Indices: 加權指數 ^TWII, 櫃買指數 ^TPEX (Yahoo only) ──────────
-            for (const host of HOSTS) {
-              try {
-                const url = `https://${host}/v7/finance/quote?symbols=%5ETWII,%5ETPEX&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketTime`;
-                const json = await fetchJson(url);
-                for (const item of json?.quoteResponse?.result || []) {
-                  const price = item.regularMarketPrice;
-                  if (!price) continue;
-                  const prev = item.regularMarketPreviousClose ?? null;
-                  const key  = item.symbol === '^TWII' ? '_idx_t00' : '_idx_o00';
-                  prices[key] = {
-                    price, prevClose: prev,
-                    change: prev != null ? price - prev : null,
-                    pct:    prev ? (price - prev) / prev : null,
-                    time:   item.regularMarketTime
-                              ? new Date(item.regularMarketTime * 1000).toISOString()
-                              : '',
+            // ── Indices: TWSE MI_INDEX (primary) → Yahoo fallback ────────────
+            // Tier 1: TWSE official market index API
+            // Returns array; find 發行量加權股價指數 (code Y) for TWII, 未含金融保險指數 etc.
+            try {
+              const idxData = await fetchJson('https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX');
+              // Find 加權指數 (發行量加權股價指數) — 指數代號 Y or 代碼含 "發行量加權"
+              for (const item of (idxData || [])) {
+                const name = item.Index || item.指數名稱 || '';
+                const val  = parseNum(item.ClosingIndex || item.收盤指數 || item.指數 || item.Value);
+                const prev = parseNum(item.PreviousClosingIndex || item.前收指數 || item.PreviousIndex);
+                const chg  = parseNum(item.Change || item.漲跌點數);
+                if (!val) continue;
+                // 發行量加權股價指數 = TWII
+                if (name.includes('發行量加權') || name.includes('加權股價指數') || item.Code === 'Y') {
+                  const p = prev || (chg != null ? val - chg : null);
+                  prices['_idx_t00'] = {
+                    price: val, prevClose: p,
+                    change: chg ?? (p ? val - p : null),
+                    pct:    p ? (val - p) / p : null,
+                    time:   new Date().toISOString(),
                   };
                 }
-                if (prices['_idx_t00']) break;
-              } catch(e) {
-                console.warn(`Index ${host} error:`, e.message);
+              }
+              console.log(`TWSE index: t00=${!!prices['_idx_t00']}`);
+            } catch(e) {
+              console.warn('TWSE MI_INDEX error:', e.message);
+            }
+
+            // Tier 2: Yahoo fallback for any missing indices
+            if (!prices['_idx_t00'] || !prices['_idx_o00']) {
+              for (const host of HOSTS) {
+                try {
+                  const url = `https://${host}/v7/finance/quote?symbols=%5ETWII,%5ETPEX&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketTime`;
+                  const json = await fetchJson(url);
+                  for (const item of json?.quoteResponse?.result || []) {
+                    const price = item.regularMarketPrice;
+                    if (!price) continue;
+                    const prev = item.regularMarketPreviousClose ?? null;
+                    const key  = item.symbol === '^TWII' ? '_idx_t00' : '_idx_o00';
+                    if (prices[key]) continue; // already have it from TWSE
+                    prices[key] = {
+                      price, prevClose: prev,
+                      change: prev != null ? price - prev : null,
+                      pct:    prev ? (price - prev) / prev : null,
+                      time:   item.regularMarketTime
+                                ? new Date(item.regularMarketTime * 1000).toISOString()
+                                : '',
+                    };
+                  }
+                  if (prices['_idx_t00'] && prices['_idx_o00']) break;
+                } catch(e) {
+                  console.warn(`Index Yahoo ${host} error:`, e.message);
+                }
               }
             }
 
