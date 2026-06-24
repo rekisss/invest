@@ -1,5 +1,75 @@
 [
   {
+    "date": "2026-06-24",
+    "generated_at": "08:04",
+    "xgb_prob_up": 0.679,
+    "xgb_label": "看多",
+    "market_data": {
+      "vix": null,
+      "sp500_ret": null,
+      "nasdaq_ret": null,
+      "sox_ret": null,
+      "tsm_adr_ret": null,
+      "futures_net": -76502.0,
+      "night_change": -733.0,
+      "pcr": null,
+      "taiex_rsi": 65.87782044401214,
+      "macd_hist": 228.07533695603843,
+      "dist_ma20": 4.725785861214216,
+      "dist_ma60": 16.739397468761187,
+      "taiex_ret_5d": 3.8806504110800555,
+      "taiex_ret_20d": 8.254161791365577,
+      "buyback_count": 0,
+      "disposition_count": 74,
+      "jpy_ret": null,
+      "arkk_ret": null,
+      "hyg_ret": null,
+      "night_trend": "↓ 走弱",
+      "market_revenue_yoy": 0.0937,
+      "market_foreign_holding_chg": 1.2185
+    },
+    "ai_insight": "# 今日操盤要點\n\n・外資期貨大幅淨賣逾七萬口且現貨賣超超四成，夜盤跌逾七百點，需謹慎觀察開盤外資動向與是否延續賣壓。\n\n・處置股達七十四支創風險警示，加權RSI高檔逼近超買，短期獲利了結壓力增溫，宜控制風險並設置停損。\n\n・市場月營收年增仍正向但AI上漲機率偏低，建議聚焦基本面選股而非追高，留意個股業績與技術面背離訊號。",
+    "regime": {
+      "label": "double_whipsaw",
+      "label_zh": "🔄 多空雙巴日",
+      "win_rate": 45.0
+    },
+    "scenario": {
+      "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+      "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
+      "danger_signals": [
+        "外資空單極重（-76,502口），軋空風險高",
+        "夜盤缺口 -733pt 過大，易反轉"
+      ],
+      "forbidden_actions": [
+        "禁止追空缺口超過200pt",
+        "禁止反彈高點追多（軋空陷阱）"
+      ]
+    },
+    "risk": {
+      "level": "medium",
+      "score": 0.4,
+      "factors": [
+        {
+          "name": "外資空單極重",
+          "description": "-76,502口，軋空/崩潰雙向風險",
+          "action": "避免重押方向"
+        },
+        {
+          "name": "夜盤大缺口",
+          "description": "夜盤 -733pt，開盤後可能快速反轉",
+          "action": "禁止追缺口超過200pt"
+        }
+      ]
+    },
+    "news_sentiment": {
+      "market_impact": 0.56,
+      "key_events": [],
+      "bullish_count": 0,
+      "bearish_count": 0
+    }
+  },
+  {
     "date": "2026-06-23",
     "generated_at": "08:04",
     "xgb_prob_up": 0.695,
