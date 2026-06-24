@@ -2390,7 +2390,7 @@ export default function StockDetailModal({ stock, notionInfo, onClose, allScans,
         </div>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, position: 'sticky', top: 0, zIndex: 10, background: 'var(--ios-bg)', paddingTop: 6, paddingBottom: 6, marginTop: -6, boxShadow: '0 1px 0 var(--ios-sep)' }}>
           <div>
             <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--ios-label)', letterSpacing: '-0.3px' }}>
               {s.stock_id} <span style={{ fontSize: 16, color: 'var(--ios-label2)', fontWeight: 400 }}>{s.name}</span>
