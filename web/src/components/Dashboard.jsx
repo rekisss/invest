@@ -646,7 +646,86 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 >
                   {watchlist.has(s.stock_id) ? '★' : '☆'}
                 </button>
+                {/* Feature 12: Quick portfolio add button */}
+                <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    if (portfolioFormId === s.stock_id) {
+                      setPortfolioFormId(null)
+                    } else {
+                      setPortfolioFormId(s.stock_id)
+                      setPortfolioBuyPrice(String(s.close || ''))
+                      setPortfolioQty('1')
+                    }
+                  }}
+                  style={{
+                    background: portfolioFormId === s.stock_id ? 'rgba(22,214,126,0.18)' : 'none',
+                    border: portfolioFormId === s.stock_id ? '1px solid rgba(22,214,126,0.4)' : 'none',
+                    padding: '1px 5px', borderRadius: 6,
+                    cursor: 'pointer', flexShrink: 0, lineHeight: 1,
+                    color: portfolioAdded === s.stock_id ? '#16D67E' : 'var(--ios-label3)',
+                    fontSize: 14, transition: 'all 0.15s', fontWeight: 700,
+                  }}
+                  title="快速加入持倉"
+                >＋</button>
               </div>
+
+              {/* Feature 12: Portfolio quick-add inline form */}
+              {portfolioFormId === s.stock_id && (
+                <div onClick={e => e.stopPropagation()} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6,
+                  padding: '7px 10px', background: 'rgba(22,214,126,0.06)',
+                  borderRadius: 8, border: '0.5px solid rgba(22,214,126,0.25)',
+                }}>
+                  <span style={{ fontSize: 11, color: 'var(--ios-label2)', flexShrink: 0, fontWeight: 600 }}>
+                    {s.stock_id} {s.name}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--ios-label3)', flexShrink: 0 }}>買價</span>
+                  <input
+                    type="number"
+                    value={portfolioBuyPrice}
+                    onChange={e => setPortfolioBuyPrice(e.target.value)}
+                    style={{
+                      width: 68, fontSize: 12, padding: '3px 6px', borderRadius: 6,
+                      border: '0.5px solid var(--ios-sep)', background: 'var(--ios-bg2)',
+                      color: 'var(--ios-label)', outline: 'none', fontFamily: 'var(--font-mono)',
+                    }}
+                  />
+                  <span style={{ fontSize: 11, color: 'var(--ios-label3)', flexShrink: 0 }}>張</span>
+                  <input
+                    type="number"
+                    value={portfolioQty}
+                    onChange={e => setPortfolioQty(e.target.value)}
+                    min="1"
+                    style={{
+                      width: 44, fontSize: 12, padding: '3px 6px', borderRadius: 6,
+                      border: '0.5px solid var(--ios-sep)', background: 'var(--ios-bg2)',
+                      color: 'var(--ios-label)', outline: 'none', fontFamily: 'var(--font-mono)',
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      addToPortfolio(s, portfolioBuyPrice, portfolioQty)
+                      setPortfolioAdded(s.stock_id)
+                      setPortfolioFormId(null)
+                      setTimeout(() => setPortfolioAdded(null), 2000)
+                    }}
+                    style={{
+                      flexShrink: 0, fontSize: 11, fontWeight: 700, padding: '4px 10px',
+                      borderRadius: 8, border: 'none', background: 'var(--ios-green)',
+                      color: '#fff', cursor: 'pointer',
+                    }}
+                  >確認</button>
+                  <button
+                    onClick={() => setPortfolioFormId(null)}
+                    style={{
+                      flexShrink: 0, fontSize: 11, padding: '4px 8px',
+                      borderRadius: 8, border: '0.5px solid var(--ios-sep)',
+                      background: 'var(--ios-bg3)', color: 'var(--ios-label3)', cursor: 'pointer',
+                    }}
+                  >取消</button>
+                </div>
+              )}
 
               {/* Row 2: Score bar + score + sparkline + price */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>

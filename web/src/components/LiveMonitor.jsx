@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
-import { animate, stagger } from 'animejs'
+import { animate } from 'animejs'
 import { useLivePrices, fetchIndices, fetchPriceCache } from '../hooks/useLivePrices'
 import { flashPriceEl, animateListRows } from '../utils/animeUtils.js'
 import StockDetailModal from './StockDetailModal'
