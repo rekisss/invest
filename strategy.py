@@ -13,8 +13,14 @@ from indicators import (
 
 # Module-level constants — column names never change, precomputed to avoid
 # rebuilding on every prepare_stock_signals call (once per stock, ~70 per scan).
+
+# Pre-filter gates: must be True to even enter; NOT counted in condition_count or entry_score.
+# above_ema60 appears in 70%+ of stocks → poor differentiator as a scoring signal;
+# keep as a hard gate so below-EMA60 stocks never get entry_signal, but don't inflate scores.
+_PRE_FILTER_COLS = ["above_ema60"]
+
 _HARD_ENTRY_COLS = [
-    "macd_golden_cross", "above_ema60", "ema60_gt_ema120",
+    "macd_golden_cross", "ema60_gt_ema120",
     "volume_break", "rsi_strong", "breakout_20d", "market_above_ma60",
     "avoid_chase", "liquidity_ok",
 ]
@@ -548,7 +554,13 @@ def prepare_stock_signals(
         | merged["f_score_low"]
     )
     _n_hard = len(_HARD_ENTRY_COLS)
-    merged["entry_signal"] = _entry_arr[:, :_n_hard].all(axis=1) & ~merged["skip_trade"].to_numpy(dtype=bool)
+    # Pre-filter gate: above_ema60 must be True — not counted in condition_count/score
+    _pre_filter = merged[_PRE_FILTER_COLS].to_numpy(dtype=bool).all(axis=1)
+    merged["entry_signal"] = (
+        _pre_filter
+        & _entry_arr[:, :_n_hard].all(axis=1)
+        & ~merged["skip_trade"].to_numpy(dtype=bool)
+    )
 
     _soft_matrix = merged[_SOFT_SCORE_COLS].to_numpy(dtype=np.float64)
     # posinf/neginf must be handled explicitly — nan_to_num only replaces NaN

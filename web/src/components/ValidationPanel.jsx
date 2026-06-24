@@ -449,7 +449,12 @@ export default function ValidationPanel({ data }) {
     // `dates` is newest-first; keep that order so the latest date renders on the left.
     const validDates = dates.filter(d => d < todayTW)
 
-    const top20    = scans[validDates[0]]?.top_stocks?.slice(0, 20) || aggregateLatest?.top_stocks || []
+    // Prefer selectable_stocks (A/B/C grade only) — D-grade excluded from 精選 display
+    const _latestScan = scans[validDates[0]]
+    const top20    = (_latestScan?.selectable_stocks?.length
+                       ? _latestScan.selectable_stocks
+                       : _latestScan?.top_stocks?.filter(s => s.grade !== 'D' && s.grade !== 'X') || [])
+                       .slice(0, 20) || aggregateLatest?.top_stocks || []
     const scanDate = validDates[0] || aggregateLatest?.date?.slice(0, 10)
 
     // Validation window: only dates from last Friday onward (most recent week of picks).
@@ -477,7 +482,9 @@ export default function ValidationPanel({ data }) {
     const sortedDates = windowDates
     const allObs = []
     for (const date of windowDates) {
-      for (const s of (scans[date]?.top_stocks || []).slice(0, 20)) {
+      const _scanD = scans[date]
+      const _stocks = (_scanD?.selectable_stocks?.length ? _scanD.selectable_stocks : _scanD?.top_stocks?.filter(s => s.grade !== 'D' && s.grade !== 'X') || []).slice(0, 20)
+      for (const s of _stocks) {
         allObs.push({ date, ...s, r5d: s.return_5d, r1d: s.return_1d })
       }
     }
@@ -496,7 +503,8 @@ export default function ValidationPanel({ data }) {
     const byDate   = {}
     const byDate1d = {}
     for (const date of sortedDates) {
-      const allTop = (scans[date]?.top_stocks || []).slice(0, 20)
+      const _sd = scans[date]
+      const allTop = (_sd?.selectable_stocks?.length ? _sd.selectable_stocks : _sd?.top_stocks?.filter(s => s.grade !== 'D' && s.grade !== 'X') || []).slice(0, 20)
       const top5   = allTop.filter(s => s.return_5d != null)
       if (top5.length) {
         const wins5 = top5.filter(s => s.return_5d > 0).length
@@ -547,7 +555,8 @@ export default function ValidationPanel({ data }) {
     if (histDate == null) {
       base = top20
     } else {
-      base = data?.scans?.[histDate]?.top_stocks?.slice(0, 20) || []
+      const _hd = data?.scans?.[histDate]
+      base = (_hd?.selectable_stocks?.length ? _hd.selectable_stocks : _hd?.top_stocks?.filter(s => s.grade !== 'D' && s.grade !== 'X') || []).slice(0, 20)
     }
     return gradeFilter ? base.filter(s => s.grade === gradeFilter) : base
   }, [top20, histDate, gradeFilter, data])
@@ -557,7 +566,8 @@ export default function ValidationPanel({ data }) {
     if (!histDate) return batchStats
     const d5     = byDate[histDate]
     const d1     = byDate1d[histDate]
-    const allTop = data?.scans?.[histDate]?.top_stocks?.slice(0, 20) || []
+    const _hds = data?.scans?.[histDate]
+    const allTop = (_hds?.selectable_stocks?.length ? _hds.selectable_stocks : _hds?.top_stocks?.filter(s => s.grade !== 'D' && s.grade !== 'X') || []).slice(0, 20)
     return {
       total:     allTop.length,
       verified:  d5?.total ?? 0,
@@ -692,7 +702,7 @@ export default function ValidationPanel({ data }) {
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, marginBottom: 8 }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--ios-label)' }}>
-          {isViewingHistory ? '查歷史' : '精選 TOP 20'}
+          {isViewingHistory ? '查歷史' : `精選 A/B/C ${top20.length ? `(${top20.length})` : ''}`}
         </span>
         {(isViewingHistory ? histDate : scanDate) && (
           <span style={{
@@ -779,7 +789,7 @@ export default function ValidationPanel({ data }) {
           </div>
           <div style={{ width: 0.5, background: 'var(--ios-sep)' }} />
           <div className="vstat" style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>精選檔數</div>
+            <div style={{ fontSize: 8, color: 'var(--ios-label4)', marginBottom: 2 }}>精選 A/B/C</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ios-label)' }}>{displayStats.total}</div>
           </div>
         </div>
@@ -795,7 +805,9 @@ export default function ValidationPanel({ data }) {
         <div style={{ display: 'flex', gap: 5, marginBottom: 8, flexWrap: 'wrap' }}>
           {['A','B','C','D'].map(g => {
             const cfg = GRADE_CFG[g]
-            const gradeBase = isViewingHistory ? (data?.scans?.[histDate]?.top_stocks?.slice(0, 20) || []) : top20
+            const gradeBase = isViewingHistory
+              ? (() => { const _h = data?.scans?.[histDate]; return (_h?.selectable_stocks?.length ? _h.selectable_stocks : _h?.top_stocks?.filter(s => s.grade !== 'D' && s.grade !== 'X') || []).slice(0, 20) })()
+              : top20
             const count = gradeBase.filter(s => s.grade === g).length
             if (!count) return null
             const active = gradeFilter === g

@@ -554,6 +554,8 @@ function processScanData() {
       ...extra,
     })
     const topStocks = allStocks.slice(0, TOP_N).map((row, i) => ({ rank: i + 1, ...mapStock(row) }))
+    // A/B/C grade only — the "精選" pool. D-grade stocks tracked but not surfaced as actionable.
+    const selectableStocks = topStocks.filter(r => ['A','B','C'].includes(r.grade))
     const limitDownAlerts = allStocks
       .filter(r => toNum(r.limit_down_streak) >= 3)
       .sort((a, b) => toNum(b.limit_down_streak) - toNum(a.limit_down_streak))
@@ -610,7 +612,19 @@ function processScanData() {
       base_exit_signal: toBool(row.base_exit_signal),
     }))
 
-    scans[date] = { total_scanned: allStocks.length, entry_count: allStocks.filter(r => toBool(r.entry_signal)).length, top_stocks: topStocks, filter_stocks: filterStocks, limit_down_alerts: limitDownAlerts, is_partial: allStocks.length < 500, data_date: dominantDataDate }
+    const gradeCount = { A: 0, B: 0, C: 0, D: 0, X: 0 }
+    for (const r of topStocks) gradeCount[r.grade] = (gradeCount[r.grade] || 0) + 1
+    scans[date] = {
+      total_scanned: allStocks.length,
+      entry_count: allStocks.filter(r => toBool(r.entry_signal)).length,
+      top_stocks: topStocks,
+      selectable_stocks: selectableStocks,  // A/B/C grade only — excludes D-grade from 精選
+      grade_counts: gradeCount,
+      filter_stocks: filterStocks,
+      limit_down_alerts: limitDownAlerts,
+      is_partial: allStocks.length < 500,
+      data_date: dominantDataDate,
+    }
     // Write static CSV download files (top50 + all) to public/downloads/
     try {
       writeDownloadCSVs(date, allStocks, join(PUBLIC_DIR, 'downloads'))
