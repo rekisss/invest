@@ -706,8 +706,7 @@ export default function LiveMonitor({ data }) {
         70%  { box-shadow: 0 0 0 5px rgba(10,132,255,0); }
         100% { box-shadow: 0 0 0 0   rgba(10,132,255,0); }
       }
-      .livemonitor-fullscreen #tab-bar,
-      .livemonitor-fullscreen [data-tab-bar] { display: none !important; }
+      .livemonitor-fullscreen .ios-tabbar { display: none !important; }
     `}</style>
 
     {toasts.map(t => (
