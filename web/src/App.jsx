@@ -13,6 +13,7 @@ const Portfolio = lazy(() => import('./components/Portfolio.jsx'))
 const GeminiStudio = lazy(() => import('./components/GeminiStudio.jsx'))
 const LiveMonitor = lazy(() => import('./components/LiveMonitor.jsx'))
 const ValidationPanel = lazy(() => import('./components/ValidationPanel.jsx'))
+const StockDetailModal = lazy(() => import('./components/StockDetailModal.jsx'))
 
 const BASE = import.meta.env.BASE_URL || '/'
 
@@ -73,6 +74,13 @@ export default function App() {
   const toastRef = useRef(null)
   const prevScanDateRef = useRef(null)
 
+  // ── Global stock detail modal (opened via 'openStockDetail' event from
+  //    news stock-tag chips and in-modal sector-peer clicks) ─────────────────
+  const [globalStock, setGlobalStock] = useState(null)
+  const [globalCompare, setGlobalCompare] = useState(null)
+  const [globalDates, setGlobalDates] = useState(null)
+  const globalHistRef = useRef(null)
+
   useEffect(() => {
     try {
       document.documentElement.dataset.theme = theme
@@ -110,6 +118,59 @@ export default function App() {
     window.addEventListener('navigate-to-studio', handler)
     return () => window.removeEventListener('navigate-to-studio', handler)
   }, [])
+
+  // Resolve a (possibly partial) {stock_id} into a full scan stock object
+  const resolveStock = useCallback((detail) => {
+    if (!detail?.stock_id) return null
+    const id = String(detail.stock_id)
+    // A peer object from the modal already carries full fields — use directly
+    if (detail.close != null || detail.entry_score != null) return { ...detail, stock_id: id }
+    const scans = data?.scans || {}
+    for (const date of Object.keys(scans).sort().reverse()) {
+      const sc = scans[date]
+      const found = [...(sc?.top_stocks || []), ...(sc?.filter_stocks || [])]
+        .find(x => String(x.stock_id) === id)
+      if (found) return { ...found, stock_id: id }
+    }
+    return { stock_id: id, name: detail.name || '' }
+  }, [data])
+
+  // Listen for global open-stock-detail requests (news tags, sector peers)
+  useEffect(() => {
+    const handler = async (e) => {
+      const stock = resolveStock(e.detail)
+      if (!stock) return
+      setGlobalStock(stock)
+      // Lazy-load price histories once, then enrich the open stock with its k-line
+      if (!globalHistRef.current) {
+        try {
+          const h = await fetch(`${BASE}stock_histories.json`).then(r => r.ok ? r.json() : null)
+          globalHistRef.current = h || {}
+          if (h?.stocks) setGlobalCompare(h.stocks)
+          if (Array.isArray(h?.dates)) setGlobalDates(h.dates)
+        } catch { globalHistRef.current = {} }
+      }
+      const h = globalHistRef.current
+      const id = String(stock.stock_id)
+      const kline = h?.stocks?.[id]
+      const scanHist = h?.scan_stocks?.[id]
+      const dates = h?.dates || []
+      let priceHistory = null
+      if (kline?.c) {
+        priceHistory = dates.map((t, i) => kline.c[i] == null ? null : {
+          time: t, open: kline.o?.[i] ?? kline.c[i], high: kline.h?.[i] ?? kline.c[i],
+          low: kline.l?.[i] ?? kline.c[i], close: kline.c[i], volume: kline.v?.[i] ?? 0,
+        }).filter(Boolean)
+      } else if (Array.isArray(scanHist) && scanHist.length >= 2) {
+        priceHistory = scanHist.map(b => ({ time: b[0], open: b[1], high: b[2], low: b[3], close: b[4], volume: b[5] }))
+      }
+      if (priceHistory) {
+        setGlobalStock(prev => prev?.stock_id === id ? { ...prev, price_history: priceHistory } : prev)
+      }
+    }
+    document.addEventListener('openStockDetail', handler)
+    return () => document.removeEventListener('openStockDetail', handler)
+  }, [resolveStock])
 
   // ── Toast helper ──────────────────────────────────────────────────────────
   function showScanToast(message) {
@@ -389,6 +450,19 @@ export default function App() {
           )
         })}
       </div>
+
+      {/* ── Global stock detail modal (news tags / sector peers) ──────── */}
+      {globalStock && (
+        <Suspense fallback={null}>
+          <StockDetailModal
+            stock={globalStock}
+            onClose={() => setGlobalStock(null)}
+            allScans={data?.scans}
+            compareHistories={globalCompare}
+            historyDates={globalDates}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }

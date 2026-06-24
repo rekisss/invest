@@ -321,6 +321,11 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
               <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ios-label2)', fontFamily: 'var(--font-mono)' }}>{fmtP(scanClose)}</div>
               <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 1 }}>掃描收盤</div>
             </div>
+          ) : position?.buyPrice ? (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)' }}>{fmtP(position.buyPrice)}</div>
+              <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 1 }}>成本</div>
+            </div>
           ) : (
             <div style={{ fontSize: 11, color: 'var(--ios-label4)' }}>—</div>
           )}
@@ -537,6 +542,7 @@ export default function LiveMonitor({ data }) {
   const [fullscreen,    setFullscreen]    = useState(false)
   const [alerts,        setAlerts]        = useState(() => loadAlerts())
   const [toasts,        setToasts]        = useState([])
+  const [refreshKey,    setRefreshKey]    = useState(0)
   const historiesRef = useRef(null)
 
   const nameMap = useMemo(() => buildNameMap(data), [data])
@@ -556,9 +562,9 @@ export default function LiveMonitor({ data }) {
   ])], [monitorList, positions, scanStocks])
 
   const { prices: liveData, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: liveLoading, error: liveError }
-    = useLivePrices(allIds)
+    = useLivePrices(allIds, { refreshTrigger: refreshKey })
 
-  const countdown = useCountdown(liveTime)
+  const countdown = useCountdown(liveTime, 60000)
 
   // Separate index fetch via Yahoo Finance → GH Actions cache fallback
   useEffect(() => {
@@ -706,8 +712,7 @@ export default function LiveMonitor({ data }) {
         70%  { box-shadow: 0 0 0 5px rgba(10,132,255,0); }
         100% { box-shadow: 0 0 0 0   rgba(10,132,255,0); }
       }
-      .livemonitor-fullscreen #tab-bar,
-      .livemonitor-fullscreen [data-tab-bar] { display: none !important; }
+      .livemonitor-fullscreen .ios-tabbar { display: none !important; }
     `}</style>
 
     {toasts.map(t => (
@@ -774,7 +779,9 @@ export default function LiveMonitor({ data }) {
                   animation: `${mktOpen ? 'livePulse' : 'snapPulse'} 2s ease-out infinite`,
                 }} />
                 <span style={{ color: 'var(--ios-label3)', fontWeight: 600 }}>
-                  {countdown != null && countdown > 0 ? `${countdown}s 後更新` : '更新中…'}
+                  {mktOpen
+                    ? (countdown != null && countdown > 0 ? `${countdown}s 後更新` : '更新中…')
+                    : '收盤報價'}
                 </span>
               </>
             ) : (
@@ -782,7 +789,13 @@ export default function LiveMonitor({ data }) {
             )}
           </div>
           {liveError && (
-            <div style={{ fontSize: 9, color: '#FF3B30', marginTop: 2 }}>{liveError}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <div style={{ fontSize: 9, color: '#FF3B30', flex: 1 }}>{liveError}</div>
+              <button
+                onClick={() => setRefreshKey(k => k + 1)}
+                style={{ fontSize: 9, padding: '2px 7px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'rgba(10,132,255,0.15)', color: 'var(--ios-blue)', fontWeight: 700, whiteSpace: 'nowrap' }}
+              >刷新</button>
+            </div>
           )}
           </div>
         </div>

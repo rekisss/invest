@@ -238,17 +238,11 @@ export default function Portfolio({ data }) {
   )
 
   useGSAP(() => {
-    const el = containerRef.current
-    if (!el) return
-    const tw = gsap.from('.pnl-bar-fill', {
-      scaleX: 0, transformOrigin: 'left center', duration: 0.6,
-      stagger: { amount: 0.4, from: 'start' }, ease: 'power2.out', paused: true,
+    if (!containerRef.current) return
+    gsap.from('.pnl-bar-fill', {
+      scaleX: 0, transformOrigin: 'left center', duration: 0.65,
+      stagger: { amount: 0.35, from: 'start' }, ease: 'power2.out',
     })
-    const io = new IntersectionObserver((es) => {
-      if (es[0].isIntersecting) { tw.play(); io.disconnect() }
-    }, { threshold: 0.12 })
-    io.observe(el)
-    return () => io.disconnect()
   }, { scope: containerRef, dependencies: [Object.keys(positions).join(',')] })
 
   // ── CRUD helpers ──────────────────────────────────────────────────────────
