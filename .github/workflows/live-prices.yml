@@ -22,6 +22,7 @@ jobs:
         run: |
           node - << 'NODESCRIPT'
           const https = require('https');
+          const http  = require('http');
           const fs    = require('fs');
 
           // Common stocks always fetched regardless of scan data
@@ -40,11 +41,17 @@ jobs:
                    (n >= 8000 && n <= 8999) || (n >= 9200 && n <= 9999);
           }
           function toYahoo(id) { return `${id}${isOTC(id) ? '.TWO' : '.TW'}`; }
+          function parseNum(s) { return parseFloat(String(s ?? '').replace(/,/g, '')) || null; }
+          function parseVol(s) { return parseInt(String(s  ?? '').replace(/,/g, '')) || 0; }
 
-          function fetchJson(url) {
+          function fetchJson(url, extraHeaders = {}) {
             return new Promise((resolve, reject) => {
-              const req = https.get(url, {
-                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GitHubActions/price-cache)' },
+              const lib = url.startsWith('https') ? https : http;
+              const req = lib.get(url, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (compatible; GitHubActions/price-cache)',
+                  ...extraHeaders,
+                },
                 timeout: 12000,
               }, res => {
                 let d = '';
@@ -68,8 +75,8 @@ jobs:
                 const top = (data.scans?.[latest]?.top_stocks || [])
                   .slice(0, 120).map(s => String(s.stock_id));
                 ids = [...new Set([...ids, ...top])];
+                console.log(`Stock list: ${ids.length} symbols (${top.length} from scan)`);
               }
-              console.log(`Stock list: ${ids.length} symbols (${top?.length || 0} from scan)`);
             } catch(e) {
               console.warn('data.json fetch failed:', e.message);
             }
@@ -78,6 +85,7 @@ jobs:
             const CHUNK  = 20;
             const HOSTS  = ['query2.finance.yahoo.com', 'query1.finance.yahoo.com'];
 
+            // ── Tier 1: Yahoo Finance ───────────────────────────────────────────
             for (let i = 0; i < ids.length; i += CHUNK) {
               const chunk   = ids.slice(i, i + CHUNK);
               const symbols = chunk.map(toYahoo).join(',');
@@ -108,12 +116,77 @@ jobs:
                   }
                   if (chunk.some(id => prices[id])) break;
                 } catch(e) {
-                  console.warn(`${host} chunk ${i/CHUNK+1} error:`, e.message);
+                  console.warn(`Yahoo ${host} chunk ${Math.floor(i/CHUNK)+1} error:`, e.message);
                 }
               }
             }
 
-            // Indices
+            const yahooCount = Object.keys(prices).filter(k => !k.startsWith('_')).length;
+            console.log(`Yahoo: ${yahooCount} stocks fetched`);
+
+            // ── Tier 2: TWSE/TPEX Official API (fallback for Yahoo failures) ──
+            const missing     = ids.filter(id => !prices[id]);
+            const missingTWSE = missing.filter(id => !isOTC(id));
+            const missingTPEX = missing.filter(id =>  isOTC(id));
+
+            if (missingTWSE.length > 0) {
+              try {
+                const data = await fetchJson('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL');
+                const missingSet = new Set(missingTWSE);
+                for (const item of (data || [])) {
+                  if (!missingSet.has(item.Code)) continue;
+                  const price  = parseNum(item.ClosingPrice);
+                  const change = parseNum(item.Change);
+                  if (!price) continue;
+                  const prev = (change != null && !isNaN(change)) ? price - change : null;
+                  prices[item.Code] = {
+                    price, prevClose: prev,
+                    pct:    prev ? change / prev : null,
+                    high:   parseNum(item.HighestPrice),
+                    low:    parseNum(item.LowestPrice),
+                    open:   parseNum(item.OpeningPrice),
+                    volume: parseVol(item.TradeVolume),
+                    time:   new Date().toISOString(),
+                    isSnapshot: true,
+                  };
+                }
+                const twseFilled = missingTWSE.filter(id => prices[id]).length;
+                console.log(`TWSE fallback: filled ${twseFilled}/${missingTWSE.length} missing`);
+              } catch(e) {
+                console.warn('TWSE official API error:', e.message);
+              }
+            }
+
+            if (missingTPEX.length > 0) {
+              try {
+                const data = await fetchJson('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes');
+                const missingSet = new Set(missingTPEX);
+                for (const item of (data || [])) {
+                  const id = item.SecuritiesCompanyCode ?? item.Code;
+                  if (!id || !missingSet.has(id)) continue;
+                  const price  = parseNum(item.Close ?? item.ClosingPrice);
+                  const change = parseNum(item.Change);
+                  if (!price) continue;
+                  const prev = (change != null && !isNaN(change)) ? price - change : null;
+                  prices[id] = {
+                    price, prevClose: prev,
+                    pct:    prev ? change / prev : null,
+                    high:   parseNum(item.High ?? item.HighestPrice),
+                    low:    parseNum(item.Low  ?? item.LowestPrice),
+                    open:   parseNum(item.Open ?? item.OpeningPrice),
+                    volume: parseVol(item.TradeVolume),
+                    time:   new Date().toISOString(),
+                    isSnapshot: true,
+                  };
+                }
+                const tpexFilled = missingTPEX.filter(id => prices[id]).length;
+                console.log(`TPEX fallback: filled ${tpexFilled}/${missingTPEX.length} missing`);
+              } catch(e) {
+                console.warn('TPEX official API error:', e.message);
+              }
+            }
+
+            // ── Indices: 加權指數 ^TWII, 櫃買指數 ^TPEX ─────────────────────
             for (const host of HOSTS) {
               try {
                 const url = `https://${host}/v7/finance/quote?symbols=%5ETWII,%5ETPEX&fields=regularMarketPrice,regularMarketPreviousClose,regularMarketTime`;
@@ -139,7 +212,7 @@ jobs:
             }
 
             const stockCount = Object.keys(prices).filter(k => !k.startsWith('_')).length;
-            console.log(`Cached: ${stockCount} stocks, indices: ${!!prices['_idx_t00']}`);
+            console.log(`Total cached: ${stockCount} stocks, indices: ${!!prices['_idx_t00']}`);
 
             fs.writeFileSync('live_prices.json', JSON.stringify({
               updatedAt: new Date().toISOString(),
