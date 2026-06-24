@@ -225,6 +225,8 @@ export default function Portfolio({ data }) {
   const [historyDates, setHistoryDates] = useState(null)
   const historiesRef = useRef(null)  // lazy-loaded stock_histories.json cache
   const containerRef = useRef(null)
+  const [groupExpanded, setGroupExpanded] = useState({ profit: true, loss: true })
+  const [copyLabel, setCopyLabel] = useState('📋 複製')
 
   // ── Live prices via TWSE 即時行情 (replaces Yahoo Finance one-shot fetch) ──
   const posKey = Object.keys(positions).sort().join(',')
@@ -336,6 +338,48 @@ export default function Portfolio({ data }) {
     return b.cost - a.cost
   }), [entries, sortBy])
 
+  // Feature 13: group positions by profit/loss
+  const profitEntries = useMemo(() =>
+    sorted.filter(e => e.pnlPct != null ? e.pnlPct >= 0 : (e.curPrice ?? e.p.buyPrice) >= e.p.buyPrice)
+      .sort((a, b) => (b.pnlPct ?? 0) - (a.pnlPct ?? 0)),
+    [sorted])
+  const lossEntries = useMemo(() =>
+    sorted.filter(e => e.pnlPct != null ? e.pnlPct < 0 : false)
+      .sort((a, b) => (a.pnlPct ?? 0) - (b.pnlPct ?? 0)),
+    [sorted])
+  const winRateNum   = profitEntries.length
+  const totalCount   = entries.length
+  const winRatePct   = totalCount > 0 ? winRateNum / totalCount : 0
+
+  // Feature 14: export portfolio to clipboard
+  const handleCopy = () => {
+    const today = new Date()
+    const dateStr = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`
+    const sep = '─────────────────────'
+    const lines = [
+      `持倉摘要 (${dateStr})`,
+      sep,
+      ...sorted.map(e => {
+        const cp = e.curPrice ?? e.p.buyPrice
+        const ret = e.pnlPct != null ? `${e.pnlPct >= 0 ? '+' : ''}${e.pnlPct.toFixed(1)}%` : '--'
+        const lots = (e.p.qty / 1000).toFixed(e.p.qty % 1000 === 0 ? 0 : 2)
+        const name = (e.p.name || '').padEnd(6, '　')
+        const idPart = String(e.id).padEnd(5)
+        return `${idPart} ${name} 成本${fmt(e.p.buyPrice, 1)}  現價${fmt(cp, 1)}  ${ret.padStart(7)}  ${lots}張`
+      }),
+      sep,
+      `總市值 ${fmtNum(Math.round(totalValue))}`,
+      `總損益 ${totalPnL >= 0 ? '+' : ''}${fmtNum(Math.round(totalPnL))}`,
+    ]
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      setCopyLabel('✓ 已複製')
+      setTimeout(() => setCopyLabel('📋 複製'), 2000)
+    }).catch(() => {
+      setCopyLabel('複製失敗')
+      setTimeout(() => setCopyLabel('📋 複製'), 2000)
+    })
+  }
+
   const totalCost  = entries.reduce((s, e) => s + e.cost, 0)
   const totalValue = entries.reduce((s, e) => s + e.curVal, 0)
   const totalPnL   = totalValue - totalCost
@@ -440,7 +484,7 @@ export default function Portfolio({ data }) {
 
       {/* ── Sort bar ─────────────────────────────────── */}
       {entries.length > 1 && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           {[['pnlPct', '報酬率'], ['daysHeld', '持有天數'], ['cost', '成本']].map(([key, label]) => (
             <button key={key} onClick={() => setSortBy(key)} style={{
               background: sortBy === key ? 'var(--ios-blue)' : 'var(--ios-fill4)',
@@ -451,6 +495,11 @@ export default function Portfolio({ data }) {
               boxShadow: sortBy === key ? '0 2px 8px rgba(10,132,255,0.25)' : 'none',
             }}>{sortBy === key ? `↓ ${label}` : label}</button>
           ))}
+          <button onClick={handleCopy} style={{
+            marginLeft: 'auto', background: 'var(--ios-fill4)', border: '0.5px solid var(--ios-sep)',
+            borderRadius: 8, padding: '5px 12px', fontSize: 11, color: copyLabel.startsWith('✓') ? 'var(--ios-green)' : 'var(--ios-label2)',
+            cursor: 'pointer', fontWeight: 500, transition: 'color 0.2s',
+          }}>{copyLabel}</button>
         </div>
       )}
 
@@ -463,158 +512,207 @@ export default function Portfolio({ data }) {
         </div>
       )}
 
-      {/* ── Position cards ───────────────────────────── */}
-      {sorted.map(({ id, p, curPrice, scan, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft, targets, color }, idx) => {
-        const pnlColor   = pnlPct == null ? 'var(--ios-label)' : pnlPct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)'
-        const nearStop   = curPrice != null && curPrice <= stopLoss * 1.02
-        const nearTarget = curPrice != null && curPrice >= takePrft * 0.98
-        const scanWeak   = scan && !scan.entry_signal && scan.entry_score != null && scan.entry_score < 500
-        const borderColor = nearStop ? 'rgba(255,51,64,0.55)' : scanWeak ? 'rgba(255,51,64,0.3)' : nearTarget ? 'rgba(255,149,0,0.5)' : 'transparent'
-        return (
-          <div key={id} style={{
-            background: 'var(--ios-bg2)', borderRadius: 14, padding: '12px 14px', marginBottom: 8,
-            boxShadow: (nearStop || nearTarget || scanWeak) ? `0 0 0 1.5px ${borderColor}` : 'var(--shadow-card)',
-            animation: `rowIn 0.3s ${idx * 40}ms cubic-bezier(0.22,1,0.36,1) both`,
-          }}>
-            {/* Alert banner */}
-            {(nearStop || nearTarget) && (
-              <div style={{ fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 6, marginBottom: 8,
-                background: nearStop ? 'rgba(255,51,64,0.12)' : 'rgba(255,149,0,0.12)',
-                color: nearStop ? 'var(--ios-red)' : 'var(--ios-yellow)',
-              }}>
-                {nearStop ? `⚠️ 接近停損線 ${fmt(stopLoss)} 元` : `🎯 接近止盈目標 ${fmt(takePrft)} 元`}
-              </div>
-            )}
+      {/* ── Feature 13: Win-rate summary + grouped position cards ─── */}
+      {entries.length > 0 && (() => {
+        // Renders a single position card
+        const renderCard = ({ id, p, curPrice, scan, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft, targets, color }, idx) => {
+          const pnlColor   = pnlPct == null ? 'var(--ios-label)' : pnlPct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)'
+          const nearStop   = curPrice != null && curPrice <= stopLoss * 1.02
+          const nearTarget = curPrice != null && curPrice >= takePrft * 0.98
+          const scanWeak   = scan && !scan.entry_signal && scan.entry_score != null && scan.entry_score < 500
+          const borderColor = nearStop ? 'rgba(255,51,64,0.55)' : scanWeak ? 'rgba(255,51,64,0.3)' : nearTarget ? 'rgba(255,149,0,0.5)' : 'transparent'
+          return (
+            <div key={id} style={{
+              background: 'var(--ios-bg2)', borderRadius: 14, padding: '12px 14px', marginBottom: 8,
+              boxShadow: (nearStop || nearTarget || scanWeak) ? `0 0 0 1.5px ${borderColor}` : 'var(--shadow-card)',
+              animation: `rowIn 0.3s ${idx * 40}ms cubic-bezier(0.22,1,0.36,1) both`,
+            }}>
+              {/* Alert banner */}
+              {(nearStop || nearTarget) && (
+                <div style={{ fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 6, marginBottom: 8,
+                  background: nearStop ? 'rgba(255,51,64,0.12)' : 'rgba(255,149,0,0.12)',
+                  color: nearStop ? 'var(--ios-red)' : 'var(--ios-yellow)',
+                }}>
+                  {nearStop ? `⚠️ 接近停損線 ${fmt(stopLoss)} 元` : `🎯 接近止盈目標 ${fmt(takePrft)} 元`}
+                </div>
+              )}
 
-            {/* Title row — tap to open detail modal */}
-            <div onClick={() => openStockDetail(id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, cursor: 'pointer' }}>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }} />
-                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--ios-label)' }}>{id}</span>
-                <span style={{ fontSize: 13, color: 'var(--ios-label2)' }}>{p.name}</span>
-                <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>›</span>
+              {/* Title row — tap to open detail modal */}
+              <div onClick={() => openStockDetail(id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, cursor: 'pointer' }}>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--ios-label)' }}>{id}</span>
+                  <span style={{ fontSize: 13, color: 'var(--ios-label2)' }}>{p.name}</span>
+                  <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>›</span>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  {sortBy === 'daysHeld' ? (
+                    <>
+                      <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--ios-blue)' }}>{daysHeld ?? '—'} <span style={{ fontSize: 12, fontWeight: 500 }}>天</span></div>
+                      {pnlPct != null && <div style={{ fontSize: 11, color: pnlColor }}>{pnlPct >= 0 ? '+' : ''}{fmt(pnlPct)}%</div>}
+                    </>
+                  ) : sortBy === 'cost' ? (
+                    <>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ios-label)' }}>{fmtNum(Math.round(cost))}</div>
+                      <div style={{ fontSize: 10, color: 'var(--ios-label3)' }}>成本</div>
+                    </>
+                  ) : pnlPct != null ? (
+                    <>
+                      <div style={{ fontSize: 17, fontWeight: 700, color: pnlColor }}>{pnlPct >= 0 ? '+' : ''}{fmt(pnlPct)}%</div>
+                      <div style={{ fontSize: 11, color: pnlColor }}>{pnlAmt >= 0 ? '+' : ''}{fmtNum(Math.round(pnlAmt))} 元</div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 11, color: 'var(--ios-label4)' }}>{livePriceLoading ? '報價載入中…' : '無即時報價'}</div>
+                  )}
+                </div>
               </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                {sortBy === 'daysHeld' ? (
-                  <>
-                    <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--ios-blue)' }}>{daysHeld ?? '—'} <span style={{ fontSize: 12, fontWeight: 500 }}>天</span></div>
-                    {pnlPct != null && <div style={{ fontSize: 11, color: pnlColor }}>{pnlPct >= 0 ? '+' : ''}{fmt(pnlPct)}%</div>}
-                  </>
-                ) : sortBy === 'cost' ? (
-                  <>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ios-label)' }}>{fmtNum(Math.round(cost))}</div>
-                    <div style={{ fontSize: 10, color: 'var(--ios-label3)' }}>成本</div>
-                  </>
-                ) : pnlPct != null ? (
-                  <>
-                    <div style={{ fontSize: 17, fontWeight: 700, color: pnlColor }}>{pnlPct >= 0 ? '+' : ''}{fmt(pnlPct)}%</div>
-                    <div style={{ fontSize: 11, color: pnlColor }}>{pnlAmt >= 0 ? '+' : ''}{fmtNum(Math.round(pnlAmt))} 元</div>
-                  </>
-                ) : (
-                  <div style={{ fontSize: 11, color: 'var(--ios-label4)' }}>{livePriceLoading ? '報價載入中…' : '無即時報價'}</div>
+
+              {/* Scan badge */}
+              <div style={{ marginBottom: 6 }}>
+                <ScanBadge scan={scan} />
+              </div>
+
+              {/* Feature 3: 持倉加倉提醒 — bullish signal but price >= 5% below cost */}
+              {(() => {
+                const price = curPrice ?? scan?.close ?? null
+                if (!price || !scan?.entry_signal) return null
+                const dropPct = (p.buyPrice - price) / p.buyPrice * 100
+                if (dropPct < 5) return null
+                return (
+                  <div style={{
+                    marginBottom: 8, padding: '7px 10px',
+                    background: 'rgba(10,132,255,0.08)',
+                    border: '0.5px solid rgba(10,132,255,0.35)',
+                    borderRadius: 8,
+                    fontSize: 11, color: 'var(--ios-blue)', fontWeight: 600,
+                    lineHeight: 1.55,
+                  }}>
+                    ⬇ 跌破成本 {dropPct.toFixed(1)}%，訊號仍看多 — 可考慮分批加倉
+                  </div>
+                )
+              })()}
+
+              {/* Stats grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px 8px', fontSize: 11, color: 'var(--ios-label3)', marginBottom: 6 }}>
+                <div>買入 <b style={{ color: 'var(--ios-label)' }}>{p.buyPrice}</b></div>
+                <div>現價 <b style={{ color: curPrice ? pnlColor : 'var(--ios-label3)' }}>{curPrice ?? '—'}</b></div>
+                <div>持有 <b style={{ color: 'var(--ios-label)' }}>{daysHeld ?? '—'}</b> 天</div>
+                <div>張數 <b style={{ color: 'var(--ios-label)' }}>{(p.qty / 1000).toFixed(p.qty % 1000 === 0 ? 0 : 2)}</b></div>
+                <div>成本 <b style={{ color: 'var(--ios-label)' }}>{fmtNum(Math.round(cost))}</b></div>
+                <div>市值 <b style={{ color: 'var(--ios-label)' }}>{fmtNum(Math.round(curVal))}</b></div>
+              </div>
+
+              {/* Tags */}
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', fontSize: 10, marginBottom: 6 }}>
+                {mktOpen && livePriceData[id]?.pct != null && (
+                  <span style={{ background: livePriceData[id].pct >= 0 ? 'rgba(255,59,48,0.12)' : 'rgba(22,214,126,0.12)', color: livePriceData[id].pct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)', padding: '2px 7px', borderRadius: 5, fontWeight: 700, border: `0.5px solid ${livePriceData[id].pct >= 0 ? 'rgba(255,59,48,0.25)' : 'rgba(22,214,126,0.25)'}` }}>
+                    今 {livePriceData[id].pct >= 0 ? '+' : ''}{(livePriceData[id].pct * 100).toFixed(2)}%
+                  </span>
+                )}
+                {annReturn != null && (
+                  <span style={{ background: annReturn >= 0 ? 'rgba(255,59,48,0.1)' : 'rgba(22,214,126,0.1)', color: annReturn >= 0 ? 'var(--ios-red)' : 'var(--ios-green)', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
+                    年化 {annReturn >= 0 ? '+' : ''}{fmt(annReturn, 1)}%
+                  </span>
+                )}
+                <span title={targets?.stopBasis} style={{ background: 'rgba(255,59,48,0.07)', color: 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5 }}>
+                  停損 {fmt(stopLoss)}
+                </span>
+                <span title={targets?.tpBasis} style={{ background: 'rgba(255,149,0,0.07)', color: 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5 }}>
+                  目標 {fmt(takePrft)}
+                </span>
+                {targets?.rr != null && (
+                  <span style={{ background: targets.rr >= 2 ? 'rgba(22,214,126,0.12)' : 'rgba(142,142,147,0.12)', color: targets.rr >= 2 ? 'var(--ios-green)' : 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
+                    風報比 {fmt(targets.rr, 1)}
+                  </span>
+                )}
+                {totalValue > 0 && (
+                  <span style={{ background: `${color}18`, color, padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
+                    占比 {(curVal / totalValue * 100).toFixed(1)}%
+                  </span>
                 )}
               </div>
-            </div>
 
-            {/* Scan badge */}
-            <div style={{ marginBottom: 6 }}>
-              <ScanBadge scan={scan} />
-            </div>
-
-            {/* Feature 3: 持倉加倉提醒 — bullish signal but price >= 5% below cost */}
-            {(() => {
-              const price = curPrice ?? scan?.close ?? null
-              if (!price || !scan?.entry_signal) return null
-              const dropPct = (p.buyPrice - price) / p.buyPrice * 100
-              if (dropPct < 5) return null
-              return (
-                <div style={{
-                  marginBottom: 8, padding: '7px 10px',
-                  background: 'rgba(10,132,255,0.08)',
-                  border: '0.5px solid rgba(10,132,255,0.35)',
-                  borderRadius: 8,
-                  fontSize: 11, color: 'var(--ios-blue)', fontWeight: 600,
-                  lineHeight: 1.55,
-                }}>
-                  ⬇ 跌破成本 {dropPct.toFixed(1)}%，訊號仍看多 — 可考慮分批加倉
+              {/* Stop/target basis — explains where these numbers come from */}
+              {targets && (
+                <div style={{ fontSize: 9.5, color: 'var(--ios-label4)', lineHeight: 1.5, marginBottom: 6, padding: '5px 8px', background: 'var(--ios-fill4)', borderRadius: 6 }}>
+                  <span style={{ color: targets.grounded ? 'var(--ios-green)' : 'var(--ios-label3)' }}>
+                    {targets.grounded ? '📐 依技術指標計算' : '📐 依固定百分比'}
+                  </span>
+                  <span style={{ marginLeft: 6 }}>停損依據：{targets.stopBasis}</span>
+                  <span style={{ marginLeft: 6 }}>目標依據：{targets.tpBasis}</span>
                 </div>
-              )
-            })()}
+              )}
 
-            {/* Stats grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px 8px', fontSize: 11, color: 'var(--ios-label3)', marginBottom: 6 }}>
-              <div>買入 <b style={{ color: 'var(--ios-label)' }}>{p.buyPrice}</b></div>
-              <div>現價 <b style={{ color: curPrice ? pnlColor : 'var(--ios-label3)' }}>{curPrice ?? '—'}</b></div>
-              <div>持有 <b style={{ color: 'var(--ios-label)' }}>{daysHeld ?? '—'}</b> 天</div>
-              <div>張數 <b style={{ color: 'var(--ios-label)' }}>{(p.qty / 1000).toFixed(p.qty % 1000 === 0 ? 0 : 2)}</b></div>
-              <div>成本 <b style={{ color: 'var(--ios-label)' }}>{fmtNum(Math.round(cost))}</b></div>
-              <div>市值 <b style={{ color: 'var(--ios-label)' }}>{fmtNum(Math.round(curVal))}</b></div>
+              {/* P&L bar */}
+              {pnlPct != null && (
+                <div style={{ height: 3, background: 'var(--ios-fill4)', borderRadius: 2, marginBottom: 8, overflow: 'hidden' }}>
+                  <div className="pnl-bar-fill" style={{
+                    height: '100%', borderRadius: 2, background: pnlColor,
+                    width: `${Math.min(100, Math.abs(pnlPct) * 4)}%`,
+                    transition: 'width 0.5s cubic-bezier(0.34,1.56,0.64,1)',
+                  }} />
+                </div>
+              )}
+
+              {p.note && (
+                <div style={{ fontSize: 11, color: 'var(--ios-label3)', padding: '4px 8px', background: 'var(--ios-fill4)', borderRadius: 6, marginBottom: 8 }}>{p.note}</div>
+              )}
+
+              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                <button onClick={() => openStockDetail(id)} style={{ fontSize: 11, color: '#FF9F0A', background: 'rgba(255,159,10,0.12)', border: 'none', borderRadius: 7, padding: '5px 14px', cursor: 'pointer', fontWeight: 600 }}>📈 K線&詳情</button>
+                <button onClick={() => openEdit(id)} style={{ fontSize: 11, color: 'var(--ios-blue)', background: 'var(--ios-fill4)', border: 'none', borderRadius: 7, padding: '5px 14px', cursor: 'pointer' }}>編輯</button>
+                <button onClick={() => handleDelete(id)} style={{ fontSize: 11, color: 'var(--ios-red)', background: 'var(--ios-fill4)', border: 'none', borderRadius: 7, padding: '5px 14px', cursor: 'pointer' }}>刪除</button>
+              </div>
             </div>
+          )
+        }
 
-            {/* Tags */}
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', fontSize: 10, marginBottom: 6 }}>
-              {mktOpen && livePriceData[id]?.pct != null && (
-                <span style={{ background: livePriceData[id].pct >= 0 ? 'rgba(255,59,48,0.12)' : 'rgba(22,214,126,0.12)', color: livePriceData[id].pct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)', padding: '2px 7px', borderRadius: 5, fontWeight: 700, border: `0.5px solid ${livePriceData[id].pct >= 0 ? 'rgba(255,59,48,0.25)' : 'rgba(22,214,126,0.25)'}` }}>
-                  今 {livePriceData[id].pct >= 0 ? '+' : ''}{(livePriceData[id].pct * 100).toFixed(2)}%
-                </span>
-              )}
-              {annReturn != null && (
-                <span style={{ background: annReturn >= 0 ? 'rgba(255,59,48,0.1)' : 'rgba(22,214,126,0.1)', color: annReturn >= 0 ? 'var(--ios-red)' : 'var(--ios-green)', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
-                  年化 {annReturn >= 0 ? '+' : ''}{fmt(annReturn, 1)}%
-                </span>
-              )}
-              <span title={targets?.stopBasis} style={{ background: 'rgba(255,59,48,0.07)', color: 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5 }}>
-                停損 {fmt(stopLoss)}
-              </span>
-              <span title={targets?.tpBasis} style={{ background: 'rgba(255,149,0,0.07)', color: 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5 }}>
-                目標 {fmt(takePrft)}
-              </span>
-              {targets?.rr != null && (
-                <span style={{ background: targets.rr >= 2 ? 'rgba(22,214,126,0.12)' : 'rgba(142,142,147,0.12)', color: targets.rr >= 2 ? 'var(--ios-green)' : 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
-                  風報比 {fmt(targets.rr, 1)}
-                </span>
-              )}
-              {totalValue > 0 && (
-                <span style={{ background: `${color}18`, color, padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
-                  占比 {(curVal / totalValue * 100).toFixed(1)}%
-                </span>
-              )}
-            </div>
+        // Win-rate summary row
+        const winRateLabel = totalCount > 0
+          ? `勝率 ${winRateNum}/${totalCount}（${Math.round(winRatePct * 100)}%）`
+          : null
 
-            {/* Stop/target basis — explains where these numbers come from */}
-            {targets && (
-              <div style={{ fontSize: 9.5, color: 'var(--ios-label4)', lineHeight: 1.5, marginBottom: 6, padding: '5px 8px', background: 'var(--ios-fill4)', borderRadius: 6 }}>
-                <span style={{ color: targets.grounded ? 'var(--ios-green)' : 'var(--ios-label3)' }}>
-                  {targets.grounded ? '📐 依技術指標計算' : '📐 依固定百分比'}
-                </span>
-                <span style={{ marginLeft: 6 }}>停損依據：{targets.stopBasis}</span>
-                <span style={{ marginLeft: 6 }}>目標依據：{targets.tpBasis}</span>
+        return (
+          <>
+            {/* Win-rate bar */}
+            {winRateLabel && (
+              <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 700, color: winRatePct >= 0.5 ? 'var(--ios-green)' : 'var(--ios-red)' }}>
+                {winRateLabel}
               </div>
             )}
 
-            {/* P&L bar */}
-            {pnlPct != null && (
-              <div style={{ height: 3, background: 'var(--ios-fill4)', borderRadius: 2, marginBottom: 8, overflow: 'hidden' }}>
-                <div className="pnl-bar-fill" style={{
-                  height: '100%', borderRadius: 2, background: pnlColor,
-                  width: `${Math.min(100, Math.abs(pnlPct) * 4)}%`,
-                  transition: 'width 0.5s cubic-bezier(0.34,1.56,0.64,1)',
-                }} />
-              </div>
+            {/* Profitable group */}
+            {profitEntries.length > 0 && (
+              <>
+                <button
+                  onClick={() => setGroupExpanded(g => ({ ...g, profit: !g.profit }))}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0 6px', marginBottom: 2, textAlign: 'left' }}
+                >
+                  <span style={{ fontSize: 11, color: 'var(--ios-green)', fontWeight: 700 }}>
+                    {groupExpanded.profit ? '▾' : '▸'} 盈利（{profitEntries.length} 支）
+                  </span>
+                </button>
+                {groupExpanded.profit && profitEntries.map((e, idx) => renderCard(e, idx))}
+              </>
             )}
 
-            {p.note && (
-              <div style={{ fontSize: 11, color: 'var(--ios-label3)', padding: '4px 8px', background: 'var(--ios-fill4)', borderRadius: 6, marginBottom: 8 }}>{p.note}</div>
+            {/* Losing group */}
+            {lossEntries.length > 0 && (
+              <>
+                <button
+                  onClick={() => setGroupExpanded(g => ({ ...g, loss: !g.loss }))}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0 6px', marginTop: profitEntries.length > 0 ? 4 : 0, marginBottom: 2, textAlign: 'left' }}
+                >
+                  <span style={{ fontSize: 11, color: 'var(--ios-red)', fontWeight: 700 }}>
+                    {groupExpanded.loss ? '▾' : '▸'} 虧損（{lossEntries.length} 支）
+                  </span>
+                </button>
+                {groupExpanded.loss && lossEntries.map((e, idx) => renderCard(e, idx))}
+              </>
             )}
-
-            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-              <button onClick={() => openStockDetail(id)} style={{ fontSize: 11, color: '#FF9F0A', background: 'rgba(255,159,10,0.12)', border: 'none', borderRadius: 7, padding: '5px 14px', cursor: 'pointer', fontWeight: 600 }}>📈 K線&詳情</button>
-              <button onClick={() => openEdit(id)} style={{ fontSize: 11, color: 'var(--ios-blue)', background: 'var(--ios-fill4)', border: 'none', borderRadius: 7, padding: '5px 14px', cursor: 'pointer' }}>編輯</button>
-              <button onClick={() => handleDelete(id)} style={{ fontSize: 11, color: 'var(--ios-red)', background: 'var(--ios-fill4)', border: 'none', borderRadius: 7, padding: '5px 14px', cursor: 'pointer' }}>刪除</button>
-            </div>
-          </div>
+          </>
         )
-      })}
+      })()}
 
       {/* ── Add/Edit form ────────────────────────────── */}
       {showForm && (

@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, lazy, Suspense } from 'react'
+import { animate } from 'animejs'
 import Overview from './components/Overview.jsx'
 import { animateTabIn } from './utils/animeUtils.js'
 
@@ -67,6 +68,11 @@ export default function App() {
     try { return localStorage.getItem('theme_pref') || 'dark' } catch { return 'dark' }
   })
 
+  // ── Scan update toast ─────────────────────────────────────────────────────
+  const [toast, setToast] = useState(null)
+  const toastRef = useRef(null)
+  const prevScanDateRef = useRef(null)
+
   useEffect(() => {
     try {
       document.documentElement.dataset.theme = theme
@@ -104,6 +110,36 @@ export default function App() {
     window.addEventListener('navigate-to-studio', handler)
     return () => window.removeEventListener('navigate-to-studio', handler)
   }, [])
+
+  // ── Toast helper ──────────────────────────────────────────────────────────
+  function showScanToast(message) {
+    setToast(message)
+    setTimeout(() => setToast(null), 4000)
+  }
+
+  // Detect when data refreshes to a newer scan date and show a toast
+  useEffect(() => {
+    if (!data?.dates?.length) return
+    const latestDate = data.dates[0] // dates sorted desc, first = latest
+    if (prevScanDateRef.current && prevScanDateRef.current !== latestDate) {
+      const scan = data.scans?.[latestDate]
+      const entryCount = scan?.entry_count || 0
+      showScanToast(`掃描更新 ${latestDate}，${entryCount} 支進場信號`)
+    }
+    prevScanDateRef.current = latestDate
+  }, [data])
+
+  // Animate toast in whenever it appears
+  useEffect(() => {
+    if (toast && toastRef.current) {
+      animate(toastRef.current, {
+        opacity: [0, 1],
+        translateY: ['-20px', '0px'],
+        duration: 300,
+        easing: 'easeOutCubic',
+      })
+    }
+  }, [toast])
 
   function goToTab(newIdx) {
     if (newIdx === tabIdx) return
@@ -157,7 +193,7 @@ export default function App() {
       case 'validate':   return <ValidationPanel data={data} />
       case 'portfolio':  return <Portfolio data={data} />
       case 'monitor':    return <LiveMonitor data={data} />
-      case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} />
+      case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} data={data} />
       case 'predict':    return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} />
       case 'studio':     return null
       case 'quota':      return <QuotaPanel quota={data?.quota} generatedAt={data?.generated_at} />
@@ -175,6 +211,22 @@ export default function App() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'transparent' }}>
+      {/* ── Scan update toast ────────────────────────────────────────── */}
+      {toast && (
+        <div ref={toastRef} style={{
+          position: 'fixed', top: 'calc(env(safe-area-inset-top) + 12px)',
+          left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--ios-green)', color: '#fff',
+          padding: '8px 18px', borderRadius: 20,
+          fontSize: 13, fontWeight: 600,
+          zIndex: 9999, pointerEvents: 'none',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+          whiteSpace: 'nowrap',
+        }}>
+          📊 {toast}
+        </div>
+      )}
+
       <style>{`
         @keyframes titleReveal {
           from { opacity: 0; transform: translateY(8px); filter: blur(6px); letter-spacing: 0.5px; }

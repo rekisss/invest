@@ -1,14 +1,25 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
+import { animate } from 'animejs'
 import { useLivePrices, fetchIndices, fetchPriceCache } from '../hooks/useLivePrices'
 import { flashPriceEl, animateListRows } from '../utils/animeUtils.js'
 import StockDetailModal from './StockDetailModal'
 
-const PORTFOLIO_KEY = 'tw_portfolio_positions'
-const MONITOR_KEY   = 'tw_monitor_list'
+const PORTFOLIO_KEY  = 'tw_portfolio_positions'
+const MONITOR_KEY    = 'tw_monitor_list'
+const ALERTS_KEY     = 'tw_price_alerts'
+const RECENTLY_KEY   = 'tw_recently_viewed'
 
 function loadPortfolio()   { try { return JSON.parse(localStorage.getItem(PORTFOLIO_KEY) || '{}') } catch { return {} } }
 function loadMonitorList() { try { return JSON.parse(localStorage.getItem(MONITOR_KEY)   || '[]') } catch { return [] } }
 function saveMonitorList(list) { try { localStorage.setItem(MONITOR_KEY, JSON.stringify(list)) } catch {} }
+function loadAlerts()    { try { return JSON.parse(localStorage.getItem(ALERTS_KEY) || '[]') } catch { return [] } }
+function saveAlerts(a)   { try { localStorage.setItem(ALERTS_KEY, JSON.stringify(a)) } catch {} }
+function loadRecentlyViewed() { try { return JSON.parse(localStorage.getItem(RECENTLY_KEY) || '[]') } catch { return [] } }
+function saveRecentlyViewed(items) { try { localStorage.setItem(RECENTLY_KEY, JSON.stringify(items)) } catch {} }
+function addRecentlyViewed(id, name) {
+  const prev = loadRecentlyViewed().filter(r => r.id !== id)
+  saveRecentlyViewed([{ id, name }, ...prev].slice(0, 5))
+}
 
 function getLatestScan(data) {
   if (!data?.scans || !data?.dates?.length) return {}
@@ -21,7 +32,7 @@ function buildNameMap(data) {
   if (!data?.scans) return map
   for (const scan of Object.values(data.scans))
     for (const s of scan.top_stocks || [])
-      map[String(s.stock_id)] = s.name || ''
+      if (!map[String(s.stock_id)] && s.name) map[String(s.stock_id)] = s.name
   return map
 }
 
@@ -37,6 +48,93 @@ function fmtP(v) {
   if (v >= 1000) return v.toFixed(0)
   if (v >= 100)  return v.toFixed(1)
   return v.toFixed(2)
+}
+
+// ── Toast notification ────────────────────────────────────────────────────
+function Toast({ message, onDone }) {
+  const ref = useRef(null)
+  useLayoutEffect(() => {
+    if (!ref.current) return
+    ref.current.style.opacity = '0'
+    ref.current.style.transform = 'translateY(-20px)'
+    animate(ref.current, { opacity: [0, 1], translateY: [-20, 0], duration: 280, ease: 'outQuart' })
+    const t = setTimeout(() => {
+      animate(ref.current, {
+        opacity: [1, 0], translateY: [0, -16], duration: 300, ease: 'inQuart',
+        onComplete: onDone,
+      })
+    }, 3700)
+    return () => clearTimeout(t)
+  }, [])
+  return (
+    <div ref={ref} style={{
+      position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)',
+      background: 'rgba(30,30,40,0.96)', color: '#fff', borderRadius: 14,
+      padding: '12px 20px', fontSize: 13, fontWeight: 700,
+      boxShadow: '0 4px 24px rgba(0,0,0,0.35)', zIndex: 99999,
+      whiteSpace: 'nowrap', pointerEvents: 'none',
+    }}>{message}</div>
+  )
+}
+
+// ── Alert inline form ─────────────────────────────────────────────────────
+function AlertForm({ stockId, stockName, onSave, onClose }) {
+  const [price, setPrice]     = useState('')
+  const [dir, setDir]         = useState('above')
+  const ref = useRef(null)
+  useLayoutEffect(() => {
+    if (!ref.current) return
+    ref.current.style.opacity = '0'
+    ref.current.style.transform = 'scaleY(0.85)'
+    animate(ref.current, { opacity: [0, 1], scaleY: [0.85, 1], duration: 220, ease: 'outQuart' })
+  }, [])
+  const submit = () => {
+    const tp = parseFloat(price)
+    if (!tp || tp <= 0) return
+    const alerts = loadAlerts()
+    const next = alerts.filter(a => !(a.stock_id === stockId && a.direction === dir))
+    next.push({ stock_id: stockId, name: stockName, targetPrice: tp, direction: dir, triggered: false })
+    saveAlerts(next)
+    onSave()
+    onClose()
+  }
+  return (
+    <div ref={ref} onClick={e => e.stopPropagation()} style={{
+      position: 'absolute', right: 0, top: '110%', background: 'var(--ios-bg2)',
+      border: '1px solid var(--ios-sep)', borderRadius: 12, padding: '10px 12px',
+      zIndex: 500, boxShadow: '0 4px 20px rgba(0,0,0,0.22)', minWidth: 200,
+      transformOrigin: 'top right',
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-label3)', marginBottom: 8 }}>設定價格提醒 {stockName}</div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        {[['above', '≥ 目標價'], ['below', '≤ 目標價']].map(([v, l]) => (
+          <button key={v} onClick={() => setDir(v)} style={{
+            flex: 1, padding: '5px 0', borderRadius: 8, fontSize: 11, fontWeight: 700,
+            border: 'none', cursor: 'pointer',
+            background: dir === v ? 'var(--ios-blue)' : 'var(--ios-fill3)',
+            color: dir === v ? '#fff' : 'var(--ios-label3)',
+          }}>{l}</button>
+        ))}
+      </div>
+      <input
+        autoFocus
+        value={price}
+        onChange={e => setPrice(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') onClose() }}
+        placeholder="目標價格"
+        type="number"
+        style={{
+          width: '100%', padding: '7px 10px', borderRadius: 8, border: '1.5px solid var(--ios-sep)',
+          background: 'var(--ios-bg)', color: 'var(--ios-label)', fontSize: 13, outline: 'none',
+          boxSizing: 'border-box', marginBottom: 8,
+        }}
+      />
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button onClick={submit} style={{ flex: 1, padding: '7px 0', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', background: 'var(--ios-blue)', color: '#fff' }}>確認</button>
+        <button onClick={onClose} style={{ flex: 1, padding: '7px 0', borderRadius: 8, fontSize: 12, fontWeight: 700, border: '1px solid var(--ios-sep)', cursor: 'pointer', background: 'transparent', color: 'var(--ios-label3)' }}>取消</button>
+      </div>
+    </div>
+  )
 }
 
 // ── Index bar ─────────────────────────────────────────────────────────────
@@ -114,7 +212,7 @@ function useCountdown(lastUpdate, intervalMs = 30000) {
 }
 
 // ── Stock row ─────────────────────────────────────────────────────────────
-function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, showRemove }) {
+function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, showRemove, onAlertChange }) {
   const upColor   = '#FF3340'
   const downColor = '#16D67E'
   const pct       = live?.pct ?? null
@@ -124,12 +222,20 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
   const pnlAmt    = position && live?.price ? (live.price - position.buyPrice) * position.qty           : null
   const pnlColor  = pnlPct == null ? 'var(--ios-label3)' : pnlPct >= 0 ? upColor : downColor
 
-  // Fallback info from scan data when no live price yet
+  const [showAlertForm, setShowAlertForm] = useState(false)
+
   const scanClose   = scan?.close || null
   const scanScore   = scan?.entry_score || null
   const scanSignals = scan?.entry_reason
     ? scan.entry_reason.split(',').map(s => s.trim()).filter(Boolean).slice(0, 3)
     : []
+
+  const volumeRatio = live?.volume_ratio ?? null
+  const hasVolSpike = volumeRatio != null && volumeRatio > 3
+
+  const rowBg = hasVolSpike
+    ? 'rgba(255,159,10,0.1)'
+    : pct == null ? 'transparent' : pct >= 0 ? 'rgba(255,51,64,0.025)' : 'rgba(22,214,126,0.025)'
 
   return (
     <div
@@ -138,7 +244,9 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
       style={{
         display: 'flex', alignItems: 'center', padding: '14px 14px', cursor: 'pointer',
         borderBottom: isLast ? 'none' : '0.5px solid var(--ios-sep)',
-        background: pct == null ? 'transparent' : pct >= 0 ? 'rgba(255,51,64,0.025)' : 'rgba(22,214,126,0.025)',
+        background: rowBg,
+        borderLeft: hasVolSpike ? '2px solid rgba(255,159,10,0.6)' : '2px solid transparent',
+        position: 'relative',
       }}
     >
       {/* Left column */}
@@ -160,6 +268,11 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
           {position && (
             <span style={{ fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '1px 5px', color: 'var(--ios-blue)', background: 'rgba(10,132,255,0.12)' }}>持倉</span>
           )}
+          {hasVolSpike && (
+            <span style={{ fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '1px 5px', color: '#FF9F0A', background: 'rgba(255,159,10,0.18)' }}>
+              量×{volumeRatio.toFixed(1)}
+            </span>
+          )}
         </div>
         {/* Sub-row: live OHLV / scan signals / P&L */}
         <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--ios-label4)', flexWrap: 'wrap', marginTop: 2 }}>
@@ -168,7 +281,6 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
           {live && !isSnap && live.low   != null && <span style={{ color: downColor }}>低 {fmtP(live.low)}</span>}
           {live && !isSnap && live.volume > 0    && <span>量 {Math.round(live.volume / 1000).toLocaleString()}張</span>}
           {live && !isSnap && live.time          && <span>{live.time}</span>}
-          {/* Scan signals shown when no live data */}
           {!live && scanSignals.map(sig => (
             <span key={sig} style={{ color: '#FF9F0A', fontWeight: 600 }}>{sig}</span>
           ))}
@@ -211,6 +323,25 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
             </div>
           ) : (
             <div style={{ fontSize: 11, color: 'var(--ios-label4)' }}>—</div>
+          )}
+        </div>
+        {/* Alert button */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={e => { e.stopPropagation(); setShowAlertForm(v => !v) }}
+            style={{
+              background: 'none', border: 'none', fontSize: 15, cursor: 'pointer',
+              color: 'var(--ios-label3)', padding: '2px 4px', lineHeight: 1,
+            }}
+            title="設定價格提醒"
+          >🔔</button>
+          {showAlertForm && (
+            <AlertForm
+              stockId={id}
+              stockName={name}
+              onSave={onAlertChange}
+              onClose={() => setShowAlertForm(false)}
+            />
           )}
         </div>
         {showRemove && (
@@ -290,18 +421,28 @@ function PortfolioSummary({ items }) {
   )
 }
 
+function hasChinese(str) { return /[一-鿿㐀-䶿]/.test(str) }
+
 // ── Add stock panel (bottom sheet) ────────────────────────────────────────
 function AddStockPanel({ data, monitorList, onAdd, onClose }) {
-  const [query, setQuery] = useState('')
+  const [query,   setQuery]   = useState('')
+  const [focused, setFocused] = useState(false)
   const inputRef = useRef(null)
 
-  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 80) }, [])
+  useEffect(() => { setTimeout(() => { inputRef.current?.focus(); setFocused(true) }, 80) }, [])
 
   const nameMap = useMemo(() => buildNameMap(data), [data])
+  const recentlyViewed = useMemo(() => loadRecentlyViewed(), [])
 
   const suggestions = useMemo(() => {
     const q = query.trim()
     if (!q) return []
+    if (hasChinese(q)) {
+      return Object.entries(nameMap)
+        .filter(([id, name]) => (name || '').includes(q) && !monitorList.includes(id))
+        .slice(0, 8)
+        .map(([id, name]) => ({ id, name }))
+    }
     const lower = q.toLowerCase()
     return Object.entries(nameMap)
       .filter(([id, name]) => (id.startsWith(q) || (name || '').toLowerCase().includes(lower)) && !monitorList.includes(id))
@@ -309,7 +450,16 @@ function AddStockPanel({ data, monitorList, onAdd, onClose }) {
       .map(([id, name]) => ({ id, name }))
   }, [query, nameMap, monitorList])
 
-  const handleAdd = (id) => { onAdd(id); onClose() }
+  const showRecent = focused && !query.trim() && recentlyViewed.length > 0
+
+  const handleAdd = (id, name) => {
+    addRecentlyViewed(id, name || nameMap[id] || id)
+    onAdd(id)
+    onClose()
+  }
+
+  const listToShow = suggestions.length > 0 ? suggestions : (showRecent ? recentlyViewed.filter(r => !monitorList.includes(r.id)) : [])
+  const isShowingRecent = suggestions.length === 0 && showRecent
 
   return (
     <div
@@ -326,25 +476,31 @@ function AddStockPanel({ data, monitorList, onAdd, onClose }) {
           ref={inputRef}
           value={query}
           onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && query.trim()) handleAdd(suggestions[0]?.id || query.trim().split(/\s/)[0]) }}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onKeyDown={e => { if (e.key === 'Enter' && query.trim()) handleAdd(suggestions[0]?.id || query.trim().split(/\s/)[0], suggestions[0]?.name) }}
           placeholder="輸入股號或股名，Enter 確認"
           style={{
             width: '100%', padding: '11px 14px', borderRadius: 12, border: '1.5px solid var(--ios-sep)',
             background: 'var(--ios-bg2)', color: 'var(--ios-label)', fontSize: 15, outline: 'none', boxSizing: 'border-box',
           }}
         />
-        {suggestions.length > 0 && (
+        {listToShow.length > 0 && (
           <div style={{ background: 'var(--ios-bg2)', borderRadius: 12, marginTop: 8, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
-            {suggestions.map((s, i) => (
+            {isShowingRecent && (
+              <div style={{ padding: '7px 14px 4px', fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', letterSpacing: 0.5, textTransform: 'uppercase' }}>最近查看</div>
+            )}
+            {listToShow.map((s, i) => (
               <div
                 key={s.id}
-                onClick={() => handleAdd(s.id)}
+                onClick={() => handleAdd(s.id, s.name)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px',
-                  borderBottom: i < suggestions.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
+                  borderBottom: i < listToShow.length - 1 ? '0.5px solid var(--ios-sep)' : 'none',
                   cursor: 'pointer',
                 }}
               >
+                {isShowingRecent && <span style={{ fontSize: 11, color: 'var(--ios-label4)' }}>🕐</span>}
                 <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--ios-blue)', fontFamily: 'var(--font-mono)' }}>{s.id}</span>
                 <span style={{ fontSize: 13, color: 'var(--ios-label)' }}>{s.name}</span>
               </div>
@@ -371,13 +527,16 @@ export default function LiveMonitor({ data }) {
   const [monitorList,   setMonitorList]   = useState(() => loadMonitorList())
   const [positions]                       = useState(() => loadPortfolio())
   const [showAdd,       setShowAdd]       = useState(false)
-  const [sortBy,        setSortBy]        = useState('pct')      // 'pct' | 'vol' | 'id'
-  const [scanScope,     setScanScope]     = useState('entry')    // 'entry' | 'top50' | 'top100'
+  const [sortBy,        setSortBy]        = useState('pct')
+  const [scanScope,     setScanScope]     = useState('entry')
   const [collapsed,     setCollapsed]     = useState({})
   const [indices,       setIndices]       = useState({})
   const [idxLoading,    setIdxLoading]    = useState(false)
   const [selectedStock, setSelectedStock] = useState(null)
   const [historyData,   setHistoryData]   = useState(null)
+  const [fullscreen,    setFullscreen]    = useState(false)
+  const [alerts,        setAlerts]        = useState(() => loadAlerts())
+  const [toasts,        setToasts]        = useState([])
   const historiesRef = useRef(null)
 
   const nameMap = useMemo(() => buildNameMap(data), [data])
@@ -424,6 +583,46 @@ export default function LiveMonitor({ data }) {
     return () => { cancelled = true; clearInterval(t) }
   }, [mktOpen])
 
+  useEffect(() => {
+    document.body.classList.toggle('livemonitor-fullscreen', fullscreen)
+    return () => document.body.classList.remove('livemonitor-fullscreen')
+  }, [fullscreen])
+
+  const prevPricesRef = useRef({})
+  useEffect(() => {
+    const currentPrices = liveData
+    const prev = prevPricesRef.current
+    const fired = []
+    alerts.forEach(alert => {
+      if (alert.triggered) return
+      const live = currentPrices[alert.stock_id]
+      if (!live?.price) return
+      const prevLive = prev[alert.stock_id]
+      if (!prevLive?.price) return
+      const hit = alert.direction === 'above'
+        ? live.price >= alert.targetPrice && prevLive.price < alert.targetPrice
+        : live.price <= alert.targetPrice && prevLive.price > alert.targetPrice
+      if (hit) fired.push(alert.stock_id)
+    })
+    if (fired.length) {
+      const next = alerts.map(a => fired.includes(a.stock_id) ? { ...a, triggered: true } : a)
+      saveAlerts(next)
+      setAlerts(next)
+      fired.forEach(sid => {
+        const a = alerts.find(x => x.stock_id === sid)
+        if (!a) return
+        const price = currentPrices[sid]?.price
+        const msg = `${a.name || sid} 已${a.direction === 'above' ? '突破' : '跌破'} ${a.targetPrice}（現價 ${fmtP(price)}）`
+        setToasts(t => [...t, { id: Date.now() + Math.random(), msg }])
+      })
+    }
+    prevPricesRef.current = currentPrices
+  }, [liveData])
+
+  const reloadAlerts = useCallback(() => setAlerts(loadAlerts()), [])
+
+  const activeAlertCount = alerts.filter(a => !a.triggered).length
+
   const sortFn = useCallback((a, b) => {
     if (sortBy === 'pct') return (b.live?.pct ?? -Infinity) - (a.live?.pct ?? -Infinity)
     if (sortBy === 'vol') return (b.live?.volume || 0) - (a.live?.volume || 0)
@@ -462,6 +661,7 @@ export default function LiveMonitor({ data }) {
   useStaggerRows(scanListRef,  scanKey)
 
   const openDetail = async (stock) => {
+    addRecentlyViewed(String(stock.stock_id), stock.name || nameMap[String(stock.stock_id)] || String(stock.stock_id))
     setSelectedStock(stock)
     if (!historiesRef.current) {
       try {
@@ -506,8 +706,22 @@ export default function LiveMonitor({ data }) {
         70%  { box-shadow: 0 0 0 5px rgba(10,132,255,0); }
         100% { box-shadow: 0 0 0 0   rgba(10,132,255,0); }
       }
+      .livemonitor-fullscreen #tab-bar,
+      .livemonitor-fullscreen [data-tab-bar] { display: none !important; }
     `}</style>
-    <div style={{ padding: '10px 16px 80px', overflowY: 'auto', height: '100%', WebkitOverflowScrolling: 'touch' }}>
+
+    {toasts.map(t => (
+      <Toast key={t.id} message={t.msg} onDone={() => setToasts(prev => prev.filter(x => x.id !== t.id))} />
+    ))}
+
+    <div style={{
+      padding: '10px 16px 80px', overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+      height: fullscreen ? '100vh' : '100%',
+      position: fullscreen ? 'fixed' : 'relative',
+      inset: fullscreen ? 0 : 'auto',
+      zIndex: fullscreen ? 9990 : 'auto',
+      background: fullscreen ? 'var(--ios-bg)' : 'transparent',
+    }}>
 
       {/* ── Market status ───────────────────────────────────────── */}
       <div style={{
@@ -517,12 +731,30 @@ export default function LiveMonitor({ data }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: sessionColor, letterSpacing: '-0.3px' }}>
-            {SESSION_LABEL[mktSession] || '—'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: sessionColor, letterSpacing: '-0.3px' }}>
+              {SESSION_LABEL[mktSession] || '—'}
+            </div>
+            {activeAlertCount > 0 && (
+              <span style={{
+                fontSize: 10, fontWeight: 800, borderRadius: 99, padding: '2px 7px',
+                background: 'rgba(255,159,10,0.18)', color: '#FF9F0A',
+              }}>🔔 {activeAlertCount}</span>
+            )}
           </div>
           <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 2 }}>台股 09:00–13:30 週一至週五</div>
         </div>
-        <div style={{ textAlign: 'right' }}>
+        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          <button
+            onClick={() => setFullscreen(v => !v)}
+            style={{
+              padding: '4px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700,
+              border: '1px solid var(--ios-sep)', cursor: 'pointer',
+              background: fullscreen ? 'rgba(255,59,48,0.10)' : 'var(--ios-fill3)',
+              color: fullscreen ? '#FF3B30' : 'var(--ios-label2)',
+            }}
+          >{fullscreen ? '✕ 離開' : '⛶ 專注'}</button>
+          <div style={{ textAlign: 'right' }}>
           {liveTime && (
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ios-label)', fontFamily: 'var(--font-mono)' }}>
               {liveTime.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -552,6 +784,7 @@ export default function LiveMonitor({ data }) {
           {liveError && (
             <div style={{ fontSize: 9, color: '#FF3B30', marginTop: 2 }}>{liveError}</div>
           )}
+          </div>
         </div>
       </div>
 
@@ -612,7 +845,7 @@ export default function LiveMonitor({ data }) {
           ) : (
             <div ref={watchListRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
               {watchItems.map((item, i) => (
-                <StockRow key={item.id} {...item} isLast={i === watchItems.length - 1} onSelect={openDetail} onRemove={removeFromMonitor} showRemove />
+                <StockRow key={item.id} {...item} isLast={i === watchItems.length - 1} onSelect={openDetail} onRemove={removeFromMonitor} showRemove onAlertChange={reloadAlerts} />
               ))}
             </div>
           )
@@ -638,7 +871,7 @@ export default function LiveMonitor({ data }) {
               <div ref={portListRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
                 {mktOpen && <PortfolioSummary items={portItems} />}
                 {portItems.map((item, i) => (
-                  <StockRow key={item.id} {...item} isLast={i === portItems.length - 1} onSelect={openDetail} showRemove={false} />
+                  <StockRow key={item.id} {...item} isLast={i === portItems.length - 1} onSelect={openDetail} showRemove={false} onAlertChange={reloadAlerts} />
                 ))}
               </div>
             )
@@ -668,7 +901,7 @@ export default function LiveMonitor({ data }) {
                   </div>
                 )}
                 {scanItems.map((item, i) => (
-                  <StockRow key={item.id} {...item} isLast={i === scanItems.length - 1} onSelect={openDetail} showRemove={false} />
+                  <StockRow key={item.id} {...item} isLast={i === scanItems.length - 1} onSelect={openDetail} showRemove={false} onAlertChange={reloadAlerts} />
                 ))}
               </div>
             )

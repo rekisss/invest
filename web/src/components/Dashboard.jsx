@@ -509,7 +509,24 @@ function AnimatedScoreBar({ normScore, scoreColor }) {
   )
 }
 
+// Feature 12: Portfolio quick-add helper
+function addToPortfolio(s, buyPrice, qty) {
+  try {
+    const existing = JSON.parse(localStorage.getItem('tw_portfolio_positions') || '{}')
+    existing[s.stock_id] = {
+      stock_id: s.stock_id, name: s.name || '',
+      buyPrice: parseFloat(buyPrice), qty: parseInt(qty),
+      buyDate: new Date().toISOString().slice(0, 10), note: '',
+    }
+    localStorage.setItem('tw_portfolio_positions', JSON.stringify(existing))
+  } catch {}
+}
+
 function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {}, sectorMode = false, rankOffset = 0, liveData = {} }) {
+  const [portfolioFormId, setPortfolioFormId] = useState(null)
+  const [portfolioBuyPrice, setPortfolioBuyPrice] = useState('')
+  const [portfolioQty, setPortfolioQty] = useState('1')
+  const [portfolioAdded, setPortfolioAdded] = useState(null)
 
   if (!stocks || stocks.length === 0) {
     return (
@@ -629,7 +646,86 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                 >
                   {watchlist.has(s.stock_id) ? '★' : '☆'}
                 </button>
+                {/* Feature 12: Quick portfolio add button */}
+                <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    if (portfolioFormId === s.stock_id) {
+                      setPortfolioFormId(null)
+                    } else {
+                      setPortfolioFormId(s.stock_id)
+                      setPortfolioBuyPrice(String(s.close || ''))
+                      setPortfolioQty('1')
+                    }
+                  }}
+                  style={{
+                    background: portfolioFormId === s.stock_id ? 'rgba(22,214,126,0.18)' : 'none',
+                    border: portfolioFormId === s.stock_id ? '1px solid rgba(22,214,126,0.4)' : 'none',
+                    padding: '1px 5px', borderRadius: 6,
+                    cursor: 'pointer', flexShrink: 0, lineHeight: 1,
+                    color: portfolioAdded === s.stock_id ? '#16D67E' : 'var(--ios-label3)',
+                    fontSize: 14, transition: 'all 0.15s', fontWeight: 700,
+                  }}
+                  title="快速加入持倉"
+                >＋</button>
               </div>
+
+              {/* Feature 12: Portfolio quick-add inline form */}
+              {portfolioFormId === s.stock_id && (
+                <div onClick={e => e.stopPropagation()} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6,
+                  padding: '7px 10px', background: 'rgba(22,214,126,0.06)',
+                  borderRadius: 8, border: '0.5px solid rgba(22,214,126,0.25)',
+                }}>
+                  <span style={{ fontSize: 11, color: 'var(--ios-label2)', flexShrink: 0, fontWeight: 600 }}>
+                    {s.stock_id} {s.name}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--ios-label3)', flexShrink: 0 }}>買價</span>
+                  <input
+                    type="number"
+                    value={portfolioBuyPrice}
+                    onChange={e => setPortfolioBuyPrice(e.target.value)}
+                    style={{
+                      width: 68, fontSize: 12, padding: '3px 6px', borderRadius: 6,
+                      border: '0.5px solid var(--ios-sep)', background: 'var(--ios-bg2)',
+                      color: 'var(--ios-label)', outline: 'none', fontFamily: 'var(--font-mono)',
+                    }}
+                  />
+                  <span style={{ fontSize: 11, color: 'var(--ios-label3)', flexShrink: 0 }}>張</span>
+                  <input
+                    type="number"
+                    value={portfolioQty}
+                    onChange={e => setPortfolioQty(e.target.value)}
+                    min="1"
+                    style={{
+                      width: 44, fontSize: 12, padding: '3px 6px', borderRadius: 6,
+                      border: '0.5px solid var(--ios-sep)', background: 'var(--ios-bg2)',
+                      color: 'var(--ios-label)', outline: 'none', fontFamily: 'var(--font-mono)',
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      addToPortfolio(s, portfolioBuyPrice, portfolioQty)
+                      setPortfolioAdded(s.stock_id)
+                      setPortfolioFormId(null)
+                      setTimeout(() => setPortfolioAdded(null), 2000)
+                    }}
+                    style={{
+                      flexShrink: 0, fontSize: 11, fontWeight: 700, padding: '4px 10px',
+                      borderRadius: 8, border: 'none', background: 'var(--ios-green)',
+                      color: '#fff', cursor: 'pointer',
+                    }}
+                  >確認</button>
+                  <button
+                    onClick={() => setPortfolioFormId(null)}
+                    style={{
+                      flexShrink: 0, fontSize: 11, padding: '4px 8px',
+                      borderRadius: 8, border: '0.5px solid var(--ios-sep)',
+                      background: 'var(--ios-bg3)', color: 'var(--ios-label3)', cursor: 'pointer',
+                    }}
+                  >取消</button>
+                </div>
+              )}
 
               {/* Row 2: Score bar + score + sparkline + price */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -1998,10 +2094,13 @@ export default function Dashboard({ data, error }) {
     return sorted.includes(todayTW) ? todayTW : (sorted[0] || null)
   })
   const [selectedStock, setSelectedStock] = useState(null)
-  const [viewTab, setViewTab] = useState('all')
+  const [selectedStockIndex, setSelectedStockIndex] = useState(0)
+  const [selectedStockList, setSelectedStockList] = useState([])
+  // Feature 8: persist filter/sort state
+  const [viewTab, setViewTab] = useState(() => localStorage.getItem('dash_viewTab') || 'all')
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortField, setSortField] = useState('entry_score')
-  const [sortDir, setSortDir] = useState('desc')
+  const [sortField, setSortField] = useState(() => localStorage.getItem('dash_sortField') || 'entry_score')
+  const [sortDir, setSortDir] = useState(() => localStorage.getItem('dash_sortDir') || 'desc')
   const [page, setPage] = useState(0)
   const notionMap = data?.notionMap || {}
 
@@ -2164,6 +2263,25 @@ export default function Dashboard({ data, error }) {
   }
   const [activeSector, setActiveSector] = useState(null)
   const [activeTrendType, setActiveTrendType] = useState(null)
+
+  // Feature 8: persist filter/sort state to localStorage
+  useEffect(() => { try { localStorage.setItem('dash_viewTab', viewTab) } catch {} }, [viewTab])
+  useEffect(() => { try { localStorage.setItem('dash_sortField', sortField) } catch {} }, [sortField])
+  useEffect(() => { try { localStorage.setItem('dash_sortDir', sortDir) } catch {} }, [sortDir])
+
+  // Feature 9: scroll position memory
+  const savedScrollRef = useRef(null)
+  useEffect(() => {
+    if (selectedStock) {
+      savedScrollRef.current = listScrollRef.current?.scrollTop ?? null
+    } else if (savedScrollRef.current != null) {
+      const top = savedScrollRef.current
+      savedScrollRef.current = null
+      requestAnimationFrame(() => {
+        listScrollRef.current?.scrollTo({ top })
+      })
+    }
+  }, [selectedStock])
 
   // ── 即時報價 — must be called before any conditional return ─────────────
   // Compute entry stock IDs from the latest scan date (or empty when no data).
@@ -2850,6 +2968,34 @@ export default function Dashboard({ data, error }) {
       {/* ── Scrollable Content ───────────────────────────────────── */}
       <div ref={listScrollRef} onScroll={handleListScroll} style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
 
+        {/* Feature 10: Today's scan summary bar */}
+        {scan && (() => {
+          const entryCount = scan.entry_count || stocks.filter(s => s.entry_signal).length
+          const topScore = Math.max(...(stocks || []).map(s => s.entry_score || 0), 0)
+          const foreignBuyCount = (stocks || []).filter(s => s.foreign_buy_streak > 0).length
+          const totalScanned = scan.total_scanned || 0
+          const chips = [
+            { label: `${entryCount} 支進場信號`, color: '#16D67E' },
+            { label: `最高分 ${Math.round(topScore)}`, color: '#0A84FF' },
+            { label: `外資買 ${foreignBuyCount} 支`, color: '#FF9F0A' },
+            ...(totalScanned > 0 ? [{ label: `掃描 ${totalScanned} 支`, color: 'var(--ios-label3)' }] : []),
+          ]
+          return (
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '10px 14px 0', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', marginBottom: 0 }}>
+              {chips.map((c, i) => (
+                <span key={i} style={{
+                  flexShrink: 0, fontSize: 12, fontWeight: 600,
+                  background: 'var(--ios-bg2)',
+                  border: '0.5px solid var(--ios-sep)',
+                  borderRadius: 8, padding: '3px 10px',
+                  color: c.color,
+                  whiteSpace: 'nowrap',
+                }}>{c.label}</span>
+              ))}
+            </div>
+          )
+        })()}
+
         {/* Market summary banner */}
         {pred && (() => {
           const isBull = pred.xgb_label === '偏多', isBear = pred.xgb_label === '偏空'
@@ -3106,7 +3252,12 @@ export default function Dashboard({ data, error }) {
             <WatchlistView
               stocks={pagedStocks}
               globalMaxScore={globalMaxScore}
-              onSelect={setSelectedStock}
+              onSelect={s => {
+                setSelectedStock(s)
+                const idx = displayList.findIndex(x => x.stock_id === s.stock_id)
+                setSelectedStockIndex(idx >= 0 ? idx : 0)
+                setSelectedStockList(displayList)
+              }}
               notionMap={notionMap}
               watchlist={watchlist}
               toggleWatchlist={toggleWatchlist}
@@ -3195,6 +3346,8 @@ export default function Dashboard({ data, error }) {
 
       <StockDetailModal
         stock={selectedStock}
+        stocks={selectedStockList}
+        initialIndex={selectedStockIndex}
         notionInfo={selectedStock ? notionMap[selectedStock.stock_id] : null}
         onClose={() => setSelectedStock(null)}
         allScans={data?.scans}
