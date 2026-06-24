@@ -46,7 +46,8 @@ function sameTWDay(a, b) {
 /**
  * Fetch the GH Actions price cache.
  * ids: stock IDs to extract (pass [] to get indices only).
- * Returns { stocks, indices, updatedAt } — all may be empty/null when cache is missing or stale.
+ * Always returns whatever data exists. isStale=true means the cache is older than expected.
+ * Returns { stocks, indices, updatedAt, isStale }
  */
 export async function fetchPriceCache(ids) {
   try {
@@ -61,10 +62,10 @@ export async function fetchPriceCache(ids) {
     const ageMs     = now - cacheDate
     const open      = isTWSEOpen()
 
-    // During open: reject if > 5 min stale (GH Actions runs every 3 min)
-    // After close: accept same-day cache up to 8 h (closing prices are final)
-    if (open  && ageMs > 5 * 60 * 1000)         return { stocks: {}, indices: null }
-    if (!open && !sameTWDay(now, cacheDate))     return { stocks: {}, indices: null }
+    // Mark as stale if data is too old for current context, but still return it
+    const isStale = open
+      ? ageMs > 5 * 60 * 1000                        // during open: stale after 5 min
+      : !sameTWDay(now, cacheDate)                    // after close: stale if not today
 
     const toTime = iso => iso
       ? new Date(iso).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' })
@@ -84,7 +85,7 @@ export async function fetchPriceCache(ids) {
       ...(i_o00 ? { o00: { ...i_o00, time: toTime(i_o00.time) } } : {}),
     } : null
 
-    return { stocks, indices, updatedAt: cacheDate }
+    return { stocks, indices, updatedAt: cacheDate, isStale }
   } catch (e) {
     console.warn('Price cache fetch error:', e.message)
     return { stocks: {}, indices: null }
@@ -130,18 +131,24 @@ export function useLivePrices(stockIds, { pollInterval = 3 * 60 * 1000 } = {}) {
         setLoading(true)
       }
       try {
-        const { stocks } = await fetchPriceCache(ids)
+        const { stocks, updatedAt, isStale } = await fetchPriceCache(ids)
         if (cancelled) return
         if (Object.keys(stocks).length > 0) {
           setPrices(prev => ({ ...prev, ...stocks }))
           setLastUpdate(new Date())
-          setError(null)
+          if (isStale && updatedAt) {
+            const dateStr = updatedAt.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric' })
+            const timeStr = updatedAt.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' })
+            setError(`資料來自 ${dateStr} ${timeStr}（後台更新中）`)
+          } else {
+            setError(null)
+          }
         } else {
           const sess = getTWSESession()
           if      (sess === 'pre')     setError('盤前（09:00 開盤後後台自動更新）')
           else if (sess === 'weekend') setError('休市（週末）')
           else if (sess === 'open')    setError('等待後台更新（每3分鐘）…')
-          else                         setError('今日收盤快取不可用')
+          else                         setError('收盤快取暫無資料')
         }
       } catch (e) {
         if (!cancelled) setError(e.message)
