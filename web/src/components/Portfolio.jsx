@@ -380,6 +380,21 @@ export default function Portfolio({ data }) {
   const totalValue = entries.reduce((s, e) => s + e.curVal, 0)
   const totalPnL   = totalValue - totalCost
   const totalPct   = totalCost > 0 ? totalPnL / totalCost * 100 : 0
+  // Today's P&L (今日損益): how much positions moved on the latest trading day.
+  // During market hours use the live intraday % change; after close use the scan's
+  // day_return. Skips positions with no usable change so it never invents a number.
+  let todayPnL = 0, todayCovered = 0
+  for (const e of entries) {
+    const pct = (mktOpen && livePriceData[e.id]?.pct != null)
+      ? livePriceData[e.id].pct
+      : (!mktOpen && e.scan?.day_return != null ? e.scan.day_return : null)
+    if (pct == null) continue
+    const price = e.curPrice ?? e.p.buyPrice
+    if (!price || pct <= -1) continue
+    const prevClose = price / (1 + pct)
+    todayPnL += (price - prevClose) * e.p.qty
+    todayCovered++
+  }
   const priceCount = entries.filter(e => e.curPrice != null).length
   const alertCount = entries.filter(e => e.scan && !e.scan.entry_signal && e.scan.entry_score != null && e.scan.entry_score < 500).length
 
@@ -452,6 +467,14 @@ export default function Portfolio({ data }) {
                   </span>
                 )}
               </div>
+              {todayCovered > 0 && (
+                <div style={{ fontSize: 12, marginTop: 4, fontWeight: 600, color: todayPnL >= 0 ? 'var(--ios-red)' : 'var(--ios-green)' }}>
+                  {mktOpen ? '今日損益' : '收盤當日'} {todayPnL >= 0 ? '+' : ''}{fmtNum(Math.round(todayPnL))} 元
+                  {todayCovered < entries.length && (
+                    <span style={{ color: 'var(--ios-label4)', fontWeight: 500, marginLeft: 4 }}>（{todayCovered}/{entries.length} 檔）</span>
+                  )}
+                </div>
+              )}
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 22, fontWeight: 700, color: totalPct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)' }}>
