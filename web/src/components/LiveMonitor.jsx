@@ -38,7 +38,12 @@ function buildNameMap(data) {
 
 function buildScanMap(data) {
   const map = {}
-  for (const s of (getLatestScan(data).top_stocks || []))
+  const scan = getLatestScan(data)
+  // filter_stocks covers the full scanned universe (slim ~25 fields incl. close/day_return);
+  // top_stocks is richer (~120 fields) so let it override the slim rows.
+  for (const s of (scan.filter_stocks || []))
+    map[String(s.stock_id)] = s
+  for (const s of (scan.top_stocks || []))
     map[String(s.stock_id)] = s
   return map
 }
@@ -48,6 +53,17 @@ function fmtP(v) {
   if (v >= 1000) return v.toFixed(0)
   if (v >= 100)  return v.toFixed(1)
   return v.toFixed(2)
+}
+
+// Price source policy (mirrors Dashboard/Portfolio):
+// Trust the real-time TWSE/TPEX quote ONLY during market hours. After close the
+// official STOCK_DAY_ALL snapshot can lag or disagree with the scan CSV close (the
+// value shown everywhere else in the app), so prefer the scan close for stocks we
+// scanned, and only fall back to the live snapshot for custom watchlist stocks that
+// aren't in today's scan.
+function resolvePrice(live, scan, mktOpen) {
+  if (mktOpen && live?.price != null) return live.price
+  return (scan?.close ?? null) ?? (live?.price ?? null)
 }
 
 // ── Toast notification ────────────────────────────────────────────────────
@@ -212,19 +228,27 @@ function useCountdown(lastUpdate, intervalMs = 30000) {
 }
 
 // ── Stock row ─────────────────────────────────────────────────────────────
-function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, showRemove, onAlertChange }) {
+function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, showRemove, onAlertChange, mktOpen }) {
   const upColor   = '#FF3340'
   const downColor = '#16D67E'
-  const pct       = live?.pct ?? null
+  const scanClose = scan?.close || null
+
+  // During market hours the live quote is authoritative; after close prefer the
+  // scan CSV close so the price + P&L match the rest of the app (TWSE STOCK_DAY_ALL
+  // can briefly disagree with the scan close after the session ends).
+  const liveOk    = mktOpen && live?.price != null
+  const effPrice  = resolvePrice(live, scan, mktOpen)
+  const usingScan = !liveOk && scanClose != null
+
+  const pct       = liveOk ? (live?.pct ?? null) : null  // intraday % only meaningful during open
   const isSnap    = live?.isSnapshot ?? false
   const color     = pct == null ? 'var(--ios-label)' : pct >= 0 ? upColor : downColor
-  const pnlPct    = position && live?.price ? (live.price - position.buyPrice) / position.buyPrice * 100 : null
-  const pnlAmt    = position && live?.price ? (live.price - position.buyPrice) * position.qty           : null
+  const pnlPct    = position && effPrice != null ? (effPrice - position.buyPrice) / position.buyPrice * 100 : null
+  const pnlAmt    = position && effPrice != null ? (effPrice - position.buyPrice) * position.qty           : null
   const pnlColor  = pnlPct == null ? 'var(--ios-label3)' : pnlPct >= 0 ? upColor : downColor
 
   const [showAlertForm, setShowAlertForm] = useState(false)
 
-  const scanClose   = scan?.close || null
   const scanScore   = scan?.entry_score || null
   const scanSignals = scan?.entry_reason
     ? scan.entry_reason.split(',').map(s => s.trim()).filter(Boolean).slice(0, 3)
@@ -276,22 +300,22 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
         </div>
         {/* Sub-row: live OHLV / scan signals / P&L */}
         <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--ios-label4)', flexWrap: 'wrap', marginTop: 2 }}>
-          {live && !isSnap && live.open  != null && <span>開 {fmtP(live.open)}</span>}
-          {live && !isSnap && live.high  != null && <span style={{ color: upColor }}>高 {fmtP(live.high)}</span>}
-          {live && !isSnap && live.low   != null && <span style={{ color: downColor }}>低 {fmtP(live.low)}</span>}
-          {live && !isSnap && live.volume > 0    && <span>量 {Math.round(live.volume / 1000).toLocaleString()}張</span>}
-          {live && !isSnap && live.time          && <span>{live.time}</span>}
-          {!live && scanSignals.map(sig => (
+          {liveOk && !isSnap && live.open  != null && <span>開 {fmtP(live.open)}</span>}
+          {liveOk && !isSnap && live.high  != null && <span style={{ color: upColor }}>高 {fmtP(live.high)}</span>}
+          {liveOk && !isSnap && live.low   != null && <span style={{ color: downColor }}>低 {fmtP(live.low)}</span>}
+          {liveOk && !isSnap && live.volume > 0    && <span>量 {Math.round(live.volume / 1000).toLocaleString()}張</span>}
+          {liveOk && !isSnap && live.time          && <span>{live.time}</span>}
+          {!liveOk && scanSignals.map(sig => (
             <span key={sig} style={{ color: '#FF9F0A', fontWeight: 600 }}>{sig}</span>
           ))}
-          {!live && scanScore != null && <span>分 {scanScore}</span>}
-          {position && live?.price && pnlAmt != null && (
+          {!liveOk && scanScore != null && <span>分 {scanScore}</span>}
+          {position && pnlAmt != null && (
             <span style={{ color: pnlColor, fontWeight: 700 }}>
               持倉 {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
               <span style={{ fontWeight: 500, marginLeft: 3 }}>({pnlAmt >= 0 ? '+' : ''}{Math.round(pnlAmt).toLocaleString()})</span>
             </span>
           )}
-          {position && !live && (
+          {position && pnlAmt == null && (
             <span>買 {fmtP(position.buyPrice)} · {Math.round(position.qty / 1000)}張</span>
           )}
         </div>
@@ -299,7 +323,7 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
       {/* Right column */}
       <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 80, display: 'flex', alignItems: 'center', gap: 6 }}>
         <div>
-          {live ? (
+          {liveOk ? (
             <>
               <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-mono)', lineHeight: 1.1, letterSpacing: '-0.5px' }}>
                 <FlashPrice value={live.price} formatter={fmtP} color={isSnap ? 'var(--ios-label2)' : color} />
@@ -316,10 +340,10 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
                 <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 1 }}>昨 {fmtP(live.prevClose)}</div>
               )}
             </>
-          ) : scanClose ? (
+          ) : effPrice != null ? (
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ios-label2)', fontFamily: 'var(--font-mono)' }}>{fmtP(scanClose)}</div>
-              <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 1 }}>掃描收盤</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ios-label2)', fontFamily: 'var(--font-mono)' }}>{fmtP(effPrice)}</div>
+              <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 1 }}>{usingScan ? '掃描收盤' : '收盤報價'}</div>
             </div>
           ) : position?.buyPrice ? (
             <div style={{ textAlign: 'right' }}>
@@ -383,17 +407,28 @@ function SectionHeader({ title, count, collapsed, onToggle, rightSlot }) {
 }
 
 // ── Portfolio summary bar ─────────────────────────────────────────────────
-function PortfolioSummary({ items }) {
+function PortfolioSummary({ items, mktOpen }) {
   if (!items.length) return null
-  const totalCost  = items.reduce((s, e) => s + (e.position?.buyPrice || 0) * (e.position?.qty || 0), 0)
-  const totalValue = items.reduce((s, e) => s + (e.live?.price || e.position?.buyPrice || 0) * (e.position?.qty || 0), 0)
+  let totalCost = 0, totalValue = 0, todayPnl = 0
+  for (const e of items) {
+    const pos = e.position
+    if (!pos) continue
+    const eff = resolvePrice(e.live, e.scan, mktOpen)
+    const price = eff ?? pos.buyPrice
+    totalCost  += pos.buyPrice * pos.qty
+    totalValue += price * pos.qty
+    // Today's P&L: live intraday delta during open; scan day_return after close.
+    if (mktOpen && e.live?.pct != null && e.live?.price != null) {
+      const prevPrice = e.live.price / (1 + e.live.pct)
+      todayPnl += (e.live.price - prevPrice) * pos.qty
+    } else if (!mktOpen && e.scan?.day_return != null && eff != null) {
+      const dr = e.scan.day_return
+      const prevPrice = eff / (1 + dr)
+      todayPnl += (eff - prevPrice) * pos.qty
+    }
+  }
   const totalPnl   = totalValue - totalCost
   const pnlPct     = totalCost > 0 ? totalPnl / totalCost * 100 : 0
-  const todayPnl   = items.reduce((s, e) => {
-    if (!e.live?.pct || !e.position) return s
-    const prevPrice = e.live.price / (1 + e.live.pct)
-    return s + (e.live.price - prevPrice) * e.position.qty
-  }, 0)
   const color      = totalPnl >= 0 ? '#FF3340' : '#16D67E'
   const todayColor = todayPnl >= 0 ? '#FF3340' : '#16D67E'
 
@@ -858,7 +893,7 @@ export default function LiveMonitor({ data }) {
           ) : (
             <div ref={watchListRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
               {watchItems.map((item, i) => (
-                <StockRow key={item.id} {...item} isLast={i === watchItems.length - 1} onSelect={openDetail} onRemove={removeFromMonitor} showRemove onAlertChange={reloadAlerts} />
+                <StockRow key={item.id} {...item} isLast={i === watchItems.length - 1} onSelect={openDetail} onRemove={removeFromMonitor} showRemove onAlertChange={reloadAlerts} mktOpen={mktOpen} />
               ))}
             </div>
           )
@@ -882,9 +917,9 @@ export default function LiveMonitor({ data }) {
               </div>
             ) : (
               <div ref={portListRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
-                {mktOpen && <PortfolioSummary items={portItems} />}
+                <PortfolioSummary items={portItems} mktOpen={mktOpen} />
                 {portItems.map((item, i) => (
-                  <StockRow key={item.id} {...item} isLast={i === portItems.length - 1} onSelect={openDetail} showRemove={false} onAlertChange={reloadAlerts} />
+                  <StockRow key={item.id} {...item} isLast={i === portItems.length - 1} onSelect={openDetail} showRemove={false} onAlertChange={reloadAlerts} mktOpen={mktOpen} />
                 ))}
               </div>
             )
@@ -914,7 +949,7 @@ export default function LiveMonitor({ data }) {
                   </div>
                 )}
                 {scanItems.map((item, i) => (
-                  <StockRow key={item.id} {...item} isLast={i === scanItems.length - 1} onSelect={openDetail} showRemove={false} onAlertChange={reloadAlerts} />
+                  <StockRow key={item.id} {...item} isLast={i === scanItems.length - 1} onSelect={openDetail} showRemove={false} onAlertChange={reloadAlerts} mktOpen={mktOpen} />
                 ))}
               </div>
             )
