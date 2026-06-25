@@ -522,7 +522,7 @@ function addToPortfolio(s, buyPrice, qty) {
   } catch {}
 }
 
-function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {}, sectorMode = false, rankOffset = 0, liveData = {} }) {
+function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {}, sectorMode = false, rankOffset = 0, liveData = {}, marketOpen = isTWSEOpen() }) {
   const [portfolioFormId, setPortfolioFormId] = useState(null)
   const [portfolioBuyPrice, setPortfolioBuyPrice] = useState('')
   const [portfolioQty, setPortfolioQty] = useState('1')
