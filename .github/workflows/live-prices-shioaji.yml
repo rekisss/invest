@@ -1,0 +1,55 @@
+name: 盤中即時報價快取 — Shioaji (每3分鐘)
+
+# Read-only Shioaji snapshot cache. Writes live_prices_shioaji.json to the
+# `data` branch in the same schema as the existing live-prices.yml cache, but to
+# a SEPARATE file so the two workflows never conflict. No-op unless the
+# SHIOAJI_API_KEY / SHIOAJI_SECRET_KEY secrets are configured.
+
+on:
+  schedule:
+    # Every 3 minutes during Taiwan market hours (01:00–05:30 UTC = 09:00–13:30 CST), Mon–Fri
+    - cron: '*/3 1-5 * * 1-5'
+    # Once at 06:00 UTC (14:00 CST) to capture the final closing snapshot
+    - cron: '0 6 * * 2-6'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Avoid overlapping runs racing on the data-branch push.
+concurrency:
+  group: live-prices-shioaji
+  cancel-in-progress: false
+
+jobs:
+  cache-shioaji:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4   # default branch (main) — provides shioaji_prices.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Shioaji
+        run: pip install --quiet shioaji
+
+      - name: Fetch snapshot
+        env:
+          SHIOAJI_API_KEY: ${{ secrets.SHIOAJI_API_KEY }}
+          SHIOAJI_SECRET_KEY: ${{ secrets.SHIOAJI_SECRET_KEY }}
+        run: python shioaji_prices.py
+
+      - name: Publish to data branch
+        run: |
+          if [ ! -f live_prices_shioaji.json ]; then
+            echo "No output produced (likely no secrets configured) — nothing to publish."
+            exit 0
+          fi
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git fetch origin data
+          git checkout data
+          git add live_prices_shioaji.json
+          git diff --staged --quiet || git commit -m "shioaji prices $(TZ=Asia/Taipei date '+%H:%M:%S')"
+          git push origin data
