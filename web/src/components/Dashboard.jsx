@@ -522,7 +522,7 @@ function addToPortfolio(s, buyPrice, qty) {
   } catch {}
 }
 
-function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {}, sectorMode = false, rankOffset = 0, liveData = {} }) {
+function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watchlist = new Set(), toggleWatchlist, persistentMap = {}, scoreDeltaMap = {}, sectorMode = false, rankOffset = 0, liveData = {}, marketOpen = isTWSEOpen() }) {
   const [portfolioFormId, setPortfolioFormId] = useState(null)
   const [portfolioBuyPrice, setPortfolioBuyPrice] = useState('')
   const [portfolioQty, setPortfolioQty] = useState('1')
@@ -538,6 +538,14 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
   }
 
   const maxScore = globalMaxScore || Math.max(...stocks.map(s => s.entry_score || 0), 1)
+
+  // Per-stock data-quality marker: flag individual stocks whose institutional /
+  // fundamental data looks incomplete (data_quality_ok === false). But if MOST
+  // of the list is flagged it's a systemic pipeline issue (e.g. FinMind 法人資料
+  // 整批未取得) — surfacing 20 badges is noise, so suppress per-card badges in that
+  // case and let the aggregate ValidationPanel banner carry the warning instead.
+  const flaggedCount = stocks.filter(s => s.data_quality_ok === false).length
+  const systemicDataIssue = stocks.length > 0 && flaggedCount > stocks.length * 0.5
 
   return (
     <div style={{ margin: '0 12px 16px' }}>
@@ -559,6 +567,7 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const marginChg = s.margin_change_5d || 0
           const shortRatio = s.short_ratio || 0
           const hasMarginWarning = marginChg > 5 || shortRatio > 15
+          const dataQualitySuspect = s.data_quality_ok === false && !systemicDataIssue
           const fScore = s.f_score || 0
           const dealerStreak = s.dealer_buy_streak || 0
           const skipReason = s.skip_reason || ''
@@ -626,6 +635,12 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     title={marginChg > 5 ? `融資5日暴增 +${marginChg.toFixed(1)}%` : `融券比率 ${shortRatio.toFixed(1)}%`}
                     style={{ fontSize: 10, fontWeight: 700, color: '#FF9F0A', background: 'rgba(255,159,10,0.12)', border: '1px solid rgba(255,159,10,0.3)', borderRadius: 9999, padding: '2px 6px', flexShrink: 0 }}
                   >⚠</span>
+                )}
+                {dataQualitySuspect && (
+                  <span
+                    title="此股的法人／基本面資料可能未完整取得，技術指標仍有效，但法人與基本面訊號僅供參考"
+                    style={{ fontSize: 9, fontWeight: 700, color: 'var(--ios-label3)', background: 'var(--ios-fill2)', border: '0.5px solid var(--ios-sep)', borderRadius: 5, padding: '1px 5px', flexShrink: 0, letterSpacing: 0.2 }}
+                  >資料?</span>
                 )}
                 {fScore >= 7 && (
                   <span title={`Piotroski F-Score ${fScore}/9 — 基本面優質`} style={{
