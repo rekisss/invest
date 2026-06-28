@@ -9,6 +9,9 @@
 import { useState, useEffect, useMemo } from 'react'
 
 const CACHE_URL = 'https://api.github.com/repos/rekisss/invest/contents/live_prices.json?ref=data'
+// Shioaji broker-feed cache (read-only snapshots, populated by live-prices-shioaji.yml
+// when SHIOAJI_* secrets are configured). Preferred when present & at least as fresh.
+const SHIOAJI_CACHE_URL = 'https://api.github.com/repos/rekisss/invest/contents/live_prices_shioaji.json?ref=data'
 
 const TWSE_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
 const TPEX_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'
@@ -148,15 +151,33 @@ export async function fetchIndices() {
 }
 
 // ── Tier 2: GitHub Actions cache (fallback) ───────────────────────────────────
+async function fetchOneCache(url) {
+  const r = await fetch(url, {
+    headers: { Accept: 'application/vnd.github.raw+json' },
+    signal: AbortSignal.timeout(10000),
+  })
+  if (!r.ok) return null
+  const json = await r.json()
+  if (!json?.prices || !json?.updatedAt) return null
+  return json
+}
+
 export async function fetchPriceCache(ids) {
   try {
-    const r = await fetch(CACHE_URL, {
-      headers: { Accept: 'application/vnd.github.raw+json' },
-      signal: AbortSignal.timeout(10000),
-    })
-    if (!r.ok) return { stocks: {}, indices: null }
-    const json = await r.json()
-    if (!json?.prices || !json?.updatedAt) return { stocks: {}, indices: null }
+    // Pull both caches; prefer the Shioaji broker feed when it's at least as
+    // fresh. Gracefully degrades to the TWSE/Yahoo cache if Shioaji isn't
+    // configured (file absent → fetchOneCache returns null).
+    const [shioaji, fallback] = await Promise.all([
+      fetchOneCache(SHIOAJI_CACHE_URL).catch(() => null),
+      fetchOneCache(CACHE_URL).catch(() => null),
+    ])
+    let json = null
+    if (shioaji && fallback) {
+      json = new Date(shioaji.updatedAt) >= new Date(fallback.updatedAt) ? shioaji : fallback
+    } else {
+      json = shioaji || fallback
+    }
+    if (!json) return { stocks: {}, indices: null }
 
     const cacheDate = new Date(json.updatedAt)
     const now       = new Date()
