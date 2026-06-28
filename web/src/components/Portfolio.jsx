@@ -404,6 +404,18 @@ export default function Portfolio({ data }) {
   const maxPosPct = (totalValue > 0 && maxByVal) ? maxByVal.curVal / totalValue : 0
   const concentrationWarn = entries.length >= 2 && maxPosPct > 0.40
 
+  // Downside-to-stops (停損風險暴露): total $ that would be lost if every position
+  // fell from its current price to its stop-loss. computeTargets always yields a
+  // stopLoss (technical or fixed-% fallback), so this is defined for every entry.
+  let riskToStop = 0
+  for (const e of entries) {
+    const ref = e.curPrice ?? e.p.buyPrice
+    if (ref == null || e.stopLoss == null) continue
+    const downside = (ref - e.stopLoss) * e.p.qty
+    if (downside > 0) riskToStop += downside
+  }
+  const riskPct = totalValue > 0 ? riskToStop / totalValue * 100 : 0
+
   const donutSlices = entries.map(e => ({ label: e.id, value: e.curVal, color: e.color }))
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -479,6 +491,12 @@ export default function Portfolio({ data }) {
                   {todayCovered < entries.length && (
                     <span style={{ color: 'var(--ios-label4)', fontWeight: 500, marginLeft: 4 }}>（{todayCovered}/{entries.length} 檔）</span>
                   )}
+                </div>
+              )}
+              {riskToStop > 0 && (
+                <div style={{ fontSize: 11, marginTop: 3, color: 'var(--ios-label3)' }} title="若每檔都從現價跌到各自停損價，合計的最大損失（依技術指標或固定%計算）">
+                  停損風險暴露 <b style={{ color: 'var(--ios-yellow)' }}>−{fmtNum(Math.round(riskToStop))} 元</b>
+                  <span style={{ color: 'var(--ios-label4)', marginLeft: 4 }}>（−{riskPct.toFixed(1)}%）</span>
                 </div>
               )}
             </div>
