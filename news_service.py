@@ -143,7 +143,14 @@ class NewsClient:
         self._session.mount("http://", _adapter)
 
     def _cache_path(self, stock_id: str, name: str, days: int, limit: int) -> Path:
-        return self.cache_dir / f"news_{stock_id}_{days}_{limit}.csv"
+        # Sanitize stock_id so it can never escape cache_dir (path traversal).
+        # Taiwan stock ids are alphanumeric; any other char (incl. '/', '..') is dropped.
+        safe_id = re.sub(r"[^0-9A-Za-z]", "_", str(stock_id))[:32] or "unknown"
+        path = self.cache_dir / f"news_{safe_id}_{int(days)}_{int(limit)}.csv"
+        # Defense-in-depth: refuse anything that still resolves outside cache_dir.
+        if not str(path.resolve()).startswith(str(self.cache_dir.resolve())):
+            raise ValueError(f"unsafe cache path for stock_id={stock_id!r}")
+        return path
 
     def fetch_stock_news(
         self,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -48,14 +49,20 @@ def _int_from_form(key: str, default: int) -> int:
     raw = (request.form.get(key) or "").strip()
     if not raw:
         return default
-    return int(raw)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
 
 
 def _float_from_form(key: str, default: float | None = None) -> float | None:
     raw = (request.form.get(key) or "").strip()
     if not raw:
         return default
-    return float(raw)
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
 
 
 def _build_args(mode: str) -> SimpleNamespace:
@@ -281,4 +288,8 @@ def artifacts(filename: str):
 
 if __name__ == "__main__":
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    # Werkzeug's debugger executes arbitrary Python on unhandled exceptions, so
+    # never enable it by default — opt in locally with FLASK_DEBUG=1. Keep the
+    # loopback bind so it is never reachable off-host.
+    debug = os.getenv("FLASK_DEBUG") == "1"
+    app.run(host="127.0.0.1", port=5000, debug=debug)
