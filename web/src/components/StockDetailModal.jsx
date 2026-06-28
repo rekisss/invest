@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
+import { safeUrl } from '../utils/safeUrl'
 gsap.registerPlugin(useGSAP)
 
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
@@ -2767,9 +2768,9 @@ export default function StockDetailModal({ stock, stocks, initialIndex = 0, noti
             {n.confidence != null && <Row label="信心分數" value={`${n.confidence}%`} />}
             {n.note && <Row label="觀察建議" value={n.note} valueStyle={{ color: 'var(--ios-blue)', fontSize: 11 }} />}
             {n.date && <Row label="同步日期" value={n.date} valueStyle={{ color: 'var(--ios-label3)' }} />}
-            {n.notion_url && (
+            {safeUrl(n.notion_url) && (
               <a
-                href={n.notion_url}
+                href={safeUrl(n.notion_url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
