@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
+import { safeUrl } from '../utils/safeUrl'
 
 const CUSTOM_RULES_KEY = 'news_custom_rules'
 const CUSTOM_COLORS = ['#58a6ff', '#3fb950', '#ffa657', '#f85149', '#bc8cff', '#f9c74f', '#79c0ff', '#56d364']
@@ -802,10 +803,11 @@ function NewsItem({ item, isOpen, onToggle, customRules = [], nameMap = {} }) {
               {hint}
             </div>
           )}
-          {/* Link to full article */}
-          {item.url && (
+          {/* Link to full article — safeUrl() blocks javascript:/data: hrefs from
+              externally-sourced RSS links (see utils/safeUrl.js) */}
+          {safeUrl(item.url) && (
             <a
-              href={item.url}
+              href={safeUrl(item.url)}
               target="_blank"
               rel="noopener noreferrer"
               style={{
