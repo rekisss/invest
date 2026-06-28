@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { animate } from 'animejs'
 import { useLivePrices, fetchIndices, fetchPriceCache } from '../hooks/useLivePrices'
+import { useShioajiStream, loadStreamCfg, saveStreamCfg } from '../hooks/useShioajiStream'
 import { flashPriceEl, animateListRows } from '../utils/animeUtils.js'
 import StockDetailModal from './StockDetailModal'
 
@@ -578,6 +579,8 @@ export default function LiveMonitor({ data }) {
   const [alerts,        setAlerts]        = useState(() => loadAlerts())
   const [toasts,        setToasts]        = useState([])
   const [refreshKey,    setRefreshKey]    = useState(0)
+  const [showStreamCfg, setShowStreamCfg] = useState(false)
+  const [streamDraft,   setStreamDraft]   = useState(() => loadStreamCfg())
   const historiesRef = useRef(null)
 
   const nameMap = useMemo(() => buildNameMap(data), [data])
@@ -596,8 +599,20 @@ export default function LiveMonitor({ data }) {
     ...scanStocks.map(s => String(s.stock_id)),
   ])], [monitorList, positions, scanStocks])
 
-  const { prices: liveData, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: liveLoading, error: liveError }
+  const { prices: liveDataBase, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: liveLoading, error: liveError }
     = useLivePrices(allIds, { refreshTrigger: refreshKey })
+
+  // Real-time Shioaji tick stream (optional). When configured + connected, its
+  // tick prices override the polled quotes (zero-delay); otherwise transparent.
+  const [streamCfg, setStreamCfg] = useState(loadStreamCfg)
+  const { prices: streamPrices, connected: streamConnected, error: streamError }
+    = useShioajiStream(allIds, { wsUrl: streamCfg.wsUrl, token: streamCfg.token })
+  const liveData = useMemo(
+    () => (streamConnected && Object.keys(streamPrices).length)
+      ? { ...liveDataBase, ...streamPrices }
+      : liveDataBase,
+    [liveDataBase, streamPrices, streamConnected]
+  )
 
   const countdown = useCountdown(liveTime, 60000)
 
@@ -794,6 +809,16 @@ export default function LiveMonitor({ data }) {
               color: fullscreen ? '#FF3B30' : 'var(--ios-label2)',
             }}
           >{fullscreen ? '✕ 離開' : '⛶ 專注'}</button>
+          <button
+            onClick={() => setShowStreamCfg(v => !v)}
+            title="Shioaji 即時連線設定"
+            style={{
+              padding: '4px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700,
+              border: '1px solid var(--ios-sep)', cursor: 'pointer',
+              background: streamConnected ? 'rgba(22,214,126,0.15)' : 'var(--ios-fill3)',
+              color: streamConnected ? '#16D67E' : 'var(--ios-label2)',
+            }}
+          >{streamConnected ? '⚡ 即時' : '⚡ 即時連線'}</button>
           <div style={{ textAlign: 'right' }}>
           {liveTime && (
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ios-label)', fontFamily: 'var(--font-mono)' }}>
@@ -835,6 +860,51 @@ export default function LiveMonitor({ data }) {
           </div>
         </div>
       </div>
+
+      {/* ── Shioaji 即時連線設定 ──────────────────────────────── */}
+      {showStreamCfg && (
+        <div style={{
+          marginBottom: 14, padding: '12px 14px', borderRadius: 12,
+          background: 'var(--ios-bg2)', border: '0.5px solid var(--ios-sep)',
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ios-label)', marginBottom: 8 }}>
+            ⚡ Shioaji 即時連線（零延遲）
+            <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, color: streamConnected ? '#16D67E' : 'var(--ios-label3)' }}>
+              {streamConnected ? '● 已連線' : (streamCfg.wsUrl ? '○ 連線中…' : '未設定')}
+            </span>
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--ios-label3)', lineHeight: 1.6, marginBottom: 8 }}>
+            填入你部署在 Railway 的 streaming 服務網址與 token（見 shioaji_stream/README.md）。
+            未設定時自動使用一般輪詢報價。
+          </div>
+          <input
+            value={streamDraft.wsUrl || ''}
+            onChange={e => setStreamDraft(d => ({ ...d, wsUrl: e.target.value }))}
+            placeholder="wss://你的服務.up.railway.app/ws"
+            style={{ width: '100%', boxSizing: 'border-box', marginBottom: 6, padding: '7px 10px', borderRadius: 8, border: '0.5px solid var(--ios-sep)', background: 'var(--ios-fill3)', color: 'var(--ios-label)', fontSize: 12, fontFamily: 'var(--font-mono)', outline: 'none' }}
+          />
+          <input
+            value={streamDraft.token || ''}
+            onChange={e => setStreamDraft(d => ({ ...d, token: e.target.value }))}
+            placeholder="STREAM_TOKEN"
+            type="password"
+            style={{ width: '100%', boxSizing: 'border-box', marginBottom: 8, padding: '7px 10px', borderRadius: 8, border: '0.5px solid var(--ios-sep)', background: 'var(--ios-fill3)', color: 'var(--ios-label)', fontSize: 12, fontFamily: 'var(--font-mono)', outline: 'none' }}
+          />
+          {streamError && streamCfg.wsUrl && (
+            <div style={{ fontSize: 10, color: '#FF3B30', marginBottom: 8 }}>連線問題：{streamError}</div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => { saveStreamCfg(streamDraft); setStreamCfg(streamDraft); setShowStreamCfg(false) }}
+              style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'var(--ios-blue)', color: '#fff', fontSize: 12, fontWeight: 700 }}
+            >儲存並連線</button>
+            <button
+              onClick={() => { const empty = {}; saveStreamCfg(empty); setStreamCfg(empty); setStreamDraft(empty) }}
+              style={{ padding: '8px 14px', borderRadius: 8, border: '0.5px solid var(--ios-sep)', cursor: 'pointer', background: 'var(--ios-fill3)', color: 'var(--ios-label2)', fontSize: 12, fontWeight: 600 }}
+            >清除</button>
+          </div>
+        </div>
+      )}
 
       {/* ── Index bar ─────────────────────────────────────────── */}
       <IndexBar indices={indices} loading={idxLoading} />
