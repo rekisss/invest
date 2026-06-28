@@ -398,6 +398,12 @@ export default function Portfolio({ data }) {
   const priceCount = entries.filter(e => e.curPrice != null).length
   const alertCount = entries.filter(e => e.scan && !e.scan.entry_signal && e.scan.entry_score != null && e.scan.entry_score < 500).length
 
+  // Concentration risk: flag when a single position dominates the book.
+  // Computed from the user's own qty × price (always reliable, no scan data needed).
+  const maxByVal = entries.reduce((m, e) => e.curVal > (m?.curVal ?? -1) ? e : m, null)
+  const maxPosPct = (totalValue > 0 && maxByVal) ? maxByVal.curVal / totalValue : 0
+  const concentrationWarn = entries.length >= 2 && maxPosPct > 0.40
+
   const donutSlices = entries.map(e => ({ label: e.id, value: e.curVal, color: e.color }))
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -492,6 +498,12 @@ export default function Portfolio({ data }) {
               transition: 'width 0.5s cubic-bezier(0.34,1.56,0.64,1)',
             }} />
           </div>
+
+          {concentrationWarn && (
+            <div style={{ marginTop: 10, fontSize: 11, color: 'var(--ios-yellow)', background: 'rgba(255,159,10,0.1)', borderRadius: 7, padding: '6px 10px', fontWeight: 600 }}>
+              ⚠️ 持倉集中：{maxByVal.id} {maxByVal.p.name} 占 {Math.round(maxPosPct * 100)}%，單一個股風險偏高
+            </div>
+          )}
 
           {alertCount > 0 && (
             <div style={{ marginTop: 10, fontSize: 11, color: 'var(--ios-red)', background: 'rgba(255,51,64,0.1)', borderRadius: 7, padding: '6px 10px', fontWeight: 600 }}>
