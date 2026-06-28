@@ -220,10 +220,43 @@ async def _broadcast_loop():
             clients.discard(ws)
 
 
+def _auto_shutdown_watch():
+    """Optional cost saver: exit cleanly after market close so Railway stops
+    billing. Pair with a cron-job.org call to serviceInstanceRedeploy each
+    trading morning to start back up. With restartPolicyType=ON_FAILURE, a
+    clean exit(0) is NOT auto-restarted.
+
+    Set AUTO_SHUTDOWN_CST="HH:MM" (Taipei time, e.g. "13:40"). Unset → run 24/7.
+    """
+    target = os.getenv("AUTO_SHUTDOWN_CST", "").strip()
+    if not target:
+        return
+    try:
+        th, tm = (int(x) for x in target.split(":"))
+        target_min = th * 60 + tm
+    except Exception:  # noqa: BLE001
+        print(f"invalid AUTO_SHUTDOWN_CST={target!r} — ignoring")
+        return
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("Asia/Taipei")
+    print(f"AUTO_SHUTDOWN armed for {target} CST (and weekends).")
+    while True:
+        now = datetime.now(tz)
+        cur = now.hour * 60 + now.minute
+        weekend = now.weekday() >= 5
+        # Exit after close on weekdays (target..20:00 window so a late manual
+        # deploy to reconfigure isn't killed instantly), or any time on weekends.
+        if weekend or (target_min <= cur < 20 * 60):
+            print(f"AUTO_SHUTDOWN: CST {now:%Y-%m-%d %H:%M} — exiting (Railway billing stops).")
+            os._exit(0)
+        time.sleep(30)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Login in a thread so a slow contracts download doesn't block startup.
     threading.Thread(target=_login, daemon=True).start()
+    threading.Thread(target=_auto_shutdown_watch, daemon=True).start()
     task = asyncio.create_task(_broadcast_loop())
     yield
     task.cancel()

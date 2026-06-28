@@ -56,6 +56,45 @@ python server.py            # http://localhost:8000
 curl 'http://localhost:8000/healthz'
 ```
 
+## 省錢:開盤時段自動啟停（cron-job.org）
+
+台股一週只開約 22.5 小時,沒必要 24h 開著付錢。做法:**早上用 cron-job.org 叫醒、
+收盤後服務自己關機**。
+
+### 1. 收盤自動關機（服務自己處理）
+在 Railway Variables 加一個:
+| 變數 | 值 |
+|---|---|
+| `AUTO_SHUTDOWN_CST` | `13:40` |
+
+服務會在台灣時間 13:40（收盤後）自己 `exit(0)`。因為 `railway.json` 設了
+`restartPolicyType: ON_FAILURE`,乾淨結束不會被重啟 → 容器停止 → 不再計費。
+（週末若還開著也會自動關。想在非交易時段測試就先別設這個變數。）
+
+### 2. 開盤前自動開機（cron-job.org)
+先拿三樣東西:
+- **Railway API token**:Railway → Account Settings → Tokens → 建一個（帳號或團隊 token）
+- **serviceId** 和 **environmentId**:打開你的 Railway service 頁,網址長這樣
+  `railway.com/project/<projectId>/service/<serviceId>?environmentId=<envId>`,
+  把 `<serviceId>` 和 `<envId>` 抄下來。
+
+到 [cron-job.org](https://cron-job.org) 建一個 job:
+- **URL**:`https://backboard.railway.com/graphql/v2`
+- **Method**:`POST`
+- **Headers**:
+  - `Authorization: Bearer <你的 Railway token>`
+  - `Content-Type: application/json`
+- **Request body**（JSON）:
+  ```json
+  {"query":"mutation { serviceInstanceRedeploy(serviceId: \"<serviceId>\", environmentId: \"<environmentId>\") }"}
+  ```
+- **排程**:時區選 `Asia/Taipei`,時間 `08:55`,星期一～五。
+
+這樣每個交易日早上 08:55 cron-job.org 會叫醒服務,登入 Shioaji 開始 streaming;
+13:40 服務自己關機。每月只付約 13% 的時間。
+
+> 驗證:cron-job.org 那筆 job 的回應若是 `{"data":{"serviceInstanceRedeploy":true}}` 就成功。
+
 ## 成本 / 注意
 
 - Railway 免費額度有限，長時間 24h 執行可能需付費方案；非交易時段可手動停掉省錢。
