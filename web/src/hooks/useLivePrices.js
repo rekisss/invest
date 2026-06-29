@@ -8,10 +8,12 @@
 
 import { useState, useEffect, useMemo } from 'react'
 
-const CACHE_URL = 'https://api.github.com/repos/rekisss/invest/contents/live_prices.json?ref=data'
+// raw.githubusercontent.com is NOT subject to the api.github.com 60-req/hr limit,
+// so it's safe to poll on every refresh (the cache is now a primary source).
+const CACHE_URL = 'https://raw.githubusercontent.com/rekisss/invest/data/live_prices.json'
 // Shioaji broker-feed cache (read-only snapshots, populated by live-prices-shioaji.yml
-// when SHIOAJI_* secrets are configured). Preferred when present & at least as fresh.
-const SHIOAJI_CACHE_URL = 'https://api.github.com/repos/rekisss/invest/contents/live_prices_shioaji.json?ref=data'
+// when SHIOAJI_* secrets are configured). Preferred when fresh.
+const SHIOAJI_CACHE_URL = 'https://raw.githubusercontent.com/rekisss/invest/data/live_prices_shioaji.json'
 
 const TWSE_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
 const TPEX_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'
@@ -152,10 +154,9 @@ export async function fetchIndices() {
 
 // ── Tier 2: GitHub Actions cache (fallback) ───────────────────────────────────
 async function fetchOneCache(url) {
-  const r = await fetch(url, {
-    headers: { Accept: 'application/vnd.github.raw+json' },
-    signal: AbortSignal.timeout(10000),
-  })
+  // ~1-min cache-buster so the Fastly CDN serves data near the 3-min cadence.
+  const bust = Math.floor(Date.now() / 60000)
+  const r = await fetch(`${url}?t=${bust}`, { signal: AbortSignal.timeout(10000) })
   if (!r.ok) return null
   const json = await r.json()
   if (!json?.prices || !json?.updatedAt) return null
@@ -252,35 +253,47 @@ export function useLivePrices(stockIds, { pollInterval = 60000, refreshTrigger =
 
       if (!cancelled) setLoading(true)
       try {
-        // Tier 1: TWSE/TPEX official (real-time, browser CORS-friendly)
-        const official = await fetchTWSEOfficial(ids)
+        // Fetch the broker/official cache (Shioaji-preferred) and the browser-direct
+        // TWSE/TPEX quotes in parallel. The cache WINS when fresh: it's the broker
+        // feed (more accurate) and, crucially, after close TWSE's STOCK_DAY_ALL goes
+        // stale while the cache holds the correct close. Browser quotes fill symbols
+        // the cache lacks, and serve as the fallback when the cache is missing/stale.
+        const [official, cache] = await Promise.all([
+          fetchTWSEOfficial(ids).catch(() => ({})),
+          fetchPriceCache(ids).catch(() => ({ stocks: {}, isStale: true, updatedAt: null })),
+        ])
         if (cancelled) return
 
-        if (Object.keys(official).length > 0) {
+        const cacheStocks = cache.stocks || {}
+        const cacheFresh  = Object.keys(cacheStocks).length > 0 && !cache.isStale
+        const officialHas = Object.keys(official).length > 0
+
+        if (cacheFresh) {
+          setPrices(prev => ({ ...prev, ...official, ...cacheStocks }))
+          setLastUpdate(new Date())
+          setError(open ? null : '今日收盤')
+        } else if (officialHas) {
           setPrices(prev => ({ ...prev, ...official }))
           setLastUpdate(new Date())
           setError(open ? null : '今日收盤')
-        } else {
-          // Tier 2: GH Actions cache fallback
-          const { stocks: cached, updatedAt, isStale } = await fetchPriceCache(ids)
-          if (cancelled) return
-          if (Object.keys(cached).length > 0) {
-            setPrices(prev => ({ ...prev, ...cached }))
-            setLastUpdate(new Date())
-            if (isStale && updatedAt) {
-              const dateStr = updatedAt.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric' })
-              const timeStr = updatedAt.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' })
-              setError(`快取報價 ${dateStr} ${timeStr}`)
-            } else {
-              setError('快取報價（官方 API 暫時無回應）')
-            }
+        } else if (Object.keys(cacheStocks).length > 0) {
+          // Last resort: stale cache.
+          setPrices(prev => ({ ...prev, ...cacheStocks }))
+          setLastUpdate(new Date())
+          const u = cache.updatedAt
+          if (u) {
+            const dateStr = u.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric' })
+            const timeStr = u.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' })
+            setError(`快取報價 ${dateStr} ${timeStr}`)
           } else {
-            const s = getTWSESession()
-            if      (s === 'pre')     setError('盤前（09:00 開盤後即時更新）')
-            else if (s === 'weekend') setError('休市（週末）')
-            else if (s === 'open')    setError('等待報價…')
-            else                      setError('收盤報價暫時無法取得，可點「刷新」重試')
+            setError('快取報價')
           }
+        } else {
+          const s = getTWSESession()
+          if      (s === 'pre')     setError('盤前（09:00 開盤後即時更新）')
+          else if (s === 'weekend') setError('休市（週末）')
+          else if (s === 'open')    setError('等待報價…')
+          else                      setError('收盤報價暫時無法取得，可點「刷新」重試')
         }
       } catch (e) {
         if (!cancelled) setError(e.message)
