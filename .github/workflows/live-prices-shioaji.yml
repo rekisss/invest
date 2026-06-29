@@ -46,10 +46,14 @@ jobs:
             echo "No output produced (likely no secrets configured) — nothing to publish."
             exit 0
           fi
+          # Move the generated file aside so switching to the data branch (which
+          # already holds a copy) doesn't abort on the untracked working-tree file.
+          mv live_prices_shioaji.json "${RUNNER_TEMP}/live_prices_shioaji.json"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git fetch origin data
           git checkout data
+          mv -f "${RUNNER_TEMP}/live_prices_shioaji.json" live_prices_shioaji.json
           git add live_prices_shioaji.json
           git diff --staged --quiet || git commit -m "shioaji prices $(TZ=Asia/Taipei date '+%H:%M:%S')"
           git push origin data
