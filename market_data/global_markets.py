@@ -9,12 +9,45 @@ All fields have sensible defaults so downstream code never crashes on stale data
 """
 from __future__ import annotations
 
+import json
 import time
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional
 
 import pandas as pd
+
+
+# ── Yahoo chart REST (crumb-free) ──────────────────────────────────────────────
+# yfinance gets blocked from CI/datacenter IPs (Yahoo rejects its fingerprint),
+# which left every overnight-US feature null. The public v8/finance/chart endpoint
+# is not blocked the same way — it's the same family of endpoints live-prices.yml
+# already uses successfully from GitHub Actions. We try it first, then fall back to
+# yfinance (which still works in local dev).
+_YF_HOSTS = ("query1.finance.yahoo.com", "query2.finance.yahoo.com")
+
+
+def _yahoo_chart_closes(ticker: str, rng: str = "5d") -> list[float]:
+    """Return recent daily closes for a Yahoo ticker via the chart REST API."""
+    sym = urllib.parse.quote(ticker)
+    for host in _YF_HOSTS:
+        try:
+            url = f"https://{host}/v8/finance/chart/{sym}?range={rng}&interval=1d"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; market-data/1.0)"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = json.loads(r.read().decode("utf-8", "ignore"))
+            res = (data.get("chart", {}).get("result") or [None])[0]
+            if not res:
+                continue
+            closes = res.get("indicators", {}).get("quote", [{}])[0].get("close") or []
+            vals = [float(c) for c in closes if c is not None]
+            if len(vals) >= 1:
+                return vals
+        except Exception:
+            continue
+    return []
 
 
 # ── Schema ───────────────────────────────────────────────────────────────────────
@@ -63,32 +96,37 @@ class GlobalMarketSnapshot:
 # ── Fetchers ─────────────────────────────────────────────────────────────────────
 
 def _safe_yf_return(ticker: str, period: str = "2d") -> tuple[float, bool]:
-    """Fetch 1-day return from yfinance. Returns (return, success)."""
+    """Fetch 1-day return. Yahoo chart REST first (works in CI), then yfinance."""
+    closes = _yahoo_chart_closes(ticker)
+    if len(closes) >= 2 and closes[-2]:
+        return float((closes[-1] - closes[-2]) / closes[-2]), True
     try:
         import yfinance as yf
         df = yf.download(ticker, period=period, progress=False, auto_adjust=True)
         if df.empty or len(df) < 2:
             return 0.0, False
-        closes = df["Close"].dropna()
-        if len(closes) < 2:
+        c = df["Close"].dropna()
+        if len(c) < 2:
             return 0.0, False
-        ret = float((closes.iloc[-1] - closes.iloc[-2]) / closes.iloc[-2])
-        return ret, True
+        return float((c.iloc[-1] - c.iloc[-2]) / c.iloc[-2]), True
     except Exception:
         return 0.0, False
 
 
 def _safe_yf_last(ticker: str, period: str = "2d") -> tuple[float, bool]:
-    """Fetch latest price/level from yfinance. Returns (value, success)."""
+    """Fetch latest level. Yahoo chart REST first (works in CI), then yfinance."""
+    closes = _yahoo_chart_closes(ticker)
+    if closes:
+        return float(closes[-1]), True
     try:
         import yfinance as yf
         df = yf.download(ticker, period=period, progress=False, auto_adjust=True)
         if df.empty:
             return 0.0, False
-        closes = df["Close"].dropna()
-        if closes.empty:
+        c = df["Close"].dropna()
+        if c.empty:
             return 0.0, False
-        return float(closes.iloc[-1]), True
+        return float(c.iloc[-1]), True
     except Exception:
         return 0.0, False
 
@@ -154,15 +192,17 @@ def fetch_global_snapshot(use_cache: bool = True, cache_ttl_minutes: int = 30) -
     vix_now, ok1 = _safe_yf_last("^VIX", period="3d")
     if ok1:
         snap.vix = round(vix_now, 2)
-        try:
-            import yfinance as yf
-            df = yf.download("^VIX", period="3d", progress=False, auto_adjust=True)
-            closes = df["Close"].dropna()
-            if len(closes) >= 2:
-                snap.vix_prev = round(float(closes.iloc[-2]), 2)
-                snap.vix_change = round(float(closes.iloc[-1] - closes.iloc[-2]), 2)
-        except Exception:
-            pass
+        vix_closes = _yahoo_chart_closes("^VIX")
+        if len(vix_closes) < 2:
+            try:
+                import yfinance as yf
+                df = yf.download("^VIX", period="3d", progress=False, auto_adjust=True)
+                vix_closes = [float(x) for x in df["Close"].dropna().tolist()]
+            except Exception:
+                vix_closes = []
+        if len(vix_closes) >= 2:
+            snap.vix_prev = round(float(vix_closes[-2]), 2)
+            snap.vix_change = round(float(vix_closes[-1] - vix_closes[-2]), 2)
     else:
         missing.append("vix")
 
