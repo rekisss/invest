@@ -40,7 +40,8 @@ jobs:
 
       - name: Run pre-market prediction
         env:
-          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          # 盤前預測改用帳號10（FINMIND_TOKEN_10）— 額度較足；沒設時自動退回原本的 FINMIND_TOKEN。
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN_10 || secrets.FINMIND_TOKEN }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PREMARKET_AI_KEY: ${{ secrets.PREMARKET_AI_KEY }}
         run: |
