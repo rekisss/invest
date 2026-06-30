@@ -555,7 +555,8 @@ function processScanData() {
     })
     const topStocks = allStocks.slice(0, TOP_N).map((row, i) => ({ rank: i + 1, ...mapStock(row) }))
     // A/B/C grade only — the "精選" pool. D-grade stocks tracked but not surfaced as actionable.
-    const selectableStocks = topStocks.filter(r => ['A','B','C'].includes(r.grade))
+    // Also exclude rows with an invalid price (≤0 / missing) — halted/delisted stubs.
+    const selectableStocks = topStocks.filter(r => ['A','B','C'].includes(r.grade) && toNum(r.close) > 0)
     const limitDownAlerts = allStocks
       .filter(r => toNum(r.limit_down_streak) >= 3)
       .sort((a, b) => toNum(b.limit_down_streak) - toNum(a.limit_down_streak))
@@ -578,6 +579,11 @@ function processScanData() {
       adx14: r2(row.adx14),
       foreign_buy_streak: toNum(row.foreign_buy_streak),
       invest_trust_streak: toNum(row.invest_trust_streak),
+      // 法人 net (張) — carried so the TWSE T86 build-time supplement can backfill
+      // the full universe, not just top stocks (FinMind often returns these empty).
+      foreign_net: r2(row.foreign_net),
+      invest_trust_net: r2(row.invest_trust_net),
+      dealer_net: r2(row.dealer_net),
       f_score: toNum(row.f_score),
       revenue_yoy: r2(row.revenue_yoy),
       day_return: r2(row.day_return),
@@ -1524,7 +1530,10 @@ if (latestDataDate && isFresh) {
   const twseData = await fetchTWSEInstitutional(dateStr)
   if (twseData) {
     let merged = 0
-    for (const stock of topStocks) {
+    // Backfill BOTH the top list and the full filter_stocks universe so 法人 net
+    // isn't limited to ~20 top stocks (FinMind commonly returns these empty).
+    const instTargets = [...topStocks, ...(latestScanObj.filter_stocks || [])]
+    for (const stock of instTargets) {
       const inst = twseData[stock.stock_id]
       if (!inst) continue
       // Only fill gaps — don't overwrite non-zero scan data
@@ -1538,10 +1547,15 @@ if (latestDataDate && isFresh) {
     const newInstCount = topStocks.filter(s =>
       (s.foreign_net || 0) !== 0 || (s.invest_trust_net || 0) !== 0
     ).length
+    const filterInstCount = (latestScanObj.filter_stocks || []).filter(s =>
+      (s.foreign_net || 0) !== 0 || (s.invest_trust_net || 0) !== 0
+    ).length
     dataQuality.institutional_ok    = newInstCount >= Math.max(5, Math.floor(totalTop * 0.15))
     dataQuality.institutional_ratio = totalTop > 0 ? Math.round(newInstCount / totalTop * 100) : null
+    const filterTotal = (latestScanObj.filter_stocks || []).length
+    dataQuality.institutional_ratio_full = filterTotal > 0 ? Math.round(filterInstCount / filterTotal * 100) : null
     if (merged > 0) dataQuality.institutional_source = 'twse_t86'
-    console.log(`  TWSE T86 補抓完成：${merged} 支填補，inst_ratio=${dataQuality.institutional_ratio}%`)
+    console.log(`  TWSE T86 補抓完成：${merged} 支填補，top inst_ratio=${dataQuality.institutional_ratio}%、全池 ${dataQuality.institutional_ratio_full}%`)
   } else {
     console.log('  TWSE T86 無資料（可能盤後尚未公布或非交易日）')
   }
