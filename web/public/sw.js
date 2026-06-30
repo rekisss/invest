@@ -1,7 +1,9 @@
 // Service worker for 台股 AI 助手 PWA
-// Strategy: app shell + assets cache-first (with background refresh),
-// data.json network-first (fresh data, cache fallback when offline).
-const CACHE = 'invest-pwa-v1'
+// Strategy: HTML/navigation + data.json network-first (so new deploys and fresh
+// data load immediately), hashed assets cache-first (immutable by content hash).
+// NOTE: previously index.html was cache-first, which pinned users to a stale
+// bundle for a launch or more after each deploy — fixed here.
+const CACHE = 'invest-pwa-v2'
 const BASE = '/invest/'
 const SHELL = [BASE, BASE + 'index.html', BASE + 'manifest.json', BASE + 'icon.svg']
 
@@ -26,8 +28,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url)
   if (url.origin !== self.location.origin) return // let cross-origin (fonts, APIs) hit network directly
 
-  // Fresh market data: network-first, fall back to cache offline.
-  if (url.pathname.endsWith('/data.json')) {
+  // HTML entry / navigations + market data: network-first so a new deploy (and
+  // fresh data) is picked up immediately; fall back to cache when offline.
+  const isNavigation = req.mode === 'navigate'
+  const isHtml = url.pathname.endsWith('/') || url.pathname.endsWith('/index.html')
+  if (url.pathname.endsWith('/data.json') || isNavigation || isHtml) {
     event.respondWith(
       fetch(req)
         .then((res) => {
