@@ -1,0 +1,29 @@
+name: FinMind Token 健康檢查
+
+# 手動觸發:Actions → 此 workflow → Run workflow。結果直接看 log。
+# 一次檢查 9 把掃描用的 FinMind token:有效 / 額度滿 / 無效 / 未設定。
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install requests
+        run: pip install --quiet requests
+      - name: 檢查 FinMind tokens
+        env:
+          FINMIND_TOKEN:   ${{ secrets.FINMIND_TOKEN }}
+          FINMIND_TOKEN_2: ${{ secrets.FINMIND_TOKEN_2 }}
+          FINMIND_TOKEN_3: ${{ secrets.FINMIND_TOKEN_3 }}
+          FINMIND_TOKEN_4: ${{ secrets.FINMIND_TOKEN_4 }}
+          FINMIND_TOKEN_5: ${{ secrets.FINMIND_TOKEN_5 }}
+          FINMIND_TOKEN_6: ${{ secrets.FINMIND_TOKEN_6 }}
+          FINMIND_TOKEN_7: ${{ secrets.FINMIND_TOKEN_7 }}
+          FINMIND_TOKEN_8: ${{ secrets.FINMIND_TOKEN_8 }}
+          FINMIND_TOKEN_9: ${{ secrets.FINMIND_TOKEN_9 }}
+        run: python finmind_token_check.py
