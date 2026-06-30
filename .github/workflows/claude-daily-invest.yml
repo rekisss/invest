@@ -1,0 +1,46 @@
+name: Claude Daily Invest Check
+
+# 每日自動健檢:檢查資料流/掃描/測試,發現可安全修正的問題就開「草稿 PR」(不自動 merge)。
+# 需求:repo secret ANTHROPIC_API_KEY。建議先設好 main branch protection(見 README/聊天說明)。
+# 注意:claude-code-action 會自動讀取 repo 根目錄的 CLAUDE.md 並遵守其中規則。
+on:
+  schedule:
+    - cron: "0 0 * * *"   # UTC 00:00 = 台灣 08:00
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+# 同一時間只跑一個,避免重疊開重複 PR
+concurrency:
+  group: claude-daily-invest
+  cancel-in-progress: false
+
+jobs:
+  claude-daily:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # v1 使用 `prompt`;若你的 action 版本報「unknown input」,改成 `direct_prompt`。
+          prompt: |
+            請對這個台股 invest 專案做每日健檢。嚴格遵守 repo 根目錄 CLAUDE.md 的所有規則
+            (尤其:不改現有 Python、不自動 merge、不碰 secrets、不直接改 main、所有修改開新 branch + 草稿 PR)。
+
+            任務:
+            1. 檢查資料更新流程是否正常(output/ 的掃描/彙整/預測是否有當日資料、有沒有明顯錯誤或缺漏)
+            2. 檢查股票掃描/選股策略是否有明顯 bug
+            3. 檢查測試是否足夠;可補的測試就補
+            4. 只在「可安全修正」時才改程式;有疑慮就只在 PR 描述提出建議,不要硬改
+            5. 建立草稿 Pull Request,絕對不要直接 merge
+            6. PR 說明請包含:改了什麼、為什麼、測試結果、風險、建議我人工檢查的地方
+
+            股票安全限制:不要自動下單、不要產生保證獲利敘述、策略修改要附理由與風險。
