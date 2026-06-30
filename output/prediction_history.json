@@ -1,8 +1,8 @@
 [
   {
     "date": "2026-06-30",
-    "generated_at": "08:04",
-    "xgb_prob_up": 0.646,
+    "generated_at": "00:02",
+    "xgb_prob_up": 0.642,
     "xgb_label": "看多",
     "market_data": {
       "vix": null,
@@ -10,39 +10,39 @@
       "nasdaq_ret": null,
       "sox_ret": null,
       "tsm_adr_ret": null,
-      "futures_net": -76627.0,
-      "night_change": 781.0,
+      "futures_net": -83063.0,
+      "night_change": -369.0,
       "pcr": null,
-      "taiex_rsi": 53.01730349780903,
-      "macd_hist": -546.2152847518028,
-      "dist_ma20": -0.6096962321407551,
-      "dist_ma60": 9.237477115207327,
-      "taiex_ret_5d": -5.695660540660496,
-      "taiex_ret_20d": 0.9378755095759361,
+      "taiex_rsi": 57.90368924935506,
+      "macd_hist": -472.47855694040345,
+      "dist_ma20": 1.8232366100221942,
+      "dist_ma60": 11.440456396495602,
+      "taiex_ret_5d": -1.9861134511631073,
+      "taiex_ret_20d": 2.1361313641028445,
       "buyback_count": 0,
-      "disposition_count": 80,
+      "disposition_count": 81,
       "jpy_ret": null,
       "arkk_ret": null,
       "hyg_ret": null,
       "night_trend": "↑ 偏強",
       "market_revenue_yoy": 0.0937,
-      "market_foreign_holding_chg": -5.8564
+      "market_foreign_holding_chg": -5.4153
     },
-    "ai_insight": "# 今日操盤要點\n\n・夜盤強勢上漲逾780點，惟外資期貨、現貨及持股連日淨賣，短線存在獲利回吐壓力，應留意開盤後的技術面支撐強度。\n\n・處置股達80支創風險警示，加權指數貼近月線但距20日線僅0.6%，上檔缺乏量能突破跡象，建議逢高減碼並控制風險部位。\n\n・市場月營收年增近一成反映基本面韌性，惟AI概念股漲幅預期與外資淨賣現象矛盾，應聚焦個股基本",
+    "ai_insight": "# 今日操盤要點\n\n・ AI題材仍具上漲動能（64%機率），惟外資期貨大幅淨賣逾8萬口，短線易有回檔，應控制追高風險。\n\n・ 加權指數距MA20僅+1.8%處於高檔整理，RSI 58偏溫和、MACD直方轉弱，留意技術面短期承壓的拉回機會。\n\n・ 外資5日淨賣5.42%、現股零成長，搭配81支處置股警示，應謹慎標的選擇，優先聚焦基本面與籌碼相對穩健的個股。",
     "regime": {
-      "label": "range_bound",
-      "label_zh": "😴 區間震盪日",
-      "win_rate": 53.0
+      "label": "double_whipsaw",
+      "label_zh": "🔄 多空雙巴日",
+      "win_rate": 45.0
     },
     "scenario": {
-      "main_scenario": "無強烈方向訊號，台股可能在區間內震盪，注意盤中族群輪動",
-      "best_strategy": "區間操作 / 選強勢族群個股 / 勿重押方向",
+      "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+      "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
       "danger_signals": [
-        "外資空單極重（-76,627口），軋空風險高",
-        "夜盤缺口 +781pt 過大，易反轉"
+        "外資空單極重（-83,063口），軋空風險高",
+        "夜盤缺口 -369pt 過大，易反轉"
       ],
       "forbidden_actions": [
-        "禁止追多缺口超過200pt",
+        "禁止追空缺口超過200pt",
         "禁止反彈高點追多（軋空陷阱）"
       ]
     },
@@ -52,12 +52,12 @@
       "factors": [
         {
           "name": "外資空單極重",
-          "description": "-76,627口，軋空/崩潰雙向風險",
+          "description": "-83,063口，軋空/崩潰雙向風險",
           "action": "避免重押方向"
         },
         {
           "name": "夜盤大缺口",
-          "description": "夜盤 +781pt，開盤後可能快速反轉",
+          "description": "夜盤 -369pt，開盤後可能快速反轉",
           "action": "禁止追缺口超過200pt"
         }
       ]
