@@ -35,3 +35,24 @@ web/public/data.json
      ↓
 React frontend (web/src/**, OK to modify)
 ```
+
+## 自動化代理規則 (Autonomous Agent Rules)
+適用於每日自動排程（`claude-daily-invest.yml`）等無人值守的執行。
+
+目標：
+- 自動檢查資料更新流程是否正常
+- 修正 bug、補測試、優化程式架構
+- 開 Pull Request（草稿）
+
+限制（硬規則）：
+- **不要自動 merge**（PR 一律交人工審核）
+- **不要改 API key、token、secrets**（不讀取、不輸出、不修改任何憑證）
+- **不要刪除資料庫或重要資料**（`output/`、`models/`、`training_data/` 等）
+- **不要直接改 `main`**；所有修改都開新 branch + PR
+- 每個 PR 都要說明：改了什麼、為什麼、測試結果、風險、建議人工檢查處
+- 仍受上面「核心原則」約束（不改現有 Python，除非用戶明確授權）
+
+股票相關安全限制：
+- **不要自動下單**、不接觸任何下單/交易 API
+- **不要產生「保證獲利」之類的敘述**
+- 策略修改一定要附上理由與可能風險
