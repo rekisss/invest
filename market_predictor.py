@@ -139,8 +139,46 @@ def _fetch_stooq_close(symbol: str, start_date: str, end_date: str) -> pd.Series
     return pd.Series(df["Close"].values, index=df["Date"])
 
 
+def _fetch_yahoo_chart_close(ticker: str, start_date: str, end_date: str) -> pd.Series | None:
+    """Daily closes via Yahoo's crumb-free v8 chart REST.
+
+    Works from CI/datacenter IPs where the yfinance library AND Stooq are blocked
+    (this is the same Yahoo endpoint family live-prices.yml uses successfully from
+    GitHub Actions). Critically covers SOX / TSM ADR, which FRED does not provide.
+    """
+    import time as _time
+    from io import StringIO  # noqa: F401 (keep import style consistent)
+    import requests
+    try:
+        p1 = int(_time.mktime(_time.strptime(start_date, "%Y-%m-%d")))
+        p2 = int(_time.mktime(_time.strptime(end_date, "%Y-%m-%d"))) + 86400
+    except Exception:
+        return None
+    sym = requests.utils.quote(ticker)
+    for host in ("query1.finance.yahoo.com", "query2.finance.yahoo.com"):
+        try:
+            url = (f"https://{host}/v8/finance/chart/{sym}"
+                   f"?period1={p1}&period2={p2}&interval=1d")
+            resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+            if resp.status_code != 200:
+                continue
+            res = (resp.json().get("chart", {}).get("result") or [None])[0]
+            if not res:
+                continue
+            ts = res.get("timestamp") or []
+            closes = (res.get("indicators", {}).get("quote", [{}]) or [{}])[0].get("close") or []
+            pairs = [(t, c) for t, c in zip(ts, closes) if c is not None]
+            if not pairs:
+                continue
+            idx = pd.to_datetime([p[0] for p in pairs], unit="s")
+            return pd.Series([float(p[1]) for p in pairs], index=idx)
+        except Exception:
+            continue
+    return None
+
+
 def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
-    """Download US market indicators via yfinance with Stooq + FRED fallbacks."""
+    """Download US market indicators via yfinance with Yahoo-REST + Stooq + FRED fallbacks."""
     if not _YF_OK:
         return pd.DataFrame()
     try:
@@ -159,6 +197,25 @@ def fetch_us_features(start_date: str, end_date: str) -> pd.DataFrame:
                 col_frames.append(close.rename(key))
             except Exception:
                 failed.append(ticker)
+
+        # Yahoo chart REST fallback — the crumb-free v8 endpoint works from CI where
+        # the yfinance library (and often Stooq) are IP-blocked. Recovers SOX / TSM
+        # ADR / VIX etc. that FRED cannot provide. Same endpoint family as live-prices.yml.
+        if failed:
+            yc_recovered: list[str] = []
+            for key, ticker in _US_TICKERS.items():
+                if ticker not in failed:
+                    continue
+                try:
+                    close = _fetch_yahoo_chart_close(ticker, start_date, end_dt)
+                    if close is not None and not close.empty:
+                        col_frames.append(close.rename(key))
+                        yc_recovered.append(ticker)
+                except Exception:
+                    pass
+            failed = [t for t in failed if t not in yc_recovered]
+            if yc_recovered:
+                print(f"[ai] Yahoo chart 後備補回 {len(yc_recovered)} 個 ticker", file=sys.stderr)
 
         # Stooq fallback for tickers Yahoo refused (datacenter-IP blocking)
         if failed:
