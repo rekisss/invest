@@ -377,9 +377,15 @@ function processScanData() {
     uniqueCountPerDate[date] = new Set(rows.map(r => r.stock_id)).size
   }
   const _allDatesDesc = Object.keys(dateMap).sort().reverse()
-  const dates = _allDatesDesc
-    .filter((d, i) => i === 0 || uniqueCountPerDate[d] >= MIN_VALID_STOCKS)
+  // Drop degenerate scans (< MIN_VALID_STOCKS) — including the newest. A scan that
+  // ran overnight while FinMind quota was exhausted can produce e.g. 88 stocks; the
+  // old `i === 0` exemption made that the PRIMARY date, replacing yesterday's complete
+  // scan with a broken 88-stock leaderboard. Now the newest COMPLETE date wins.
+  let dates = _allDatesDesc
+    .filter(d => uniqueCountPerDate[d] >= MIN_VALID_STOCKS)
     .slice(0, MAX_DATES)
+  // Safety net: if every date is tiny (unlikely), fall back to showing them anyway.
+  if (dates.length === 0) dates = _allDatesDesc.slice(0, MAX_DATES)
   const scans = {}
   const stockHistory = {}
 
