@@ -1043,12 +1043,15 @@ async function fetchTaiwanIndustryMap() {
   const map = {}
   // TWSE listed (上市)
   try {
-    const txt = await fetchUrl('https://opendata.twse.com.tw/v1/company/stockList', 10000)
+    // 上市公司基本資料 (t187ap03_L) — has 公司代號 + 產業別. The old
+    // opendata.twse.com.tw host does not resolve (ENOTFOUND); openapi.twse.com.tw
+    // is the working host (same one used for STOCK_DAY_ALL).
+    const txt = await fetchUrl('https://openapi.twse.com.tw/v1/opendata/t187ap03_L', 10000)
     const data = JSON.parse(txt)
     if (Array.isArray(data)) {
       for (const item of data) {
-        const id  = (item['公司代號'] || item['stockSymbol'] || item['code'] || '').trim()
-        const cat = (item['產業別']   || item['industryType'] || item['industry'] || '').trim()
+        const id  = (item['公司代號'] || item['Company Code'] || item['stockSymbol'] || item['code'] || '').trim()
+        const cat = (item['產業別']   || item['Industry'] || item['industryType'] || item['industry'] || '').trim()
         if (id && cat) map[id] = cat
       }
     }
