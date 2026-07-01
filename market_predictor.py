@@ -170,7 +170,11 @@ def _fetch_yahoo_chart_close(ticker: str, start_date: str, end_date: str) -> pd.
             pairs = [(t, c) for t, c in zip(ts, closes) if c is not None]
             if not pairs:
                 continue
-            idx = pd.to_datetime([p[0] for p in pairs], unit="s")
+            # Normalize to calendar date — different asset classes (indices, stocks,
+            # futures, FX) return different intraday bar timestamps; without this the
+            # per-ticker Series don't align on concat and the latest row ends up mostly
+            # NaN (so sox_ret1/vix reached the prediction as null despite being fetched).
+            idx = pd.to_datetime([p[0] for p in pairs], unit="s").normalize()
             return pd.Series([float(p[1]) for p in pairs], index=idx)
         except Exception:
             continue
