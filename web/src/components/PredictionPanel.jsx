@@ -576,6 +576,21 @@ export default function PredictionPanel({ prediction, history = [] }) {
               color={xgb_prob_up >= 0.55 ? 'var(--ios-red)' : xgb_prob_up <= 0.45 ? 'var(--ios-green)' : 'var(--ios-yellow)'} />
             {regime && <Tag text={`勝率 ${regime.win_rate > 1 ? regime.win_rate : Math.round(regime.win_rate * 100)}%`} color="var(--ios-blue)" />}
           </div>
+          {(() => {
+            // Honest low-confidence flag — don't let an unreliable call be treated as gospel.
+            const md = market_data || {}
+            const reasons = []
+            if (md.sox_ret == null && md.nasdaq_ret == null) reasons.push('隔夜美股資料缺')
+            if (Math.abs((xgb_prob_up ?? 0.5) - 0.5) < 0.05) reasons.push('機率接近五五波')
+            const rwin = regime?.win_rate == null ? null : (regime.win_rate > 1 ? regime.win_rate : regime.win_rate * 100)
+            if (rwin != null && rwin < 40) reasons.push('此盤勢歷史勝率偏低')
+            if (!reasons.length) return null
+            return (
+              <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(255,159,10,0.1)', border: '0.5px solid rgba(255,159,10,0.35)', borderRadius: 10, fontSize: 12, color: 'var(--ios-yellow)', fontWeight: 600, lineHeight: 1.5 }}>
+                ⚠️ 低信心：{reasons.join('、')} — 建議降低倉位、別當鐵口
+              </div>
+            )
+          })()}
           {regime?.label_zh && (
             <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--ios-bg3)', borderRadius: 10, fontSize: 14, color: 'var(--ios-label)', lineHeight: 1.5 }}>
               {regime.label_zh}
