@@ -1,9 +1,11 @@
 name: FinMind Token 健康檢查
 
-# 手動觸發:Actions → 此 workflow → Run workflow。結果直接看 log。
-# 一次檢查 9 把掃描用的 FinMind token:有效 / 額度滿 / 無效 / 未設定。
+# 檢查 9 把掃描用的 FinMind token:有效 / 額度滿 / 無效 / 未設定,並發 Discord 通知。
+# 每日盤前自動跑一次(掃描出問題多半是 token 額度),也可手動觸發。
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '30 22 * * *'   # 每日 22:30 UTC = 06:30 CST,盤前提醒
 
 jobs:
   check:
@@ -26,4 +28,6 @@ jobs:
           FINMIND_TOKEN_7: ${{ secrets.FINMIND_TOKEN_7 }}
           FINMIND_TOKEN_8: ${{ secrets.FINMIND_TOKEN_8 }}
           FINMIND_TOKEN_9: ${{ secrets.FINMIND_TOKEN_9 }}
+          FINMIND_TOKEN_10: ${{ secrets.FINMIND_TOKEN_10 }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python finmind_token_check.py
