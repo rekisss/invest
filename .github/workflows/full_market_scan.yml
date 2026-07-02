@@ -8,6 +8,11 @@ name: 全市場掃描
 # 每日 20:30 CST 由 full_market_aggregate.yml 彙整 TOP 20 → Discord
 
 on:
+  # 固定在「收盤後、FinMind 當日額度最足」的時間自動跑,取代傍晚手動觸發(那時額度常被
+  # 用光導致半數分段失敗)。第二個時段接續補掃第一輪失敗的分段(force_rescan 預設 false)。
+  schedule:
+    - cron: '5 6 * * 1-5'    # 14:05 CST 週一~五(盤後 ~30 分,今日收盤已入庫、額度最新)
+    - cron: '35 7 * * 1-5'   # 15:35 CST 補掃一次(接續)
   workflow_dispatch:
     inputs:
       force_rescan:
