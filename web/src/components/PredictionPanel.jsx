@@ -43,6 +43,64 @@ function ProbBar({ prob }) {
   )
 }
 
+// Rule-based 空方 cross-check — high-conviction bearish conditions for Taiwan's
+// next session, scored from the day's market_data, shown next to the model so the
+// user can see agreement/divergence (a sanity check on a ~40%-precision model).
+function BearishCrossCheck({ market_data, prob }) {
+  const md = market_data || {}
+  const n = (v) => (typeof v === 'number' && !Number.isNaN(v)) ? v : null
+  const RULES = [
+    { label: '費半 SOX 隔夜 ≤ −2%', hit: n(md.sox_ret) != null && md.sox_ret <= -0.02, val: n(md.sox_ret) },
+    { label: '台積電 ADR 隔夜 ≤ −2%', hit: n(md.tsm_adr_ret) != null && md.tsm_adr_ret <= -0.02, val: n(md.tsm_adr_ret) },
+    { label: 'Nasdaq 隔夜 ≤ −1%', hit: n(md.nasdaq_ret) != null && md.nasdaq_ret <= -0.01, val: n(md.nasdaq_ret) },
+    { label: 'VIX > 22（恐慌）', hit: n(md.vix) != null && md.vix > 22, val: n(md.vix) },
+    { label: '外資期貨淨空 > 3萬口', hit: n(md.futures_net) != null && md.futures_net < -30000, val: n(md.futures_net) },
+    { label: '夜盤大跌 < −150', hit: n(md.night_change) != null && md.night_change < -150, val: n(md.night_change) },
+  ]
+  const known = RULES.filter(r => r.val != null)
+  if (known.length === 0) return null
+  const hits = RULES.filter(r => r.hit).length
+  const modelBear = prob != null && prob <= 0.45
+  const modelBull = prob != null && prob >= 0.55
+  // Divergence: many hard bearish signals but the model is bullish (or vice-versa)
+  const diverge = (hits >= 3 && modelBull)
+  const fmtVal = (label, v) => {
+    if (v == null) return '—'
+    if (label.includes('VIX')) return v.toFixed(1)
+    if (label.includes('淨空') || label.includes('夜盤')) return Math.round(v).toLocaleString()
+    return `${(v * 100).toFixed(1)}%`
+  }
+  return (
+    <Card title="空方硬規則交叉驗證" accent="var(--ios-orange)">
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-mono)', color: hits >= 3 ? 'var(--ios-red)' : hits >= 1 ? 'var(--ios-yellow)' : 'var(--ios-green)' }}>{hits}/6</span>
+        <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>空方訊號成立</span>
+      </div>
+      {diverge && (
+        <div style={{ marginBottom: 8, padding: '7px 10px', background: 'rgba(255,51,64,0.1)', border: '0.5px solid rgba(255,51,64,0.35)', borderRadius: 8, fontSize: 12, color: 'var(--ios-red)', fontWeight: 600, lineHeight: 1.5 }}>
+          ⚠️ 硬規則偏空({hits} 條)但模型偏多 — 兩者分歧,宜謹慎、別急著追多
+        </div>
+      )}
+      {!diverge && hits >= 3 && modelBear && (
+        <div style={{ marginBottom: 8, padding: '7px 10px', background: 'rgba(22,214,126,0.08)', border: '0.5px solid rgba(22,214,126,0.3)', borderRadius: 8, fontSize: 12, color: 'var(--ios-green)', fontWeight: 600 }}>
+          ✓ 模型與硬規則一致偏空 — 高信心
+        </div>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {RULES.map(r => (
+          <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, opacity: r.val == null ? 0.4 : 1 }}>
+            <span style={{ color: 'var(--ios-label2)' }}>{r.hit ? '🔴' : r.val == null ? '⚪' : '⚪️'} {r.label}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', color: r.hit ? 'var(--ios-red)' : 'var(--ios-label3)' }}>{fmtVal(r.label, r.val)}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--ios-label4)', marginTop: 8, lineHeight: 1.5 }}>
+        硬規則是「機械式高勝率空方條件」,與 AI 模型獨立;兩者一致才是高信心訊號。
+      </div>
+    </Card>
+  )
+}
+
 // Probability trend chart — redesigned with gradient area + animated line drawing.
 function ProbTrend({ history }) {
   const lineRef = useRef(null)
@@ -582,6 +640,9 @@ export default function PredictionPanel({ prediction, history = [] }) {
             </div>
           )}
         </Card>
+
+        {/* Rule-based bearish cross-check vs the model */}
+        <BearishCrossCheck market_data={market_data} prob={xgb_prob_up} />
 
         {/* Probability trend across recent days */}
         <ProbTrend history={history} />
