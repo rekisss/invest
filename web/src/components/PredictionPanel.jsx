@@ -366,14 +366,22 @@ function ErrorPatternPanel({ history }) {
   if (!data) return null
 
   const errColor = data.errRate <= 30 ? 'var(--ios-green)' : data.errRate <= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)'
+  // Trust-first framing: lead with hit rate + sample size (small samples flagged honestly)
+  const hitRate = 100 - data.errRate
+  const hitColor = hitRate >= 55 ? 'var(--ios-green)' : hitRate >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)'
+  const smallSample = data.total < 15
 
   return (
-    <Card title="預測錯誤模式分析">
-      {/* Overall error rate */}
+    <Card title="預測命中率追蹤">
+      {/* Overall track record — hit rate + sample size */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 30, fontWeight: 700, fontFamily: 'var(--font-mono)', color: errColor, lineHeight: 1 }}>{data.errRate}%</div>
-          <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 2 }}>整體錯誤率</div>
+          <div style={{ fontSize: 30, fontWeight: 700, fontFamily: 'var(--font-mono)', color: hitColor, lineHeight: 1 }}>{hitRate}%</div>
+          <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 2 }}>預測命中率</div>
+          <div style={{ fontSize: 9, color: smallSample ? 'var(--ios-orange)' : 'var(--ios-label4)', marginTop: 1 }}>
+            近 {data.total} 筆{smallSample ? '·樣本少僅參考' : ''}
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 1 }}>錯誤率 {data.errRate}%</div>
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
