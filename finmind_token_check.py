@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 
@@ -34,6 +35,7 @@ TOKENS = [
     ("FINMIND_TOKEN_7", "seg5"),
     ("FINMIND_TOKEN_8", "seg6"),
     ("FINMIND_TOKEN_9", "seg7"),
+    ("FINMIND_TOKEN_10", "帳號10"),  # premarket/備用帳號
 ]
 
 
@@ -89,11 +91,13 @@ def main() -> int:
 
     valid = exhausted = unset = invalid = 0
     total_remaining = 0
+    seg_status: list[str] = []  # compact per-token lines for the Discord summary
     for env, seg in TOKENS:
         token = os.getenv(env, "").strip()
         if not token:
             unset += 1
             print(f"{seg:<6}{env:<18}{'⚪未設定':<10}{'-':<14}{'此分段沒有 token'}")
+            seg_status.append(f"{seg} ⚪未設定")
             continue
         r = _check_one(token)
         if r["remaining"] is not None:
@@ -110,6 +114,7 @@ def main() -> int:
         else:
             invalid += 1; state = "🔴無效"
         print(f"{seg:<6}{env:<18}{state:<10}{quota:<14}{r['note']}")
+        seg_status.append(f"{seg} {state}{(' ' + quota) if quota != '?' else ''}")
 
     print("-" * 64)
     print(f"總結：🟢有效 {valid}  🟠額度滿 {exhausted}  🔴無效 {invalid}  ⚪未設定 {unset}  （共 {len(TOKENS)} 把）")
@@ -121,6 +126,33 @@ def main() -> int:
         print("➡ 有 token 無效或未設定：到 GitHub repo Settings → Secrets → Actions 補上/更換。")
     if valid and not exhausted and not invalid and not unset:
         print("✅ 全部 token 健康，額度充足。若掃描仍缺資料，問題不在 token，需查掃描程式。")
+
+    # Proactive Discord notification (only when a webhook is configured) so token
+    # problems surface without anyone reading the CI log.
+    webhook = os.getenv("DISCORD_WEBHOOK_URL", "").strip()
+    if webhook:
+        headline = "✅ FinMind token 全部健康" if (valid and not exhausted and not invalid and not unset) \
+            else f"⚠️ FinMind token 檢查：🟢{valid} 🟠額度滿{exhausted} 🔴無效{invalid} ⚪未設定{unset}"
+        body = "\n".join(seg_status)
+        tail = ""
+        if exhausted:
+            tail += "\n🟠 有 token 額度耗盡（每小時/每日重置）。"
+        if invalid or unset:
+            tail += "\n🔴 有 token 無效/未設定 → Settings → Secrets → Actions 補上。"
+        if total_remaining:
+            tail += f"\n可用額度合計約 {total_remaining} 次。"
+        msg = f"**{headline}**\n```\n{body}\n```{tail}"
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                webhook,
+                data=json.dumps({"content": msg[:1900]}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            urllib.request.urlopen(req, timeout=10)
+            print("[discord] 已發送 token 健康通知")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[discord] 通知失敗（skip）: {exc}")
     return 0
 
 
