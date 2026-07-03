@@ -1,0 +1,31 @@
+name: 掃描完整度檢查
+
+# 每天掃完後回報「哪幾段有資料、哪幾段空了」，並把空掉的分段對應回它用的 FinMind
+# token，直接發 Discord。純唯讀，只看 output/full_scan/ 下的 batch CSV，不動任何掃描程式。
+# 掃描排程：14:05 / 15:35 CST。本檢查排在 16:10 CST（第二輪掃完後）。也可手動觸發。
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "檢查哪一天（YYYY-MM-DD，留空=今天 CST）"
+        required: false
+        default: ""
+        type: string
+  schedule:
+    - cron: '10 8 * * 1-5'   # 16:10 CST 週一~五，第二輪掃描（15:35）完成後
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main   # 讀 main 上最新掃描結果
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 檢查掃描完整度
+        env:
+          SCAN_DATE: ${{ inputs.date }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python scan_completeness_check.py
