@@ -1,44 +1,44 @@
 {
-  "date": "2026-07-02",
+  "date": "2026-07-03",
   "generated_at": "08:01",
-  "xgb_prob_up": 0.39,
-  "xgb_label": "偏空",
+  "xgb_prob_up": 0.319,
+  "xgb_label": "看空",
   "market_data": {
-    "vix": 16.59,
-    "sp500_ret": -0.0022,
-    "nasdaq_ret": -0.0066,
-    "sox_ret": -0.0627,
-    "tsm_adr_ret": -0.0698,
-    "futures_net": -84168.0,
-    "night_change": -816.0,
+    "vix": null,
+    "sp500_ret": null,
+    "nasdaq_ret": null,
+    "sox_ret": null,
+    "tsm_adr_ret": null,
+    "futures_net": -84487.0,
+    "night_change": -632.0,
     "pcr": null,
-    "taiex_rsi": 61.410345947962455,
-    "macd_hist": -289.65497627149216,
-    "dist_ma20": 3.6909997112307247,
-    "dist_ma60": 13.029407196103705,
-    "taiex_ret_5d": 2.281532889162863,
-    "taiex_ret_20d": 3.695983762874544,
+    "taiex_rsi": 60.04459874261949,
+    "macd_hist": -218.34018826389092,
+    "dist_ma20": 3.1081156881824112,
+    "dist_ma60": 11.846585381192853,
+    "taiex_ret_5d": 1.2891304202042209,
+    "taiex_ret_20d": 1.1718421645248833,
     "buyback_count": 0,
-    "disposition_count": 42,
+    "disposition_count": 66,
     "jpy_ret": null,
-    "arkk_ret": 0.0127,
-    "hyg_ret": -0.0048,
+    "arkk_ret": null,
+    "hyg_ret": null,
     "night_trend": "↓ 走弱",
-    "market_revenue_yoy": 0.1051,
-    "market_foreign_holding_chg": -2.2812
+    "market_revenue_yoy": 0.0937,
+    "market_foreign_holding_chg": -3.0419
   },
-  "ai_insight": "# 今日操盤要點\n\n・**外資淨賣壓持續**：期貨淨空單逾8萬口、現貨持股5日跌2.28%，加上夜盤跌816點走弱，短期修正壓力明顯，應控制風險部位並觀察是否跌破MA20支撐。\n\n・**科技類股重挫需防守**：美股NQ、SOX、台積電齊跌，惟ARKK反彈+1.3%顯示科技情緒分歧，留意權值股能否支撐大盤，面臨月線壓力宜謹慎。\n\n・**技術面超漲回檔訊號**",
+  "ai_insight": "# 今日操盤要點\n\n・ 夜盤跌幅超六百點且外資期貨淨空單逾八萬口，加上五日持股大幅下滑，顯示外資風險規避態度明確，開盤應留意向下缺口補跌風險。\n\n・ 處置股警示達六十六支創高風險，配合MACD直方深度負值，反映市場動能轉弱，宜迴避地雷個股並聚焦相對強勢標的。\n\n・ 加權指數雖距MA60有逾一成乖離度，但RSI已達超漲區間，建議分批減碼獲利，並以月營",
   "regime": {
     "label": "long_liquidate",
     "label_zh": "💥 多殺多日",
     "win_rate": 35.0
   },
   "scenario": {
-    "main_scenario": "夜盤大跌 -816pt，多頭倉位鬆動，開盤可能持續賣壓，避免搶反彈",
+    "main_scenario": "夜盤大跌 -632pt，多頭倉位鬆動，開盤可能持續賣壓，避免搶反彈",
     "best_strategy": "等開盤30分鐘後觀察量能是否縮減，再考慮進場",
     "danger_signals": [
-      "外資空單極重（-84,168口），軋空風險高",
-      "夜盤缺口 -816pt 過大，易反轉"
+      "外資空單極重（-84,487口），軋空風險高",
+      "夜盤缺口 -632pt 過大，易反轉"
     ],
     "forbidden_actions": [
       "禁止追空缺口超過200pt",
@@ -51,18 +51,18 @@
     "factors": [
       {
         "name": "外資空單極重",
-        "description": "-84,168口，軋空/崩潰雙向風險",
+        "description": "-84,487口，軋空/崩潰雙向風險",
         "action": "避免重押方向"
       },
       {
         "name": "夜盤大缺口",
-        "description": "夜盤 -816pt，開盤後可能快速反轉",
+        "description": "夜盤 -632pt，開盤後可能快速反轉",
         "action": "禁止追缺口超過200pt"
       }
     ]
   },
   "news_sentiment": {
-    "market_impact": 0.42,
+    "market_impact": 0.56,
     "key_events": [],
     "bullish_count": 0,
     "bearish_count": 0
