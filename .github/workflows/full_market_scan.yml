@@ -9,10 +9,13 @@ name: 全市場掃描
 
 on:
   # 固定在「收盤後、FinMind 當日額度最足」的時間自動跑,取代傍晚手動觸發(那時額度常被
-  # 用光導致半數分段失敗)。第二個時段接續補掃第一輪失敗的分段(force_rescan 預設 false)。
+  # 用光導致半數分段失敗)。FinMind 免費額度每小時重置,所以每小時排一輪:第一輪盤後首掃,
+  # 之後幾輪由下面的「自癒」步驟自動清掉『試過卻零產出』分段的進度,趁新額度重抓,直到補齊。
   schedule:
-    - cron: '5 6 * * 1-5'    # 14:05 CST 週一~五(盤後 ~30 分,今日收盤已入庫、額度最新)
-    - cron: '35 7 * * 1-5'   # 15:35 CST 補掃一次(接續)
+    - cron: '5 6 * * 1-5'    # 14:05 CST 盤後首掃(今日收盤已入庫、額度最新)
+    - cron: '5 7 * * 1-5'    # 15:05 CST 自癒重掃(額度每小時重置)
+    - cron: '5 8 * * 1-5'    # 16:05 CST 自癒重掃
+    - cron: '5 9 * * 1-5'    # 17:05 CST 自癒重掃(最後一次)
   workflow_dispatch:
     inputs:
       force_rescan:
@@ -57,6 +60,27 @@ jobs:
 
       - name: Pull latest scan progress
         run: git pull --rebase origin main || true
+
+      - name: 自癒：清掉「試過卻零產出」分段的進度，讓本輪重抓（僅排程觸發）
+        # 進度檔 _attempted 會把「抓失敗」的股票也記成試過，導致下一輪跳過→半數分段永遠空。
+        # 這裡只針對「今日 batch CSV 完全沒有資料」的分段清掉它自己的進度檔，讓本輪重新抓取
+        # （FinMind 額度每小時重置，前一輪額度滿的 token 這輪多半已恢復）。有資料的分段不動，
+        # 正常續掃；也不刪任何 batch 資料。手動觸發維持原本 resume 行為（要重掃請用 force_rescan）。
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          SEG=${{ matrix.seg }}
+          DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
+          CSV="output/full_scan/batch_seq${SEG}_${DATE}.csv"
+          ROWS=0
+          if [ -f "$CSV" ]; then
+            ROWS=$(tail -n +2 "$CSV" | grep -c . || true)
+          fi
+          if [ "${ROWS:-0}" -eq 0 ]; then
+            echo "seg${SEG} 今日 0 產出 → 清進度以便本輪重抓（token 額度可能已重置）"
+            rm -f "output/full_scan/_attempted_${DATE}_seg${SEG}.csv"
+          else
+            echo "seg${SEG} 今日已有 ${ROWS} 支 → 保留進度，正常續掃"
+          fi
 
       - name: 強制重置今日進度（force_rescan=true 時）
         if: ${{ inputs.force_rescan == 'true' }}
