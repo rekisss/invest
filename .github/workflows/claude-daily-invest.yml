@@ -12,6 +12,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  id-token: write   # claude-code-action@v1 需要 OIDC token,缺這行會 3/3 失敗
 
 # 同一時間只跑一個,避免重疊開重複 PR
 concurrency:
