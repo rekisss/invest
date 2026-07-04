@@ -1,0 +1,32 @@
+name: 每日 TOP 20 通知
+
+# 把 2026-06-22 隨 full_market_aggregate.yml 一起消失的「🌙 全市場掃描 TOP N」Discord
+# 總榜補回來。與舊 aggregate 不同:純唯讀,只讀當日 batch_seq CSV 排名,不刪任何檔案
+# (舊 aggregate 彙整完會刪 batch CSV,但新架構裡那些 CSV 是網頁與完整度檢查的資料來源)。
+# 時間沿用舊制 20:30 CST,此時 14~17 點的掃描與自癒輪全部結束。
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "哪一天的榜（YYYY-MM-DD，留空=今天 CST）"
+        required: false
+        default: ""
+        type: string
+  schedule:
+    - cron: '30 12 * * 1-5'   # 20:30 CST 週一~五
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main   # 讀 main 上最新掃描結果
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 發送 TOP 20 榜單
+        env:
+          SCAN_DATE: ${{ inputs.date }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python top20_notify.py
