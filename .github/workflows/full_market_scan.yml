@@ -5,7 +5,7 @@ name: 全市場掃描
 # 帳號 7-9（300/hr）× 130 支 =  390 支 → ~52 分鐘（seg 5-7）
 # seg=8 使用 FINMIND_TOKEN（備用帳號），掃完剩餘 130 支
 # 全部完成：約 52 分鐘（原 3 段需 ~2 小時）
-# 每日 20:30 CST 由 full_market_aggregate.yml 彙整 TOP 20 → Discord
+# 每日 20:30 CST 由 top20-notify.yml 發 TOP 20 總榜 → Discord（唯讀，不刪 CSV）
 
 on:
   # 固定在「收盤後、FinMind 當日額度最足」的時間自動跑,取代傍晚手動觸發(那時額度常被
