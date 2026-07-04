@@ -25,21 +25,28 @@ from datetime import datetime, timedelta, timezone
 # 掃描輸出目錄（對齊 full_market_scan.yml 的 --output output）
 SCAN_DIR = os.path.join("output", "full_scan")
 
-# seg -> 該分段使用的 FinMind token 環境變數（對齊 full_market_scan.yml 的 matrix）
-SEG_TOKEN = {
-    0: "FINMIND_TOKEN_2",
-    1: "FINMIND_TOKEN_3",
-    2: "FINMIND_TOKEN_4",
-    3: "FINMIND_TOKEN_5",
-    4: "FINMIND_TOKEN_6",
-    5: "FINMIND_TOKEN_7",
-    6: "FINMIND_TOKEN_8",
-    7: "FINMIND_TOKEN_9",
-    8: "FINMIND_TOKEN",  # 主帳號（備用），常是最弱的一把
+# 重要:batch_seq{N} 的 N 是「token 在 main.py 內部清單的序號」
+# (FINMIND_TOKEN=0, FINMIND_TOKEN_2=1, ... FINMIND_TOKEN_9=8),
+# 不是 workflow 的 seg 編號!workflow segM 的 job 實際寫出 batch_seq((M+1) mod 9)。
+# 以下對照表以「檔案編號」為 key:
+#   檔案 seqN -> 用的 token / 來源 workflow job / 該 job 的目標股數
+FILE_TOKEN = {
+    0: "FINMIND_TOKEN",    # ← workflow seg8 的 job（主帳號，130 支窗口）
+    1: "FINMIND_TOKEN_2",  # ← seg0（256）
+    2: "FINMIND_TOKEN_3",  # ← seg1（256）
+    3: "FINMIND_TOKEN_4",  # ← seg2（256）
+    4: "FINMIND_TOKEN_5",  # ← seg3（256）
+    5: "FINMIND_TOKEN_6",  # ← seg4（256）
+    6: "FINMIND_TOKEN_7",  # ← seg5（130）
+    7: "FINMIND_TOKEN_8",  # ← seg6（130）
+    8: "FINMIND_TOKEN_9",  # ← seg7（130）
 }
-
-# 每段的目標股數（加權分段，對齊 full_market_scan.yml）。只作參考顯示用。
-SEG_TARGET = {0: 256, 1: 256, 2: 256, 3: 256, 4: 256, 5: 130, 6: 130, 7: 130, 8: 130}
+# 檔案編號 -> 來源 workflow seg（顯示用，方便去 Actions 找對 job）
+FILE_JOB = {0: "seg8", 1: "seg0", 2: "seg1", 3: "seg2", 4: "seg3", 5: "seg4", 6: "seg5", 7: "seg6", 8: "seg7"}
+# 檔案編號 -> 該 job 的目標股數（加權分段）
+FILE_TARGET = {0: 130, 1: 256, 2: 256, 3: 256, 4: 256, 5: 256, 6: 130, 7: 130, 8: 130}
+# 進度檔 _attempted_<date>_seg<M>.csv 用的是 workflow seg 編號 → 檔案 seqN 對應 seg (N-1) mod 9
+FILE_ATTEMPT_SEG = {n: (n - 1) % 9 for n in range(9)}
 
 
 def _taipei_today() -> str:
@@ -75,19 +82,20 @@ def main() -> int:
     print("=" * 70)
     print(f"全市場掃描完整度檢查 · {date}")
     print("=" * 70)
-    print(f"{'分段':<6}{'token':<18}{'狀態':<10}{'有資料':<8}{'嘗試':<8}{'備註'}")
+    print(f"{'檔案':<8}{'來源job':<8}{'token':<18}{'狀態':<10}{'有資料':<8}{'嘗試':<8}{'備註'}")
     print("-" * 70)
 
     have_data = empty = missing = 0
     total_rows = 0
     empty_segs: list[str] = []
-    lines: list[str] = []  # compact per-seg lines for Discord
+    lines: list[str] = []  # compact per-file lines for Discord
 
-    for seg in sorted(SEG_TOKEN):
-        env = SEG_TOKEN[seg]
-        csv_path = os.path.join(SCAN_DIR, f"batch_seq{seg}_{date}.csv")
+    for n in sorted(FILE_TOKEN):
+        env = FILE_TOKEN[n]
+        job = FILE_JOB[n]
+        csv_path = os.path.join(SCAN_DIR, f"batch_seq{n}_{date}.csv")
         rows = _count_rows(csv_path)
-        attempted = _attempted_count(date, seg)
+        attempted = _attempted_count(date, FILE_ATTEMPT_SEG[n])
 
         if rows > 0:
             have_data += 1
@@ -98,26 +106,26 @@ def main() -> int:
             empty += 1
             state = "🔴空的"
             note = f"試過 {attempted} 支全失敗 → 疑 {env} 額度滿/無效"
-            empty_segs.append(f"seg{seg}({env})")
+            empty_segs.append(f"seq{n}/{job}({env})")
         else:  # rows == -1，檔案不存在
             if attempted > 0:
                 empty += 1
                 state = "🔴空的"
                 note = f"試過 {attempted} 支全失敗、無輸出 → 疑 {env} 額度滿/無效"
-                empty_segs.append(f"seg{seg}({env})")
+                empty_segs.append(f"seq{n}/{job}({env})")
             else:
                 missing += 1
                 state = "⚪未執行"
-                note = "今日尚無此段（未跑到）"
+                note = "今日尚無此檔（未跑到）"
 
-        tgt = SEG_TARGET.get(seg, "?")
-        print(f"{seg:<6}{env:<18}{state:<10}{str(max(rows,0)) + '/' + str(tgt):<8}{attempted:<8}{note}")
-        lines.append(f"seg{seg} {state} {max(rows,0)}/{tgt} ({env})")
+        tgt = FILE_TARGET.get(n, "?")
+        print(f"seq{n:<5}{job:<8}{env:<18}{state:<10}{str(max(rows,0)) + '/' + str(tgt):<8}{attempted:<8}{note}")
+        lines.append(f"seq{n}/{job} {state} {max(rows,0)}/{tgt} ({env})")
 
     print("-" * 70)
     print(f"總結：🟢有資料 {have_data} 段  🔴空 {empty} 段  ⚪未執行 {missing} 段  ·  合計 {total_rows} 支")
     if empty_segs:
-        print("➡ 空掉的分段（同一組 token 反覆失敗）：" + "、".join(empty_segs))
+        print("➡ 空掉的分段（token 反覆失敗，格式 檔案/來源job(token)）：" + "、".join(empty_segs))
         print("➡ 修法：1) 先跑『FinMind Token 健康檢查』確認這幾把是額度滿還是無效")
         print("        2) 額度滿→等重置；無效→到 Settings → Secrets 換掉")
         print("        3) 再用 workflow_dispatch 勾 force_rescan=true 重掃（普通重跑會被進度檔擋住）")
