@@ -95,6 +95,11 @@ jobs:
 
       # GitHub Pages 後端偶爾回「Deployment failed, try again later」(暫時性,非 build 問題)。
       # 第一次失敗就自動重試一次,避免暫時性錯誤讓網站沒更新到。
+      # 先等 30 秒再重試:失敗都發生在建立 deployment 後 ~5 秒,立刻重試容易撞到同一個後端狀態。
+      - name: 等待 30 秒再重試
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 30
+
       - name: Deploy to GitHub Pages（重試一次，處理暫時性後端錯誤）
         id: deployment_retry
         if: steps.deployment.outcome == 'failure'
