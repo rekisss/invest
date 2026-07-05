@@ -12,6 +12,9 @@ export function safeUrl(u) {
   if (u == null) return undefined
   const s = String(u).trim()
   if (!s) return undefined
+  // 瀏覽器會把 \ 正規化成 /，所以 "/\evil.com"、"\\evil.com" 實際上是
+  // protocol-relative 外部導向——先擋掉再放行相對路徑。
+  if (s.startsWith('/\\') || s.startsWith('\\')) return undefined
   // Allow relative and protocol-relative URLs (no scheme to abuse).
   if (s.startsWith('/') || s.startsWith('#') || s.startsWith('./') || s.startsWith('../')) return s
   if (s.startsWith('//')) return s

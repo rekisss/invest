@@ -54,7 +54,9 @@ function sameTWDay(a, b) {
          ta.getDate()     === tb.getDate()
 }
 
-function parseNum(s) { return parseFloat(String(s ?? '').replace(/,/g, '')) || null }
+// 注意不能用 `|| null`：平盤股 Change="0.00" 是合法的 0，|| 會把它變 null，
+// 造成平盤股不顯示漲跌幅。
+function parseNum(s) { const v = parseFloat(String(s ?? '').replace(/,/g, '')); return Number.isFinite(v) ? v : null }
 function parseVol(s) { return parseInt(String(s  ?? '').replace(/,/g, '')) || 0 }
 
 // ── Tier 1: TWSE/TPEX Official OpenAPI (browser, CORS-friendly) ──────────────
@@ -240,16 +242,22 @@ export function useLivePrices(stockIds, { pollInterval = 60000, refreshTrigger =
     if (!ids.length) return
 
     let cancelled = false
-    let didFetchOnce = false
+    let closedFetchDone = false
 
     const run = async () => {
       const open = isTWSEOpen()
       const sess = getTWSESession()
       if (!cancelled) { setIsOpen(open); setSession(sess) }
 
-      // After close, only fetch once to get final prices
-      if (!open && didFetchOnce) return
-      didFetchOnce = true
+      // 收盤後只再抓「一次」拿最終定價。flag 只在收盤狀態設立、開盤中一律重置：
+      // 舊寫法在第一次執行就設 flag，導致 (a) 跨越 13:30 的分頁抓不到收盤定價、
+      // (b) 盤前開著的分頁在 09:00 開盤後不會開始更新（配合下方 interval 常駐）。
+      if (!open) {
+        if (closedFetchDone) return
+        closedFetchDone = true
+      } else {
+        closedFetchDone = false
+      }
 
       if (!cancelled) setLoading(true)
       try {
@@ -304,7 +312,9 @@ export function useLivePrices(stockIds, { pollInterval = 60000, refreshTrigger =
 
     run()
     // Only poll during market hours
-    const t = isTWSEOpen() ? setInterval(run, pollInterval) : null
+    // interval 常駐（不只開盤時建立）：盤前載入的分頁才會在 09:00 開盤後自動開始
+    // 輪詢。收盤時段 run() 會早退（見上方 closedFetchDone），空轉成本可忽略。
+    const t = setInterval(run, pollInterval)
     return () => { cancelled = true; if (t) clearInterval(t) }
   }, [idsKey, pollInterval, refreshTrigger])
 

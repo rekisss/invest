@@ -8,6 +8,15 @@ const HIST_PAGE_SIZE = 20
 const RISK_COLOR = { LOW: 'var(--ios-green)', MEDIUM: 'var(--ios-yellow)', HIGH: 'var(--ios-orange)', EXTREME: 'var(--ios-red)' }
 const RISK_LABEL = { LOW: '低風險', MEDIUM: '中風險', HIGH: '高風險', EXTREME: '極高風險' }
 
+// 預測是用「下一次執行紀錄」的 night_change 當實際結果打分；但 cron 缺跑會讓
+// history 相鄰兩筆差好幾天，硬配對會拿好幾天後的夜盤替早前的預測打分，默默污染
+// 命中率/校準統計。只接受間隔 ≤5 天（涵蓋週五→週一＋連假一天），更大的缺口不配對。
+function isConsecutiveRun(dateA, dateB) {
+  if (!dateA || !dateB) return false
+  const gap = (new Date(dateB) - new Date(dateA)) / 86400000
+  return gap > 0 && gap <= 5
+}
+
 function ProbBar({ prob }) {
   const pct = Math.round((prob ?? 0.5) * 100)
   const color = pct >= 60 ? 'var(--ios-red)' : pct <= 40 ? 'var(--ios-green)' : 'var(--ios-yellow)'
@@ -62,8 +71,12 @@ function BearishCrossCheck({ market_data, prob }) {
   const hits = RULES.filter(r => r.hit).length
   const modelBear = prob != null && prob <= 0.45
   const modelBull = prob != null && prob >= 0.55
-  // Divergence: many hard bearish signals but the model is bullish (or vice-versa)
-  const diverge = (hits >= 3 && modelBull)
+  // Divergence/agreement thresholds must scale with how many rules are evaluable —
+  // overnight-US fields can all be null (feed outage), leaving only 2 of 6 rules
+  // scored; a fixed `hits >= 3` could then never fire even with every known rule
+  // hard-bearish while the model says bullish.
+  const bearishConsensus = known.length >= 2 && hits >= Math.min(3, known.length) && hits / known.length >= 0.5
+  const diverge = bearishConsensus && modelBull
   const fmtVal = (label, v) => {
     if (v == null) return '—'
     if (label.includes('VIX')) return v.toFixed(1)
@@ -73,15 +86,15 @@ function BearishCrossCheck({ market_data, prob }) {
   return (
     <Card title="空方硬規則交叉驗證" accent="var(--ios-orange)">
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-mono)', color: hits >= 3 ? 'var(--ios-red)' : hits >= 1 ? 'var(--ios-yellow)' : 'var(--ios-green)' }}>{hits}/6</span>
-        <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>空方訊號成立</span>
+        <span style={{ fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-mono)', color: bearishConsensus ? 'var(--ios-red)' : hits >= 1 ? 'var(--ios-yellow)' : 'var(--ios-green)' }}>{hits}/{known.length}</span>
+        <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>空方訊號成立{known.length < RULES.length ? `（${RULES.length - known.length} 條缺資料未計）` : ''}</span>
       </div>
       {diverge && (
         <div style={{ marginBottom: 8, padding: '7px 10px', background: 'rgba(255,51,64,0.1)', border: '0.5px solid rgba(255,51,64,0.35)', borderRadius: 8, fontSize: 12, color: 'var(--ios-red)', fontWeight: 600, lineHeight: 1.5 }}>
           ⚠️ 硬規則偏空({hits} 條)但模型偏多 — 兩者分歧,宜謹慎、別急著追多
         </div>
       )}
-      {!diverge && hits >= 3 && modelBear && (
+      {!diverge && bearishConsensus && modelBear && (
         <div style={{ marginBottom: 8, padding: '7px 10px', background: 'rgba(22,214,126,0.08)', border: '0.5px solid rgba(22,214,126,0.3)', borderRadius: 8, fontSize: 12, color: 'var(--ios-green)', fontWeight: 600 }}>
           ✓ 模型與硬規則一致偏空 — 高信心
         </div>
@@ -113,7 +126,8 @@ function ProbTrend({ history }) {
     return recent.map((h, i) => {
       const nextH = sorted[sorted.length - recent.length + i + 1]
       const nc = nextH?.market_data?.night_change
-      const actual = nc != null ? (nc > 20 ? 1 : nc < -20 ? -1 : 0) : null
+      const paired = nc != null && isConsecutiveRun(h.date, nextH?.date)
+      const actual = paired ? (nc > 20 ? 1 : nc < -20 ? -1 : 0) : null
       return { date: h.date, p: h.xgb_prob_up, actual }
     })
   }, [history])
@@ -294,7 +308,7 @@ function CalibrationPanel({ history }) {
 
     for (let i = 0; i < sorted.length - 1; i++) {
       const nc = sorted[i + 1].market_data?.night_change
-      if (nc == null) continue
+      if (nc == null || !isConsecutiveRun(sorted[i].date, sorted[i + 1].date)) continue
       const p = sorted[i].xgb_prob_up
       const up = nc > 20
       const b = defs.find(d => p >= d.lo && p < d.hi)
@@ -377,17 +391,12 @@ function ErrorPatternPanel({ history }) {
 
     if (sorted.length < 8) return null
 
-    const strong = sorted.filter((_, i) => {
-      const p = sorted[i].xgb_prob_up
-      const nc = sorted[i + 1]?.market_data?.night_change
-      return nc != null && Math.abs(p - 0.5) > 0.05
-    })
-
     const errors = [], corrects = []
     for (let i = 0; i < sorted.length - 1; i++) {
       const h = sorted[i]
       const nc = sorted[i + 1].market_data?.night_change
       if (nc == null || Math.abs(h.xgb_prob_up - 0.5) <= 0.05) continue
+      if (!isConsecutiveRun(h.date, sorted[i + 1].date)) continue
       const predUp = h.xgb_prob_up > 0.55
       const actualUp = nc > 20
       const entry = {
@@ -527,7 +536,7 @@ function HistoryRow({ entry }) {
   const [open, setOpen] = useState(false)
   const pct = Math.round((entry.xgb_prob_up ?? 0.5) * 100)
   const color = pct >= 60 ? 'var(--ios-red)' : pct <= 40 ? 'var(--ios-green)' : 'var(--ios-yellow)'
-  const riskLevel = entry.risk?.level?.replace('RiskLevel.', '') || 'MEDIUM'
+  const riskLevel = (entry.risk?.level?.replace('RiskLevel.', '') || 'MEDIUM').toUpperCase()
 
   return (
     <div style={{ borderBottom: '0.5px solid var(--ios-sep)' }}>
@@ -576,18 +585,14 @@ function HistoryRow({ entry }) {
 }
 
 export default function PredictionPanel({ prediction, history = [] }) {
-  if (!prediction) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, padding: 24, textAlign: 'center' }}>
-        <div style={{ fontSize: 48 }}>🔮</div>
-        <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--ios-label)' }}>尚無盤前預測</div>
-        <div style={{ fontSize: 14, color: 'var(--ios-label2)', maxWidth: 280, lineHeight: 1.6 }}>每個交易日盤前執行後，這裡會顯示 AI 預測分析、市場結構分析、風險評估</div>
-      </div>
-    )
-  }
-
-  const { xgb_prob_up, xgb_label, date, generated_at, regime, scenario, risk, news_sentiment, market_data, ai_insight } = prediction
-  const riskLevel = risk?.level?.replace('RiskLevel.', '') || 'MEDIUM'
+  // NOTE: all hooks must run before the empty-state return — `prediction` can flip
+  // from null to an object on the SAME mounted component (刷新 after the morning
+  // prediction lands), and an early return above hooks would change the hook count
+  // between renders and crash the whole tab.
+  const { xgb_prob_up, xgb_label, date, generated_at, regime, scenario, risk, news_sentiment, market_data, ai_insight } = prediction || {}
+  // data.json ships lowercase levels ('medium'); legacy entries may carry a
+  // 'RiskLevel.' prefix — normalize both into the uppercase RISK_COLOR/LABEL keys.
+  const riskLevel = (risk?.level?.replace('RiskLevel.', '') || 'MEDIUM').toUpperCase()
   const riskBarRef = useRef(null)
   const bullBearRef = useRef(null)
   useGSAP(() => {
@@ -609,6 +614,16 @@ export default function PredictionPanel({ prediction, history = [] }) {
     () => history.slice(histPage * HIST_PAGE_SIZE, (histPage + 1) * HIST_PAGE_SIZE),
     [history, histPage]
   )
+
+  if (!prediction) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, padding: 24, textAlign: 'center' }}>
+        <div style={{ fontSize: 48 }}>🔮</div>
+        <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--ios-label)' }}>尚無盤前預測</div>
+        <div style={{ fontSize: 14, color: 'var(--ios-label2)', maxWidth: 280, lineHeight: 1.6 }}>每個交易日盤前執行後，這裡會顯示 AI 預測分析、市場結構分析、風險評估</div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -742,9 +757,10 @@ export default function PredictionPanel({ prediction, history = [] }) {
           <Card title="新聞情緒">
             <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
               {[
-                { label: '利多', val: news_sentiment.bullish_count, color: 'var(--ios-green)' },
-                { label: '利空', val: news_sentiment.bearish_count, color: 'var(--ios-red)' },
-                { label: '市場影響', val: `${news_sentiment.market_impact > 0 ? '+' : ''}${news_sentiment.market_impact?.toFixed(2)}`, color: news_sentiment.market_impact > 0 ? 'var(--ios-green)' : news_sentiment.market_impact < 0 ? 'var(--ios-red)' : 'var(--ios-label2)' },
+                // 台股慣例（與本頁其他區塊一致）：紅=多/漲、綠=空/跌
+                { label: '利多', val: news_sentiment.bullish_count, color: 'var(--ios-red)' },
+                { label: '利空', val: news_sentiment.bearish_count, color: 'var(--ios-green)' },
+                { label: '市場影響', val: `${news_sentiment.market_impact > 0 ? '+' : ''}${news_sentiment.market_impact?.toFixed(2)}`, color: news_sentiment.market_impact > 0 ? 'var(--ios-red)' : news_sentiment.market_impact < 0 ? 'var(--ios-green)' : 'var(--ios-label2)' },
               ].map(({ label, val, color }) => (
                 <div key={label} style={{ flex: 1, background: 'var(--ios-bg3)', borderRadius: 12, padding: '10px 12px', textAlign: 'center' }}>
                   <div style={{ fontSize: 11, color: 'var(--ios-label2)', marginBottom: 4 }}>{label}</div>
@@ -760,9 +776,10 @@ export default function PredictionPanel({ prediction, history = [] }) {
               const bp = total > 0 ? (b / total) * 100 : 50
               return (
                 <div style={{ marginBottom: 12 }}>
+                  {/* 左段=偏多(紅)、右段=偏空(綠)，標籤顏色與所指區段一致（台股慣例） */}
                   <div ref={bullBearRef} style={{ display: 'flex', height: 8, borderRadius: 9999, overflow: 'hidden', background: 'var(--ios-bg3)' }}>
-                    <div style={{ width: `${bp}%`, background: 'var(--ios-green)' }} />
-                    <div style={{ width: `${100 - bp}%`, background: 'var(--ios-red)' }} />
+                    <div style={{ width: `${bp}%`, background: 'var(--ios-red)' }} />
+                    <div style={{ width: `${100 - bp}%`, background: 'var(--ios-green)' }} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ios-label3)', marginTop: 4 }}>
                     <span style={{ color: 'var(--ios-red)' }}>偏多 {Math.round(bp)}%</span>
