@@ -87,9 +87,12 @@ jobs:
 
       - name: 執行橫截面信號補充
         env:
-          # 使用任一帳號（Wave 1 結束後配額已重置）
-          FINMIND_TOKEN:   ${{ github.event.inputs.skip_fscore == 'true' && '' || secrets.FINMIND_TOKEN }}
-          FINMIND_TOKEN_2: ${{ github.event.inputs.skip_fscore == 'true' && '' || secrets.FINMIND_TOKEN_2 }}
+          # scan_enrich.py 依序取 FINMIND_TOKEN → _2 → _3。原本這裡餵的是主帳號
+          # (register 等級、最弱)+_2(常額度滿),導致 F-Score 補抓長期成功 0 支、全市場
+          # f_score 停在 -1。改餵健康帳號:帳號10(盤前預測同款,下午時段額度閒置)優先,
+          # 備援 _3(seg1 專用、長期穩定)。skip_fscore=true 時維持全空以跳過補抓。
+          FINMIND_TOKEN:   ${{ github.event.inputs.skip_fscore == 'true' && '' || secrets.FINMIND_TOKEN_10 || secrets.FINMIND_TOKEN_3 || secrets.FINMIND_TOKEN }}
+          FINMIND_TOKEN_2: ${{ github.event.inputs.skip_fscore == 'true' && '' || secrets.FINMIND_TOKEN_3 }}
         run: |
           python scan_enrich.py \
             --scan-dir output/full_scan \
