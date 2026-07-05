@@ -3,7 +3,9 @@
 // data load immediately), hashed assets cache-first (immutable by content hash).
 // NOTE: previously index.html was cache-first, which pinned users to a stale
 // bundle for a launch or more after each deploy — fixed here.
-const CACHE = 'invest-pwa-v2'
+// v3: data.json 曾以「完整 URL(含 ?t=時間戳)」當快取 key，每次載入囤一份 ~25MB
+// 且離線查找永遠 miss;升版讓 activate 清掉 v2 累積的肥大快取。
+const CACHE = 'invest-pwa-v3'
 const BASE = '/invest/'
 const SHELL = [BASE, BASE + 'index.html', BASE + 'manifest.json', BASE + 'icon.svg']
 
@@ -33,14 +35,21 @@ self.addEventListener('fetch', (event) => {
   const isNavigation = req.mode === 'navigate'
   const isHtml = url.pathname.endsWith('/') || url.pathname.endsWith('/index.html')
   if (url.pathname.endsWith('/data.json') || isNavigation || isHtml) {
+    // 用「去掉 query 的正規化 key」存取：App 以 data.json?t=<now> 破快取，若以完整
+    // URL 當 key，每次載入都新增一份大快取（無上限成長），而離線 fallback 查的是新
+    // 時間戳 URL，永遠比對不到舊存檔。另外只快取成功回應——把 404/500 存起來會讓
+    // 離線 fallback 重播錯誤頁。
+    const key = new Request(url.origin + url.pathname)
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone()
-          caches.open(CACHE).then((c) => c.put(req, copy))
+          if (res.ok) {
+            const copy = res.clone()
+            caches.open(CACHE).then((c) => c.put(key, copy))
+          }
           return res
         })
-        .catch(() => caches.match(req))
+        .catch(() => caches.match(key).then((hit) => hit || Response.error()))
     )
     return
   }
@@ -56,7 +65,7 @@ self.addEventListener('fetch', (event) => {
           }
           return res
         })
-        .catch(() => cached)
+        .catch(() => cached || Response.error()) // respondWith(undefined) 會直接 TypeError
       return cached || network
     })
   )

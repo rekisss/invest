@@ -43,6 +43,10 @@ export function useShioajiStream(stockIds, { wsUrl, token, enabled = true } = {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [(stockIds || []).join(',')]
   )
+  // onmessage 活在 [url] effect 的閉包裡，直接讀 idsKey 會是連線當下的舊值；
+  // 用 ref 讓過濾永遠拿到最新訂閱清單。
+  const idsRef = useRef(idsKey)
+  idsRef.current = idsKey
   const url = useMemo(() => (enabled && wsUrl) ? buildUrl(wsUrl, token) : null, [enabled, wsUrl, token])
 
   useEffect(() => {
@@ -73,7 +77,13 @@ export function useShioajiStream(stockIds, { wsUrl, token, enabled = true } = {}
         try {
           const msg = JSON.parse(ev.data)
           if (msg?.prices && (msg.type === 'snapshot' || msg.type === 'tick')) {
-            setPrices(prev => ({ ...prev, ...msg.prices }))
+            // 只合併目前訂閱清單內的代號：伺服器不支援退訂，改訂閱後舊代號的 tick
+            // 仍會推來，不過濾會讓已移除的股票永遠殘留在 prices state 裡。
+            const want = new Set(idsRef.current.split(',').filter(Boolean))
+            const incoming = Object.fromEntries(
+              Object.entries(msg.prices).filter(([sid]) => want.has(sid) || sid.startsWith('_'))
+            )
+            if (Object.keys(incoming).length) setPrices(prev => ({ ...prev, ...incoming }))
           }
         } catch { /* ignore malformed frame */ }
       }
