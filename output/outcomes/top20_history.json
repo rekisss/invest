@@ -1,0 +1,127 @@
+[
+ {
+  "date": "2026-07-03",
+  "stocks": [
+   {
+    "stock_id": "3004",
+    "name": "豐達科",
+    "close": 150.0,
+    "entry_score": 1154.2
+   },
+   {
+    "stock_id": "6143",
+    "name": "振曜",
+    "close": 106.5,
+    "entry_score": 1110.6
+   },
+   {
+    "stock_id": "6158",
+    "name": "禾昌",
+    "close": 19.45,
+    "entry_score": 1106.8
+   },
+   {
+    "stock_id": "1785",
+    "name": "光洋科",
+    "close": 156.0,
+    "entry_score": 1070.0
+   },
+   {
+    "stock_id": "8182",
+    "name": "加高",
+    "close": 59.0,
+    "entry_score": 1067.1
+   },
+   {
+    "stock_id": "5490",
+    "name": "同亨",
+    "close": 30.45,
+    "entry_score": 1055.5
+   },
+   {
+    "stock_id": "3141",
+    "name": "晶宏",
+    "close": 82.7,
+    "entry_score": 1054.5
+   },
+   {
+    "stock_id": "7610",
+    "name": "聯友金屬-創",
+    "close": 2550.0,
+    "entry_score": 1041.3
+   },
+   {
+    "stock_id": "3221",
+    "name": "台嘉碩",
+    "close": 66.3,
+    "entry_score": 1041.3
+   },
+   {
+    "stock_id": "2511",
+    "name": "太子",
+    "close": 8.4,
+    "entry_score": 1033.6
+   },
+   {
+    "stock_id": "1714",
+    "name": "和桐",
+    "close": 22.75,
+    "entry_score": 1029.3
+   },
+   {
+    "stock_id": "2103",
+    "name": "台橡",
+    "close": 23.5,
+    "entry_score": 1026.5
+   },
+   {
+    "stock_id": "3532",
+    "name": "台勝科",
+    "close": 440.0,
+    "entry_score": 1024.9
+   },
+   {
+    "stock_id": "1810",
+    "name": "和成",
+    "close": 23.25,
+    "entry_score": 1019.6
+   },
+   {
+    "stock_id": "4763",
+    "name": "材料*-KY",
+    "close": 51.3,
+    "entry_score": 1013.7
+   },
+   {
+    "stock_id": "6174",
+    "name": "安碁",
+    "close": 61.8,
+    "entry_score": 1007.4
+   },
+   {
+    "stock_id": "3042",
+    "name": "晶技",
+    "close": 249.0,
+    "entry_score": 998.4
+   },
+   {
+    "stock_id": "3026",
+    "name": "禾伸堂",
+    "close": 988.0,
+    "entry_score": 995.5
+   },
+   {
+    "stock_id": "1312",
+    "name": "國喬",
+    "close": 15.1,
+    "entry_score": 995.0
+   },
+   {
+    "stock_id": "1909",
+    "name": "榮成",
+    "close": 10.3,
+    "entry_score": 994.8
+   }
+  ]
+ }
+]

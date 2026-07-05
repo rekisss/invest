@@ -1,0 +1,41 @@
+name: 真實結果追蹤
+
+# 可參考度地基：每天用「真實加權指數收盤」替前一次盤前預測打分（取代夜盤代理值），
+# 並記錄當日 TOP 20 快照＋回填過去快照的 1/5/10/20 掃描日報酬。
+# 純加法:只讀 prediction_history / batch CSV,寫自己的 output/outcomes/*.json。
+# 時間:17:45 CST(最後一輪自癒掃描 17:05 之後,當日 batch 收盤價已齊)。
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "追蹤哪一天（YYYY-MM-DD，留空=今天 CST）"
+        required: false
+        default: ""
+        type: string
+  schedule:
+    - cron: '45 9 * * 1-5'   # 17:45 CST 週一~五
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 追蹤真實結果
+        env:
+          TRACK_DATE: ${{ inputs.date }}
+        run: python outcome_tracker.py
+      - name: Commit 結果
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          git pull --rebase -X theirs origin main || true
+          git add output/outcomes/ || true
+          git diff --staged --quiet || git commit -m "outcomes: 真實結果追蹤 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST"
+          for i in 1 2 3; do git push && break; sleep $((i*10)); git pull --rebase -X theirs origin main || true; done

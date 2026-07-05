@@ -1440,6 +1440,35 @@ let prediction = readPrediction()
 const predictionHistory = readPredictionHistory()
 console.log(`Prediction: ${prediction ? prediction.date : 'none'}, history: ${predictionHistory.length} entries`)
 
+// ── 真實結果（outcome_tracker.py 產出）───────────────────────────────────────
+// 用真實加權收盤替預測打分的紀錄 + TOP20 事後報酬。取代前端目前用夜盤代理值
+// 推算的命中率（有真實資料時前端應優先顯示這份）。
+let realOutcomes = null
+const readOutcomes = (f) => { try { return JSON.parse(readFileSync(resolve(__dirname, `../../output/outcomes/${f}`), 'utf-8')) } catch { return [] } }
+try {
+  const po = readOutcomes('prediction_outcomes.json')
+  const th = readOutcomes('top20_history.json')
+  if (!po.length && !th.length) throw new Error('no outcome files yet')
+  const scored = po.filter(e => e.hit != null)
+  const horizons = [1, 5, 10, 20]
+  const top20Summary = {}
+  for (const h of horizons) {
+    const rets = th.flatMap(s => (s.stocks || []).map(st => st[`ret_${h}d`]).filter(r => r != null))
+    if (rets.length) top20Summary[`ret_${h}d`] = {
+      count: rets.length,
+      avg: +(rets.reduce((a, b) => a + b, 0) / rets.length).toFixed(4),
+      win_rate: +(rets.filter(r => r > 0).length / rets.length).toFixed(3),
+    }
+  }
+  realOutcomes = {
+    prediction: po.slice(-60),   // 最近 60 筆逐日紀錄（含 taiex 收盤、hit）
+    prediction_hit: scored.length ? { hits: scored.filter(e => e.hit).length, total: scored.length } : null,
+    top20_summary: Object.keys(top20Summary).length ? top20Summary : null,
+    top20_snapshots: th.length,
+  }
+  console.log(`Real outcomes: ${po.length} pred days (scored ${scored.length}), ${th.length} top20 snapshots`)
+} catch { console.log('Real outcomes: none yet (outcome_tracker not run)') }
+
 console.log('Reading news corpus...')
 let news = readNewsCorpus()
 if (news.length === 0) {
@@ -1681,5 +1710,5 @@ if (Object.keys(industryMap).length > 0) {
   console.log(`Industry enrichment: ${filled} stocks filled`)
 }
 
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
