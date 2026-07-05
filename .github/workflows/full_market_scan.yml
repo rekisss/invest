@@ -61,25 +61,35 @@ jobs:
       - name: Pull latest scan progress
         run: git pull --rebase origin main || true
 
+      - name: 計算本段輸出檔編號（FILE_IDX）
+        # 重要:main.py 的 batch_seq{N} 檔名用的是「token 在內部清單的序號」
+        # (FINMIND_TOKEN=0, _2=1, ... _9=8),不是 workflow 的 seg 編號。
+        # 本 workflow segN 配的 token 是 _{N+2}(seg8 配主帳號),所以
+        # 「segN 的 job 實際寫出的檔案」是 batch_seq((N+1) mod 9)。
+        # 所有依「本 job 自己的輸出」判斷的步驟(自癒/force_rescan/上傳)都要用 FILE_IDX。
+        run: echo "FILE_IDX=$(( (${{ matrix.seg }} + 1) % 9 ))" >> "$GITHUB_ENV"
+
       - name: 自癒：清掉「試過卻零產出」分段的進度，讓本輪重抓（僅排程觸發）
         # 進度檔 _attempted 會把「抓失敗」的股票也記成試過，導致下一輪跳過→半數分段永遠空。
         # 這裡只針對「今日 batch CSV 完全沒有資料」的分段清掉它自己的進度檔，讓本輪重新抓取
         # （FinMind 額度每小時重置，前一輪額度滿的 token 這輪多半已恢復）。有資料的分段不動，
         # 正常續掃；也不刪任何 batch 資料。手動觸發維持原本 resume 行為（要重掃請用 force_rescan）。
+        # 注意:檢查的是本 job 實際寫出的 batch_seq${FILE_IDX}(token 序號),進度檔則是
+        # _attempted_seg${SEG}(seg 序號)——兩者編號體系不同,不能混用。
         if: ${{ github.event_name == 'schedule' }}
         run: |
           SEG=${{ matrix.seg }}
           DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
-          CSV="output/full_scan/batch_seq${SEG}_${DATE}.csv"
+          CSV="output/full_scan/batch_seq${FILE_IDX}_${DATE}.csv"
           ROWS=0
           if [ -f "$CSV" ]; then
             ROWS=$(tail -n +2 "$CSV" | grep -c . || true)
           fi
           if [ "${ROWS:-0}" -eq 0 ]; then
-            echo "seg${SEG} 今日 0 產出 → 清進度以便本輪重抓（token 額度可能已重置）"
+            echo "seg${SEG}（輸出檔 seq${FILE_IDX}）今日 0 產出 → 清進度以便本輪重抓（token 額度可能已重置）"
             rm -f "output/full_scan/_attempted_${DATE}_seg${SEG}.csv"
           else
-            echo "seg${SEG} 今日已有 ${ROWS} 支 → 保留進度，正常續掃"
+            echo "seg${SEG}（輸出檔 seq${FILE_IDX}）今日已有 ${ROWS} 支 → 保留進度，正常續掃"
           fi
 
       - name: 強制重置今日進度（force_rescan=true 時）
@@ -93,10 +103,11 @@ jobs:
           rm -f output/full_scan/_attempted_${DATE}.csv
           rm -f output/full_scan/_attempted_${DATE}_seg*.csv
           rm -f output/full_scan/_attempted_${YESTERDAY}_seg${SEG}.csv
-          rm -f output/full_scan/batch_seq${SEG}_${DATE}.csv
-          rm -f output/full_scan/batch_seq${SEG}_${DATE}.xlsx
-          rm -f output/full_scan/batch_seq${SEG}_${YESTERDAY}.csv
-          rm -f output/full_scan/batch_seq${SEG}_${YESTERDAY}.xlsx
+          # 刪本 job 實際會重寫的輸出檔（batch_seq 編號=token 序號，見 FILE_IDX 說明）
+          rm -f output/full_scan/batch_seq${FILE_IDX}_${DATE}.csv
+          rm -f output/full_scan/batch_seq${FILE_IDX}_${DATE}.xlsx
+          rm -f output/full_scan/batch_seq${FILE_IDX}_${YESTERDAY}.csv
+          rm -f output/full_scan/batch_seq${FILE_IDX}_${YESTERDAY}.xlsx
           echo "已刪除 seg${SEG} 進度 ${DATE}（含昨日 ${YESTERDAY}）"
           if [ "${{ matrix.seg }}" = "0" ]; then
             curl -s -H "Content-Type: application/json" \
@@ -145,7 +156,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: daily-scan-seg${{ matrix.seg }}-${{ github.run_number }}
-          path: output/full_scan/batch_seq${{ matrix.seg }}*.xlsx
+          path: output/full_scan/batch_seq${{ env.FILE_IDX }}*.xlsx
           if-no-files-found: ignore
           retention-days: 14
 
