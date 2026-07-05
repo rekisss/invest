@@ -359,7 +359,11 @@ function processScanData() {
     for (const [dataDate, rows] of Object.entries(rawDateMap)) {
       const execDate = execDates.find(d => {
         const diff = (new Date(d) - new Date(dataDate)) / 86400000
-        return diff >= 0 && diff <= 1
+        if (diff === 0) return true
+        // 隔夜換算（資料日 = 執行日−1）只在「執行日自己沒有資料」時才成立——
+        // 否則兩個不同交易日會被併進同一桶（實例：06-16 整天被併進 06-17、
+        // 07-01 與 07-02 混桶），一天憑空消失、且去重後顯示到前一天的收盤價。
+        return diff > 0 && diff <= 1 && !rawDateMap[d]
       })
       const key = execDate || dataDate  // fall back to data date for old/unmatched entries
       ;(dateMap[key] = dateMap[key] || []).push(...rows)
@@ -559,7 +563,9 @@ function processScanData() {
       price_history: isLatest ? (priceHistoryMap[row.stock_id] || []) : undefined,
       ...extra,
     })
-    const topStocks = allStocks.slice(0, TOP_N).map((row, i) => ({ rank: i + 1, ...mapStock(row) }))
+    // 壞價（close<=0，停牌/下市殘影）不得進榜/過濾池——前端會顯示 0.00 且百分比運算全爆
+    const pricedStocks = allStocks.filter(r => toNum(r.close) > 0)
+    const topStocks = pricedStocks.slice(0, TOP_N).map((row, i) => ({ rank: i + 1, ...mapStock(row) }))
     // A/B/C grade only — the "精選" pool. D-grade stocks tracked but not surfaced as actionable.
     // Also exclude rows with an invalid price (≤0 / missing) — halted/delisted stubs.
     const selectableStocks = topStocks.filter(r => ['A','B','C'].includes(r.grade) && toNum(r.close) > 0)
@@ -571,7 +577,7 @@ function processScanData() {
     // Slim profile for ALL scanned stocks — included on every date so grade/signal
     // filters in the Dashboard work against the full scan universe, not just top N.
     // Fields kept minimal to control data.json growth.
-    const filterStocks = allStocks.map(row => ({
+    const filterStocks = pricedStocks.map(row => ({
       stock_id: row.stock_id,
       name: row.name || '',
       industry_category: row.industry_category || '',
@@ -1023,17 +1029,30 @@ async function fetchTWSEInstitutional(dateYYYYMMDD) {
     const body = await fetchUrl(url, 12000)
     const json = JSON.parse(body)
     if (json.stat !== 'OK' || !Array.isArray(json.data) || json.data.length < 10) return null
+    // 依欄名定位而非寫死索引：ALLBUT0999 版面實際有 19 欄（含外陸資/外資自營商拆分），
+    // 固定 row[7]/row[10] 會把「外資自營商」寫進投信、「投信」寫進自營商。
+    const fields = Array.isArray(json.fields) ? json.fields.map(f => String(f)) : []
+    const idxOf = (...keys) => fields.findIndex(f => keys.every(k => f.includes(k)))
+    let iForeign = idxOf('外陸資', '買賣超')
+    if (iForeign < 0) iForeign = idxOf('外資', '買賣超')          // 舊版面 fallback
+    const iTrust  = idxOf('投信', '買賣超')
+    // 「外資自營商買賣超股數」也含「自營商買賣超」字樣，必須排除「外資」才會落在
+    // 自營商合計欄（合計欄在(自行買賣)/(避險)拆分欄之前，取第一個符合者即合計）。
+    const iDealer = fields.findIndex(f => f.includes('自營商') && f.includes('買賣超') && !f.includes('外資'))
+    if (iForeign < 0 || iTrust < 0 || iDealer < 0) {
+      console.warn(`  TWSE T86 欄位對不上（fields=${fields.join('|')}），跳過補值以免寫錯欄`)
+      return null
+    }
     const result = {}
     for (const row of json.data) {
       const sid = (row[0] || '').trim().replace(/\s/g, '')
       if (!sid || !/^\d{4,6}$/.test(sid)) continue
-      // TWSE T86 columns: [代號, 名稱, 外資買, 外資賣, 外資差, 投信買, 投信賣, 投信差, 自營差(自), 自營差(避), 自營差, 合計]
       // Values in 股 (shares) → divide by 1000 to get 張
       const toZhang = v => { const n = parseInt((v || '').replace(/,/g, ''), 10); return isNaN(n) ? 0 : Math.round(n / 1000) }
       result[sid] = {
-        foreign_net:       toZhang(row[4]),
-        invest_trust_net:  toZhang(row[7]),
-        dealer_net:        toZhang(row[10]),
+        foreign_net:       toZhang(row[iForeign]),
+        invest_trust_net:  toZhang(row[iTrust]),
+        dealer_net:        toZhang(row[iDealer]),
       }
     }
     return Object.keys(result).length > 100 ? result : null
@@ -1112,7 +1131,9 @@ if (aggregateLatest) {
     const diff = (new Date(d) - new Date(aggDate)) / 86400000
     return diff >= 0 && diff <= 1
   }) || aggDate
-  const isNewer = !dates.length || aggExecDate >= dates[0]
+  // 用 > 不用 >=：同日時 CSV 掃描的資料較完整（有 selectable_stocks/grade_counts），
+  // aggregate 注入會蓋掉並弄丟這些欄位；同日已有 CSV 就不注入。
+  const isNewer = !dates.length || aggExecDate > dates[0]
   const isMissing = !scans[aggExecDate]
   const aggSufficient = (aggregateLatest.total_scanned || 0) >= MIN_VALID_STOCKS
   if ((isNewer || isMissing) && aggSufficient) {
@@ -1572,9 +1593,9 @@ if (latestDataDate && isFresh) {
 
 // ── Price cross-validation: compare scan CSV close vs TWSE/TPEX official ─────
 // Detects cases where FinMind data differs from TWSE official post-market data.
-// Only runs when data is fresh (same-day or T+1) — older scans can't be validated
-// against today's TWSE endpoint.
-if (isFresh && topStocks.length > 0) {
+// 只在 days_behind === 0（同一交易日）時比價：STOCK_DAY_ALL 永遠回「最新一個交易日」，
+// T+1 情況會拿今天的盤比昨天的掃描，凡是今天波動 >2% 的股票都被誤標 mismatch。
+if (daysBehind === 0 && topStocks.length > 0) {
   console.log('Price cross-validation: fetching TWSE STOCK_DAY_ALL...')
   try {
     const twseBody = await fetchUrl('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL', 12000)
@@ -1639,7 +1660,7 @@ if (isFresh && topStocks.length > 0) {
     dataQuality.price_validation = { ok: null, checked: 0, mismatches: [], error: e.message }
   }
 } else {
-  dataQuality.price_validation = { ok: null, checked: 0, mismatches: [], skipped: !isFresh ? 'stale_data' : 'no_stocks' }
+  dataQuality.price_validation = { ok: null, checked: 0, mismatches: [], skipped: daysBehind !== 0 ? 'not_same_day' : 'no_stocks' }
 }
 
 // ── Enrich industry_category from TWSE/TPEX open data ────────────────────────
