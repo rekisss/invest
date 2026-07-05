@@ -1,0 +1,55 @@
+name: 模型每月重訓（草稿 PR，不自動上線）
+
+# 用每日掃描 CSV 累積的資料重訓 xgb_label_5d（scan_training_builder.py →
+# 原版 train_model.py,不改保護的 Python）。產出一律走「草稿 PR + 新舊指標對比」
+# 交人工審核,絕不直接改 main 的模型——符合 CLAUDE.md 策略修改需附理由與風險的規則。
+# 註:盤前預測(market_predictor)每次執行都就地重訓,不依賴這顆模型;
+# xgb_label_5d 目前無 runtime 消費者,重訓是為了讓它隨資料累積變強、日後可接回選股。
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 1 * *'   # 每月 1 日 10:00 CST
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: 舊指標存檔
+        run: cp models/xgb_label_5d_metrics.json /tmp/old_metrics.json 2>/dev/null || echo '{}' > /tmp/old_metrics.json
+      - name: 建訓練資料（掃描 CSV → parquet）
+        id: build
+        run: |
+          python scan_training_builder.py
+          echo "parquet=$(ls -t training_data/historical_scan_*.parquet | head -1)" >> "$GITHUB_OUTPUT"
+      - name: 重訓
+        run: python train_model.py --data "${{ steps.build.outputs.parquet }}"
+      - name: 開草稿 PR（新舊指標對比）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
+          BR="model-retrain/${DATE}"
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          git checkout -b "$BR"
+          git add models/xgb_label_5d.pkl models/xgb_label_5d_metrics.json models/xgb_label_5d_features.json training_data/historical_scan_*.parquet
+          git commit -m "model: 每月重訓 ${DATE}（掃描資料累積版，待人工審核）"
+          git push -u origin "$BR"
+          OLD=$(python -c "import json;m=json.load(open('/tmp/old_metrics.json'));print(f\"AUC {m.get('auc','?')} / P {m.get('precision','?')} / R {m.get('recall','?')}\")")
+          NEW=$(python -c "import json;m=json.load(open('models/xgb_label_5d_metrics.json'));print(f\"AUC {m.get('auc','?')} / P {m.get('precision','?')} / R {m.get('recall','?')}\")")
+          gh pr create --draft --base main --head "$BR" \
+            --title "model: 每月重訓 ${DATE}（待審，勿自動合併）" \
+            --body "$(printf '## 每月自動重訓（掃描資料累積版）\n\n| | AUC / Precision / Recall |\n|---|---|\n| 舊模型 | %s |\n| 新模型 | %s |\n\n**理由**：資料隨每日掃描累積，定期重訓避免模型過期。\n**風險**：樣本天數仍少時新模型可能較弱；未還原除權息（除息季有假負標籤）；掃描樣本略偏 watchlist。\n**規則**：指標沒有明顯變好就直接關閉本 PR，不要合併。此模型目前無 runtime 消費者，合併僅更新 artifact。\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)' "$OLD" "$NEW")"
