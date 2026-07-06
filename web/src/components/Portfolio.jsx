@@ -233,11 +233,15 @@ export default function Portfolio({ data }) {
   const posKey = Object.keys(positions).sort().join(',')
   const posIds = useMemo(() => Object.keys(positions), [posKey])
   const { prices: livePriceData, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: livePriceLoading } = useLivePrices(posIds)
+  // Note: not gated by mktOpen — useLivePrices already fetches the final settled
+  // close once after market close (see its `closedFetchDone` logic), and that
+  // covers far more stocks than the day's scan top_stocks/filter_stocks list.
+  // Gating this on mktOpen threw away that fetched price after close and fell
+  // back to getScanClose(), which shows "無報價" for any holding that wasn't a
+  // scan-flagged mover that day even though its close price was fetched fine.
   const livePrices = useMemo(
-    () => mktOpen
-      ? Object.fromEntries(Object.entries(livePriceData).map(([id, d]) => [id, d.price]))
-      : {},
-    [livePriceData, mktOpen]
+    () => Object.fromEntries(Object.entries(livePriceData).map(([id, d]) => [id, d.price])),
+    [livePriceData]
   )
 
   useGSAP(() => {
