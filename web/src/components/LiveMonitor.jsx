@@ -4,6 +4,7 @@ import { useLivePrices, fetchIndices, fetchPriceCache } from '../hooks/useLivePr
 import { useShioajiStream, loadStreamCfg, saveStreamCfg } from '../hooks/useShioajiStream'
 import { flashPriceEl, animateListRows } from '../utils/animeUtils.js'
 import StockDetailModal from './StockDetailModal'
+import { getStockHistories } from '../utils/histCache'
 
 const PORTFOLIO_KEY  = 'tw_portfolio_positions'
 const MONITOR_KEY    = 'tw_monitor_list'
@@ -722,7 +723,7 @@ export default function LiveMonitor({ data }) {
     if (!historiesRef.current) {
       try {
         const base = import.meta.env.BASE_URL || '/'
-        const h = await fetch(`${base}stock_histories.json`).then(r => r.ok ? r.json() : null)
+        const h = await getStockHistories(base)
         historiesRef.current = h || {}
         if (h) setHistoryData(h)
       } catch { historiesRef.current = {} }

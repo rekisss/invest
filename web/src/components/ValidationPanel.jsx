@@ -3,6 +3,7 @@ import { animate, stagger, spring } from 'animejs'
 import { useLivePrices, isTWSEOpen } from '../hooks/useLivePrices'
 import { useDataValidation } from '../hooks/useDataValidation'
 import StockDetailModal from './StockDetailModal'
+import { getStockHistories } from '../utils/histCache'
 
 const BASE = import.meta.env.BASE_URL || '/'
 
@@ -714,8 +715,7 @@ export default function ValidationPanel({ data, onRefresh }) {
     try {
       if (!historiesRef.current) {
         const base = BASE.endsWith('/') ? BASE : BASE + '/'
-        const resp = await fetch(`${base}stock_histories.json`)
-        historiesRef.current = resp.ok ? await resp.json() : {}
+        historiesRef.current = await getStockHistories(base)
       }
       const h = historiesRef.current
       const sid = String(stock.stock_id)

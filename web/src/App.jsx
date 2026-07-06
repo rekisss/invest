@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback, lazy, Suspen
 import { animate } from 'animejs'
 import Overview from './components/Overview.jsx'
 import { animateTabIn } from './utils/animeUtils.js'
+import { getStockHistories } from './utils/histCache.js'
 
 // Lazy-load non-landing tabs so the initial bundle only contains Overview
 const Dashboard = lazy(() => import('./components/Dashboard.jsx'))
@@ -80,6 +81,9 @@ export default function App() {
   const [globalCompare, setGlobalCompare] = useState(null)
   const [globalDates, setGlobalDates] = useState(null)
   const globalHistRef = useRef(null)
+  // Timestamp of the data.json currently in state, used to skip redundant
+  // re-downloads/re-parses of the (multi-MB) file on periodic auto-refresh.
+  const lastGeneratedAtRef = useRef(null)
 
   useEffect(() => {
     try {
@@ -100,15 +104,39 @@ export default function App() {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
     setError(null)
-    fetch(`${BASE}data.json?t=${Date.now()}`)
+
+    const doFullLoad = () => fetch(`${BASE}data.json?t=${Date.now()}`)
       .then(r => { if (!r.ok) throw new Error(r.status); return r.json() })
       .then(d => {
         setData(d)
+        lastGeneratedAtRef.current = d?.generated_at || null
         setLoading(false)
         setRefreshing(false)
         if (isRefresh) setRefreshCount(c => c + 1)
       })
       .catch(e => { setError(e.message); setLoading(false); setRefreshing(false) })
+
+    // On the initial load (or if we've never recorded a version) there's
+    // nothing to compare against — just load the full file.
+    if (!isRefresh || !lastGeneratedAtRef.current) {
+      doFullLoad()
+      return
+    }
+
+    // Periodic/manual refresh: meta.json is a few hundred bytes. Only pay
+    // the cost of re-downloading and re-parsing the multi-MB data.json when
+    // it actually changed, instead of doing that on every 5-minute tick.
+    fetch(`${BASE}meta.json?t=${Date.now()}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(meta => {
+        if (meta && meta.data_generated_at === lastGeneratedAtRef.current) {
+          setRefreshing(false)
+          setRefreshCount(c => c + 1)
+          return
+        }
+        return doFullLoad()
+      })
+      .catch(doFullLoad)
   }, [])
 
   useEffect(() => { loadData(false) }, [loadData])
@@ -144,7 +172,7 @@ export default function App() {
       // Lazy-load price histories once, then enrich the open stock with its k-line
       if (!globalHistRef.current) {
         try {
-          const h = await fetch(`${BASE}stock_histories.json`).then(r => r.ok ? r.json() : null)
+          const h = await getStockHistories(BASE)
           globalHistRef.current = h || {}
           if (h?.stocks) setGlobalCompare(h.stocks)
           if (Array.isArray(h?.dates)) setGlobalDates(h.dates)

@@ -3,6 +3,7 @@ import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 gsap.registerPlugin(useGSAP)
 import StockDetailModal from './StockDetailModal'
+import { getStockHistories } from '../utils/histCache'
 
 /* ── Live Market Constants ───────────────────────────────────────── */
 const LIVE_CACHE_KEY = 'live_mkt_v1'
@@ -958,7 +959,7 @@ export default function Overview({ data, error }) {
     if (!ovHistoriesRef.current) {
       try {
         const base = import.meta.env.BASE_URL || '/'
-        const h = await fetch(`${base}stock_histories.json`).then(r => r.ok ? r.json() : null)
+        const h = await getStockHistories(base)
         ovHistoriesRef.current = h || {}
         if (h?.stocks) setOvCompareHistories(h.stocks)
         if (Array.isArray(h?.dates)) setOvHistoryDates(h.dates)
