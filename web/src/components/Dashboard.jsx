@@ -2341,7 +2341,12 @@ export default function Dashboard({ data, error }) {
       if (!slim || slim.length === 0) return stocks
       const richMap = {}
       for (const s of stocks) richMap[s.stock_id] = s
-      return slim.map(s => richMap[s.stock_id] || s)
+      const merged = slim.map(s => richMap[s.stock_id] || s)
+      // top_stocks can include entries absent from filter_stocks (e.g. skip-flagged
+      // picks) — keep them instead of silently dropping them from the scan.
+      const slimIds = new Set(slim.map(s => String(s.stock_id)))
+      const missingFromSlim = stocks.filter(s => !slimIds.has(String(s.stock_id)))
+      return missingFromSlim.length ? [...merged, ...missingFromSlim] : merged
     })()
     if (!slimHistories && !scanHistories) return base
     return base.map(s => {

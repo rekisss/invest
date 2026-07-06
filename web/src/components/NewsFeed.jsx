@@ -383,9 +383,11 @@ async function loadLiveNews() {
     })
     .map(item => {
       const tags = detectTags(item.title, item.summary)
-      const ts = item.published ? new Date(item.published).getTime() : 0
+      // Static data.json items carry `published_at`; live RSS-fetched items carry `published`.
+      const published = item.published || item.published_at
+      const ts = published ? new Date(published).getTime() : 0
       const isNew = ts > 0 && (now - ts) < NEW_BADGE_MS
-      return { ...item, tags, _ts: ts, isNew }
+      return { ...item, published, tags, _ts: ts, isNew }
     })
     // Items with no date go to bottom; otherwise newest first
     .sort((a, b) => {
@@ -521,8 +523,9 @@ function Stars({ n }) {
 
 function SentimentBadge({ sentiment }) {
   const cfg = {
-    bull:    { label: '利多', color: '#22C55E', bg: 'rgba(34,197,94,0.12)' },
-    bear:    { label: '利空', color: '#EF4444', bg: 'rgba(239,68,68,0.12)' },
+    // Taiwan convention: red = bullish (利多), green = bearish (利空) — opposite of US markets.
+    bull:    { label: '利多', color: '#EF4444', bg: 'rgba(239,68,68,0.12)' },
+    bear:    { label: '利空', color: '#22C55E', bg: 'rgba(34,197,94,0.12)' },
     neutral: { label: '中性', color: '#94A3B8', bg: 'transparent' },
   }[sentiment] || { label: '中性', color: '#94A3B8', bg: 'transparent' }
   return (
@@ -698,7 +701,7 @@ function NewsItem({ item, isOpen, onToggle, customRules = [], nameMap = {} }) {
       borderBottom: '0.5px solid var(--ios-sep)',
       background: isOpen ? `linear-gradient(90deg, ${borderColor}08 0%, var(--ios-bg2) 40%)` : 'transparent',
       transition: 'background 0.18s',
-      borderLeft: `2.5px solid ${isOpen ? borderColor : sentiment === 'bull' ? 'rgba(34,197,94,0.4)' : sentiment === 'bear' ? 'rgba(239,68,68,0.4)' : 'transparent'}`,
+      borderLeft: `2.5px solid ${isOpen ? borderColor : sentiment === 'bull' ? 'rgba(239,68,68,0.4)' : sentiment === 'bear' ? 'rgba(34,197,94,0.4)' : 'transparent'}`,
     }}>
       <div
         onClick={onToggle}
@@ -749,9 +752,9 @@ function NewsItem({ item, isOpen, onToggle, customRules = [], nameMap = {} }) {
             const { bull, bear } = getSentimentReason(item.title, item.summary)
             const keys = sentiment === 'bull' ? bull : bear
             if (!keys.length) return null
-            const col = sentiment === 'bull' ? '#22C55E' : '#EF4444'
-            const bg = sentiment === 'bull' ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)'
-            const border = sentiment === 'bull' ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'
+            const col = sentiment === 'bull' ? '#EF4444' : '#22C55E'
+            const bg = sentiment === 'bull' ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)'
+            const border = sentiment === 'bull' ? 'rgba(239,68,68,0.25)' : 'rgba(34,197,94,0.25)'
             const icon = sentiment === 'bull' ? '📈 利多依據' : '📉 利空依據'
             return (
               <div style={{ marginBottom: 10, padding: '8px 11px', background: bg, borderRadius: 10, border: `0.5px solid ${border}` }}>
@@ -760,7 +763,7 @@ function NewsItem({ item, isOpen, onToggle, customRules = [], nameMap = {} }) {
                   {keys.map((k, i) => (
                     <span key={i} style={{
                       fontSize: 11, fontWeight: 700, color: col,
-                      background: sentiment === 'bull' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                      background: sentiment === 'bull' ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)',
                       borderRadius: 6, padding: '2px 8px',
                     }}>{k}</span>
                   ))}
@@ -1139,8 +1142,8 @@ export default function NewsFeed({ staticNews, refreshSignal, data }) {
         <div style={{ display: 'flex', gap: 6, padding: '0 12px 8px', alignItems: 'center' }}>
           {[
             { key: 'all',  label: '全部',  color: 'var(--ios-label2)',  bg: 'var(--ios-fill4)',               count: tagFiltered.length },
-            { key: 'bull', label: '利多',  color: '#22C55E', bg: 'rgba(34,197,94,0.13)',  count: bullCount },
-            { key: 'bear', label: '利空',  color: '#EF4444', bg: 'rgba(239,68,68,0.13)',  count: bearCount },
+            { key: 'bull', label: '利多',  color: '#EF4444', bg: 'rgba(239,68,68,0.13)',  count: bullCount },
+            { key: 'bear', label: '利空',  color: '#22C55E', bg: 'rgba(34,197,94,0.13)',  count: bearCount },
           ].map(({ key, label, color, bg, count }) => {
             const isActive = sentimentFilter === key
             return (
