@@ -126,6 +126,10 @@ export const STOCK_AGENTS = {
 2. 整理數據後用繁體中文說明重點（勿直接貼原始 JSON）
 3. 若資料量大，只摘要關鍵指標
 
-日期格式：YYYY-MM-DD，查詢近期資料 end_date 用今天（${new Date().toISOString().slice(0,10)}），start_date 往前推所需天數。`,
+日期格式：YYYY-MM-DD，查詢近期資料 end_date 用今天（{{TODAY}}），start_date 往前推所需天數。`,
+    // {{TODAY}} above is substituted with the real current date at send-time
+    // (see sendFinmindMessage) — this module is imported once per page load,
+    // so embedding new Date() directly here would freeze "today" at that
+    // moment for the entire browser session (stale after midnight).
   },
 }

@@ -385,7 +385,7 @@ export default function AgentPanel({ apiKey, data, onSaveKey, onClearKey }) {
         body: JSON.stringify({
           model: MODEL,
           max_tokens: 800,
-          system: agent.systemPrompt,
+          system: agent.systemPrompt.replace('{{TODAY}}', new Date().toISOString().slice(0, 10)),
           messages: currentHistory,
           tools: FINMIND_TOOLS,
         }),
