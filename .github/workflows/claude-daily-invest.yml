@@ -1,7 +1,7 @@
 name: Claude Daily Invest Check
 
 # 每日自動健檢:檢查資料流/掃描/測試,發現可安全修正的問題就開「草稿 PR」(不自動 merge)。
-# 需求:repo secret ANTHROPIC_API_KEY。建議先設好 main branch protection(見 README/聊天說明)。
+# 需求:repo secret ANTHROPIC_API_KEY 或 CLAUDE_CODE_OAUTH_TOKEN(擇一)。建議先設好 main branch protection(見 README/聊天說明)。
 # 注意:claude-code-action 會自動讀取 repo 根目錄的 CLAUDE.md 並遵守其中規則。
 on:
   schedule:
@@ -30,7 +30,9 @@ jobs:
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         with:
+          # 兩個 secret 擇一設定即可;都是 optional input,沒設的那個留空字串無妨。
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # v1 使用 `prompt`;若你的 action 版本報「unknown input」,改成 `direct_prompt`。
           prompt: |
             請對這個台股 invest 專案做每日健檢。嚴格遵守 repo 根目錄 CLAUDE.md 的所有規則
