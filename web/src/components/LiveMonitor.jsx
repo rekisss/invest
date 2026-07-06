@@ -256,7 +256,9 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
     ? scan.entry_reason.split(',').map(s => s.trim()).filter(Boolean).slice(0, 3)
     : []
 
-  const volumeRatio = live?.volume_ratio ?? null
+  // Live price feeds don't carry volume_ratio; the scan row does (e.g. 3.47).
+  // Prefer a live value if a future feed ever provides one, else use the scan's.
+  const volumeRatio = live?.volume_ratio ?? scan?.volume_ratio ?? null
   const hasVolSpike = volumeRatio != null && volumeRatio > 3
 
   const rowBg = hasVolSpike
