@@ -3,6 +3,8 @@
 // a shared cache every one of them re-fetches and re-parses the same
 // multi-MB payload independently. Module-level promise cache ensures the
 // fetch + JSON.parse happens at most once per page session.
+//
+// Callers pass the app BASE_URL so the fetch resolves under any deploy path.
 let cachedPromise = null
 
 export function getStockHistories(base = '/') {
