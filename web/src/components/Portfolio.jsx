@@ -40,6 +40,17 @@ function getScanClose(stockId, data) {
   const m = scanRows(data).find(s => String(s.stock_id) === String(stockId))
   return m?.close ?? null
 }
+// Last-resort close price from stock_histories.json — it carries kline data for
+// nearly the whole listed universe (~1500 stocks), so it covers holdings that
+// never show up in the day's scan top_stocks/filter_stocks (e.g. quiet large-caps).
+function getHistoriesClose(stockId, histories) {
+  const c = histories?.stocks?.[stockId]?.c
+  if (!Array.isArray(c)) return null
+  for (let i = c.length - 1; i >= 0; i--) {
+    if (c[i] != null) return c[i]
+  }
+  return null
+}
 function getScanInfo(stockId, data) {
   // Prefer the richest matching row (top_stocks ~120 fields, filter_stocks ~25)
   const matches = scanRows(data).filter(s => String(s.stock_id) === String(stockId))
@@ -229,6 +240,27 @@ export default function Portfolio({ data }) {
   const [groupExpanded, setGroupExpanded] = useState({ profit: true, loss: true })
   const [copyLabel, setCopyLabel] = useState('📋 複製')
 
+  // Eagerly (not lazily) warm the stock_histories.json cache so its close prices
+  // are available as a third-tier fallback for curPrice below — it covers almost
+  // the whole listed universe, unlike getScanClose()'s narrow top-mover list.
+  // getStockHistories() dedups against any fetch already triggered by openStockDetail
+  // or another component, so this doesn't cause a duplicate download.
+  useEffect(() => {
+    if (historiesRef.current) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const base = import.meta.env.BASE_URL || '/'
+        const h = await getStockHistories(base)
+        if (cancelled) return
+        historiesRef.current = h || {}
+        if (h?.stocks) setCompareHistories(h.stocks)
+        if (Array.isArray(h?.dates)) setHistoryDates(h.dates)
+      } catch { if (!cancelled) historiesRef.current = {} }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   // ── Live prices via TWSE 即時行情 (replaces Yahoo Finance one-shot fetch) ──
   const posKey = Object.keys(positions).sort().join(',')
   const posIds = useMemo(() => Object.keys(positions), [posKey])
@@ -318,7 +350,7 @@ export default function Portfolio({ data }) {
 
   // ── Computed entries ──────────────────────────────────────────────────────
   const entries = useMemo(() => Object.entries(positions).map(([id, p], i) => {
-    const curPrice  = livePrices[id] ?? getScanClose(id, data)
+    const curPrice  = livePrices[id] ?? getScanClose(id, data) ?? getHistoriesClose(id, { stocks: compareHistories })
     const scan      = getScanInfo(id, data)
     const pnlPct    = curPrice ? (curPrice - p.buyPrice) / p.buyPrice * 100 : null
     const pnlAmt    = curPrice ? (curPrice - p.buyPrice) * p.qty : null
@@ -331,7 +363,7 @@ export default function Portfolio({ data }) {
     const stopLoss  = tg.stopLoss
     const takePrft  = tg.takePrft
     return { id, p, curPrice, scan, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft, targets: tg, color: PALETTE[i % PALETTE.length] }
-  }), [positions, data, livePrices])
+  }), [positions, data, livePrices, compareHistories])
 
   const sorted = useMemo(() => [...entries].sort((a, b) => {
     if (sortBy === 'pnlPct') return (b.pnlPct ?? -Infinity) - (a.pnlPct ?? -Infinity)
