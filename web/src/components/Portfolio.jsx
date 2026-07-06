@@ -313,6 +313,10 @@ export default function Portfolio({ data }) {
       name: p?.name || scan?.name || id,
       ...(scan || {}),
       close: livePrices[id] ?? scan?.close ?? null,
+      // Keep the %-change consistent with the close above: during market hours
+      // pair the live close with the live day change, not the scan's stale one
+      // (same mktOpen convention already used for 今日損益 below).
+      ...(mktOpen && livePriceData[id]?.pct != null ? { day_return: livePriceData[id].pct } : {}),
       price_history_loading: true,
     }
     // Show modal immediately with whatever we have (chart section loads async)
