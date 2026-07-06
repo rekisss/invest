@@ -17,7 +17,11 @@ export default function QuotaPanel({ quota, generatedAt }) {
   ]
 
   const allAccounts = accountDefs.map(({ label, hrLimit, tag }) => {
-    const found = (quota || []).find(q => q.label.includes(label))
+    // Exact-prefix match, not substring: '帳號1'.includes-style matching would
+    // also match '帳號10（K線）' (since '帳號1' is a substring of '帳號10'),
+    // silently attributing account 10's quota to account 1 when account 1's
+    // own entry is missing from `quota`.
+    const found = (quota || []).find(q => q.label === label || q.label.startsWith(`${label}（`))
     const resolvedLimit = found?.limit ?? hrLimit
     return { label, tag, hrLimit: resolvedLimit, used: found?.used ?? null, limit: found?.limit ?? null }
   })

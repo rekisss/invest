@@ -58,6 +58,26 @@ function AnimatedTabPanel({ direction, onDone, style, children }) {
   )
 }
 
+// Like AnimatedTabPanel, but for the Studio tab specifically: GeminiStudio owns
+// long-running AI roundtable state (in-flight streaming, autoRun timers), so it
+// must stay mounted across tab switches rather than being torn down/recreated.
+// Toggles visibility via display:none and re-plays the entry animation each
+// time it becomes active, without ever unmounting `children`.
+function StudioPanel({ active, direction, onDone, style, children }) {
+  const ref = useRef(null)
+  const wasActive = useRef(active)
+  useLayoutEffect(() => {
+    if (active && !wasActive.current) animateTabIn(ref.current, direction, onDone)
+    wasActive.current = active
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active])
+  return (
+    <div ref={ref} style={{ ...style, display: active ? 'flex' : 'none' }}>
+      {children}
+    </div>
+  )
+}
+
 export default function App() {
   const [tabIdx, setTabIdx] = useState(0)
   const [apiKey, setApiKey] = useState(() => sessionStorage.getItem('anthropic_key') || '')
@@ -429,25 +449,19 @@ export default function App() {
           </AnimatedTabPanel>
         )}
 
-        {/* GeminiStudio — always mounted once data loads; hidden via display:none when inactive */}
+        {/* GeminiStudio — always mounted once data loads; hidden via display:none when inactive.
+            Uses StudioPanel (not AnimatedTabPanel) so switching tabs never unmounts it: it owns
+            in-flight AI roundtable state (streaming, autoRun timers) that a remount would drop. */}
         {!loading && !!data && (
-          <div style={{ ...panelStyle, display: tab === 'studio' ? 'flex' : 'none' }}>
-            {tab === 'studio' ? (
-              <AnimatedTabPanel key="studio-visible" direction={slideDir} onDone={() => setSlideDir(null)} style={panelStyle}>
-                <Suspense fallback={
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                    <div style={{ width: 28, height: 28, border: '3px solid var(--ios-fill3)', borderTop: '3px solid var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                  </div>
-                }>
-                  <GeminiStudio data={data} />
-                </Suspense>
-              </AnimatedTabPanel>
-            ) : (
-              <Suspense fallback={null}>
-                <GeminiStudio data={data} />
-              </Suspense>
-            )}
-          </div>
+          <StudioPanel active={tab === 'studio'} direction={slideDir} onDone={() => setSlideDir(null)} style={panelStyle}>
+            <Suspense fallback={
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                <div style={{ width: 28, height: 28, border: '3px solid var(--ios-fill3)', borderTop: '3px solid var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              </div>
+            }>
+              <GeminiStudio data={data} />
+            </Suspense>
+          </StudioPanel>
         )}
       </div>
 

@@ -385,7 +385,12 @@ export default function AgentPanel({ apiKey, data, onSaveKey, onClearKey }) {
         body: JSON.stringify({
           model: MODEL,
           max_tokens: 800,
-          system: agent.systemPrompt,
+          // Taipei calendar date, not toISOString() (UTC): between 00:00–07:59
+          // Asia/Taipei the UTC date is still yesterday, which would tell the
+          // model to use the wrong end_date for Taiwan market queries.
+          // en-CA locale formats as YYYY-MM-DD.
+          system: agent.systemPrompt.replace('{{TODAY}}',
+            new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date())),
           messages: currentHistory,
           tools: FINMIND_TOOLS,
         }),
