@@ -311,8 +311,8 @@ export default function Portfolio({ data }) {
     const baseStock = {
       stock_id: id,
       name: p?.name || scan?.name || id,
-      close: livePrices[id] ?? scan?.close ?? null,
       ...(scan || {}),
+      close: livePrices[id] ?? scan?.close ?? null,
       price_history_loading: true,
     }
     // Show modal immediately with whatever we have (chart section loads async)
@@ -372,16 +372,21 @@ export default function Portfolio({ data }) {
   }), [entries, sortBy])
 
   // Feature 13: group positions by profit/loss
+  // Filter only — `sorted` already carries the user's chosen sortBy order,
+  // which a subsequent re-sort here would silently discard.
   const profitEntries = useMemo(() =>
-    sorted.filter(e => e.pnlPct != null ? e.pnlPct >= 0 : (e.curPrice ?? e.p.buyPrice) >= e.p.buyPrice)
-      .sort((a, b) => (b.pnlPct ?? 0) - (a.pnlPct ?? 0)),
+    sorted.filter(e => e.pnlPct != null ? e.pnlPct >= 0 : (e.curPrice ?? e.p.buyPrice) >= e.p.buyPrice),
     [sorted])
   const lossEntries = useMemo(() =>
-    sorted.filter(e => e.pnlPct != null ? e.pnlPct < 0 : false)
-      .sort((a, b) => (a.pnlPct ?? 0) - (b.pnlPct ?? 0)),
+    sorted.filter(e => e.pnlPct != null ? e.pnlPct < 0 : false),
     [sorted])
-  const winRateNum   = profitEntries.length
-  const totalCount   = entries.length
+  // Win rate only counts positions with a known current price — entries with
+  // no price data fall into profitEntries for display grouping (above) but
+  // must not be silently counted as wins here (buyPrice >= buyPrice is always
+  // true, which would inflate the stat for stocks the app has no quote for).
+  const knownPnlEntries = entries.filter(e => e.pnlPct != null)
+  const winRateNum   = knownPnlEntries.filter(e => e.pnlPct >= 0).length
+  const totalCount   = knownPnlEntries.length
   const winRatePct   = totalCount > 0 ? winRateNum / totalCount : 0
 
   // Feature 14: export portfolio to clipboard
