@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
 import { useLivePrices } from '../hooks/useLivePrices'
+import { getStockHistories } from '../utils/histCache'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 gsap.registerPlugin(useGSAP)
@@ -285,7 +286,7 @@ export default function Portfolio({ data }) {
     if (!historiesRef.current) {
       try {
         const base = import.meta.env.BASE_URL || '/'
-        const h = await fetch(`${base}stock_histories.json`).then(r => r.ok ? r.json() : null)
+        const h = await getStockHistories(base)
         historiesRef.current = h || {}
         if (h?.stocks) setCompareHistories(h.stocks)
         if (Array.isArray(h?.dates)) setHistoryDates(h.dates)

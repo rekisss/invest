@@ -1433,7 +1433,8 @@ for (const d of allScanDatesAsc) {
 const scanStocksFiltered = Object.fromEntries(
   Object.entries(scanStocksHistory).filter(([, bars]) => bars.length >= 10)
 )
-writeFileSync(HISTORIES_FILE, JSON.stringify({ generated_at: new Date().toISOString(), dates: historiesDates, stocks: historiesStocks, scan_stocks: scanStocksFiltered }), 'utf-8')
+const historiesGeneratedAt = new Date().toISOString()
+writeFileSync(HISTORIES_FILE, JSON.stringify({ generated_at: historiesGeneratedAt, dates: historiesDates, stocks: historiesStocks, scan_stocks: scanStocksFiltered }), 'utf-8')
 console.log(`stock_histories.json written (${Object.keys(historiesStocks).length} kline + ${Object.keys(scanStocksFiltered).length} scan stocks, ${historiesDates.length} kline bars, ${(readFileSync(HISTORIES_FILE).length / 1024).toFixed(0)} KB)`)
 
 let prediction = readPrediction()
@@ -1710,5 +1711,13 @@ if (Object.keys(industryMap).length > 0) {
   console.log(`Industry enrichment: ${filled} stocks filled`)
 }
 
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: new Date().toISOString(), last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality }), 'utf-8')
+const dataGeneratedAt = new Date().toISOString()
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
+
+// Small sidecar so the frontend can cheaply check "did anything change?" (a few
+// hundred bytes) before deciding to re-download and re-parse the multi-MB
+// data.json / stock_histories.json on its periodic auto-refresh.
+const META_FILE = join(PUBLIC_DIR, 'meta.json')
+writeFileSync(META_FILE, JSON.stringify({ data_generated_at: dataGeneratedAt, histories_generated_at: historiesGeneratedAt }), 'utf-8')
+console.log(`meta.json written`)
