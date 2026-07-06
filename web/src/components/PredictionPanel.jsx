@@ -760,7 +760,7 @@ export default function PredictionPanel({ prediction, history = [] }) {
                 // 台股慣例（與本頁其他區塊一致）：紅=多/漲、綠=空/跌
                 { label: '利多', val: news_sentiment.bullish_count, color: 'var(--ios-red)' },
                 { label: '利空', val: news_sentiment.bearish_count, color: 'var(--ios-green)' },
-                { label: '市場影響', val: `${news_sentiment.market_impact > 0 ? '+' : ''}${news_sentiment.market_impact?.toFixed(2)}`, color: news_sentiment.market_impact > 0 ? 'var(--ios-red)' : news_sentiment.market_impact < 0 ? 'var(--ios-green)' : 'var(--ios-label2)' },
+                { label: '市場影響', val: news_sentiment.market_impact == null ? '—' : `${news_sentiment.market_impact > 0 ? '+' : ''}${news_sentiment.market_impact.toFixed(2)}`, color: news_sentiment.market_impact > 0 ? 'var(--ios-red)' : news_sentiment.market_impact < 0 ? 'var(--ios-green)' : 'var(--ios-label2)' },
               ].map(({ label, val, color }) => (
                 <div key={label} style={{ flex: 1, background: 'var(--ios-bg3)', borderRadius: 12, padding: '10px 12px', textAlign: 'center' }}>
                   <div style={{ fontSize: 11, color: 'var(--ios-label2)', marginBottom: 4 }}>{label}</div>
