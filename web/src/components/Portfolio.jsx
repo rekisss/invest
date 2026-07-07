@@ -36,8 +36,8 @@ function scanRows(data) {
   ]
 }
 
-function getScanClose(stockId, data) {
-  const m = scanRows(data).find(s => String(s.stock_id) === String(stockId))
+function getScanClose(stockId, rows) {
+  const m = rows.find(s => String(s.stock_id) === String(stockId))
   return m?.close ?? null
 }
 // Last-resort close price from stock_histories.json — it carries kline data for
@@ -51,9 +51,9 @@ function getHistoriesClose(stockId, histories) {
   }
   return null
 }
-function getScanInfo(stockId, data) {
+function getScanInfo(stockId, rows) {
   // Prefer the richest matching row (top_stocks ~120 fields, filter_stocks ~25)
-  const matches = scanRows(data).filter(s => String(s.stock_id) === String(stockId))
+  const matches = rows.filter(s => String(s.stock_id) === String(stockId))
   if (!matches.length) return null
   return matches.sort((a, b) => Object.keys(b).length - Object.keys(a).length)[0]
 }
@@ -240,6 +240,10 @@ export default function Portfolio({ data }) {
   const [groupExpanded, setGroupExpanded] = useState({ profit: true, loss: true })
   const [copyLabel, setCopyLabel] = useState('📋 複製')
 
+  // Build the ~1600-row scan concat once per data change instead of rebuilding
+  // it (and re-filtering/-sorting it) for every holding on every live-price tick.
+  const scanRowsCached = useMemo(() => scanRows(data), [data])
+
   // Eagerly (not lazily) warm the stock_histories.json cache so its close prices
   // are available as a third-tier fallback for curPrice below — it covers almost
   // the whole listed universe, unlike getScanClose()'s narrow top-mover list.
@@ -305,7 +309,7 @@ export default function Portfolio({ data }) {
 
   // Open StockDetailModal with scan data + lazy-loaded price history
   const openStockDetail = async (id) => {
-    const scan = getScanInfo(id, data)
+    const scan = getScanInfo(id, scanRowsCached)
     const p = positions[id]
     // Build base stock object; price_history_loading=true shows a spinner in the chart section
     const baseStock = {
@@ -354,8 +358,8 @@ export default function Portfolio({ data }) {
 
   // ── Computed entries ──────────────────────────────────────────────────────
   const entries = useMemo(() => Object.entries(positions).map(([id, p], i) => {
-    const curPrice  = livePrices[id] ?? getScanClose(id, data) ?? getHistoriesClose(id, { stocks: compareHistories })
-    const scan      = getScanInfo(id, data)
+    const curPrice  = livePrices[id] ?? getScanClose(id, scanRowsCached) ?? getHistoriesClose(id, { stocks: compareHistories })
+    const scan      = getScanInfo(id, scanRowsCached)
     const pnlPct    = curPrice ? (curPrice - p.buyPrice) / p.buyPrice * 100 : null
     const pnlAmt    = curPrice ? (curPrice - p.buyPrice) * p.qty : null
     const cost      = p.buyPrice * p.qty
@@ -367,7 +371,7 @@ export default function Portfolio({ data }) {
     const stopLoss  = tg.stopLoss
     const takePrft  = tg.takePrft
     return { id, p, curPrice, scan, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft, targets: tg, color: PALETTE[i % PALETTE.length] }
-  }), [positions, data, livePrices, compareHistories])
+  }), [positions, scanRowsCached, livePrices, compareHistories])
 
   const sorted = useMemo(() => [...entries].sort((a, b) => {
     if (sortBy === 'pnlPct') return (b.pnlPct ?? -Infinity) - (a.pnlPct ?? -Infinity)
@@ -848,7 +852,7 @@ export default function Portfolio({ data }) {
                   const val = e.target.value
                   if (f.key === 'stock_id') {
                     // Auto-fill name from scan data when the typed id matches a known stock
-                    const info = getScanInfo(val.trim(), data)
+                    const info = getScanInfo(val.trim(), scanRowsCached)
                     const px = info?.close
                     setForm(prev => ({
                       ...prev,

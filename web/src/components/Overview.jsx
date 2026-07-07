@@ -791,21 +791,25 @@ function inferSector(stockId) {
 
 function SectorHeatmap({ stocks, onStockClick }) {
   const [selectedSector, setSelectedSector] = useState(null)
+
+  // Group up to ~1500 stocks into sectors once per `stocks` change, instead of
+  // on every tile click (which only flips local selectedSector state).
+  const { sectorMap, sectors } = useMemo(() => {
+    const map = {}
+    for (const s of (stocks || [])) {
+      const sector = (s.industry_category && s.industry_category.trim()) || inferSector(s.stock_id)
+      if (!map[sector]) map[sector] = []
+      map[sector].push(s)
+    }
+    const list = Object.entries(map).map(([name, members]) => {
+      const avgReturn = members.reduce((sum, s) => sum + (s.day_return || 0), 0) / members.length
+      const signalCount = members.filter(s => s.entry_signal).length
+      return { name, count: members.length, avgReturn, signalCount }
+    }).sort((a, b) => b.avgReturn - a.avgReturn)
+    return { sectorMap: map, sectors: list }
+  }, [stocks])
+
   if (!stocks || stocks.length === 0) return null
-
-  const sectorMap = {}
-  for (const s of stocks) {
-    const sector = (s.industry_category && s.industry_category.trim()) || inferSector(s.stock_id)
-    if (!sectorMap[sector]) sectorMap[sector] = []
-    sectorMap[sector].push(s)
-  }
-
-  const sectors = Object.entries(sectorMap).map(([name, members]) => {
-    const avgReturn = members.reduce((sum, s) => sum + (s.day_return || 0), 0) / members.length
-    const signalCount = members.filter(s => s.entry_signal).length
-    return { name, count: members.length, avgReturn, signalCount }
-  }).sort((a, b) => b.avgReturn - a.avgReturn)
-
   if (sectors.length === 0) return null
 
   function tileBg(ret) {

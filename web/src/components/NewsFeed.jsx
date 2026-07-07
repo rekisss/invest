@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, memo } from 'react'
 import { safeUrl } from '../utils/safeUrl'
 
 const CUSTOM_RULES_KEY = 'news_custom_rules'
@@ -686,7 +686,7 @@ function CustomRulePanel({ customRules, onRulesChange, onClose }) {
   )
 }
 
-function NewsItem({ item, isOpen, onToggle, customRules = [], nameMap = {} }) {
+const NewsItem = memo(function NewsItem({ item, index, isOpen, onToggle, customRules = [], nameMap = {} }) {
   const allRules = [...KEYWORD_RULES, ...customRules]
   const mainTag = item.tags?.[0]
   const rule = mainTag ? allRules.find(r => r.tag === mainTag) : null
@@ -704,7 +704,7 @@ function NewsItem({ item, isOpen, onToggle, customRules = [], nameMap = {} }) {
       borderLeft: `2.5px solid ${isOpen ? borderColor : sentiment === 'bull' ? 'rgba(239,68,68,0.4)' : sentiment === 'bear' ? 'rgba(34,197,94,0.4)' : 'transparent'}`,
     }}>
       <div
-        onClick={onToggle}
+        onClick={() => onToggle(index)}
         style={{ padding: '12px 14px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start' }}
       >
         <div style={{
@@ -830,7 +830,7 @@ function NewsItem({ item, isOpen, onToggle, customRules = [], nameMap = {} }) {
       )}
     </div>
   )
-}
+})
 
 // ── Feature 17: Stock tag chips ──────────────────────────────────────────────
 function StockTagChips({ title, summary, nameMap }) {
@@ -885,6 +885,8 @@ export default function NewsFeed({ staticNews, refreshSignal, data }) {
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [openIdx, setOpenIdx] = useState(null)
+  // Stable toggle so memoized NewsItem rows don't all re-render on each expand.
+  const toggleIdx = useCallback((idx) => setOpenIdx(cur => (cur === idx ? null : idx)), [])
   const [filter, setFilter] = useState('all')
   const [sentimentFilter, setSentimentFilter] = useState('all') // 'all' | 'bull' | 'bear'
   const [tagsExpanded, setTagsExpanded] = useState(false)
@@ -1008,22 +1010,27 @@ export default function NewsFeed({ staticNews, refreshSignal, data }) {
     [rawNews, customRules]
   )
 
-  const tabs = buildDynamicTabs(news, customRules)
-  const tagFiltered = filter === 'all' ? news : news.filter(n => (n.tags || []).includes(filter))
-  const filtered = sentimentFilter === 'all' ? tagFiltered : tagFiltered.filter(n => {
-    const hint = generateHint(n.title, n.tags || [])
-    return getSentiment(n.title, hint) === sentimentFilter
-  })
+  const tabs = useMemo(() => buildDynamicTabs(news, customRules), [news, customRules])
+  const tagFiltered = useMemo(
+    () => filter === 'all' ? news : news.filter(n => (n.tags || []).includes(filter)),
+    [news, filter]
+  )
+  // generateHint runs 20+ regex tests per item; compute each item's sentiment
+  // once here instead of 3× (filtered + bull + bear) on every re-render
+  // (NewsFeed re-renders on every expand/collapse and the 30s clock tick).
+  const sentimentByItem = useMemo(() => {
+    const m = new Map()
+    for (const n of tagFiltered) m.set(n, getSentiment(n.title, generateHint(n.title, n.tags || [])))
+    return m
+  }, [tagFiltered])
+  const filtered = useMemo(
+    () => sentimentFilter === 'all' ? tagFiltered : tagFiltered.filter(n => sentimentByItem.get(n) === sentimentFilter),
+    [tagFiltered, sentimentFilter, sentimentByItem]
+  )
 
   // Counts for sentiment badges
-  const bullCount = tagFiltered.filter(n => {
-    const hint = generateHint(n.title, n.tags || [])
-    return getSentiment(n.title, hint) === 'bull'
-  }).length
-  const bearCount = tagFiltered.filter(n => {
-    const hint = generateHint(n.title, n.tags || [])
-    return getSentiment(n.title, hint) === 'bear'
-  }).length
+  const bullCount = useMemo(() => { let c = 0; for (const v of sentimentByItem.values()) if (v === 'bull') c++; return c }, [sentimentByItem])
+  const bearCount = useMemo(() => { let c = 0; for (const v of sentimentByItem.values()) if (v === 'bear') c++; return c }, [sentimentByItem])
 
   if (loading && news.length === 0) {
     return (
@@ -1194,8 +1201,9 @@ export default function NewsFeed({ staticNews, refreshSignal, data }) {
           <NewsItem
             key={i}
             item={item}
+            index={i}
             isOpen={openIdx === i}
-            onToggle={() => setOpenIdx(openIdx === i ? null : i)}
+            onToggle={toggleIdx}
             customRules={customRules}
             nameMap={nameMap}
           />
