@@ -2312,10 +2312,13 @@ export default function StockDetailModal({ stock, stocks, initialIndex = 0, noti
   // Feature 18: track recently viewed
   useEffect(() => {
     if (!s_nav?.stock_id) return
-    const stored = JSON.parse(localStorage.getItem('recentlyViewed') || '[]')
-    const filtered = stored.filter(x => x.id !== s_nav.stock_id)
-    const updated = [{ id: s_nav.stock_id, name: s_nav.name || '' }, ...filtered].slice(0, 5)
-    localStorage.setItem('recentlyViewed', JSON.stringify(updated))
+    try {
+      const raw = JSON.parse(localStorage.getItem('recentlyViewed') || '[]')
+      const stored = Array.isArray(raw) ? raw : []
+      const filtered = stored.filter(x => x?.id !== s_nav.stock_id)
+      const updated = [{ id: s_nav.stock_id, name: s_nav.name || '' }, ...filtered].slice(0, 5)
+      localStorage.setItem('recentlyViewed', JSON.stringify(updated))
+    } catch { /* corrupt localStorage — skip recording */ }
   }, [s_nav?.stock_id])
 
   useGSAP(() => {
