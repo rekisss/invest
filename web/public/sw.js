@@ -30,15 +30,46 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url)
   if (url.origin !== self.location.origin) return // let cross-origin (fonts, APIs) hit network directly
 
-  // HTML entry / navigations + market data: network-first so a new deploy (and
-  // fresh data) is picked up immediately; fall back to cache when offline.
   const isNavigation = req.mode === 'navigate'
   const isHtml = url.pathname.endsWith('/') || url.pathname.endsWith('/index.html')
-  if (url.pathname.endsWith('/data.json') || isNavigation || isHtml) {
-    // 用「去掉 query 的正規化 key」存取：App 以 data.json?t=<now> 破快取，若以完整
-    // URL 當 key，每次載入都新增一份大快取（無上限成長），而離線 fallback 查的是新
-    // 時間戳 URL，永遠比對不到舊存檔。另外只快取成功回應——把 404/500 存起來會讓
-    // 離線 fallback 重播錯誤頁。
+
+  // data.json is multi-MB. Serving it network-first made every visit block the
+  // first render on the full download — on a slow / mobile connection that is a
+  // long blank spinner ("頁面跑不出東西"), and the App's `?t=<now>` cache-buster
+  // means the browser HTTP cache never helps. Switch to stale-while-revalidate:
+  // hand back the cached copy immediately (instant render for返回訪客) and
+  // refresh it in the background so the next load — and the App's periodic
+  // refresh, which re-fetches after meta.json signals new data — picks up fresh
+  // data. First-ever visit (no cache) still falls through to the network.
+  // 「去掉 query 的正規化 key」存取：App 以 data.json?t=<now> 破快取，若以完整
+  // URL 當 key，每次載入都新增一份大快取（無上限成長）。只快取成功回應——把
+  // 404/500 存起來會讓離線 fallback 重播錯誤頁。
+  if (url.pathname.endsWith('/data.json')) {
+    const key = new Request(url.origin + url.pathname)
+    event.respondWith(
+      caches.match(key).then((cached) => {
+        const network = fetch(req)
+          .then((res) => {
+            if (res.ok) {
+              const copy = res.clone()
+              caches.open(CACHE).then((c) => c.put(key, copy))
+            }
+            return res
+          })
+          .catch(() => cached || Response.error())
+        return cached || network
+      })
+    )
+    return
+  }
+
+  // HTML entry / navigations + meta.json: network-first so a new deploy (fresh
+  // hashed bundle) and the freshness signal load immediately; fall back to
+  // cache when offline. meta.json is a few hundred bytes and the App polls it to
+  // decide whether to re-pull data.json, so it must never be served stale —
+  // otherwise the background-refreshed data.json above would go unnoticed.
+  const isMeta = url.pathname.endsWith('/meta.json')
+  if (isNavigation || isHtml || isMeta) {
     const key = new Request(url.origin + url.pathname)
     event.respondWith(
       fetch(req)
