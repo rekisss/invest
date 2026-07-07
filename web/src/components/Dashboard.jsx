@@ -1119,8 +1119,10 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
         {sectors.map(sec => {
           const isSelected = activeSector === sec.name
           const hasEntry = sec.entries > 0
-          // Width scale: larger tiles for sectors with more entries (mini treemap)
-          const tileScale = Math.max(1, sec.entries / Math.max(maxEntries, 1))
+          // Width scale: larger tiles for sectors with more entries (mini treemap).
+          // tileScale is the 0..1 share of the busiest sector; the old Math.max(1,…)
+          // pinned it to 1 so every tile came out the same width.
+          const tileScale = maxEntries > 0 ? sec.entries / maxEntries : 0
           const minW = heatTab === 'strong' ? Math.round(80 + tileScale * 30) : 80
 
           let bg, textColor, borderColor
