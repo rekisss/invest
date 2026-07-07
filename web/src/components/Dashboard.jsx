@@ -2389,7 +2389,9 @@ export default function Dashboard({ data, error }) {
     })
   }, [scan.filter_stocks, stocks, slimHistories, historyDates, scanHistories])
 
-  const entryStocks = allScanStocks.filter(s => s.entry_signal)
+  // Memoized: also feeds a useEffect dep below, so a fresh array each render
+  // would re-run that effect (and re-filters up to ~1500 rows) needlessly.
+  const entryStocks = useMemo(() => allScanStocks.filter(s => s.entry_signal), [allScanStocks])
   const globalMaxScore = Math.max(...stocks.map(s => s.entry_score || 0), 1)
   const pred = data.prediction || null
   const aiText = scan.ai_picks_text || ''
