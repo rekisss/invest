@@ -659,10 +659,15 @@ export default function GeminiStudio({ data }) {
   const countdownRef = useRef(null)
   const sessionIdRef = useRef(null)
   const claudeModelRef = useRef(claudeModel)
+  // Always points at the latest runRoundInternal so the stable ([]) auto-round
+  // scheduler fires the current topic/brief/mode/roster, not the mount-time ones.
+  const runRoundInternalRef = useRef(null)
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
   useEffect(() => { localStorage.setItem(CLAUDE_MODEL_STORAGE, claudeModel); claudeModelRef.current = claudeModel }, [claudeModel])
   useEffect(() => { autoRunRef.current = autoRun }, [autoRun])
+  // Clear any pending auto-round countdown if the panel unmounts mid-countdown.
+  useEffect(() => () => { if (countdownRef.current) clearInterval(countdownRef.current) }, [])
   // Persist in-progress session to sessionStorage so it survives page refreshes
   useEffect(() => {
     try {
@@ -722,7 +727,7 @@ export default function GeminiStudio({ data }) {
         clearInterval(countdownRef.current)
         countdownRef.current = null
         setCountdown(0)
-        if (autoRunRef.current) runRoundInternal(acc, null)
+        if (autoRunRef.current) runRoundInternalRef.current?.(acc, null)
       }
     }, 1000)
   }, [])  // eslint-disable-line react-hooks/exhaustive-deps
@@ -818,6 +823,8 @@ export default function GeminiStudio({ data }) {
 
     if (autoRunRef.current) scheduleAutoRound(acc)
   }, [topic, brief, typedId, mode, scheduleAutoRound])
+
+  useEffect(() => { runRoundInternalRef.current = runRoundInternal }, [runRoundInternal])
 
   const runRound = useCallback((priorMessages, userNote) => {
     return runRoundInternal(priorMessages, userNote)
