@@ -477,14 +477,19 @@ export default function AgentPanel({ apiKey, data, onSaveKey, onClearKey }) {
         const reader = resp.body.getReader()
         const decoder = new TextDecoder()
         let accumulated = ''
+        let buf = ''
         let inputTokens = 0
         let outputTokens = 0
 
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-          const chunk = decoder.decode(value, { stream: true })
-          for (const line of chunk.split('\n')) {
+          // Network reads split at arbitrary byte boundaries, so a single SSE
+          // `data:` line can span two chunks. Keep the trailing partial line in
+          // buf and only parse complete lines (mirrors GeminiStudio.callClaude).
+          buf += decoder.decode(value, { stream: true })
+          const lines = buf.split('\n'); buf = lines.pop()
+          for (const line of lines) {
             if (!line.startsWith('data: ')) continue
             const data = line.slice(6).trim()
             if (data === '[DONE]') continue
