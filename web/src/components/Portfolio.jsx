@@ -96,7 +96,13 @@ function computeTargets(buyPrice, scan) {
 
   const rr = (buyPrice - stopLoss > 0) ? (takePrft - buyPrice) / (buyPrice - stopLoss) : null
   const grounded = atr != null && atr > 0
-  return { stopLoss, stopBasis, takePrft, tpBasis, rr, grounded }
+  // Evidence-based "high win-rate" take-profit. Backtest (strategy_analysis.py)
+  // over the top-decile picks showed a flat +8% profit target lifts the trade
+  // win rate ~10-13pts vs holding to a far technical target — you lock in more
+  // green trades (at the cost of some upside on the rare big runners).
+  const quickTP = buyPrice * 1.08
+  const quickTPBasis = '買價 +8%（回測：高勝率停利點，較常收綠）'
+  return { stopLoss, stopBasis, takePrft, tpBasis, rr, grounded, quickTP, quickTPBasis }
 }
 
 function fmt(v, d = 2) { return v == null || isNaN(v) ? '—' : Number(v).toFixed(d) }
@@ -634,21 +640,27 @@ export default function Portfolio({ data }) {
           const pnlColor   = pnlPct == null ? 'var(--ios-label)' : pnlPct >= 0 ? 'var(--ios-red)' : 'var(--ios-green)'
           const nearStop   = curPrice != null && curPrice <= stopLoss * 1.02
           const nearTarget = curPrice != null && curPrice >= takePrft * 0.98
+          // Evidence-based high win-rate lock-in level (+8%); fires earlier than
+          // the far technical target so you bank green trades more often.
+          const nearQuickTP = curPrice != null && targets?.quickTP != null && curPrice >= targets.quickTP * 0.98
           const scanWeak   = scan && !scan.entry_signal && scan.entry_score != null && scan.entry_score < 500
-          const borderColor = nearStop ? 'rgba(255,51,64,0.55)' : scanWeak ? 'rgba(255,51,64,0.3)' : nearTarget ? 'rgba(255,149,0,0.5)' : 'transparent'
+          const showTPAlert = nearTarget || nearQuickTP
+          const borderColor = nearStop ? 'rgba(255,51,64,0.55)' : scanWeak ? 'rgba(255,51,64,0.3)' : showTPAlert ? 'rgba(255,149,0,0.5)' : 'transparent'
           return (
             <div key={id} style={{
               background: 'var(--ios-bg2)', borderRadius: 14, padding: '12px 14px', marginBottom: 8,
-              boxShadow: (nearStop || nearTarget || scanWeak) ? `0 0 0 1.5px ${borderColor}` : 'var(--shadow-card)',
+              boxShadow: (nearStop || showTPAlert || scanWeak) ? `0 0 0 1.5px ${borderColor}` : 'var(--shadow-card)',
               animation: `rowIn 0.3s ${idx * 40}ms cubic-bezier(0.22,1,0.36,1) both`,
             }}>
               {/* Alert banner */}
-              {(nearStop || nearTarget) && (
+              {(nearStop || showTPAlert) && (
                 <div style={{ fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 6, marginBottom: 8,
                   background: nearStop ? 'rgba(255,51,64,0.12)' : 'rgba(255,149,0,0.12)',
                   color: nearStop ? 'var(--ios-red)' : 'var(--ios-yellow)',
                 }}>
-                  {nearStop ? `⚠️ 接近停損線 ${fmt(stopLoss)} 元` : `🎯 接近止盈目標 ${fmt(takePrft)} 元`}
+                  {nearStop ? `⚠️ 接近停損線 ${fmt(stopLoss)} 元`
+                    : nearTarget ? `🎯 接近止盈目標 ${fmt(takePrft)} 元`
+                    : `🎯 已達高勝率停利點 +8%（${fmt(targets.quickTP)} 元）建議分批獲利`}
                 </div>
               )}
 
@@ -735,6 +747,11 @@ export default function Portfolio({ data }) {
                 <span title={targets?.tpBasis} style={{ background: 'rgba(255,149,0,0.07)', color: 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5 }}>
                   目標 {fmt(takePrft)}
                 </span>
+                {targets?.quickTP != null && (
+                  <span title={targets.quickTPBasis} style={{ background: 'rgba(255,214,10,0.1)', color: 'var(--ios-yellow)', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
+                    高勝率停利 {fmt(targets.quickTP)}
+                  </span>
+                )}
                 {targets?.rr != null && (
                   <span style={{ background: targets.rr >= 2 ? 'rgba(22,214,126,0.12)' : 'rgba(142,142,147,0.12)', color: targets.rr >= 2 ? 'var(--ios-green)' : 'var(--ios-label3)', padding: '2px 7px', borderRadius: 5, fontWeight: 600 }}>
                     風報比 {fmt(targets.rr, 1)}
