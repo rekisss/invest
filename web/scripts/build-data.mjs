@@ -1713,6 +1713,26 @@ if (Object.keys(industryMap).length > 0) {
   console.log(`Industry enrichment: ${filled} stocks filled`)
 }
 
+// ── Slim selectable_stocks: drop duplicated k-line arrays ───────────────────
+// selectable_stocks is `top_stocks.filter(A/B/C)` and shares object refs with
+// top_stocks, so for the few recent dates that get k-line injection it drags a
+// full copy of each stock's price_history (~40–50KB/stock) into data.json,
+// roughly doubling the payload for those dates. The frontend only reads scalar
+// fields from selectable_stocks (grade / return_1d / return_5d /
+// base_exit_signal for the 精選 win-rate tables) and lazy-loads charts from
+// stock_histories.json separately, so strip the three k-line arrays here.
+// Done just before serialization — after every enrichment pass above (return_1d,
+// industry_category, …) has run — and via map() so top_stocks keep their
+// price_history intact while the selectable copies shed only the heavy arrays.
+for (const d of dates) {
+  const sel = scans[d]?.selectable_stocks
+  if (Array.isArray(sel)) {
+    scans[d].selectable_stocks = sel.map(
+      ({ price_history, price_history_wk, price_history_mo, ...rest }) => rest
+    )
+  }
+}
+
 const dataGeneratedAt = new Date().toISOString()
 writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
