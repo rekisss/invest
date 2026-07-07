@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { animate } from 'animejs'
 import Overview from './components/Overview.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { animateTabIn } from './utils/animeUtils.js'
 import { getStockHistories } from './utils/histCache.js'
 
@@ -439,13 +440,15 @@ export default function App() {
             onDone={() => setSlideDir(null)}
             style={panelStyle}
           >
-            <Suspense fallback={
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                <div style={{ width: 28, height: 28, border: '3px solid var(--ios-fill3)', borderTop: '3px solid var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-              </div>
-            }>
-              {tabContent}
-            </Suspense>
+            <ErrorBoundary resetKey={tab}>
+              <Suspense fallback={
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                  <div style={{ width: 28, height: 28, border: '3px solid var(--ios-fill3)', borderTop: '3px solid var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                </div>
+              }>
+                {tabContent}
+              </Suspense>
+            </ErrorBoundary>
           </AnimatedTabPanel>
         )}
 
@@ -454,13 +457,15 @@ export default function App() {
             in-flight AI roundtable state (streaming, autoRun timers) that a remount would drop. */}
         {!loading && !!data && (
           <StudioPanel active={tab === 'studio'} direction={slideDir} onDone={() => setSlideDir(null)} style={panelStyle}>
-            <Suspense fallback={
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                <div style={{ width: 28, height: 28, border: '3px solid var(--ios-fill3)', borderTop: '3px solid var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-              </div>
-            }>
-              <GeminiStudio data={data} />
-            </Suspense>
+            <ErrorBoundary>
+              <Suspense fallback={
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                  <div style={{ width: 28, height: 28, border: '3px solid var(--ios-fill3)', borderTop: '3px solid var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                </div>
+              }>
+                <GeminiStudio data={data} />
+              </Suspense>
+            </ErrorBoundary>
           </StudioPanel>
         )}
       </div>
@@ -505,15 +510,17 @@ export default function App() {
 
       {/* ── Global stock detail modal (news tags / sector peers) ──────── */}
       {globalStock && (
-        <Suspense fallback={null}>
-          <StockDetailModal
-            stock={globalStock}
-            onClose={() => setGlobalStock(null)}
-            allScans={data?.scans}
-            compareHistories={globalCompare}
-            historyDates={globalDates}
-          />
-        </Suspense>
+        <ErrorBoundary resetKey={globalStock?.stock_id} fallback={null}>
+          <Suspense fallback={null}>
+            <StockDetailModal
+              stock={globalStock}
+              onClose={() => setGlobalStock(null)}
+              allScans={data?.scans}
+              compareHistories={globalCompare}
+              historyDates={globalDates}
+            />
+          </Suspense>
+        </ErrorBoundary>
       )}
     </div>
   )
