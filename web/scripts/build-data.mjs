@@ -733,15 +733,17 @@ function computeOutcomeStats(dates, dateMap, priceHistoryMap) {
 // whole-universe baseline on forward return? Validates the dashboard's ranking.
 function computeStrategyAccuracy(dates, dateMap, priceHistoryMap) {
   const HORIZONS = [1, 5, 10]
-  const maxH = Math.max(...HORIZONS)
   const mk = () => Object.fromEntries(HORIZONS.map(h => [h, { wins: 0, total: 0, sumRet: 0 }]))
   const groups = { top10: mk(), top25: mk(), baseline: mk() }
 
-  if (dates.length < maxH + 1) return finalize()
+  if (dates.length < 2) return finalize()
 
-  // dates sorted desc; skip the maxH most recent (no forward outcome yet)
+  // dates sorted desc. Don't skip a fixed maxH window up front — the per-horizon
+  // guard below (entryIdx + h >= history.length) already drops horizons without
+  // enough forward data, so skipping maxH here needlessly zeroed the d1/d5
+  // win rates for every recent date (only d10 needs 10 forward bars).
   // Respect OUTCOME_STATS_SINCE to allow a clean baseline reset.
-  for (let i = maxH; i < dates.length; i++) {
+  for (let i = 0; i < dates.length; i++) {
     const entryDate = dates[i]
     if (OUTCOME_STATS_SINCE && entryDate < OUTCOME_STATS_SINCE) continue
     const rows = dateMap[entryDate]
