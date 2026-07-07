@@ -1288,7 +1288,7 @@ const MA_LINES_DEF = [
   { label: 'MA5',   color: '#5AC8FA', fn: c => smaCalc(c, 5),  },
   { label: 'MA10',  color: '#FF9F0A', fn: c => smaCalc(c, 10), },
   { label: 'EMA20', color: '#BF5AF2', fn: c => emaCalc(c, 20), },
-  { label: 'MA60',  color: '#FFD60A', fn: c => emaCalc(c, 60), },
+  { label: 'MA60',  color: '#FFD60A', fn: c => smaCalc(c, 60), },
 ]
 
 const STRATEGY_PRESETS = [
@@ -2639,8 +2639,11 @@ export default function StockDetailModal({ stock, stocks, initialIndex = 0, noti
         {/* Feature 1: Compare stock input panel */}
         {showCompareInput && (() => {
           const q = compareInput.trim().toUpperCase()
-          // Build a quick name lookup from allScans latest date
-          const latestScan = allScans ? Object.values(allScans).sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0] : null
+          // Build a quick name lookup from allScans latest date. allScans is keyed
+          // by date string, so sort the keys (scan objects have no `date` field —
+          // sorting by it was a no-op that relied on key insertion order).
+          const latestKey = allScans ? Object.keys(allScans).sort().reverse()[0] : null
+          const latestScan = latestKey ? allScans[latestKey] : null
           const nameMap = {}
           ;[...(latestScan?.top_stocks || []), ...(latestScan?.filter_stocks || [])].forEach(x => { nameMap[String(x.stock_id)] = x.name || '' })
           // Candidates: all ids in compareHistories that match the query
