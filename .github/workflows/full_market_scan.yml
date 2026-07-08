@@ -26,6 +26,11 @@ on:
         options:
           - "false"
           - "true"
+      end_date:
+        description: "回補指定交易日（YYYY-MM-DD，留空=今天）"
+        required: false
+        default: ""
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -69,6 +74,16 @@ jobs:
         # 所有依「本 job 自己的輸出」判斷的步驟(自癒/force_rescan/上傳)都要用 FILE_IDX。
         run: echo "FILE_IDX=$(( (${{ matrix.seg }} + 1) % 9 ))" >> "$GITHUB_ENV"
 
+      - name: 計算掃描日期（SCAN_DATE，可回補指定交易日）
+        # 手動觸發時可填 end_date 回補過去某一交易日；留空則用今日（CST）。
+        # 自癒 / force_rescan / 掃描指令全部改用 SCAN_DATE，確保回補時只動到
+        # 指定日的檔案，不會誤刪其他日（例如今天）的正常資料。
+        run: |
+          ED="${{ inputs.end_date }}"
+          if [ -n "$ED" ]; then SCAN_DATE="$ED"; else SCAN_DATE="$(TZ=Asia/Taipei date +%Y-%m-%d)"; fi
+          echo "SCAN_DATE=$SCAN_DATE" >> "$GITHUB_ENV"
+          echo "掃描目標日：$SCAN_DATE"
+
       - name: 自癒：清掉「試過卻零產出」分段的進度，讓本輪重抓（僅排程觸發）
         # 進度檔 _attempted 會把「抓失敗」的股票也記成試過，導致下一輪跳過→半數分段永遠空。
         # 這裡只針對「今日 batch CSV 完全沒有資料」的分段清掉它自己的進度檔，讓本輪重新抓取
@@ -79,7 +94,7 @@ jobs:
         if: ${{ github.event_name == 'schedule' }}
         run: |
           SEG=${{ matrix.seg }}
-          DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
+          DATE="${SCAN_DATE}"
           CSV="output/full_scan/batch_seq${FILE_IDX}_${DATE}.csv"
           ROWS=0
           if [ -f "$CSV" ]; then
@@ -98,8 +113,8 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           SEG=${{ matrix.seg }}
-          DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
-          YESTERDAY=$(TZ=Asia/Taipei date -d 'yesterday' +%Y-%m-%d)
+          DATE="${SCAN_DATE}"
+          YESTERDAY=$(date -d "${SCAN_DATE} -1 day" +%Y-%m-%d)
           rm -f output/full_scan/_attempted_${DATE}.csv
           rm -f output/full_scan/_attempted_${DATE}_seg*.csv
           rm -f output/full_scan/_attempted_${YESTERDAY}_seg${SEG}.csv
@@ -140,7 +155,7 @@ jobs:
         run: |
           python main.py \
             --mode sequential-scan \
-            --end $(TZ=Asia/Taipei date +%Y-%m-%d) \
+            --end ${SCAN_DATE} \
             --lookback-days 420 \
             --max-universe 1800 \
             --top-n 50 \
