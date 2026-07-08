@@ -78,9 +78,20 @@ jobs:
         # 手動觸發時可填 end_date 回補過去某一交易日；留空則用今日（CST）。
         # 自癒 / force_rescan / 掃描指令全部改用 SCAN_DATE，確保回補時只動到
         # 指定日的檔案，不會誤刪其他日（例如今天）的正常資料。
+        # 安全：input 透過 env 傳入（不做 ${{ }} 直插腳本，避免 shell 注入），
+        # 並強制驗證為 YYYY-MM-DD 才採用。
+        env:
+          END_DATE: ${{ inputs.end_date }}
         run: |
-          ED="${{ inputs.end_date }}"
-          if [ -n "$ED" ]; then SCAN_DATE="$ED"; else SCAN_DATE="$(TZ=Asia/Taipei date +%Y-%m-%d)"; fi
+          if [ -n "$END_DATE" ]; then
+            if ! printf '%s' "$END_DATE" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+              echo "end_date 格式錯誤（需 YYYY-MM-DD）：$END_DATE" >&2
+              exit 1
+            fi
+            SCAN_DATE="$END_DATE"
+          else
+            SCAN_DATE="$(TZ=Asia/Taipei date +%Y-%m-%d)"
+          fi
           echo "SCAN_DATE=$SCAN_DATE" >> "$GITHUB_ENV"
           echo "掃描目標日：$SCAN_DATE"
 
