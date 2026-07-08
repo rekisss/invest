@@ -16,6 +16,7 @@ const GeminiStudio = lazy(() => import('./components/GeminiStudio.jsx'))
 const LiveMonitor = lazy(() => import('./components/LiveMonitor.jsx'))
 const ValidationPanel = lazy(() => import('./components/ValidationPanel.jsx'))
 const Performance = lazy(() => import('./components/Performance.jsx'))
+const AITrader = lazy(() => import('./components/AITrader.jsx'))
 const StockDetailModal = lazy(() => import('./components/StockDetailModal.jsx'))
 
 const BASE = import.meta.env.BASE_URL || '/'
@@ -25,6 +26,7 @@ const TABS = [
   { key: 'dashboard',  label: '掃描', icon: '📊' },
   { key: 'validate',   label: '驗證', icon: '🔬' },
   { key: 'portfolio',  label: '持倉', icon: '💼' },
+  { key: 'aitrader',   label: 'AI操盤', icon: '🤖' },
   { key: 'perf',       label: '績效', icon: '💰' },
   { key: 'monitor',    label: '盯盤', icon: '📈' },
   { key: 'news',       label: '新聞', icon: '📰' },
@@ -39,6 +41,7 @@ const TAB_TITLES = {
   dashboard: '掃描結果',
   validate:  '選股驗證',
   portfolio: '持倉追蹤',
+  aitrader:  'AI 系統交易員',
   perf:      '績效驗證與持倉建議',
   monitor:   '即時盯盤',
   news:      '市場新聞',
@@ -315,6 +318,7 @@ export default function App() {
       case 'dashboard':  return <Dashboard data={data} error={error} />
       case 'validate':   return <ValidationPanel data={data} onRefresh={() => loadData(true)} />
       case 'portfolio':  return <Portfolio data={data} />
+      case 'aitrader':   return <AITrader data={data} />
       case 'perf':       return <Performance data={data} />
       case 'monitor':    return <LiveMonitor data={data} />
       case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} data={data} />

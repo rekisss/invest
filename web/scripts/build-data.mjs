@@ -3,6 +3,7 @@ import { join, resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import https from 'https'
 import http from 'http'
+import { simulatePaperTrader } from './paper-trader.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SCAN_DIR = resolve(__dirname, '../../output/full_scan')
@@ -1733,8 +1734,18 @@ for (const d of dates) {
   }
 }
 
+// ── AI paper-trader — deterministic replay of the strategy as a virtual trader ──
+let aiTrader = null
+try {
+  aiTrader = simulatePaperTrader({
+    scans,
+    klineFor: (sid) => getKlineBars(klineMap[sid], '1d'),
+  })
+  if (aiTrader) console.log(`AI trader: ${aiTrader.stats.num_trades} trades, ${aiTrader.stats.trading_days} days, return ${aiTrader.return_pct}% (equity ${aiTrader.equity})`)
+} catch (e) { console.log(`AI trader: skipped (${e.message})`) }
+
 const dataGeneratedAt = new Date().toISOString()
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
 
 // Small sidecar so the frontend can cheaply check "did anything change?" (a few
