@@ -66,7 +66,7 @@ export default function AITrader({ data }) {
   if (!ai) {
     return (
       <div style={{ padding: 24, textAlign: 'center', color: 'var(--ios-label3)', fontSize: 13, lineHeight: 1.7 }}>
-        🤖 AI 操盤資料尚未產生。<br />需要掃描資料累積後(自 {`‎`}起始日),下次資料更新就會出現虛擬交易員的實際操作紀錄。
+        🤖 AI 操盤資料尚未產生。<br />需要掃描資料累積後,下次資料更新就會出現虛擬交易員的實際操作紀錄。
       </div>
     )
   }

@@ -26,10 +26,14 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
   const cfg = { ...DEFAULT_CONFIG, ...cfgIn }
   const scanDates = new Set(Object.keys(scans || {}))
 
-  // Per-stock date -> bar index, plus cache the bars.
+  // Per-stock date -> bar index, plus cache the bars. All keying is normalized
+  // to a String stock id so the buy site (raw stock_id, sometimes a Number) and
+  // the exit/mark-to-market sites (String keys from Object.keys(positions)) can
+  // never key barsCache / idxCache / lastClose under two different forms.
   const barsCache = {}
   const idxCache = {}
-  const barsOf = (sid) => {
+  const barsOf = (sidRaw) => {
+    const sid = String(sidRaw)
     if (sid in barsCache) return barsCache[sid]
     const b = klineFor(sid) || null
     barsCache[sid] = b
@@ -40,7 +44,8 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
     }
     return b
   }
-  const barAt = (sid, date) => {
+  const barAt = (sidRaw, date) => {
+    const sid = String(sidRaw)
     const b = barsOf(sid); if (!b) return null
     const i = idxCache[sid][date]
     return i == null ? null : b[i]
@@ -73,7 +78,8 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
   let maxDD = 0
   let lastClose = {} // sid -> last known close (carry when halted)
 
-  const priceOn = (sid, date) => {
+  const priceOn = (sidRaw, date) => {
+    const sid = String(sidRaw)
     const bar = barAt(sid, date)
     if (bar && bar.close > 0) { lastClose[sid] = bar.close; return bar.close }
     return lastClose[sid] ?? null
