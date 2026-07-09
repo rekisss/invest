@@ -116,6 +116,16 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
           hold_days: holdDays, reason,
           ret_pct: round2((proceeds - costBasis) / costBasis * 100),
           pnl: Math.round(proceeds - costBasis),
+          // buy-time context carried from the position + exit trigger levels/fees
+          entry_score: pos.entryScore ?? null,
+          grade: pos.grade || '',
+          entry_reason: pos.entryReason || '',
+          day_rank: pos.dayRank ?? null,
+          shares: pos.shares,
+          cost: pos.cost ?? Math.round(costBasis),
+          tp_price: round2(tp),
+          sl_price: round2(sl),
+          fees: Math.round(pos.shares * pos.entry * cfg.feeBuy + pos.shares * exitPrice * cfg.feeSell),
         })
         delete positions[sid]
       }
@@ -128,7 +138,8 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
         .filter(s => s.entry_signal && !held.has(String(s.stock_id)))
         .sort((a, b) => (b.entry_score || 0) - (a.entry_score || 0))
       let slots = cfg.maxPositions - Object.keys(positions).length
-      for (const s of picks) {
+      for (let pi = 0; pi < picks.length; pi++) {
+        const s = picks[pi]
         if (slots <= 0) break
         const price = priceOn(s.stock_id, day)
         if (!price || price <= 0) continue
@@ -140,6 +151,13 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
         positions[String(s.stock_id)] = {
           shares, entry: price, entryDate: day, entryDayIdx: di,
           name: s.name || String(s.stock_id),
+          // buy-time context, recorded for the trade log (display only —
+          // none of this feeds back into any decision)
+          entryScore: s.entry_score ?? null,
+          grade: s.grade || '',
+          entryReason: s.entry_reason || '',
+          dayRank: pi + 1,                    // rank among that day's entry-signal candidates
+          cost: Math.round(spend),
         }
         slots--
       }
@@ -169,11 +187,20 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
       entry_date: pos.entryDate, hold_days: dayIndex[asOf] - pos.entryDayIdx,
       value: Math.round(pos.shares * px),
       pnl_pct: round2((px / pos.entry - 1) * 100),
+      entry_score: pos.entryScore ?? null,
+      grade: pos.grade || '',
+      entry_reason: pos.entryReason || '',
+      day_rank: pos.dayRank ?? null,
+      cost: pos.cost ?? null,
+      tp_price: round2(pos.entry * (1 + cfg.takeProfit)),
+      sl_price: round2(pos.entry * (1 - cfg.stopLoss)),
     }
   }).sort((a, b) => b.value - a.value)
 
   const equity = cash + invested
   const wins = closed.filter(t => t.ret_pct > 0).length
+  const grossWin = closed.reduce((a, t) => a + Math.max(t.pnl, 0), 0)
+  const grossLoss = closed.reduce((a, t) => a + Math.max(-t.pnl, 0), 0)
   const stats = {
     num_trades: closed.length,
     win_rate: closed.length ? round2(wins / closed.length * 100) : null,
@@ -182,6 +209,14 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
     worst: closed.length ? Math.min(...closed.map(t => t.ret_pct)) : null,
     max_drawdown_pct: round2(maxDD * 100),
     trading_days: days.length,
+    exits: {
+      take_profit: closed.filter(t => t.reason === 'take_profit').length,
+      stop: closed.filter(t => t.reason === 'stop').length,
+      time: closed.filter(t => t.reason === 'time').length,
+    },
+    avg_hold_days: closed.length ? round2(closed.reduce((a, t) => a + t.hold_days, 0) / closed.length) : null,
+    profit_factor: grossLoss > 0 ? round2(grossWin / grossLoss) : null,
+    total_fees: closed.length ? closed.reduce((a, t) => a + (t.fees || 0), 0) : 0,
   }
 
   return {
