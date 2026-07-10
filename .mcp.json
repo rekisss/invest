@@ -3,6 +3,10 @@
     "google-drive": {
       "type": "http",
       "url": "https://drivemcp.googleapis.com/mcp/v1"
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
     }
   }
 }

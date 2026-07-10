@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
+import DailyActionBrief from './DailyActionBrief'
 import { useLivePrices, isTWSEOpen } from '../hooks/useLivePrices'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { animate, stagger, spring } from 'animejs'
+import { industryCategoryLabel } from '../utils/industryCategory'
 gsap.registerPlugin(useGSAP)
 
 const PAGE_SIZE = 50
@@ -1035,7 +1037,7 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
     }
     return Object.entries(map)
       .map(([name, d]) => ({
-        name, count: d.count, entries: d.entries,
+        name, label: industryCategoryLabel(name), count: d.count, entries: d.entries,
         avgScore: d.count > 0 ? d.totalScore / d.count : 0,
         avgMarketRs: d.count > 0 ? d.totalMarketRs / d.count : 0,
         breadth60: d.breadth60Count > 0 ? d.totalBreadth60 / d.breadth60Count : 0,
@@ -1065,7 +1067,7 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
           🌡 族群輪動熱圖
           {activeSector && (
             <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--ios-blue)', fontWeight: 600 }}>
-              · 已篩：{activeSector}
+              · 已篩：{industryCategoryLabel(activeSector)}
             </span>
           )}
         </div>
@@ -1141,7 +1143,12 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
           }
 
           return (
-            <div key={sec.name} className="sector-tile" onClick={() => onSectorClick && onSectorClick(sec.name)} style={{
+            <div
+              key={sec.name}
+              className="sector-tile"
+              title={`${sec.label}：市場RS均值 ${Math.round(sec.avgMarketRs)}，MA60上方比例 ${Math.round(sec.breadth60)}%，進場訊號 ${sec.entries} 支，樣本 ${sec.count} 支${sec.label !== sec.name ? `（原始分類：${sec.name}）` : ''}`}
+              onClick={() => onSectorClick && onSectorClick(sec.name)}
+              style={{
               padding: heatTab === 'strong' ? '8px 12px' : '6px 10px',
               borderRadius: 10,
               background: bg, border: `0.5px solid ${borderColor}`,
@@ -1153,17 +1160,17 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
               boxShadow: isSelected ? `0 0 0 2px ${borderColor}` : 'none',
             }}>
               <div style={{ fontSize: heatTab === 'strong' ? 12 : 11, fontWeight: 600, color: textColor, lineHeight: 1.3, letterSpacing: '-0.1px' }}>
-                {sec.name.length > 7 ? sec.name.slice(0, 7) + '…' : sec.name}
+                {sec.label.length > 7 ? sec.label.slice(0, 7) + '…' : sec.label}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 {sec.avgMarketRs > 0 && (
-                  <span style={{ fontSize: 9, color: textColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>RS{Math.round(sec.avgMarketRs)}</span>
+                  <span style={{ fontSize: 9, color: textColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>RS均{Math.round(sec.avgMarketRs)}</span>
                 )}
                 {sec.breadth60 > 0 && (
-                  <span style={{ fontSize: 9, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)' }}>{Math.round(sec.breadth60)}%</span>
+                  <span style={{ fontSize: 9, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)' }}>MA60 {Math.round(sec.breadth60)}%</span>
                 )}
                 {hasEntry && (
-                  <span style={{ fontSize: 9, color: heatTab === 'strong' ? '#FF9F0A' : '#5AC8FA', fontWeight: 700 }}>↑{sec.entries}</span>
+                  <span style={{ fontSize: 9, color: heatTab === 'strong' ? '#FF9F0A' : '#5AC8FA', fontWeight: 700 }}>訊號↑{sec.entries}</span>
                 )}
               </div>
             </div>
@@ -1173,7 +1180,9 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
           <div style={{ fontSize: 11, color: 'var(--ios-label4)', padding: '12px 0' }}>無資料</div>
         )}
       </div>
-      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 8 }}>RS=市場RS均值（跨類股百分位）· %=60日MA上方比例 · ↑=入榜支數 · 點擊族群篩選</div>
+      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 8, lineHeight: 1.45 }}>
+        RS均=該族群股票的市場相對強弱平均（跨類股百分位）· MA60=站上60日均線比例 · 訊號↑=目前有進場訊號的支數 · 點擊族群可篩選
+      </div>
     </div>
   )
 }
@@ -2464,7 +2473,7 @@ export default function Dashboard({ data, error }) {
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 20)
-      .map(([sec, count]) => ({ sec, count }))
+      .map(([sec, count]) => ({ sec, label: industryCategoryLabel(sec), count }))
   }, [allScanStocks])
 
   const gradeDistribution = useMemo(() => {
@@ -3021,6 +3030,15 @@ export default function Dashboard({ data, error }) {
           )
         })()}
 
+        <DailyActionBrief
+          scan={scan}
+          prevScan={prevScan}
+          allScanStocks={allScanStocks}
+          persistent={persistent}
+          dataQuality={data.dataQuality}
+          onSelect={setSelectedStock}
+        />
+
         {/* Market summary banner */}
         {pred && (() => {
           const isBull = pred.xgb_label === '偏多', isBear = pred.xgb_label === '偏空'
@@ -3101,7 +3119,7 @@ export default function Dashboard({ data, error }) {
                 }}
               >✕ 全部</button>
             )}
-            {availableSectors.map(({ sec, count }) => {
+            {availableSectors.map(({ sec, label, count }) => {
               const isActive = activeSector === sec
               return (
                 <button
@@ -3122,7 +3140,7 @@ export default function Dashboard({ data, error }) {
                     boxShadow: isActive ? '0 0 0 2px rgba(10,132,255,0.12)' : 'none',
                   }}
                 >
-                  {sec} <span style={{ fontSize: 10, opacity: 0.55 }}>{count}</span>
+                  {label} <span style={{ fontSize: 10, opacity: 0.55 }}>{count}</span>
                 </button>
               )
             })}
@@ -3197,7 +3215,7 @@ export default function Dashboard({ data, error }) {
           {/* Sector ranking banner */}
           {activeSector && (
             <div style={{ padding: '4px 16px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)' }}>📊 {activeSector}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ios-blue)' }}>📊 {industryCategoryLabel(activeSector)}</span>
               <span style={{ fontSize: 11, color: 'var(--ios-label3)' }}>{filteredAndSorted.length} 支 · 依類股RS排名</span>
             </div>
           )}
