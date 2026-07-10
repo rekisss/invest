@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
+import DailyActionBrief from './DailyActionBrief'
 import { useLivePrices, isTWSEOpen } from '../hooks/useLivePrices'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
@@ -1141,7 +1142,12 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
           }
 
           return (
-            <div key={sec.name} className="sector-tile" onClick={() => onSectorClick && onSectorClick(sec.name)} style={{
+            <div
+              key={sec.name}
+              className="sector-tile"
+              title={`${sec.name}：市場RS均值 ${Math.round(sec.avgMarketRs)}，MA60上方比例 ${Math.round(sec.breadth60)}%，進場訊號 ${sec.entries} 支，樣本 ${sec.count} 支`}
+              onClick={() => onSectorClick && onSectorClick(sec.name)}
+              style={{
               padding: heatTab === 'strong' ? '8px 12px' : '6px 10px',
               borderRadius: 10,
               background: bg, border: `0.5px solid ${borderColor}`,
@@ -1157,13 +1163,13 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 {sec.avgMarketRs > 0 && (
-                  <span style={{ fontSize: 9, color: textColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>RS{Math.round(sec.avgMarketRs)}</span>
+                  <span style={{ fontSize: 9, color: textColor, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>RS均{Math.round(sec.avgMarketRs)}</span>
                 )}
                 {sec.breadth60 > 0 && (
-                  <span style={{ fontSize: 9, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)' }}>{Math.round(sec.breadth60)}%</span>
+                  <span style={{ fontSize: 9, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)' }}>MA60 {Math.round(sec.breadth60)}%</span>
                 )}
                 {hasEntry && (
-                  <span style={{ fontSize: 9, color: heatTab === 'strong' ? '#FF9F0A' : '#5AC8FA', fontWeight: 700 }}>↑{sec.entries}</span>
+                  <span style={{ fontSize: 9, color: heatTab === 'strong' ? '#FF9F0A' : '#5AC8FA', fontWeight: 700 }}>訊號↑{sec.entries}</span>
                 )}
               </div>
             </div>
@@ -1173,7 +1179,9 @@ function SectorHeatmap({ stocks, onSectorClick, activeSector }) {
           <div style={{ fontSize: 11, color: 'var(--ios-label4)', padding: '12px 0' }}>無資料</div>
         )}
       </div>
-      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 8 }}>RS=市場RS均值（跨類股百分位）· %=60日MA上方比例 · ↑=入榜支數 · 點擊族群篩選</div>
+      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 8, lineHeight: 1.45 }}>
+        RS均=該族群股票的市場相對強弱平均（跨類股百分位）· MA60=站上60日均線比例 · 訊號↑=目前有進場訊號的支數 · 點擊族群可篩選
+      </div>
     </div>
   )
 }
@@ -3020,6 +3028,15 @@ export default function Dashboard({ data, error }) {
             </div>
           )
         })()}
+
+        <DailyActionBrief
+          scan={scan}
+          prevScan={prevScan}
+          allScanStocks={allScanStocks}
+          persistent={persistent}
+          dataQuality={data.dataQuality}
+          onSelect={setSelectedStock}
+        />
 
         {/* Market summary banner */}
         {pred && (() => {
