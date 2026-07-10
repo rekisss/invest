@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
+import DailyActionBrief from './DailyActionBrief'
 import { useLivePrices, isTWSEOpen } from '../hooks/useLivePrices'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
@@ -3020,6 +3021,15 @@ export default function Dashboard({ data, error }) {
             </div>
           )
         })()}
+
+        <DailyActionBrief
+          scan={scan}
+          prevScan={prevScan}
+          allScanStocks={allScanStocks}
+          persistent={persistent}
+          dataQuality={data.dataQuality}
+          onSelect={setSelectedStock}
+        />
 
         {/* Market summary banner */}
         {pred && (() => {
