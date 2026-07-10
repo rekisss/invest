@@ -1,31 +1,31 @@
 {
-  "date": "2026-07-09",
-  "generated_at": "08:02",
-  "xgb_prob_up": 0.527,
-  "xgb_label": "中性",
+  "date": "2026-07-10",
+  "generated_at": "08:01",
+  "xgb_prob_up": 0.429,
+  "xgb_label": "偏空",
   "market_data": {
     "vix": null,
     "sp500_ret": null,
     "nasdaq_ret": null,
     "sox_ret": null,
     "tsm_adr_ret": null,
-    "futures_net": -81268.0,
-    "night_change": 269.0,
+    "futures_net": -80730.0,
+    "night_change": 481.0,
     "pcr": null,
-    "taiex_rsi": 53.89534455305775,
-    "macd_hist": -453.68739349744556,
-    "dist_ma20": 0.2702934361045184,
-    "dist_ma60": 7.63982874807656,
-    "taiex_ret_5d": -2.5279183738680877,
-    "taiex_ret_20d": 2.9858647111845826,
+    "taiex_rsi": 51.78484626465148,
+    "macd_hist": -548.6230285437773,
+    "dist_ma20": -0.7729611958292137,
+    "dist_ma60": 6.414987581712306,
+    "taiex_ret_5d": -2.7955135489936334,
+    "taiex_ret_20d": 5.679441293569876,
     "buyback_count": 0,
-    "disposition_count": 49,
+    "disposition_count": 20,
     "jpy_ret": null,
     "arkk_ret": null,
     "hyg_ret": null,
     "night_trend": "↑ 偏強",
-    "market_revenue_yoy": 0.0937,
-    "market_foreign_holding_chg": -4.4657
+    "market_revenue_yoy": 0.1051,
+    "market_foreign_holding_chg": -3.9092
   },
   "regime": {
     "label": "double_whipsaw",
@@ -36,8 +36,8 @@
     "main_scenario": "VIX=nan 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
     "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
     "danger_signals": [
-      "外資空單極重（-81,268口），軋空風險高",
-      "夜盤缺口 +269pt 過大，易反轉"
+      "外資空單極重（-80,730口），軋空風險高",
+      "夜盤缺口 +481pt 過大，易反轉"
     ],
     "forbidden_actions": [
       "禁止追多缺口超過200pt",
@@ -50,18 +50,18 @@
     "factors": [
       {
         "name": "外資空單極重",
-        "description": "-81,268口，軋空/崩潰雙向風險",
+        "description": "-80,730口，軋空/崩潰雙向風險",
         "action": "避免重押方向"
       },
       {
         "name": "夜盤大缺口",
-        "description": "夜盤 +269pt，開盤後可能快速反轉",
+        "description": "夜盤 +481pt，開盤後可能快速反轉",
         "action": "禁止追缺口超過200pt"
       }
     ]
   },
   "news_sentiment": {
-    "market_impact": 0.17,
+    "market_impact": 0.14,
     "key_events": [],
     "bullish_count": 0,
     "bearish_count": 0
