@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback } from 'react'
+import LiveTraderPanel from './LiveTraderPanel'
 
 const UP = 'var(--ios-red)'      // Taiwan: red = up/gain
 const DOWN = 'var(--ios-green)'  // green = down/loss
@@ -197,6 +198,8 @@ export default function AITrader({ data }) {
         <Stat label="獲利因子" value={s.profit_factor == null ? '—' : s.profit_factor} color={s.profit_factor != null ? colorOf(s.profit_factor - 1) : undefined} sub="總益÷總損" />
         <Stat label="總交易成本" value={s.total_fees == null ? '—' : `$${nf(s.total_fees)}`} sub="手續費+稅" />
       </div>
+
+      <LiveTraderPanel ai={ai} scan={data?.scans?.[data?.dates?.[0]]} />
 
       <Card title="目前持倉" hint={`${ai.positions.length} 檔 · 最多 ${c.max_positions} 檔 · 點擊看明細`}>
         {ai.positions.length === 0 ? (
