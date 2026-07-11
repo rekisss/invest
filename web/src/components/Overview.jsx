@@ -4,6 +4,7 @@ import { useGSAP } from '@gsap/react'
 gsap.registerPlugin(useGSAP)
 import StockDetailModal from './StockDetailModal'
 import { getStockHistories } from '../utils/histCache'
+import { industryCategoryLabel } from '../utils/industryCategory'
 
 /* ── Live Market Constants ───────────────────────────────────────── */
 const LIVE_CACHE_KEY = 'live_mkt_v1'
@@ -804,7 +805,7 @@ function SectorHeatmap({ stocks, onStockClick }) {
     const list = Object.entries(map).map(([name, members]) => {
       const avgReturn = members.reduce((sum, s) => sum + (s.day_return || 0), 0) / members.length
       const signalCount = members.filter(s => s.entry_signal).length
-      return { name, count: members.length, avgReturn, signalCount }
+      return { name, label: industryCategoryLabel(name), count: members.length, avgReturn, signalCount }
     }).sort((a, b) => b.avgReturn - a.avgReturn)
     return { sectorMap: map, sectors: list }
   }, [stocks])
@@ -857,13 +858,13 @@ function SectorHeatmap({ stocks, onStockClick }) {
         </span>
       </div>
       <div style={{ padding: '10px 12px 8px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-        {sectors.map(({ name, count, avgReturn, signalCount }) => {
+        {sectors.map(({ name, label, count, avgReturn, signalCount }) => {
           const miniBarW = Math.round(Math.min(1, Math.abs(avgReturn) / 0.05) * 32)
           const isActive = selectedSector === name
           return (
             <div
               key={name}
-              title={`${name}：平均日漲跌 ${(avgReturn * 100).toFixed(2)}%，進場訊號 ${signalCount} 支，掃描樣本 ${count} 支`}
+              title={`${label}：平均日漲跌 ${(avgReturn * 100).toFixed(2)}%，進場訊號 ${signalCount} 支，掃描樣本 ${count} 支${label !== name ? `（原始分類：${name}）` : ''}`}
               onClick={() => setSelectedSector(prev => prev === name ? null : name)}
               style={{
               background: isActive ? 'rgba(10,132,255,0.12)' : tileBg(avgReturn),
@@ -882,7 +883,7 @@ function SectorHeatmap({ stocks, onStockClick }) {
                   <span style={{ fontSize: 8, color: '#16D67E', fontWeight: 700 }}>訊號{signalCount}</span>
                 </div>
               )}
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: isActive ? 'var(--ios-blue)' : 'var(--ios-label)', textAlign: 'center', marginBottom: 5, lineHeight: 1.2 }}>{name}</div>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: isActive ? 'var(--ios-blue)' : 'var(--ios-label)', textAlign: 'center', marginBottom: 5, lineHeight: 1.2 }}>{label}</div>
               <div style={{ fontSize: 8.5, color: 'var(--ios-label4)', marginBottom: 2 }}>平均日漲跌</div>
               <div style={{ fontSize: 17, fontWeight: 800, color: isActive ? 'var(--ios-blue)' : retColor(avgReturn), fontFamily: 'monospace', letterSpacing: '-0.5px', lineHeight: 1 }}>
                 {avgReturn >= 0 ? '+' : ''}{(avgReturn * 100).toFixed(1)}%
@@ -909,7 +910,7 @@ function SectorHeatmap({ stocks, onStockClick }) {
       {selectedSector && sectorStockList.length > 0 && (
         <div style={{ borderTop: '1px solid var(--ios-sep)' }}>
           <div style={{ padding: '8px 14px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-blue)' }}>📊 {selectedSector} · 前{sectorStockList.length}名</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ios-blue)' }}>📊 {industryCategoryLabel(selectedSector)} · 前{sectorStockList.length}名</span>
             <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>依 RS 排名</span>
           </div>
           {sectorStockList.map((s, i) => {
