@@ -201,6 +201,9 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
   const wins = closed.filter(t => t.ret_pct > 0).length
   const grossWin = closed.reduce((a, t) => a + Math.max(t.pnl, 0), 0)
   const grossLoss = closed.reduce((a, t) => a + Math.max(-t.pnl, 0), 0)
+  // Open positions' buy fees were already paid out of cash, so 總交易成本 must
+  // include them too — otherwise costs are underreported while a book is open.
+  const openBuyFees = Object.values(positions).reduce((a, p) => a + p.shares * p.entry * cfg.feeBuy, 0)
   const stats = {
     num_trades: closed.length,
     win_rate: closed.length ? round2(wins / closed.length * 100) : null,
@@ -216,7 +219,7 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
     },
     avg_hold_days: closed.length ? round2(closed.reduce((a, t) => a + t.hold_days, 0) / closed.length) : null,
     profit_factor: grossLoss > 0 ? round2(grossWin / grossLoss) : null,
-    total_fees: closed.length ? closed.reduce((a, t) => a + (t.fees || 0), 0) : 0,
+    total_fees: Math.round(closed.reduce((a, t) => a + (t.fees || 0), 0) + openBuyFees),
   }
 
   return {
