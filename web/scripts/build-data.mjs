@@ -629,6 +629,15 @@ function processScanData() {
       invest_trust_accel: toBool(row.invest_trust_accel),
       is_sector_leader: toBool(row.is_sector_leader),
       base_exit_signal: toBool(row.base_exit_signal),
+      // 風險警示旗標:只在「有進場訊號且旗標為真」時寫入(控制 data.json 體積)。
+      // DailyActionBrief 的風險提醒只掃進場訊號股,榜外(非 top N)的進場股原本
+      // 缺這些欄位而永遠不會被列入警示。
+      ...(toBool(row.entry_signal) ? {
+        ...(toBool(row.macd_death_cross) ? { macd_death_cross: true } : {}),
+        ...(toBool(row.close_below_ema20) ? { close_below_ema20: true } : {}),
+        ...(toBool(row.long_upper_shadow) ? { long_upper_shadow: true } : {}),
+        ...(toBool(row.open_high_close_low) ? { open_high_close_low: true } : {}),
+      } : {}),
     }))
 
     const gradeCount = { A: 0, B: 0, C: 0, D: 0, X: 0 }
@@ -1733,6 +1742,20 @@ for (const d of dates) {
     )
   }
 }
+
+// ── Trim historical filter_stocks:只保留最近 N 天的全掃描池 ─────────────────
+// filter_stocks(~1500 支 × ~40 欄)每個日期約 1–1.5MB,30 個日期累計 ~30MB,
+// 是 data.json 最大的體積來源(手機端下載/解析卡頓的主因)。前端只在近期日期
+// 使用全池(全池篩選、熱圖、LiveMonitor、DailyActionBrief 昨日基準);更舊的
+// 日期會自動退回 top_stocks(Dashboard/Overview 既有 fallback,不會壞版面)。
+// 注意:所有會讀舊日期全池的 build 期計算(strategyAccuracy、return_1d、產業
+// 補齊、T86 回填)都在上面完成了,這裡只影響序列化輸出。
+const FILTER_STOCKS_KEEP_DATES = 6
+let trimmedFilterDates = 0
+for (const d of dates.slice(FILTER_STOCKS_KEEP_DATES)) {
+  if (scans[d]?.filter_stocks) { delete scans[d].filter_stocks; trimmedFilterDates++ }
+}
+if (trimmedFilterDates) console.log(`filter_stocks trimmed: kept ${Math.min(FILTER_STOCKS_KEEP_DATES, dates.length)} recent dates, dropped ${trimmedFilterDates} historical dates`)
 
 // ── AI paper-trader — deterministic replay of the strategy as a virtual trader ──
 let aiTrader = null

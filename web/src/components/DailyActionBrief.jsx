@@ -78,12 +78,15 @@ export default function DailyActionBrief({ scan, prevScan, allScanStocks = [], p
   const topStocks = scan?.top_stocks || []
   if (!scan || (!topStocks.length && !allScanStocks.length)) return null
 
-  const prevEntryIds = new Set((prevScan?.top_stocks || []).filter(s => s.entry_signal).map(s => String(s.stock_id)))
+  // 昨日基準要用「全掃描池」(filter_stocks) + top_stocks 聯集,不能只看前 N 名:
+  // 昨天榜外但已有進場訊號的股票,只比 top_stocks 會被誤標成「新進訊號」。
+  const prevPool = prevScan ? [...(prevScan.filter_stocks || []), ...(prevScan.top_stocks || [])] : []
+  const prevEntryIds = new Set(prevPool.filter(s => s.entry_signal).map(s => String(s.stock_id)))
   const todayEntry = allScanStocks.filter(s => s.entry_signal)
   const newEntry = todayEntry.filter(s => !prevEntryIds.has(String(s.stock_id)))
     .sort((a, b) => (b.entry_score || 0) - (a.entry_score || 0))
 
-  const prevScores = new Map((prevScan?.top_stocks || []).map(s => [String(s.stock_id), s.entry_score || 0]))
+  const prevScores = new Map(prevPool.map(s => [String(s.stock_id), s.entry_score || 0]))
   const scoreMovers = topStocks
     .map(s => ({ stock: s, delta: prevScores.has(String(s.stock_id)) ? (s.entry_score || 0) - prevScores.get(String(s.stock_id)) : null }))
     .filter(x => x.delta != null && Math.abs(x.delta) >= 50)
