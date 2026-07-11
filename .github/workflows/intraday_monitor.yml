@@ -1,0 +1,55 @@
+name: 盤中觸價監控
+
+# 沒有 schedule:使用者的排程一律由外部服務(cron-job.org)透過
+# workflow_dispatch API 觸發(建議:週一到週五 09:00–13:30 CST 每 5 分鐘)。
+# POST https://api.github.com/repos/rekisss/invest/actions/workflows/intraday_monitor.yml/dispatches
+#   headers: Authorization: Bearer <PAT>, Accept: application/vnd.github+json
+#   body: {"ref":"main"}
+#
+# 需要的 repo secrets:FUGLE_API_KEY(富果 MarketData 金鑰)、
+# DISCORD_WEBHOOK_URL(既有)。不寫 repo、不 commit;通知去重狀態存 actions/cache。
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: intraday-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: web/scripts/intraday-monitor.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 還原今日通知去重狀態
+        uses: actions/cache/restore@v4
+        with:
+          path: .intraday_state.json
+          key: intraday-state-${{ github.run_id }}
+          restore-keys: intraday-state-
+
+      - name: 盤中觸價檢查
+        env:
+          FUGLE_API_KEY: ${{ secrets.FUGLE_API_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: node web/scripts/intraday-monitor.mjs
+
+      - name: 保存通知去重狀態
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .intraday_state.json
+          key: intraday-state-${{ github.run_id }}

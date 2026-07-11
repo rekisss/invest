@@ -20,6 +20,7 @@
 ### GitHub Actions
 - 不改 `.github/workflows/` 的 Python 相關 workflow（`full_market_scan.yml`, `full_market_aggregate.yml`, `premarket_predict.yml` 等）
 - `deploy-pages.yml` 和 `ci.yml` 可以動
+- **新增的 workflow 一律不加 `schedule:` 排程**：使用者的排程統一由外部服務 cron-job.org 透過 `workflow_dispatch` API 觸發（使用者明確要求，2026-07-12）。既有 workflow 的排程維持不動。
 
 ## 開發分支
 - 所有開發在 `claude/cron-job-automation-0YoJr` 分支進行
