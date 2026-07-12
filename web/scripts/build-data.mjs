@@ -1788,10 +1788,82 @@ if (aiTrader) {
         win_rate: r.stats.win_rate, num_trades: r.stats.num_trades,
         max_drawdown_pct: r.stats.max_drawdown_pct, profit_factor: r.stats.profit_factor,
         open_positions: r.positions.length,
+        // ret_pct 序列與主帳戶共用同一交易日曆(同 scans/klines),供疊圖
+        curve: r.equity_curve.map(p => p.ret_pct),
       }
     } catch { return null }
   }).filter(Boolean)
   console.log(`AI trader variants: ${aiTrader.variants.map(v => `${v.id}=${v.return_pct}%`).join(' ')}`)
+}
+
+// 大盤基準:掃描池等權日報酬複利。AI 就是從這個池子選股,等權基準比加權指數
+// 更公平(不被權值股綁架);排除單日 |r|>11% 的異常(除權息/資料錯誤,台股
+// 漲跌幅限制 10%)。對齊 AI 帳戶的交易日曆,起點同為 0%。
+if (aiTrader?.equity_curve?.length > 1) {
+  const days = aiTrader.equity_curve.map(p => p.date)
+  const daySet = new Set(days)
+  const sumRet = {}, cntRet = {}
+  for (const entry of Object.values(klineMap)) {
+    const bars = getKlineBars(entry, '1d')
+    if (!bars) continue
+    for (let i = 1; i < bars.length; i++) {
+      const d = bars[i].time
+      if (!daySet.has(d)) continue
+      const c0 = bars[i - 1].close, c1 = bars[i].close
+      if (!(c0 > 0) || !(c1 > 0)) continue
+      const r = c1 / c0 - 1
+      if (Math.abs(r) > 0.11) continue
+      sumRet[d] = (sumRet[d] || 0) + r
+      cntRet[d] = (cntRet[d] || 0) + 1
+    }
+  }
+  let level = 1
+  const benchCurve = days.map((d, i) => {
+    if (i > 0 && (cntRet[d] || 0) >= 30) level *= 1 + sumRet[d] / cntRet[d]
+    return { date: d, ret_pct: Math.round((level - 1) * 10000) / 100 }
+  })
+  aiTrader.benchmark = {
+    label: '掃描池等權基準',
+    return_pct: benchCurve[benchCurve.length - 1].ret_pct,
+    curve: benchCurve,
+  }
+  console.log(`AI trader benchmark: ${aiTrader.benchmark.return_pct}% (universe equal-weight, ${days.length} days)`)
+}
+
+// 明日作戰計畫:AI 下一個交易日會做什麼——武裝中的出場價位(持倉)+ 開盤
+// 會補進的候選。補進清單要以「最新掃描之前就持有的部位」當基準:主回放在
+// 掃描日收盤已把新訊號買成持倉,若用全部持倉過濾,會把真人明天開盤該買的
+// 剛好全部濾掉(Codex review #381)。掃描日新建持倉的成本加回現金,還原
+// 掃描前的資金來估每檔預算。純推導顯示,不影響回放本身。
+if (aiTrader) {
+  const latestDate = dates[0]
+  const latest = scans[latestDate] || {}
+  const carried = aiTrader.positions.filter(p => p.entry_date !== latestDate)
+  const heldBefore = new Set(carried.map(p => String(p.stock_id)))
+  const freshCost = aiTrader.positions
+    .filter(p => p.entry_date === latestDate)
+    .reduce((a, p) => a + (p.cost || 0), 0)
+  const cashBefore = aiTrader.cash + freshCost
+  const freeSlots = Math.max(0, (aiTrader.config.max_positions || 6) - carried.length)
+  const planBuys = (latest.top_stocks || [])
+    .filter(s => s.entry_signal && !heldBefore.has(String(s.stock_id)))
+    .sort((a, b) => (b.entry_score || 0) - (a.entry_score || 0))
+    .slice(0, freeSlots)
+    .map((s, i) => ({
+      stock_id: String(s.stock_id), name: s.name || '', rank: i + 1,
+      entry_score: Math.round(s.entry_score || 0), grade: s.grade || '', close: s.close ?? null,
+    }))
+  aiTrader.plan = {
+    as_of: latestDate,
+    free_slots: freeSlots,
+    est_budget_each: planBuys.length ? Math.floor(cashBefore / Math.min(freeSlots, planBuys.length)) : null,
+    buys: planBuys,
+    exits: aiTrader.positions.map(p => ({
+      stock_id: p.stock_id, name: p.name,
+      tp_price: p.tp_price, sl_price: p.sl_price,
+      days_left: Math.max(0, (aiTrader.config.max_hold || 15) - (p.hold_days || 0)),
+    })),
+  }
 }
 
 const dataGeneratedAt = new Date().toISOString()
