@@ -46,21 +46,26 @@ function parseSignals(entryReason) {
 }
 
 // ── equity curve (self-contained SVG) ────────────────────────────────────────
-function EquityCurve({ curve, startCapital }) {
+function EquityCurve({ curve, startCapital, benchmark }) {
   const path = useMemo(() => {
     if (!curve || curve.length < 2) return null
     const W = 320, H = 96, pad = 4
     const eqs = curve.map(p => p.equity)
-    const min = Math.min(...eqs, startCapital), max = Math.max(...eqs, startCapital)
+    // 基準曲線(ret_pct)換算成同一權益尺度,一起參與 min/max
+    const benchEqs = (benchmark?.curve || []).map(p => startCapital * (1 + p.ret_pct / 100))
+    const min = Math.min(...eqs, ...benchEqs, startCapital), max = Math.max(...eqs, ...benchEqs, startCapital)
     const span = max - min || 1
-    const x = (i) => pad + i * (W - 2 * pad) / (curve.length - 1)
+    const x = (i, n) => pad + i * (W - 2 * pad) / (n - 1)
     const y = (v) => pad + (H - 2 * pad) * (1 - (v - min) / span)
-    const line = curve.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(p.equity).toFixed(1)}`).join(' ')
-    const area = `${line} L ${x(curve.length - 1).toFixed(1)} ${H - pad} L ${x(0).toFixed(1)} ${H - pad} Z`
+    const line = curve.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i, curve.length).toFixed(1)} ${y(p.equity).toFixed(1)}`).join(' ')
+    const area = `${line} L ${x(curve.length - 1, curve.length).toFixed(1)} ${H - pad} L ${x(0, curve.length).toFixed(1)} ${H - pad} Z`
+    const benchLine = benchEqs.length >= 2
+      ? benchEqs.map((v, i) => `${i === 0 ? 'M' : 'L'} ${x(i, benchEqs.length).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')
+      : null
     const baseY = y(startCapital)
     const up = curve[curve.length - 1].equity >= startCapital
-    return { W, H, line, area, baseY, up }
-  }, [curve, startCapital])
+    return { W, H, line, area, benchLine, baseY, up }
+  }, [curve, startCapital, benchmark])
   if (!path) return null
   const stroke = path.up ? '#FF3340' : '#16D67E'
   return (
@@ -73,7 +78,40 @@ function EquityCurve({ curve, startCapital }) {
       </defs>
       <line x1="0" y1={path.baseY} x2={path.W} y2={path.baseY} stroke="var(--ios-label4)" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.6" />
       <path d={path.area} fill="url(#aiEqFill)" />
+      {path.benchLine && <path d={path.benchLine} fill="none" stroke="var(--ios-label3)" strokeWidth="1.1" strokeDasharray="4 3" strokeLinejoin="round" opacity="0.85" />}
       <path d={path.line} fill="none" stroke={stroke} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+// ── rule-lab overlay chart:主帳戶 + 變體 ret_pct 疊線 ───────────────────────
+const VARIANT_COLORS = { next_open: '#FF9F0A', trail8: '#BF5AF2', tp12: '#64D2FF', tp5: '#FFD60A', pos3: '#FF6482' }
+function VariantChart({ mainCurve, variants }) {
+  const path = useMemo(() => {
+    if (!mainCurve || mainCurve.length < 2) return null
+    const W = 320, H = 84, pad = 4
+    const series = [
+      { id: 'main', color: 'var(--ios-blue)', vals: mainCurve.map(p => p.ret_pct), width: 1.8 },
+      ...(variants || []).filter(v => Array.isArray(v.curve) && v.curve.length >= 2)
+        .map(v => ({ id: v.id, color: VARIANT_COLORS[v.id] || 'var(--ios-label3)', vals: v.curve, width: 1.1 })),
+    ]
+    const all = series.flatMap(s => s.vals)
+    const min = Math.min(...all, 0), max = Math.max(...all, 0)
+    const span = max - min || 1
+    const y = (v) => pad + (H - 2 * pad) * (1 - (v - min) / span)
+    const lines = series.map(s => ({
+      ...s,
+      d: s.vals.map((v, i) => `${i === 0 ? 'M' : 'L'} ${(pad + i * (W - 2 * pad) / (s.vals.length - 1)).toFixed(1)} ${y(v).toFixed(1)}`).join(' '),
+    }))
+    return { W, H, lines, zeroY: y(0) }
+  }, [mainCurve, variants])
+  if (!path) return null
+  return (
+    <svg viewBox={`0 0 ${path.W} ${path.H}`} width="100%" height="84" preserveAspectRatio="none" style={{ display: 'block', marginBottom: 8 }}>
+      <line x1="0" y1={path.zeroY} x2={path.W} y2={path.zeroY} stroke="var(--ios-label4)" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.6" />
+      {path.lines.map(l => (
+        <path key={l.id} d={l.d} fill="none" stroke={l.color} strokeWidth={l.width} strokeLinejoin="round" opacity={l.id === 'main' ? 1 : 0.9} />
+      ))}
     </svg>
   )
 }
@@ -139,9 +177,11 @@ function BuyDetail({ date, price, shares, cost, dayRank, score, grade, signals, 
 }
 
 function FragmentRow({ v, isMain }) {
+  const dot = isMain ? 'var(--ios-blue)' : (VARIANT_COLORS[v.id] || 'var(--ios-label3)')
   return (
     <>
       <span style={{ minWidth: 0 }}>
+        <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 4, background: dot, marginRight: 5, verticalAlign: 'middle' }} />
         <span style={{ fontSize: 11, fontWeight: isMain ? 800 : 600, color: isMain ? 'var(--ios-blue)' : 'var(--ios-label)' }}>{v.label}</span>
         {v.note && <span style={{ display: 'block', fontSize: 9, color: 'var(--ios-label4)' }}>{v.note}</span>}
       </span>
@@ -190,7 +230,16 @@ export default function AITrader({ data }) {
           <span style={{ fontSize: 34, fontWeight: 900, color: colorOf(ai.return_pct), fontFamily: 'var(--font-mono)', letterSpacing: '-1px' }}>{pctStr(ai.return_pct)}</span>
           <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>總報酬率</span>
         </div>
-        <EquityCurve curve={ai.equity_curve} startCapital={c.start_capital} />
+        <EquityCurve curve={ai.equity_curve} startCapital={c.start_capital} benchmark={ai.benchmark} />
+        {ai.benchmark?.return_pct != null && (() => {
+          const diff = Math.round((ai.return_pct - ai.benchmark.return_pct) * 100) / 100
+          return (
+            <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 4 }}>
+              灰虛線:同期{ai.benchmark.label} <b style={{ fontFamily: 'var(--font-mono)', color: colorOf(ai.benchmark.return_pct) }}>{pctStr(ai.benchmark.return_pct, 1)}</b>
+              <span style={{ marginLeft: 6 }}>AI {diff >= 0 ? '領先' : '落後'} <b style={{ fontFamily: 'var(--font-mono)', color: colorOf(diff) }}>{Math.abs(diff).toFixed(1)}pp</b></span>
+            </div>
+          )
+        })()}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--ios-label3)', marginTop: 6 }}>
           <span>本金 NT${nf(c.start_capital)}</span>
           <span>總資產 <b style={{ color: 'var(--ios-label)', fontFamily: 'var(--font-mono)' }}>NT${nf(ai.equity)}</b></span>
@@ -215,6 +264,48 @@ export default function AITrader({ data }) {
       </div>
 
       <LiveTraderPanel ai={ai} scan={data?.scans?.[data?.dates?.[0]]} />
+
+      {ai.plan && (
+        <Card title="📋 明日作戰計畫" hint={`依 ${ai.plan.as_of} 掃描推導`}>
+          {ai.plan.buys?.length > 0 ? (
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', marginBottom: 4 }}>
+                開盤補進(空槽 {ai.plan.free_slots} 檔{ai.plan.est_budget_each ? ` · 每檔預算約 NT$${nf(ai.plan.est_budget_each)}` : ''})
+              </div>
+              {ai.plan.buys.map(b => (
+                <div key={b.stock_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderTop: '0.5px solid var(--ios-sep)' }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--ios-blue)' }}>{b.stock_id}</span>
+                  <span style={{ fontSize: 11.5, color: 'var(--ios-label)' }}>{b.name}</span>
+                  <span style={{ fontSize: 9.5, color: 'var(--ios-label4)' }}>第 {b.rank} 順位</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--ios-label2)', fontFamily: 'var(--font-mono)' }}>
+                    分 {b.entry_score}{b.grade ? ` · ${b.grade}` : ''}{b.close != null ? ` · 收 ${b.close}` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 11.5, color: 'var(--ios-label3)', marginBottom: 6 }}>
+              {ai.plan.free_slots === 0 ? '滿倉中,明日開盤不補新單。' : `有 ${ai.plan.free_slots} 個空槽,但最新掃描沒有(未持有的)進場訊號 → 明日不進新單,續抱等訊號。`}
+            </div>
+          )}
+          {ai.plan.exits?.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', margin: '6px 0 4px' }}>武裝中的出場單</div>
+              {ai.plan.exits.map(e => (
+                <div key={e.stock_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderTop: '0.5px solid var(--ios-sep)', fontSize: 10.5 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--ios-blue)' }}>{e.stock_id}</span>
+                  <span style={{ fontSize: 11, color: 'var(--ios-label)' }}>{e.name}</span>
+                  <span style={{ marginLeft: 'auto', color: 'var(--ios-label2)', fontFamily: 'var(--font-mono)' }}>
+                    {e.tp_price != null && <>停利 <b style={{ color: UP }}>{e.tp_price}</b></>}
+                    {e.sl_price != null && <> · 停損 <b style={{ color: DOWN }}>{e.sl_price}</b></>}
+                    <> · 期滿剩 {e.days_left} 日</>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card title="目前持倉" hint={`${ai.positions.length} 檔 · 最多 ${c.max_positions} 檔 · 點擊看明細`}>
         {ai.positions.length === 0 ? (
@@ -292,6 +383,7 @@ export default function AITrader({ data }) {
 
       {Array.isArray(ai.variants) && ai.variants.length > 0 && (
         <Card title="🧪 規則實驗室" hint="同資料、同起點,只換規則的平行帳戶">
+          <VariantChart mainCurve={ai.equity_curve} variants={ai.variants} />
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) auto auto auto auto', gap: '6px 10px', fontSize: 11, alignItems: 'center' }}>
             <span style={{ fontSize: 9.5, color: 'var(--ios-label4)' }}>規則</span>
             <span style={{ fontSize: 9.5, color: 'var(--ios-label4)', textAlign: 'right' }}>報酬</span>
