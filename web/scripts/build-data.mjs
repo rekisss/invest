@@ -1831,14 +1831,22 @@ if (aiTrader?.equity_curve?.length > 1) {
 }
 
 // 明日作戰計畫:AI 下一個交易日會做什麼——武裝中的出場價位(持倉)+ 開盤
-// 會補進的候選(最新掃描的進場訊號、未持有、依分數排序、填滿空槽)。純推導
-// 顯示,不影響回放本身。
+// 會補進的候選。補進清單要以「最新掃描之前就持有的部位」當基準:主回放在
+// 掃描日收盤已把新訊號買成持倉,若用全部持倉過濾,會把真人明天開盤該買的
+// 剛好全部濾掉(Codex review #381)。掃描日新建持倉的成本加回現金,還原
+// 掃描前的資金來估每檔預算。純推導顯示,不影響回放本身。
 if (aiTrader) {
-  const held = new Set(aiTrader.positions.map(p => String(p.stock_id)))
-  const latest = scans[dates[0]] || {}
-  const freeSlots = Math.max(0, (aiTrader.config.max_positions || 6) - aiTrader.positions.length)
+  const latestDate = dates[0]
+  const latest = scans[latestDate] || {}
+  const carried = aiTrader.positions.filter(p => p.entry_date !== latestDate)
+  const heldBefore = new Set(carried.map(p => String(p.stock_id)))
+  const freshCost = aiTrader.positions
+    .filter(p => p.entry_date === latestDate)
+    .reduce((a, p) => a + (p.cost || 0), 0)
+  const cashBefore = aiTrader.cash + freshCost
+  const freeSlots = Math.max(0, (aiTrader.config.max_positions || 6) - carried.length)
   const planBuys = (latest.top_stocks || [])
-    .filter(s => s.entry_signal && !held.has(String(s.stock_id)))
+    .filter(s => s.entry_signal && !heldBefore.has(String(s.stock_id)))
     .sort((a, b) => (b.entry_score || 0) - (a.entry_score || 0))
     .slice(0, freeSlots)
     .map((s, i) => ({
@@ -1846,9 +1854,9 @@ if (aiTrader) {
       entry_score: Math.round(s.entry_score || 0), grade: s.grade || '', close: s.close ?? null,
     }))
   aiTrader.plan = {
-    as_of: dates[0],
+    as_of: latestDate,
     free_slots: freeSlots,
-    est_budget_each: planBuys.length ? Math.floor(aiTrader.cash / Math.min(freeSlots, planBuys.length)) : null,
+    est_budget_each: planBuys.length ? Math.floor(cashBefore / Math.min(freeSlots, planBuys.length)) : null,
     buys: planBuys,
     exits: aiTrader.positions.map(p => ({
       stock_id: p.stock_id, name: p.name,

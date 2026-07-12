@@ -113,6 +113,7 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
         cash -= spend
         positions[q.sid] = {
           shares, entry: openPx, entryDate: day, entryDayIdx: di,
+          openFill: true, // 開盤成交:整個時段在場內,當天即可觸發停利/停損
           name: q.name, entryScore: q.entryScore, grade: q.grade,
           entryReason: q.entryReason, dayRank: q.dayRank, cost: Math.round(spend),
         }
@@ -124,7 +125,10 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
     // 1) exits — check each holding's bar today for TP/stop/time
     for (const sid of Object.keys(positions)) {
       const pos = positions[sid]
-      if (di <= pos.entryDayIdx) continue // never exit on entry day
+      if (di < pos.entryDayIdx) continue
+      // 收盤成交的部位當天不出場(高低點發生在買進之前);開盤成交(next_open)
+      // 整個時段都在場內,當天觸及停利/停損就要出場
+      if (di === pos.entryDayIdx && !pos.openFill) continue
       const bar = barAt(sid, day)
       const holdDays = di - pos.entryDayIdx
       let exitPrice = null, reason = null
