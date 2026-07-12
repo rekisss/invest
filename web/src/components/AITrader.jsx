@@ -138,6 +138,21 @@ function BuyDetail({ date, price, shares, cost, dayRank, score, grade, signals, 
   )
 }
 
+function FragmentRow({ v, isMain }) {
+  return (
+    <>
+      <span style={{ minWidth: 0 }}>
+        <span style={{ fontSize: 11, fontWeight: isMain ? 800 : 600, color: isMain ? 'var(--ios-blue)' : 'var(--ios-label)' }}>{v.label}</span>
+        {v.note && <span style={{ display: 'block', fontSize: 9, color: 'var(--ios-label4)' }}>{v.note}</span>}
+      </span>
+      <span style={{ textAlign: 'right', fontWeight: 800, fontFamily: 'var(--font-mono)', color: colorOf(v.return_pct) }}>{pctStr(v.return_pct, 1)}</span>
+      <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--ios-label2)' }}>{v.win_rate == null ? '—' : `${Math.round(v.win_rate)}%`}</span>
+      <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--ios-label3)' }}>{v.max_drawdown_pct == null ? '—' : `-${v.max_drawdown_pct}%`}</span>
+      <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--ios-label3)' }}>{v.num_trades ?? '—'}</span>
+    </>
+  )
+}
+
 function exitText(t, maxHold) {
   if (t.reason === 'take_profit') return `觸及停利 +8%${t.tp_price != null ? `(${t.tp_price} 元)` : ''}`
   if (t.reason === 'stop') return `觸及停損 −12%${t.sl_price != null ? `(${t.sl_price} 元)` : ''}`
@@ -274,6 +289,26 @@ export default function AITrader({ data }) {
           )
         })}
       </Card>
+
+      {Array.isArray(ai.variants) && ai.variants.length > 0 && (
+        <Card title="🧪 規則實驗室" hint="同資料、同起點,只換規則的平行帳戶">
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) auto auto auto auto', gap: '6px 10px', fontSize: 11, alignItems: 'center' }}>
+            <span style={{ fontSize: 9.5, color: 'var(--ios-label4)' }}>規則</span>
+            <span style={{ fontSize: 9.5, color: 'var(--ios-label4)', textAlign: 'right' }}>報酬</span>
+            <span style={{ fontSize: 9.5, color: 'var(--ios-label4)', textAlign: 'right' }}>勝率</span>
+            <span style={{ fontSize: 9.5, color: 'var(--ios-label4)', textAlign: 'right' }}>回落</span>
+            <span style={{ fontSize: 9.5, color: 'var(--ios-label4)', textAlign: 'right' }}>筆數</span>
+            {[{ id: 'main', label: '主帳戶(現行)', note: '停利8%/停損12%', return_pct: ai.return_pct, win_rate: s.win_rate, max_drawdown_pct: s.max_drawdown_pct, num_trades: s.num_trades },
+              ...[...ai.variants].sort((a, b) => (b.return_pct ?? -999) - (a.return_pct ?? -999))]
+              .map(v => (
+                <FragmentRow key={v.id} v={v} isMain={v.id === 'main'} />
+              ))}
+          </div>
+          <div style={{ fontSize: 9.5, color: 'var(--ios-label4)', lineHeight: 1.6, marginTop: 8 }}>
+            「次日開盤買進」是唯一真人跟單拿得到的成交價(掃描收盤後才完成)。樣本仍少,規則排名會隨時間變動,先看方向、別急著下結論。
+          </div>
+        </Card>
+      )}
 
       <div style={{ fontSize: 9.5, color: 'var(--ios-label4)', lineHeight: 1.6, padding: '2px 6px' }}>
         規則:自 {c.start_date} 起以 NT${nf(c.start_capital)} 虛擬本金,每日買進掃描分數最高的進場訊號股(最多 {c.max_positions} 檔、等權),

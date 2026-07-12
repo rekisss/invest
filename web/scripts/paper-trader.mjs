@@ -19,6 +19,11 @@ export const DEFAULT_CONFIG = {
   maxHold: 15,             // trading days before a time exit
   feeBuy: 0.001425,        // broker fee
   feeSell: 0.004425,       // broker fee + 0.3% securities tax
+  // rule-lab switches(預設值 = 與原帳戶完全相同的行為)
+  execution: 'close',      // 'close' = 掃描日收盤價買 | 'next_open' = 次日開盤價買
+                           //   (掃描收盤後才完成,次日開盤才是真人跟單拿得到的價)
+  trailingStop: null,      // 例 0.08 = 從進場後最高點回落 8% 出場(收緊固定停損)
+                           //   takeProfit 可設 null 停用停利,搭配移動停損讓利潤跑
 }
 
 // klineFor(sid) -> ascending [{time, open, high, low, close}] or null/undefined
@@ -85,8 +90,36 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
     return lastClose[sid] ?? null
   }
 
+  let pending = [] // next_open execution: picks queued on scan day, filled at a later open
+
   for (const day of days) {
     const di = dayIndex[day]
+
+    // 0) next_open fills — buy queued picks at today's open (before exit checks;
+    //    a same-day exit is impossible anyway because entryDayIdx === today)
+    if (cfg.execution === 'next_open' && pending.length) {
+      const stillPending = []
+      let slots = cfg.maxPositions - Object.keys(positions).length
+      for (const q of pending) {
+        if (positions[q.sid]) continue
+        if (slots <= 0) { if (di - q.queuedDayIdx <= 3) stillPending.push(q); continue }
+        const bar = barAt(q.sid, day)
+        const openPx = bar && bar.open > 0 ? bar.open : null
+        if (!openPx) { if (di - q.queuedDayIdx < 3) stillPending.push(q); continue } // 停牌等 3 個交易日,否則放棄
+        const budget = cash / slots
+        const shares = Math.floor(budget / (openPx * (1 + cfg.feeBuy)))
+        if (shares < 1) continue
+        const spend = shares * openPx * (1 + cfg.feeBuy)
+        cash -= spend
+        positions[q.sid] = {
+          shares, entry: openPx, entryDate: day, entryDayIdx: di,
+          name: q.name, entryScore: q.entryScore, grade: q.grade,
+          entryReason: q.entryReason, dayRank: q.dayRank, cost: Math.round(spend),
+        }
+        slots--
+      }
+      pending = stillPending
+    }
 
     // 1) exits — check each holding's bar today for TP/stop/time
     for (const sid of Object.keys(positions)) {
@@ -95,12 +128,19 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
       const bar = barAt(sid, day)
       const holdDays = di - pos.entryDayIdx
       let exitPrice = null, reason = null
-      const tp = pos.entry * (1 + cfg.takeProfit)
-      const sl = pos.entry * (1 - cfg.stopLoss)
+      const tp = cfg.takeProfit != null ? pos.entry * (1 + cfg.takeProfit) : null
+      let sl = pos.entry * (1 - cfg.stopLoss)
+      if (cfg.trailingStop != null) {
+        // trailing floor from the peak since entry(含今日高點——若同一根K棒先衝高再
+        // 回落,保守假設回落發生在衝高之後,觸發移動停損)
+        if (bar && bar.high != null && bar.high > (pos.peak ?? pos.entry)) pos.peak = bar.high
+        const trail = (pos.peak ?? pos.entry) * (1 - cfg.trailingStop)
+        if (trail > sl) sl = trail
+      }
       if (bar) {
         // conservative: if both stop and target touched same bar, assume stop first
         if (bar.low != null && bar.low <= sl) { exitPrice = sl; reason = 'stop' }
-        else if (bar.high != null && bar.high >= tp) { exitPrice = tp; reason = 'take_profit' }
+        else if (tp != null && bar.high != null && bar.high >= tp) { exitPrice = tp; reason = 'take_profit' }
       }
       if (exitPrice == null && holdDays >= cfg.maxHold) {
         exitPrice = priceOn(sid, day); reason = 'time'
@@ -123,7 +163,7 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
           day_rank: pos.dayRank ?? null,
           shares: pos.shares,
           cost: pos.cost ?? Math.round(costBasis),
-          tp_price: round2(tp),
+          tp_price: tp != null ? round2(tp) : null,
           sl_price: round2(sl),
           fees: Math.round(pos.shares * pos.entry * cfg.feeBuy + pos.shares * exitPrice * cfg.feeSell),
         })
@@ -137,6 +177,22 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
       const picks = (scans[day].top_stocks || [])
         .filter(s => s.entry_signal && !held.has(String(s.stock_id)))
         .sort((a, b) => (b.entry_score || 0) - (a.entry_score || 0))
+      if (cfg.execution === 'next_open') {
+        // queue picks for a later open; cap the queue at the free slots
+        const pendingIds = new Set(pending.map(q => q.sid))
+        let free = cfg.maxPositions - Object.keys(positions).length - pending.length
+        for (let pi = 0; pi < picks.length && free > 0; pi++) {
+          const s = picks[pi]
+          const sid = String(s.stock_id)
+          if (pendingIds.has(sid)) continue
+          pending.push({
+            sid, name: s.name || sid, queuedDayIdx: di,
+            entryScore: s.entry_score ?? null, grade: s.grade || '',
+            entryReason: s.entry_reason || '', dayRank: pi + 1,
+          })
+          free--
+        }
+      } else {
       let slots = cfg.maxPositions - Object.keys(positions).length
       for (let pi = 0; pi < picks.length; pi++) {
         const s = picks[pi]
@@ -160,6 +216,7 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
           cost: Math.round(spend),
         }
         slots--
+      }
       }
     }
 
@@ -192,8 +249,9 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
       entry_reason: pos.entryReason || '',
       day_rank: pos.dayRank ?? null,
       cost: pos.cost ?? null,
-      tp_price: round2(pos.entry * (1 + cfg.takeProfit)),
-      sl_price: round2(pos.entry * (1 - cfg.stopLoss)),
+      tp_price: cfg.takeProfit != null ? round2(pos.entry * (1 + cfg.takeProfit)) : null,
+      sl_price: round2(Math.max(pos.entry * (1 - cfg.stopLoss),
+        cfg.trailingStop != null ? (pos.peak ?? pos.entry) * (1 - cfg.trailingStop) : 0)),
     }
   }).sort((a, b) => b.value - a.value)
 
@@ -224,7 +282,10 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
 
   return {
     config: { start_capital: cfg.startCapital, start_date: cfg.startDate, max_positions: cfg.maxPositions,
-              take_profit_pct: cfg.takeProfit * 100, stop_loss_pct: cfg.stopLoss * 100, max_hold: cfg.maxHold },
+              take_profit_pct: cfg.takeProfit != null ? cfg.takeProfit * 100 : null,
+              stop_loss_pct: cfg.stopLoss * 100, max_hold: cfg.maxHold,
+              execution: cfg.execution,
+              trailing_stop_pct: cfg.trailingStop != null ? cfg.trailingStop * 100 : null },
     as_of: asOf,
     equity: Math.round(equity),
     cash: Math.round(cash),
