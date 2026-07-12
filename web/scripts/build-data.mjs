@@ -1767,6 +1767,33 @@ try {
   if (aiTrader) console.log(`AI trader: ${aiTrader.stats.num_trades} trades, ${aiTrader.stats.trading_days} days, return ${aiTrader.return_pct}% (equity ${aiTrader.equity})`)
 } catch (e) { console.log(`AI trader: skipped (${e.message})`) }
 
+// 規則實驗室:同一份掃描資料 + 同一起點,只換出場/成交規則的平行虛擬帳戶。
+// 用來回答「哪套規則真的比較會賺」——特別是 next_open(次日開盤買進)才是
+// 真人跟單實際拿得到的價(掃描收盤後才完成)。只存精簡統計,不存交易明細。
+if (aiTrader) {
+  const VARIANTS = [
+    { id: 'next_open', label: '次日開盤買進', note: '貼近實單可執行價', config: { execution: 'next_open' } },
+    { id: 'trail8', label: '移動停損 8%', note: '不停利,讓利潤跑', config: { takeProfit: null, trailingStop: 0.08 } },
+    { id: 'tp12', label: '停利 12%', note: '拉高目標', config: { takeProfit: 0.12 } },
+    { id: 'tp5', label: '停利 5%', note: '高勝率短打', config: { takeProfit: 0.05 } },
+    { id: 'pos3', label: '集中 3 檔', note: '重押高分股', config: { maxPositions: 3 } },
+  ]
+  aiTrader.variants = VARIANTS.map(v => {
+    try {
+      const r = simulatePaperTrader({ scans, klineFor: (sid) => getKlineBars(klineMap[sid], '1d'), config: v.config })
+      if (!r) return null
+      return {
+        id: v.id, label: v.label, note: v.note,
+        return_pct: r.return_pct, equity: r.equity,
+        win_rate: r.stats.win_rate, num_trades: r.stats.num_trades,
+        max_drawdown_pct: r.stats.max_drawdown_pct, profit_factor: r.stats.profit_factor,
+        open_positions: r.positions.length,
+      }
+    } catch { return null }
+  }).filter(Boolean)
+  console.log(`AI trader variants: ${aiTrader.variants.map(v => `${v.id}=${v.return_pct}%`).join(' ')}`)
+}
+
 const dataGeneratedAt = new Date().toISOString()
 writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
