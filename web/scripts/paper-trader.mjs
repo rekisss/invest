@@ -360,7 +360,11 @@ export function simulateAdaptiveTrader({ accounts, window = 10, minTrades = 10, 
       if (p > curPerf + marginPp / 100 && (best === cur || p > trail(best))) best = k
     }
     if (best !== cur) {
-      level *= 1 - switchCostPct / 100 // 換倉成本在切換當下入帳
+      level *= 1 - switchCostPct / 100
+      // 換倉成本記在「切換當日」的曲線點上——當日點已先 push,要回填;否則
+      // 成本會延後一天入帳,若切換發生在最後一個交易日更會完全漏掉
+      // (return_pct 取自 curve 最後一點)。(Codex review #385)
+      curve[curve.length - 1].ret_pct = round2((level - 1) * 100)
       switches.push({
         date: days[i], from: usable[cur].id, to: usable[best].id,
         from_trail_pct: round2(curPerf * 100), to_trail_pct: round2(trail(best) * 100),
