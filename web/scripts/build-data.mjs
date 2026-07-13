@@ -1771,8 +1771,16 @@ try {
 // 用來回答「哪套規則真的比較會賺」——特別是 next_open(次日開盤買進)才是
 // 真人跟單實際拿得到的價(掃描收盤後才完成)。只存精簡統計,不存交易明細。
 if (aiTrader) {
+  // 盤前預測 → 日期→標籤 映射,給「避開偏空日」變體當進場濾網。這是預測
+  // 系統與交易系統的第一個接點:預測偏空的掃描日不進新單(出場照常)。
+  const predLabelByDate = {}
+  for (const p of (predictionHistory || [])) {
+    if (p?.date && p?.xgb_label) predLabelByDate[p.date] = p.xgb_label
+  }
+  const isBearish = (label) => label === '偏空' || label === '看空'
   const VARIANTS = [
     { id: 'next_open', label: '次日開盤買進', note: '貼近實單可執行價', config: { execution: 'next_open' } },
+    { id: 'bear_filter', label: '避開偏空日', note: '盤前預測偏空不進場', config: { buyGate: (day) => !isBearish(predLabelByDate[day]) } },
     { id: 'trail8', label: '移動停損 8%', note: '不停利,讓利潤跑', config: { takeProfit: null, trailingStop: 0.08 } },
     { id: 'tp12', label: '停利 12%', note: '拉高目標', config: { takeProfit: 0.12 } },
     { id: 'tp5', label: '停利 5%', note: '高勝率短打', config: { takeProfit: 0.05 } },

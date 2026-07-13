@@ -85,7 +85,7 @@ function EquityCurve({ curve, startCapital, benchmark }) {
 }
 
 // ── rule-lab overlay chart:主帳戶 + 變體 ret_pct 疊線 ───────────────────────
-const VARIANT_COLORS = { next_open: '#FF9F0A', trail8: '#BF5AF2', tp12: '#64D2FF', tp5: '#FFD60A', pos3: '#FF6482' }
+const VARIANT_COLORS = { next_open: '#FF9F0A', bear_filter: '#5E5CE6', trail8: '#BF5AF2', tp12: '#64D2FF', tp5: '#FFD60A', pos3: '#FF6482' }
 function VariantChart({ mainCurve, variants }) {
   const path = useMemo(() => {
     if (!mainCurve || mainCurve.length < 2) return null
