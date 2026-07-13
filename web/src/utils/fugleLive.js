@@ -155,6 +155,66 @@ export function createFugleClient({ onQuote, onStatus }) {
   }
 }
 
+// ── 批次即時報價(給 useLivePrices 當最優先資料源)────────────────────────────
+// 準確度背景:TWSE OpenAPI 的 STOCK_DAY_ALL 是「日收盤」資料集,盤中打它拿到
+// 的是前一交易日的價格 → 即時盯盤顯示不準。有富果金鑰時改以富果為第一優先。
+// 策略:先試 snapshot(TSE+OTC 各 1 請求涵蓋全市場);方案不支援或失敗時,
+// 退回逐檔 quote(限 15 檔/輪,守住免費方案 60 req/min);CORS 或網路錯誤一律
+// 靜默回空物件,讓既有 TWSE/快取層接手 — 不會比現在更差。
+export async function fetchFugleQuotes(ids) {
+  const apikey = getFugleKey()
+  if (!apikey || !ids?.length) return {}
+  const idSet = new Set(ids.map(String))
+  const out = {}
+  const mapQuote = (d) => {
+    const price = d.closePrice ?? d.lastPrice ?? d.lastTrade?.price
+    if (!(price > 0)) return null
+    const prev = d.previousClose ?? null
+    return {
+      price: Number(price),
+      prevClose: prev != null ? Number(prev) : null,
+      pct: d.changePercent != null ? Number(d.changePercent) / 100
+        : (prev > 0 ? (Number(price) - prev) / prev : null),
+      high: d.highPrice != null ? Number(d.highPrice) : null,
+      low: d.lowPrice != null ? Number(d.lowPrice) : null,
+      open: d.openPrice != null ? Number(d.openPrice) : null,
+      volume: d.total?.tradeVolume != null ? Number(d.total.tradeVolume) : 0,
+      time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' }),
+      isSnapshot: false,
+      source: 'fugle',
+    }
+  }
+  try {
+    // 1) snapshot:兩個請求涵蓋上市+上櫃全部
+    let snapshotOk = false
+    for (const market of ['TSE', 'OTC']) {
+      const res = await fetch(`https://api.fugle.tw/marketdata/v1.0/stock/snapshot/quotes/${market}`, {
+        headers: { 'X-API-KEY': apikey },
+      })
+      if (!res.ok) break // 方案不含 snapshot(401/403)→ 改走逐檔
+      const body = await res.json()
+      for (const d of (body.data || [])) {
+        const sym = String(d.symbol || '')
+        if (!idSet.has(sym)) continue
+        const q = mapQuote(d)
+        if (q) out[sym] = q
+      }
+      snapshotOk = true
+    }
+    if (snapshotOk && Object.keys(out).length) return out
+    // 2) 逐檔 quote(前 15 檔)
+    for (const sym of [...idSet].slice(0, 15)) {
+      const res = await fetch(`https://api.fugle.tw/marketdata/v1.0/stock/intraday/quote/${sym}`, {
+        headers: { 'X-API-KEY': apikey },
+      })
+      if (!res.ok) continue
+      const q = mapQuote(await res.json())
+      if (q) out[sym] = q
+    }
+  } catch { /* CORS / 網路失敗 → 空物件,讓既有層接手 */ }
+  return out
+}
+
 // ── REST fallback (best-effort; may be CORS-blocked in some browsers) ────────
 export async function fetchFugleQuote(symbol) {
   const apikey = getFugleKey()
