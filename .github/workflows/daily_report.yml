@@ -1,0 +1,40 @@
+name: AI操盤日報
+
+# 沒有 schedule:使用者的排程一律由外部服務(cron-job.org)透過
+# workflow_dispatch API 觸發(建議:週一到週五 21:30 CST 每日一次)。
+# POST https://api.github.com/repos/rekisss/invest/actions/workflows/daily_report.yml/dispatches
+#   headers: Authorization: Bearer <PAT>, Accept: application/vnd.github+json
+#   body: {"ref":"main"}
+#
+# 從已部署的 Pages data.json 產生 AI 操盤日報並發 Discord(戰績 vs 基準、
+# 今日買賣、明日作戰計畫、規則排行)。只讀資料+通知,不寫 repo。
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: daily-report
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: web/scripts/daily-report.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 產生並發送日報
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: node web/scripts/daily-report.mjs
