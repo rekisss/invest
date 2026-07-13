@@ -113,13 +113,21 @@ if (ph.length && benchCurve.length >= 2) {
   }
 }
 
-// 規則實驗室:目前領先的規則
+// 規則實驗室:目前領先的規則 + 自我學習帳戶動態
 if (Array.isArray(ai.variants) && ai.variants.length) {
   const all = [{ label: '主帳戶', return_pct: ai.return_pct }, ...ai.variants]
     .filter(v => v.return_pct != null)
     .sort((a, b) => b.return_pct - a.return_pct)
   const top = all[0]
-  lines.push(`🧪 規則排行第一:${top.label}(${pct(top.return_pct, 1)})`)
+  let adaptiveText = ''
+  if (ai.adaptive) {
+    const a = ai.adaptive
+    const switchedToday = (a.switches || []).find(s => s.date === asOf)
+    adaptiveText = switchedToday
+      ? ` · 🎓 自學帳戶今日換規則:${switchedToday.from}→${switchedToday.to}`
+      : ` · 🎓 自學帳戶跟隨「${a.follow_label}」(${pct(a.return_pct, 1)}${a.learning_active ? '' : ',樣本累積中'})`
+  }
+  lines.push(`🧪 規則排行第一:${top.label}(${pct(top.return_pct, 1)})${adaptiveText}`)
 }
 
 lines.push(`-# 虛擬帳戶紀錄,非投資建議;正式數據以網頁 AI操盤分頁為準`)

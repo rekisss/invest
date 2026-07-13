@@ -3,7 +3,7 @@ import { join, resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import https from 'https'
 import http from 'http'
-import { simulatePaperTrader } from './paper-trader.mjs'
+import { simulatePaperTrader, simulateAdaptiveTrader } from './paper-trader.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SCAN_DIR = resolve(__dirname, '../../output/full_scan')
@@ -1786,22 +1786,37 @@ if (aiTrader) {
     { id: 'tp5', label: '停利 5%', note: '高勝率短打', config: { takeProfit: 0.05 } },
     { id: 'pos3', label: '集中 3 檔', note: '重押高分股', config: { maxPositions: 3 } },
   ]
-  aiTrader.variants = VARIANTS.map(v => {
+  const variantResults = VARIANTS.map(v => {
     try {
       const r = simulatePaperTrader({ scans, klineFor: (sid) => getKlineBars(klineMap[sid], '1d'), config: v.config })
-      if (!r) return null
-      return {
-        id: v.id, label: v.label, note: v.note,
-        return_pct: r.return_pct, equity: r.equity,
-        win_rate: r.stats.win_rate, num_trades: r.stats.num_trades,
-        max_drawdown_pct: r.stats.max_drawdown_pct, profit_factor: r.stats.profit_factor,
-        open_positions: r.positions.length,
-        // ret_pct 序列與主帳戶共用同一交易日曆(同 scans/klines),供疊圖
-        curve: r.equity_curve.map(p => p.ret_pct),
-      }
+      return r ? { v, r } : null
     } catch { return null }
   }).filter(Boolean)
+  aiTrader.variants = variantResults.map(({ v, r }) => ({
+    id: v.id, label: v.label, note: v.note,
+    return_pct: r.return_pct, equity: r.equity,
+    win_rate: r.stats.win_rate, num_trades: r.stats.num_trades,
+    max_drawdown_pct: r.stats.max_drawdown_pct, profit_factor: r.stats.profit_factor,
+    open_positions: r.positions.length,
+    // ret_pct 序列與主帳戶共用同一交易日曆(同 scans/klines),供疊圖
+    curve: r.equity_curve.map(p => p.ret_pct),
+  }))
   console.log(`AI trader variants: ${aiTrader.variants.map(v => `${v.id}=${v.return_pct}%`).join(' ')}`)
+
+  // 🎓 自適應帳戶(自我學習層):從主帳戶+變體的實績中學習該跟隨哪套規則。
+  // 樣本不足(全體已結 < 10 筆)前固定跟隨主帳戶;之後每天評估近 10 個交易
+  // 日績效,挑戰者領先 >1pp 才切換,每次切換扣 0.7% 換倉成本。確定性可重現。
+  try {
+    const adaptiveAccounts = [
+      { id: 'main', label: '主帳戶', curve: aiTrader.equity_curve.map(p => ({ date: p.date, ret_pct: p.ret_pct })), exit_dates: aiTrader.exit_dates },
+      ...variantResults.map(({ v, r }) => ({ id: v.id, label: v.label, curve: r.equity_curve.map(p => ({ date: p.date, ret_pct: p.ret_pct })), exit_dates: r.exit_dates })),
+    ]
+    aiTrader.adaptive = simulateAdaptiveTrader({ accounts: adaptiveAccounts })
+    if (aiTrader.adaptive) {
+      console.log(`AI trader adaptive: ${aiTrader.adaptive.return_pct}% follow=${aiTrader.adaptive.follow_id} switches=${aiTrader.adaptive.num_switches} learning=${aiTrader.adaptive.learning_active}`)
+    }
+  } catch (e) { console.log(`AI trader adaptive: skipped (${e.message})`) }
+  delete aiTrader.exit_dates // 只在 build 期用,不進 data.json
 }
 
 // 大盤基準:掃描池等權日報酬複利。AI 就是從這個池子選股,等權基準比加權指數

@@ -288,6 +288,9 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
   }
 
   return {
+    // 全部已結交易的出場日(供自適應帳戶統計「截至某日累積了幾筆樣本」;
+    // trades 只保留最後 40 筆,這裡要完整)
+    exit_dates: closed.map(t => t.exit_date),
     config: { start_capital: cfg.startCapital, start_date: cfg.startDate, max_positions: cfg.maxPositions,
               take_profit_pct: cfg.takeProfit != null ? cfg.takeProfit * 100 : null,
               stop_loss_pct: cfg.stopLoss * 100, max_hold: cfg.maxHold,
@@ -306,3 +309,76 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
 }
 
 function round2(v) { return v == null || !isFinite(v) ? null : Math.round(v * 100) / 100 }
+
+// ── 自適應帳戶(自我學習層)──────────────────────────────────────────────────
+// 透明的績效跟隨機制,不是黑箱 ML:每個交易日看「過去 window 個交易日」哪個
+// 帳戶(主帳戶+變體)的實績最好,滿足保護欄才切換跟隨對象:
+//   1. 樣本保護:全體帳戶累積已結交易 < minTrades 前,固定跟隨第一個帳戶(主帳戶)
+//   2. 遲滯保護:挑戰者近期績效要贏過現任 marginPp 個百分點才切換(避免頻繁震盪)
+//   3. 切換成本:每次切換扣 switchCostPct%(模擬全數換倉的手續費+滑價)
+// 輸入的各帳戶 curve 共用同一交易日曆(同一份 scans/klines 跑出來的)。
+// 完全確定性、可重現,每次切換都有紀錄可解釋。
+export function simulateAdaptiveTrader({ accounts, window = 10, minTrades = 10, marginPp = 1, switchCostPct = 0.7 }) {
+  const base = accounts?.[0]
+  if (!base?.curve?.length || accounts.length < 2) return null
+  const days = base.curve.map(p => p.date)
+  const n = days.length
+  // 累積報酬 → 水位序列(1 + ret/100);曲線長度不齊的帳戶直接排除
+  const usable = accounts.filter(a => a.curve?.length === n)
+  const levels = usable.map(a => a.curve.map(p => 1 + p.ret_pct / 100))
+  // 各帳戶「截至第 i 日」的累積已結筆數
+  const closedByDay = usable.map(a => {
+    const sorted = [...(a.exit_dates || [])].sort()
+    const m = new Array(n).fill(0)
+    let j = 0
+    for (let i = 0; i < n; i++) {
+      while (j < sorted.length && sorted[j] <= days[i]) j++
+      m[i] = j
+    }
+    return m
+  })
+
+  let cur = 0            // 目前跟隨的帳戶(起始:主帳戶)
+  let level = 1
+  const curve = []
+  const switches = []
+  let eligibleSince = null
+  for (let i = 0; i < n; i++) {
+    if (i > 0) level *= levels[cur][i] / levels[cur][i - 1]
+    curve.push({ date: days[i], ret_pct: round2((level - 1) * 100) })
+    // 今天收盤後評估「明天起要跟誰」——樣本與回看窗都要夠
+    if (i < window) continue
+    const totalClosed = closedByDay.reduce((a, m) => a + m[i], 0)
+    if (totalClosed < minTrades) continue
+    if (eligibleSince == null) eligibleSince = days[i]
+    const trail = (k) => levels[k][i] / levels[k][i - window] - 1
+    const curPerf = trail(cur)
+    let best = cur
+    for (let k = 0; k < usable.length; k++) {
+      if (k === cur) continue
+      const p = trail(k)
+      if (p > curPerf + marginPp / 100 && (best === cur || p > trail(best))) best = k
+    }
+    if (best !== cur) {
+      level *= 1 - switchCostPct / 100 // 換倉成本在切換當下入帳
+      switches.push({
+        date: days[i], from: usable[cur].id, to: usable[best].id,
+        from_trail_pct: round2(curPerf * 100), to_trail_pct: round2(trail(best) * 100),
+      })
+      cur = best
+    }
+  }
+  const totalClosedNow = closedByDay.reduce((a, m) => a + m[n - 1], 0)
+  return {
+    return_pct: curve[n - 1].ret_pct,
+    follow_id: usable[cur].id,
+    follow_label: usable[cur].label || usable[cur].id,
+    switches,
+    num_switches: switches.length,
+    curve,
+    learning_active: totalClosedNow >= minTrades,
+    samples: { closed_trades: totalClosedNow, required: minTrades },
+    eligible_since: eligibleSince,
+    config: { window, min_trades: minTrades, margin_pp: marginPp, switch_cost_pct: switchCostPct },
+  }
+}

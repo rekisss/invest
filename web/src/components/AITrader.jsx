@@ -86,7 +86,7 @@ function EquityCurve({ curve, startCapital, benchmark }) {
 
 // ── rule-lab overlay chart:主帳戶 + 變體 ret_pct 疊線 ───────────────────────
 const VARIANT_COLORS = { next_open: '#FF9F0A', bear_filter: '#5E5CE6', trail8: '#BF5AF2', tp12: '#64D2FF', tp5: '#FFD60A', pos3: '#FF6482' }
-function VariantChart({ mainCurve, variants }) {
+function VariantChart({ mainCurve, variants, adaptive }) {
   const path = useMemo(() => {
     if (!mainCurve || mainCurve.length < 2) return null
     const W = 320, H = 84, pad = 4
@@ -94,6 +94,9 @@ function VariantChart({ mainCurve, variants }) {
       { id: 'main', color: 'var(--ios-blue)', vals: mainCurve.map(p => p.ret_pct), width: 1.8 },
       ...(variants || []).filter(v => Array.isArray(v.curve) && v.curve.length >= 2)
         .map(v => ({ id: v.id, color: VARIANT_COLORS[v.id] || 'var(--ios-label3)', vals: v.curve, width: 1.1 })),
+      ...(adaptive?.curve?.length >= 2
+        ? [{ id: 'adaptive', color: '#30D158', vals: adaptive.curve.map(p => p.ret_pct), width: 1.8 }]
+        : []),
     ]
     const all = series.flatMap(s => s.vals)
     const min = Math.min(...all, 0), max = Math.max(...all, 0)
@@ -383,7 +386,28 @@ export default function AITrader({ data }) {
 
       {Array.isArray(ai.variants) && ai.variants.length > 0 && (
         <Card title="🧪 規則實驗室" hint="同資料、同起點,只換規則的平行帳戶">
-          <VariantChart mainCurve={ai.equity_curve} variants={ai.variants} />
+          {ai.adaptive && (
+            <div style={{ background: 'rgba(48,209,88,0.08)', border: '0.5px solid rgba(48,209,88,0.3)', borderRadius: 10, padding: '8px 11px', marginBottom: 10 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 800, color: '#30D158', display: 'flex', alignItems: 'center', gap: 6 }}>
+                🎓 自我學習帳戶
+                <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', color: colorOf(ai.adaptive.return_pct) }}>{pctStr(ai.adaptive.return_pct, 1)}</span>
+              </div>
+              <div style={{ fontSize: 10.5, color: 'var(--ios-label2)', lineHeight: 1.7, marginTop: 3 }}>
+                目前跟隨:<b>{ai.adaptive.follow_label}</b> · 已切換 {ai.adaptive.num_switches} 次
+                {ai.adaptive.learning_active
+                  ? ' · 學習中(每日評估近10日實績,領先>1pp才換,換倉扣0.7%)'
+                  : ` · 樣本累積中(已結 ${ai.adaptive.samples?.closed_trades ?? 0}/${ai.adaptive.samples?.required ?? 10} 筆,足夠後開始自動換規則)`}
+              </div>
+              {ai.adaptive.switches?.length > 0 && (
+                <div style={{ fontSize: 9.5, color: 'var(--ios-label3)', marginTop: 4, lineHeight: 1.6 }}>
+                  {ai.adaptive.switches.slice(-3).map((s, i) => (
+                    <div key={i}>{s.date}:{s.from} → <b>{s.to}</b>(近10日 {pctStr(s.from_trail_pct, 1)} vs {pctStr(s.to_trail_pct, 1)})</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <VariantChart mainCurve={ai.equity_curve} variants={ai.variants} adaptive={ai.adaptive} />
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) auto auto auto auto', gap: '6px 10px', fontSize: 11, alignItems: 'center' }}>
             <span style={{ fontSize: 9.5, color: 'var(--ios-label4)' }}>規則</span>
             <span style={{ fontSize: 9.5, color: 'var(--ios-label4)', textAlign: 'right' }}>報酬</span>
