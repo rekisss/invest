@@ -85,6 +85,34 @@ if (plan) {
   }
 }
 
+// 預測回顧:盤前預測(偏多/中性/偏空)用「掃描池等權當日報酬」驗證。
+// 等權日報酬取自基準曲線相鄰兩點的差(累計值相減,小數值下近似日報酬)。
+const ph = data.predictionHistory || []
+const benchCurve = ai.benchmark?.curve || []
+if (ph.length && benchCurve.length >= 2) {
+  const dayRet = {}
+  for (let i = 1; i < benchCurve.length; i++) {
+    dayRet[benchCurve[i].date] = Math.round((benchCurve[i].ret_pct - benchCurve[i - 1].ret_pct) * 100) / 100
+  }
+  const isHit = (label, r) => {
+    if (label === '偏多' || label === '看多') return r > 0
+    if (label === '偏空' || label === '看空') return r < 0
+    return Math.abs(r) <= 0.4 // 中性:當日等權漲跌在 ±0.4% 內算命中
+  }
+  let hits = 0, total = 0, todayLine = null
+  for (const p of ph) {
+    const r = dayRet[p.date]
+    if (r == null || !p.xgb_label) continue
+    total++
+    const ok = isHit(p.xgb_label, r)
+    if (ok) hits++
+    if (p.date === asOf) todayLine = `今日 ${p.xgb_label} → 實際 ${pct(r)} ${ok ? '✅' : '❌'}`
+  }
+  if (total > 0) {
+    lines.push(`🔮 預測回顧:${todayLine ? todayLine + ' · ' : ''}近${total}日命中 ${hits}/${total}(${Math.round(hits / total * 100)}%)`)
+  }
+}
+
 // 規則實驗室:目前領先的規則
 if (Array.isArray(ai.variants) && ai.variants.length) {
   const all = [{ label: '主帳戶', return_pct: ai.return_pct }, ...ai.variants]

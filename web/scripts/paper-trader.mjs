@@ -24,6 +24,8 @@ export const DEFAULT_CONFIG = {
                            //   (掃描收盤後才完成,次日開盤才是真人跟單拿得到的價)
   trailingStop: null,      // 例 0.08 = 從進場後最高點回落 8% 出場(收緊固定停損)
                            //   takeProfit 可設 null 停用停利,搭配移動停損讓利潤跑
+  buyGate: null,           // (day)=>bool:回傳 false 的掃描日不進新單(出場照常)。
+                           //   例:盤前預測偏空日不買。null = 不過濾
 }
 
 // klineFor(sid) -> ascending [{time, open, high, low, close}] or null/undefined
@@ -176,7 +178,8 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
     }
 
     // 2) buys — only on scan days, fill open slots with top entry-signal picks
-    if (scanDates.has(day)) {
+    //    (buyGate 為 false 的日子跳過進場決策;既有持倉的出場檢查不受影響)
+    if (scanDates.has(day) && (!cfg.buyGate || cfg.buyGate(day))) {
       const held = new Set(Object.keys(positions))
       const picks = (scans[day].top_stocks || [])
         .filter(s => s.entry_signal && !held.has(String(s.stock_id)))
