@@ -37,4 +37,6 @@ jobs:
       - name: 產生並發送日報
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # AI 操盤手札(顯示層;無金鑰時自動跳過,不影響日報其餘內容)
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: node web/scripts/daily-report.mjs

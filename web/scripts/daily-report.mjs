@@ -113,6 +113,66 @@ if (ph.length && benchCurve.length >= 2) {
   }
 }
 
+// 持倉相關新聞(確定性關鍵字比對:新聞標題含持倉/明日補進的股名或代號)
+const watchStocks = [
+  ...(ai.positions || []).map(p => ({ id: String(p.stock_id), name: p.name || '' })),
+  ...((plan?.buys) || []).map(b => ({ id: String(b.stock_id), name: b.name || '' })),
+]
+const newsList = data.news || []
+const relatedNews = []
+for (const n of newsList) {
+  const t = n.title || ''
+  const hit = watchStocks.find(w => (w.name && w.name.length >= 2 && t.includes(w.name)) || t.includes(w.id))
+  if (hit && !relatedNews.some(x => x.title === t)) relatedNews.push({ title: t, stock: hit })
+  if (relatedNews.length >= 3) break
+}
+if (relatedNews.length) {
+  lines.push(`📰 持倉相關新聞:${relatedNews.map(n => `【${n.stock.name || n.stock.id}】${n.title.slice(0, 36)}`).join(' / ')}`)
+}
+
+// 🧠 AI 操盤手札:用 Claude 把當天的事實寫成 3-4 句人話復盤(顯示層;
+// 交易決策仍是 100% 確定性規則,LLM 只解讀、不參與任何買賣判斷)。
+// 無金鑰或呼叫失敗時靜默跳過,日報其餘內容不受影響。
+const AI_KEY = process.env.ANTHROPIC_API_KEY || ''
+if (AI_KEY && !DRY) {
+  try {
+    const facts = {
+      日期: asOf,
+      總資產: ai.equity, 報酬pct: ai.return_pct,
+      大盤基準pct: bench?.return_pct ?? null,
+      今日平倉: closedToday.map(t => `${t.name} ${t.reason} ${t.ret_pct}%`),
+      今日新進: openedToday.map(p => `${p.name} @${p.entry}`),
+      持倉數: ai.positions?.length ?? 0,
+      明日補進: (plan?.buys || []).map(b => `${b.name} 分${b.entry_score}`),
+      明日預測: (data.predictionHistory || []).find(p => p.date > asOf)?.xgb_label || null,
+      持倉相關新聞: relatedNews.map(n => n.title.slice(0, 50)),
+    }
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 30000)
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { 'x-api-key': AI_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 400,
+        messages: [{
+          role: 'user',
+          content: `你是一位謹慎的台股操盤手。根據以下今日事實,寫一段今晚的操盤手札(繁體中文、最多120字、2-4句)。只能使用給定事實,不得捏造任何數字或消息;不得有「保證獲利」之類的敘述;語氣專業冷靜,聚焦「今天發生什麼、明天注意什麼」。直接輸出手札內容,不要任何開頭語或標題。\n\n事實:${JSON.stringify(facts)}`,
+        }],
+      }),
+    })
+    clearTimeout(timer)
+    if (res.ok) {
+      const out = await res.json()
+      const text = (out.content?.[0]?.text || '').trim().replace(/\s*\n+\s*/g, ' ')
+      if (text) lines.push(`🧠 AI手札:${text.slice(0, 300)}`)
+    } else {
+      console.warn(`AI 手札跳過:HTTP ${res.status}`)
+    }
+  } catch (e) { console.warn(`AI 手札跳過:${e.message}`) }
+}
+
 // 規則實驗室:目前領先的規則 + 自我學習帳戶動態
 if (Array.isArray(ai.variants) && ai.variants.length) {
   const all = [{ label: '主帳戶', return_pct: ai.return_pct }, ...ai.variants]
