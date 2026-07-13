@@ -132,7 +132,10 @@ export default function App() {
     else setLoading(true)
     setError(null)
 
-    const doFullLoad = () => fetch(`${BASE}data.json?t=${Date.now()}`)
+    // bypassSwCache(fresh=1):meta.json 已確認伺服器有新版時使用——SW 對
+    // data.json 是 stale-while-revalidate,一般請求會先拿到舊快取;fresh=1
+    // 讓 SW 走網路優先,保證這次抓回來的就是新版。
+    const doFullLoad = (bypassSwCache = false) => fetch(`${BASE}data.json?t=${Date.now()}${bypassSwCache ? '&fresh=1' : ''}`)
       .then(r => { if (!r.ok) throw new Error(r.status); return r.json() })
       .then(d => {
         setData(d)
@@ -140,6 +143,21 @@ export default function App() {
         setLoading(false)
         setRefreshing(false)
         if (isRefresh) setRefreshCount(c => c + 1)
+        // 首次載入拿到的可能是 SW 舊快取(先秒開再說)。立刻用 meta.json
+        // (network-first、幾百 bytes)驗證版本,發現伺服器已有新版就以
+        // fresh=1 重抓換上——把「開頁看到舊資料」的窗口從等 5 分鐘定時
+        // 刷新縮到幾秒,解決「資料明明部署了、手機卻一直是舊的」。
+        if (!isRefresh && !bypassSwCache) {
+          fetch(`${BASE}meta.json?t=${Date.now()}`)
+            .then(r => (r.ok ? r.json() : null))
+            .then(meta => {
+              if (meta?.data_generated_at && meta.data_generated_at !== lastGeneratedAtRef.current) {
+                setRefreshing(true)
+                doFullLoad(true)
+              }
+            })
+            .catch(() => {})
+        }
       })
       .catch(e => { setError(e.message); setLoading(false); setRefreshing(false) })
 
@@ -161,9 +179,10 @@ export default function App() {
           setRefreshCount(c => c + 1)
           return
         }
-        return doFullLoad()
+        // meta 已確認有新版 → fresh=1 繞過 SW 舊快取,保證抓到新資料
+        return doFullLoad(true)
       })
-      .catch(doFullLoad)
+      .catch(() => doFullLoad())
   }, [])
 
   useEffect(() => { loadData(false) }, [loadData])
