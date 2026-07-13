@@ -1,7 +1,7 @@
 {
-  "date": "2026-07-10",
-  "generated_at": "08:01",
-  "xgb_prob_up": 0.429,
+  "date": "2026-07-13",
+  "generated_at": "08:02",
+  "xgb_prob_up": 0.409,
   "xgb_label": "偏空",
   "market_data": {
     "vix": null,
@@ -12,20 +12,20 @@
     "futures_net": -80730.0,
     "night_change": 481.0,
     "pcr": null,
-    "taiex_rsi": 51.78484626465148,
-    "macd_hist": -548.6230285437773,
+    "taiex_rsi": 51.784846290705794,
+    "macd_hist": -548.6230286898899,
     "dist_ma20": -0.7729611958292137,
     "dist_ma60": 6.414987581712306,
     "taiex_ret_5d": -2.7955135489936334,
     "taiex_ret_20d": 5.679441293569876,
     "buyback_count": 0,
-    "disposition_count": 20,
+    "disposition_count": 34,
     "jpy_ret": null,
     "arkk_ret": null,
     "hyg_ret": null,
     "night_trend": "↑ 偏強",
-    "market_revenue_yoy": 0.1051,
-    "market_foreign_holding_chg": -3.9092
+    "market_revenue_yoy": 0.1414,
+    "market_foreign_holding_chg": -3.7858
   },
   "regime": {
     "label": "double_whipsaw",
@@ -61,7 +61,7 @@
     ]
   },
   "news_sentiment": {
-    "market_impact": 0.14,
+    "market_impact": 0.27,
     "key_events": [],
     "bullish_count": 0,
     "bearish_count": 0
