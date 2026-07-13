@@ -46,6 +46,24 @@ self.addEventListener('fetch', (event) => {
   // 404/500 存起來會讓離線 fallback 重播錯誤頁。
   if (url.pathname.endsWith('/data.json')) {
     const key = new Request(url.origin + url.pathname)
+    // fresh=1:App 已先用 meta.json(network-first)確認伺服器有新版資料,
+    // 這次要的就是新版——走網路優先,失敗才回退快取。沒有這個通道的話,
+    // App 發現資料舊了重抓,仍會拿到下面 stale-while-revalidate 的舊快取
+    // (背景更新的 20MB+ 還沒下載完),使用者就會卡在舊資料上。
+    if (url.searchParams.get('fresh') === '1') {
+      event.respondWith(
+        fetch(req)
+          .then((res) => {
+            if (res.ok) {
+              const copy = res.clone()
+              caches.open(CACHE).then((c) => c.put(key, copy))
+            }
+            return res
+          })
+          .catch(() => caches.match(key).then((hit) => hit || Response.error()))
+      )
+      return
+    }
     event.respondWith(
       caches.match(key).then((cached) => {
         const network = fetch(req)
