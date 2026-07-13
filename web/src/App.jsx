@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback, lazy, Suspen
 import { animate } from 'animejs'
 import Overview from './components/Overview.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
-import { animateTabIn, installPressFeedback, springBackX } from './utils/animeUtils.js'
+import { animateTabIn, installPressFeedback } from './utils/animeUtils.js'
 import { getStockHistories } from './utils/histCache.js'
 
 // Lazy-load non-landing tabs so the initial bundle only contains Overview
@@ -293,61 +293,9 @@ export default function App() {
   }
 
   // ── 全域按鈕按壓回饋(anime.js spring,事件委派一次安裝)──
+  // 內容區「滑動切換分頁」已依使用者回饋移除(容易誤觸);切換分頁請用
+  // 底部 tab bar(點擊或在 bar 上拖曳)。
   useEffect(() => installPressFeedback(), [])
-
-  // ── 內容區左右滑動切換分頁(跟手位移 + 過門檻換頁 / 未過門檻彈回)──
-  // 保護:直向捲動優先(先判定主軸)、觸點在橫向可捲元素或 fixed 覆蓋層
-  // (modal)內時不啟動,避免搶手勢。
-  const contentWrapRef = useRef(null)
-  const swipeRef = useRef({ x0: 0, y0: 0, axis: null, dx: 0, skip: false })
-
-  const swipeShouldSkip = (target) => {
-    let el = target
-    const stopAt = contentWrapRef.current
-    while (el && el !== stopAt && el !== document.body) {
-      if (el.scrollWidth > el.clientWidth + 4) {
-        const ox = getComputedStyle(el).overflowX
-        if (ox === 'auto' || ox === 'scroll') return true
-      }
-      if (getComputedStyle(el).position === 'fixed') return true
-      el = el.parentElement
-    }
-    return false
-  }
-
-  const onContentTouchStart = (e) => {
-    if (e.touches.length !== 1) { swipeRef.current.skip = true; return }
-    const t = e.touches[0]
-    swipeRef.current = { x0: t.clientX, y0: t.clientY, axis: null, dx: 0, skip: swipeShouldSkip(e.target) }
-  }
-  const onContentTouchMove = (e) => {
-    const s = swipeRef.current
-    if (s.skip) return
-    const t = e.touches[0]
-    const dx = t.clientX - s.x0, dy = t.clientY - s.y0
-    if (s.axis == null) {
-      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return
-      s.axis = Math.abs(dx) > Math.abs(dy) * 1.4 ? 'x' : 'y'
-    }
-    if (s.axis !== 'x') return
-    s.dx = dx
-    // 跟手位移(阻尼 0.35、上限 ±56px),讓滑動有「拉得動」的實感
-    const el = contentWrapRef.current
-    if (el) el.style.transform = `translateX(${Math.max(-56, Math.min(56, dx * 0.35))}px)`
-  }
-  const onContentTouchEnd = () => {
-    const s = swipeRef.current
-    const el = contentWrapRef.current
-    if (s.skip || s.axis !== 'x' || !el) { swipeRef.current.axis = null; return }
-    const target = s.dx <= -70 ? tabIdx + 1 : s.dx >= 70 ? tabIdx - 1 : null
-    if (target != null && target >= 0 && target < TABS.length) {
-      el.style.transform = '' // 新分頁由 AnimatedTabPanel 自己 spring 進場
-      goToTab(target)
-    } else {
-      springBackX(el) // 未過門檻或已在邊界 → 彈回
-    }
-    swipeRef.current = { x0: 0, y0: 0, axis: null, dx: 0, skip: false }
-  }
 
   // ── Drag across the bottom tab bar to switch tabs (connected feel) ──
   const tabbarRef = useRef(null)
@@ -485,14 +433,8 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── Content(左右滑動可切換分頁)────────────────────────── */}
-      <div
-        ref={contentWrapRef}
-        onTouchStart={onContentTouchStart}
-        onTouchMove={onContentTouchMove}
-        onTouchEnd={onContentTouchEnd}
-        style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', touchAction: 'pan-y' }}
-      >
+      {/* ── Content ──────────────────────────────────────────────── */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {loading && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 12 }}>
             <div style={{ width: 32, height: 32, border: '3px solid var(--ios-fill3)', borderTop: '3px solid var(--ios-blue)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />

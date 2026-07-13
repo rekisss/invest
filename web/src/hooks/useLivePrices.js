@@ -7,6 +7,7 @@
 // Poll interval: 60 s during market open, no poll after close (prices are final)
 
 import { useState, useEffect, useMemo } from 'react'
+import { getFugleKey, fetchFugleQuotes } from '../utils/fugleLive'
 
 // raw.githubusercontent.com is NOT subject to the api.github.com 60-req/hr limit,
 // so it's safe to poll on every refresh (the cache is now a primary source).
@@ -266,17 +267,25 @@ export function useLivePrices(stockIds, { pollInterval = 60000, refreshTrigger =
         // feed (more accurate) and, crucially, after close TWSE's STOCK_DAY_ALL goes
         // stale while the cache holds the correct close. Browser quotes fill symbols
         // the cache lacks, and serve as the fallback when the cache is missing/stale.
-        const [official, cache] = await Promise.all([
+        // 富果層(有金鑰時):盤中最準的即時源。TWSE STOCK_DAY_ALL 是日收盤
+        // 資料集,盤中會給前一日價 → 有富果時讓它蓋過其他所有來源。
+        const [official, cache, fugle] = await Promise.all([
           fetchTWSEOfficial(ids).catch(() => ({})),
           fetchPriceCache(ids).catch(() => ({ stocks: {}, isStale: true, updatedAt: null })),
+          (open && getFugleKey()) ? fetchFugleQuotes(ids).catch(() => ({})) : Promise.resolve({}),
         ])
         if (cancelled) return
 
         const cacheStocks = cache.stocks || {}
         const cacheFresh  = Object.keys(cacheStocks).length > 0 && !cache.isStale
         const officialHas = Object.keys(official).length > 0
+        const fugleHas    = Object.keys(fugle).length > 0
 
-        if (cacheFresh) {
+        if (fugleHas) {
+          setPrices(prev => ({ ...prev, ...official, ...(cacheFresh ? cacheStocks : {}), ...fugle }))
+          setLastUpdate(new Date())
+          setError(null)
+        } else if (cacheFresh) {
           setPrices(prev => ({ ...prev, ...official, ...cacheStocks }))
           setLastUpdate(new Date())
           setError(open ? null : '今日收盤')
