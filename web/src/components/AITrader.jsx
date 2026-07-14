@@ -203,6 +203,41 @@ function exitText(t, maxHold) {
   return t.reason
 }
 
+// 每晚日報(由 daily_report workflow 寫進 repo)— 最新一份展開,歷史可點開
+function ReportCard({ reports }) {
+  const [openIdx, setOpenIdx] = useState(0)
+  if (!Array.isArray(reports) || reports.length === 0) return null
+  return (
+    <Card title="📜 操盤日報" hint={`每晚 21:30 產生 · ${reports.length} 份`}>
+      {reports.map((r, i) => {
+        const open = openIdx === i
+        return (
+          <div key={r.date} style={{ borderTop: i > 0 ? '0.5px solid var(--ios-sep)' : 'none' }}>
+            <div onClick={() => setOpenIdx(cur => (cur === i ? null : i))}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', cursor: 'pointer' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--ios-blue)' }}>{r.date}</span>
+              {i === 0 && <span style={{ fontSize: 9, color: 'var(--ios-green)', fontWeight: 700 }}>最新</span>}
+              <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--ios-label4)' }}>{open ? '▲' : '▼'}</span>
+            </div>
+            {open && (
+              <div style={{ paddingBottom: 10, display: 'grid', gap: 5 }}>
+                {(r.lines || []).map((line, j) => (
+                  <div key={j} style={{
+                    fontSize: 11.5, lineHeight: 1.65, color: 'var(--ios-label2)',
+                    background: line.startsWith('🧠') ? 'rgba(10,132,255,0.07)' : 'var(--ios-fill4)',
+                    borderRadius: 8, padding: '7px 10px',
+                    border: line.startsWith('🧠') ? '0.5px solid rgba(10,132,255,0.2)' : 'none',
+                  }}>{line}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </Card>
+  )
+}
+
 export default function AITrader({ data }) {
   const ai = data?.aiTrader
   const [openTrade, setOpenTrade] = useState(null)
@@ -267,6 +302,8 @@ export default function AITrader({ data }) {
       </div>
 
       <LiveTraderPanel ai={ai} scan={data?.scans?.[data?.dates?.[0]]} />
+
+      <ReportCard reports={data?.aiReports} />
 
       {ai.plan && (
         <Card title="📋 明日作戰計畫" hint={`依 ${ai.plan.as_of} 掃描推導`}>

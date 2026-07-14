@@ -1889,8 +1889,16 @@ if (aiTrader) {
   }
 }
 
+// AI 操盤日報歷史(由 daily_report workflow 每晚寫入;檔案不存在時為空)
+let aiReports = []
+try {
+  const raw = JSON.parse(readFileSync(resolve(__dirname, '../../output/ai_reports.json'), 'utf-8'))
+  if (Array.isArray(raw)) aiReports = raw.slice(0, 14)
+  if (aiReports.length) console.log(`AI reports: ${aiReports.length} 份(最新 ${aiReports[0]?.date})`)
+} catch { /* 尚無日報 */ }
+
 const dataGeneratedAt = new Date().toISOString()
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
 
 // Small sidecar so the frontend can cheaply check "did anything change?" (a few

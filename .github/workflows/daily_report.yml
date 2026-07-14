@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   report:
@@ -26,8 +26,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          sparse-checkout: web/scripts/daily-report.mjs
-          sparse-checkout-cone-mode: false
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -39,4 +38,19 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           # AI 操盤手札(顯示層;無金鑰時自動跳過,不影響日報其餘內容)
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # 同步寫進 repo → 部署後顯示在網頁 AI操盤分頁(保留 14 份歷史)
+          REPORT_FILE: output/ai_reports.json
         run: node web/scripts/daily-report.mjs
+
+      - name: Commit 日報(推上 main 會自動觸發 Pages 部署)
+        continue-on-error: true
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          git add output/ai_reports.json || true
+          git diff --staged --quiet || git commit -m "report: AI操盤日報 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST"
+          for i in 1 2 3 4; do
+            git push && break
+            sleep $((i * 5))
+            git pull --rebase -X theirs origin main || true
+          done
