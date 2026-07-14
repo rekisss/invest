@@ -20,6 +20,9 @@ on:
       - 盤中事件監控 (09:00–13:30 CST)
       - 更新新聞語料庫
       - K線全量補跑（手動觸發）
+      # 日報 workflow 用內建 token push,不會觸發 push 事件(GitHub 防遞迴),
+      # 要列在這裡日報才會上到網頁
+      - AI操盤日報
     types: [completed]
 
 permissions:
