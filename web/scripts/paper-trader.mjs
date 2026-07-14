@@ -145,8 +145,16 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
       }
       if (bar) {
         // conservative: if both stop and target touched same bar, assume stop first
-        if (bar.low != null && bar.low <= sl) { exitPrice = sl; reason = 'stop' }
-        else if (tp != null && bar.high != null && bar.high >= tp) { exitPrice = tp; reason = 'take_profit' }
+        // 跳空修正:開盤已穿越觸發價時,真實成交是「開盤價」不是觸發價——
+        // 跳空跌破停損要用更差的開盤價成交(消除高估績效的樂觀偏誤);
+        // 跳空漲過停利用更好的開盤價成交(同一原則,對稱處理)。
+        if (bar.low != null && bar.low <= sl) {
+          exitPrice = (bar.open > 0 && bar.open < sl) ? bar.open : sl
+          reason = 'stop'
+        } else if (tp != null && bar.high != null && bar.high >= tp) {
+          exitPrice = (bar.open > 0 && bar.open > tp) ? bar.open : tp
+          reason = 'take_profit'
+        }
       }
       if (exitPrice == null && holdDays >= cfg.maxHold) {
         exitPrice = priceOn(sid, day); reason = 'time'
