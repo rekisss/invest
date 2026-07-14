@@ -195,6 +195,29 @@ lines.push(`-# 虛擬帳戶紀錄,非投資建議;正式數據以網頁 AI操盤
 const content = lines.join('\n').slice(0, 1990) // Discord 2000 字上限
 console.log('--- 日報內容 ---\n' + content)
 
+// 存檔供網頁顯示(Pages):REPORT_FILE 存在時,把日報(去掉 Discord 專用
+// 尾註)寫進滾動歷史檔,由 workflow commit 回 repo → build-data 收進
+// data.json → AI操盤分頁的「📜 操盤日報」卡。保留最近 14 份。
+const REPORT_FILE = process.env.REPORT_FILE || ''
+if (REPORT_FILE) {
+  try {
+    let history = []
+    try { history = JSON.parse(readFileSync(REPORT_FILE, 'utf8')) } catch { /* 首次 */ }
+    if (!Array.isArray(history)) history = []
+    const entry = {
+      date: asOf,
+      generated_at: new Date().toISOString(),
+      lines: lines.filter(l => !l.startsWith('-#')),
+    }
+    history = [entry, ...history.filter(h => h.date !== asOf)].slice(0, 14)
+    const { writeFileSync, mkdirSync } = await import('node:fs')
+    const { dirname } = await import('node:path')
+    mkdirSync(dirname(REPORT_FILE), { recursive: true })
+    writeFileSync(REPORT_FILE, JSON.stringify(history, null, 1), 'utf8')
+    console.log(`日報已寫入 ${REPORT_FILE}(歷史 ${history.length} 份)`)
+  } catch (e) { console.warn(`日報存檔失敗:${e.message}`) }
+}
+
 if (DRY) { console.log('[DRY] 不發送'); process.exit(0) }
 if (!WEBHOOK) { console.error('缺 DISCORD_WEBHOOK_URL,結束。'); process.exit(0) }
 try {
