@@ -167,9 +167,12 @@ export async function fetchFugleQuotes(ids) {
   const idSet = new Set(ids.map(String))
   const out = {}
   const mapQuote = (d) => {
-    const price = d.closePrice ?? d.lastPrice ?? d.lastTrade?.price
+    const price = d.lastPrice ?? d.closePrice ?? d.lastTrade?.price
     if (!(price > 0)) return null
-    const prev = d.previousClose ?? null
+    const prev = d.previousClose ?? d.referencePrice ?? null
+    // volume 需為「股」(LiveMonitor 以 /1000 轉張)。逐檔 quote 為 total.tradeVolume,
+    // snapshot 為扁平 tradeVolume——兩種來源都涵蓋,避免其中一種永遠顯示 0 張。
+    const vol = d.total?.tradeVolume ?? d.tradeVolume ?? null
     return {
       price: Number(price),
       prevClose: prev != null ? Number(prev) : null,
@@ -178,14 +181,29 @@ export async function fetchFugleQuotes(ids) {
       high: d.highPrice != null ? Number(d.highPrice) : null,
       low: d.lowPrice != null ? Number(d.lowPrice) : null,
       open: d.openPrice != null ? Number(d.openPrice) : null,
-      volume: d.total?.tradeVolume != null ? Number(d.total.tradeVolume) : 0,
+      volume: vol != null ? Number(vol) : 0,
       time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Taipei' }),
       isSnapshot: false,
       source: 'fugle',
     }
   }
+  const perSymbol = async () => {
+    // 逐檔 quote(並行,守住免費方案 60 req/min → 上限 20 檔/輪)。並行比循序快
+    // 一個數量級(10 檔:10 次循序來回 → 1 波並行)。
+    const syms = [...idSet].slice(0, 20)
+    const results = await Promise.all(syms.map(sym =>
+      fetch(`https://api.fugle.tw/marketdata/v1.0/stock/intraday/quote/${sym}`, {
+        headers: { 'X-API-KEY': apikey },
+      }).then(r => r.ok ? r.json() : null).then(j => [sym, j ? mapQuote(j) : null]).catch(() => [sym, null])
+    ))
+    for (const [sym, q] of results) if (q) out[sym] = q
+    return out
+  }
   try {
-    // 1) snapshot:兩個請求涵蓋上市+上櫃全部
+    // 小清單(≤20 檔)直接逐檔並行——手機常見情境(持倉/自選數檔),避免每輪
+    // 下載整個市場快照(TSE+OTC 各 ~2MB)浪費流量、拖慢更新。
+    if (idSet.size <= 20) return await perSymbol()
+    // 大清單:snapshot 兩個請求涵蓋上市+上櫃全部,比逐檔省請求數。
     let snapshotOk = false
     for (const market of ['TSE', 'OTC']) {
       const res = await fetch(`https://api.fugle.tw/marketdata/v1.0/stock/snapshot/quotes/${market}`, {
@@ -202,15 +220,7 @@ export async function fetchFugleQuotes(ids) {
       snapshotOk = true
     }
     if (snapshotOk && Object.keys(out).length) return out
-    // 2) 逐檔 quote(前 15 檔)
-    for (const sym of [...idSet].slice(0, 15)) {
-      const res = await fetch(`https://api.fugle.tw/marketdata/v1.0/stock/intraday/quote/${sym}`, {
-        headers: { 'X-API-KEY': apikey },
-      })
-      if (!res.ok) continue
-      const q = mapQuote(await res.json())
-      if (q) out[sym] = q
-    }
+    return await perSymbol() // snapshot 不可用 → 逐檔並行(前 20 檔)
   } catch { /* CORS / 網路失敗 → 空物件,讓既有層接手 */ }
   return out
 }

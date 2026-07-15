@@ -110,7 +110,8 @@ async function quoteOf(sym) {
     })
     if (!res.ok) { console.warn(`  ${sym} 報價失敗 HTTP ${res.status}`); return null }
     const d = await res.json()
-    const price = d.closePrice ?? d.lastPrice ?? d.lastTrade?.price
+    // 盤中 lastPrice 為最新成交價;closePrice 收盤後才有定值(與前端一致)
+    const price = d.lastPrice ?? d.closePrice ?? d.lastTrade?.price
     return price > 0 ? Number(price) : null
   } catch (e) { console.warn(`  ${sym} 報價失敗:${e.message}`); return null }
 }
