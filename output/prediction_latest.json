@@ -1,31 +1,31 @@
 {
-  "date": "2026-07-14",
-  "generated_at": "08:01",
-  "xgb_prob_up": 0.552,
-  "xgb_label": "偏多",
+  "date": "2026-07-15",
+  "generated_at": "08:02",
+  "xgb_prob_up": 0.419,
+  "xgb_label": "偏空",
   "market_data": {
     "vix": null,
     "sp500_ret": null,
     "nasdaq_ret": null,
     "sox_ret": null,
     "tsm_adr_ret": null,
-    "futures_net": -81066.0,
-    "night_change": -476.0,
+    "futures_net": -83390.0,
+    "night_change": 237.0,
     "pcr": null,
-    "taiex_rsi": 52.08014798097253,
-    "macd_hist": -591.1352094191643,
-    "dist_ma20": -0.93186729027811,
-    "dist_ma60": 6.16463213502858,
-    "taiex_ret_5d": -2.7796525853480025,
-    "taiex_ret_20d": 5.857577272023229,
+    "taiex_rsi": 48.18986328502552,
+    "macd_hist": -697.8501357452742,
+    "dist_ma20": -2.4069860259412823,
+    "dist_ma60": 4.359647468839367,
+    "taiex_ret_5d": -3.6892410061091563,
+    "taiex_ret_20d": 1.9510376488591996,
     "buyback_count": 0,
-    "disposition_count": 31,
+    "disposition_count": 37,
     "jpy_ret": null,
     "arkk_ret": null,
     "hyg_ret": null,
     "night_trend": "↓ 走弱",
-    "market_revenue_yoy": 0.1446,
-    "market_foreign_holding_chg": -2.9606
+    "market_revenue_yoy": 0.1403,
+    "market_foreign_holding_chg": -3.4643
   },
   "regime": {
     "label": "double_whipsaw",
@@ -36,32 +36,37 @@
     "main_scenario": "VIX=nan 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
     "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
     "danger_signals": [
-      "外資空單極重（-81,066口），軋空風險高",
-      "夜盤缺口 -476pt 過大，易反轉"
+      "外資空單極重（-83,390口），軋空風險高",
+      "夜盤缺口 +237pt 過大，易反轉"
     ],
     "forbidden_actions": [
-      "禁止追空缺口超過200pt",
+      "禁止追多缺口超過200pt",
       "禁止反彈高點追多（軋空陷阱）"
     ]
   },
   "risk": {
-    "level": "medium",
-    "score": 0.4,
+    "level": "high",
+    "score": 0.5,
     "factors": [
       {
         "name": "外資空單極重",
-        "description": "-81,066口，軋空/崩潰雙向風險",
+        "description": "-83,390口，軋空/崩潰雙向風險",
         "action": "避免重押方向"
       },
       {
         "name": "夜盤大缺口",
-        "description": "夜盤 -476pt，開盤後可能快速反轉",
+        "description": "夜盤 +237pt，開盤後可能快速反轉",
         "action": "禁止追缺口超過200pt"
+      },
+      {
+        "name": "結算日",
+        "description": "2026-07-15 台指期結算日，波動加大",
+        "action": "降低槓桿"
       }
     ]
   },
   "news_sentiment": {
-    "market_impact": 0.11,
+    "market_impact": 0.44,
     "key_events": [],
     "bullish_count": 0,
     "bearish_count": 0
