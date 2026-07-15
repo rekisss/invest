@@ -66,7 +66,7 @@ function SettingsBox({ onClose }) {
   )
 }
 
-export default function LiveTraderPanel({ ai, scan }) {
+export default function LiveTraderPanel({ ai, scan, onQuotes }) {
   const [quotes, setQuotes] = useState({})          // sym -> {price, changePct, time}
   const [wsStatus, setWsStatus] = useState(getFugleKey() ? 'connecting' : 'no_key')
   const [events, setEvents] = useState([])           // today's triggered alerts (this session)
@@ -124,7 +124,9 @@ export default function LiveTraderPanel({ ai, scan }) {
   const onQuote = useCallback((sym, q) => {
     quotesRef.current = { ...quotesRef.current, [sym]: q }
     setQuotes(quotesRef.current)
+    onQuotes?.(quotesRef.current) // 分享給父層(AITrader 持倉卡即時估值)
     evaluate(sym, q.price)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [evaluate])
 
   // Connect / disconnect with market hours; re-check every 30s so the panel
