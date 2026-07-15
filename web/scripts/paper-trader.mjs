@@ -26,6 +26,10 @@ export const DEFAULT_CONFIG = {
                            //   takeProfit 可設 null 停用停利,搭配移動停損讓利潤跑
   buyGate: null,           // (day)=>bool:回傳 false 的掃描日不進新單(出場照常)。
                            //   例:盤前預測偏空日不買。null = 不過濾
+  // 訊號擂台開關(預設 = 原策略:top_stocks 池、要進場訊號、依 entry_score)
+  pickPool: 'top',         // 'top' = top_stocks | 'filter' = 全掃描池 filter_stocks
+  requireEntrySignal: true, // false = 不要求 entry_signal(改用 rankBy 純排序選股)
+  rankBy: null,            // (s)=>number 自訂排序分數(越大越優先)。null = entry_score
 }
 
 // klineFor(sid) -> ascending [{time, open, high, low, close}] or null/undefined
@@ -189,9 +193,13 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
     //    (buyGate 為 false 的日子跳過進場決策;既有持倉的出場檢查不受影響)
     if (scanDates.has(day) && (!cfg.buyGate || cfg.buyGate(day))) {
       const held = new Set(Object.keys(positions))
-      const picks = (scans[day].top_stocks || [])
-        .filter(s => s.entry_signal && !held.has(String(s.stock_id)))
-        .sort((a, b) => (b.entry_score || 0) - (a.entry_score || 0))
+      const pool = cfg.pickPool === 'filter'
+        ? (scans[day].filter_stocks?.length ? scans[day].filter_stocks : scans[day].top_stocks || [])
+        : (scans[day].top_stocks || [])
+      const score = cfg.rankBy || ((s) => s.entry_score || 0)
+      const picks = pool
+        .filter(s => (cfg.requireEntrySignal === false || s.entry_signal) && !held.has(String(s.stock_id)))
+        .sort((a, b) => score(b) - score(a))
       if (cfg.execution === 'next_open') {
         // queue picks for a later open; cap the queue at the free slots
         const pendingIds = new Set(pending.map(q => q.sid))
