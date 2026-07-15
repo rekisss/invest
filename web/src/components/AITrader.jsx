@@ -85,7 +85,7 @@ function EquityCurve({ curve, startCapital, benchmark }) {
 }
 
 // ── rule-lab overlay chart:主帳戶 + 變體 ret_pct 疊線 ───────────────────────
-const VARIANT_COLORS = { next_open: '#FF9F0A', bear_filter: '#5E5CE6', trail8: '#BF5AF2', tp12: '#64D2FF', tp5: '#FFD60A', pos3: '#FF6482' }
+const VARIANT_COLORS = { next_open: '#FF9F0A', rs_mom: '#66D4CF', bear_filter: '#5E5CE6', trail8: '#BF5AF2', tp12: '#64D2FF', tp5: '#FFD60A', pos3: '#FF6482' }
 function VariantChart({ mainCurve, variants, adaptive }) {
   const path = useMemo(() => {
     if (!mainCurve || mainCurve.length < 2) return null
@@ -289,7 +289,8 @@ export default function AITrader({ data }) {
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-        <Stat label="勝率" value={s.win_rate == null ? '—' : `${s.win_rate}%`} color={colorOf(s.win_rate != null ? s.win_rate - 50 : null)} sub={`${s.num_trades} 筆已結`} />
+        <Stat label="勝率" value={s.win_rate == null ? '—' : `${s.win_rate}%`} color={colorOf(s.win_rate != null ? s.win_rate - 50 : null)}
+          sub={s.num_trades < 30 ? `樣本累積中 ${s.num_trades}/30 筆` : `${s.num_trades} 筆已結`} />
         <Stat label="平均報酬" value={pctStr(s.avg_ret)} color={colorOf(s.avg_ret)} />
         <Stat label="最大回落" value={s.max_drawdown_pct == null ? '—' : `-${s.max_drawdown_pct}%`} color={DOWN} />
         <Stat label="操作天數" value={s.trading_days} sub={`自 ${c.start_date}`} />

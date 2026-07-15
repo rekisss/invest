@@ -1743,21 +1743,9 @@ for (const d of dates) {
   }
 }
 
-// ── Trim historical filter_stocks:只保留最近 N 天的全掃描池 ─────────────────
-// filter_stocks(~1500 支 × ~40 欄)每個日期約 1–1.5MB,30 個日期累計 ~30MB,
-// 是 data.json 最大的體積來源(手機端下載/解析卡頓的主因)。前端只在近期日期
-// 使用全池(全池篩選、熱圖、LiveMonitor、DailyActionBrief 昨日基準);更舊的
-// 日期會自動退回 top_stocks(Dashboard/Overview 既有 fallback,不會壞版面)。
-// 注意:所有會讀舊日期全池的 build 期計算(strategyAccuracy、return_1d、產業
-// 補齊、T86 回填)都在上面完成了,這裡只影響序列化輸出。
-const FILTER_STOCKS_KEEP_DATES = 6
-let trimmedFilterDates = 0
-for (const d of dates.slice(FILTER_STOCKS_KEEP_DATES)) {
-  if (scans[d]?.filter_stocks) { delete scans[d].filter_stocks; trimmedFilterDates++ }
-}
-if (trimmedFilterDates) console.log(`filter_stocks trimmed: kept ${Math.min(FILTER_STOCKS_KEEP_DATES, dates.length)} recent dates, dropped ${trimmedFilterDates} historical dates`)
-
 // ── AI paper-trader — deterministic replay of the strategy as a virtual trader ──
+// (歷史 filter_stocks 的體積修剪移到 AI trader 之後執行:「強勢股輪動」變體
+//  的選股池要吃到每個歷史日期的全池)
 let aiTrader = null
 try {
   aiTrader = simulatePaperTrader({
@@ -1780,6 +1768,10 @@ if (aiTrader) {
   const isBearish = (label) => label === '偏空' || label === '看空'
   const VARIANTS = [
     { id: 'next_open', label: '次日開盤買進', note: '貼近實單可執行價', config: { execution: 'next_open' } },
+    // 訊號擂台:完全不用 entry_score/進場訊號,直接買全掃描池「市場 RS 最強」
+    // 的股票(0-100 百分位,越高越強),出場紀律相同。用來驗證可信度審計的
+    // 核心疑問:entry_score 是否輸給簡單的相對強勢動能。
+    { id: 'rs_mom', label: '強勢股輪動', note: '不看訊號,買全池RS最強', config: { pickPool: 'filter', requireEntrySignal: false, rankBy: (s) => s.market_rs_rank || 0 } },
     { id: 'bear_filter', label: '避開偏空日', note: '盤前預測偏空不進場', config: { buyGate: (day) => !isBearish(predLabelByDate[day]) } },
     { id: 'trail8', label: '移動停損 8%', note: '不停利,讓利潤跑', config: { takeProfit: null, trailingStop: 0.08 } },
     { id: 'tp12', label: '停利 12%', note: '拉高目標', config: { takeProfit: 0.12 } },
@@ -1817,6 +1809,21 @@ if (aiTrader) {
     }
   } catch (e) { console.log(`AI trader adaptive: skipped (${e.message})`) }
   delete aiTrader.exit_dates // 只在 build 期用,不進 data.json
+}
+
+// ── Trim historical filter_stocks:只保留最近 N 天的全掃描池 ─────────────────
+// filter_stocks(~1500 支 × ~40 欄)每個日期約 1–1.5MB,30 個日期累計 ~30MB,
+// 是 data.json 最大的體積來源(手機端下載/解析卡頓的主因)。前端只在近期日期
+// 使用全池;更舊的日期自動退回 top_stocks(既有 fallback)。所有會讀舊日期
+// 全池的 build 期計算(strategyAccuracy、return_1d、產業補齊、T86 回填、
+// AI trader 的強勢股輪動變體)都在上面完成了,這裡只影響序列化輸出。
+{
+  const FILTER_STOCKS_KEEP_DATES = 6
+  let trimmedFilterDates = 0
+  for (const d of dates.slice(FILTER_STOCKS_KEEP_DATES)) {
+    if (scans[d]?.filter_stocks) { delete scans[d].filter_stocks; trimmedFilterDates++ }
+  }
+  if (trimmedFilterDates) console.log(`filter_stocks trimmed: kept ${Math.min(FILTER_STOCKS_KEEP_DATES, dates.length)} recent dates, dropped ${trimmedFilterDates} historical dates`)
 }
 
 // 大盤基準:掃描池等權日報酬複利。AI 就是從這個池子選股,等權基準比加權指數
