@@ -617,7 +617,7 @@ export default function LiveMonitor({ data }) {
     [liveDataBase, streamPrices, streamConnected]
   )
 
-  const countdown = useCountdown(liveTime, 60000)
+  const countdown = useCountdown(liveTime, 15000) // 與 useLivePrices 盤中 15s 輪詢同步
 
   // Separate index fetch via Yahoo Finance → GH Actions cache fallback
   useEffect(() => {
@@ -846,6 +846,10 @@ export default function LiveMonitor({ data }) {
                     ? (countdown != null && countdown > 0 ? `${countdown}s 後更新` : '更新中…')
                     : '收盤報價'}
                 </span>
+                {/* 富果直連生效時亮標,方便判斷「價格跟不上」是哪一層的問題 */}
+                {mktOpen && Object.values(liveDataBase || {}).some(p => p?.source === 'fugle') && (
+                  <span style={{ color: '#66D4CF', fontWeight: 700 }}>⚡富果</span>
+                )}
               </>
             ) : (
               <span style={{ color: 'var(--ios-label4)' }}>等待報價…</span>

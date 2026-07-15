@@ -323,7 +323,11 @@ export function useLivePrices(stockIds, { pollInterval = 60000, refreshTrigger =
     // Only poll during market hours
     // interval 常駐（不只開盤時建立）：盤前載入的分頁才會在 09:00 開盤後自動開始
     // 輪詢。收盤時段 run() 會早退（見上方 closedFetchDone），空轉成本可忽略。
-    const t = setInterval(run, pollInterval)
+    // 輪詢加密到 15 秒(原 60 秒,頁面價位跟不上盤中波動)。固定用短間隔:
+    // 收盤/盤前 run() 抓一次最終定價後就早退(closedFetchDone),不會多耗
+    // 流量;開盤瞬間(09:00)同一個 interval 自動開始即時更新,不用重整頁面。
+    // 富果批次層 15 秒一輪 = snapshot 2 req × 4/min,遠低於 60 req/min 上限。
+    const t = setInterval(run, Math.min(pollInterval, 15000))
     return () => { cancelled = true; if (t) clearInterval(t) }
   }, [idsKey, pollInterval, refreshTrigger])
 
