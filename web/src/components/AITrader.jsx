@@ -242,6 +242,9 @@ export default function AITrader({ data }) {
   const ai = data?.aiTrader
   const [openTrade, setOpenTrade] = useState(null)
   const [openPos, setOpenPos] = useState(null)
+  // 盤中即時報價(由 LiveTraderPanel 的 WS/REST 分享上來)。持倉卡的 price
+  // 是每晚 build 的收盤價,盤中會過期——有即時價時蓋過顯示並標 ⚡。
+  const [liveQuotes, setLiveQuotes] = useState({})
   const toggleTrade = useCallback((i) => setOpenTrade(cur => (cur === i ? null : i)), [])
   const togglePos = useCallback((i) => setOpenPos(cur => (cur === i ? null : i)), [])
 
@@ -286,6 +289,19 @@ export default function AITrader({ data }) {
           <span>現金 NT${nf(ai.cash)}</span>
           <span>持股市值 NT${nf(ai.invested)}</span>
         </div>
+        {(() => {
+          // 盤中即時估值:任何持倉有即時價時,用即時價重算總資產(標 ⚡)
+          const hasLive = ai.positions?.some(p => liveQuotes[String(p.stock_id)]?.price != null)
+          if (!hasLive) return null
+          const liveInvested = ai.positions.reduce((a, p) => a + p.shares * (liveQuotes[String(p.stock_id)]?.price ?? p.price ?? p.entry), 0)
+          const liveEquity = Math.round(ai.cash + liveInvested)
+          const liveRet = (liveEquity / c.start_capital - 1) * 100
+          return (
+            <div style={{ fontSize: 10.5, marginTop: 4, color: '#66D4CF', fontWeight: 700 }}>
+              ⚡ 盤中即時估值 NT${nf(liveEquity)}(<span style={{ color: colorOf(liveRet) }}>{pctStr(liveRet, 2)}</span>)
+            </div>
+          )
+        })()}
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -302,7 +318,7 @@ export default function AITrader({ data }) {
         <Stat label="總交易成本" value={s.total_fees == null ? '—' : `$${nf(s.total_fees)}`} sub="手續費+稅" />
       </div>
 
-      <LiveTraderPanel ai={ai} scan={data?.scans?.[data?.dates?.[0]]} />
+      <LiveTraderPanel ai={ai} scan={data?.scans?.[data?.dates?.[0]]} onQuotes={setLiveQuotes} />
 
       <ReportCard reports={data?.aiReports} />
 
@@ -355,16 +371,22 @@ export default function AITrader({ data }) {
           const open = openPos === i
           const signals = parseSignals(p.entry_reason)
           const hasDetail = p.entry_score != null || signals.length > 0 || p.cost != null
-          const unrealized = p.price != null && p.entry != null && p.shares != null
-            ? Math.round((p.price - p.entry) * p.shares) : null
-          const toTp = (p.tp_price != null && p.price > 0) ? (p.tp_price / p.price - 1) * 100 : null
+          // 盤中有即時價(LiveTraderPanel 分享)就用即時價估值並標 ⚡;
+          // 否則用每晚 build 的收盤價(p.price)——修正「持倉價位盤中過期」
+          const livePx = liveQuotes[String(p.stock_id)]?.price
+          const px = livePx ?? p.price
+          const pnlPct = (px != null && p.entry > 0) ? (px / p.entry - 1) * 100 : p.pnl_pct
+          const unrealized = px != null && p.entry != null && p.shares != null
+            ? Math.round((px - p.entry) * p.shares) : null
+          const toTp = (p.tp_price != null && px > 0) ? (p.tp_price / px - 1) * 100 : null
           return (
             <div key={p.stock_id} style={{ borderTop: '0.5px solid var(--ios-sep)' }}>
               <div onClick={() => togglePos(i)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', cursor: 'pointer' }}>
                 <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--ios-blue)' }}>{p.stock_id}</span>
                 <span style={{ fontSize: 12, color: 'var(--ios-label)' }}>{p.name}</span>
                 <span style={{ fontSize: 10, color: 'var(--ios-label4)' }}>{nf(p.shares)}股 @{p.entry} · {p.hold_days}天</span>
-                <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: colorOf(p.pnl_pct) }}>{pctStr(p.pnl_pct, 1)}</span>
+                {livePx != null && <span style={{ fontSize: 9, color: '#66D4CF', fontWeight: 700 }}>⚡{livePx}</span>}
+                <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: colorOf(pnlPct) }}>{pctStr(pnlPct, 1)}</span>
                 <span style={{ fontSize: 9, color: 'var(--ios-label4)' }}>{open ? '▲' : '▼'}</span>
               </div>
               {open && (
@@ -376,7 +398,7 @@ export default function AITrader({ data }) {
                     {p.tp_price != null && <> · 停利 <b style={{ color: UP, fontFamily: 'var(--font-mono)' }}>{p.tp_price}</b>{toTp != null ? `(還差 ${pctStr(toTp, 1)})` : ''}</>}
                     {p.sl_price != null && <> · 停損 <b style={{ color: DOWN, fontFamily: 'var(--font-mono)' }}>{p.sl_price}</b></>}
                     <> · 期滿 {c.max_hold} 日</>
-                    {unrealized != null && <div style={{ fontSize: 10, color: colorOf(unrealized), marginTop: 2 }}>未實現損益 NT${nf(unrealized)}(現價 {p.price})</div>}
+                    {unrealized != null && <div style={{ fontSize: 10, color: colorOf(unrealized), marginTop: 2 }}>未實現損益 NT${nf(unrealized)}(現價 {px}{livePx != null ? ' ⚡即時' : ''})</div>}
                   </div>
                 </div>
               )}
