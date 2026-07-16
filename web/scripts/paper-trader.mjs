@@ -62,16 +62,18 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
     return i == null ? null : b[i]
   }
 
-  // Trading calendar: union of all bar dates >= startDate that appear in scans
-  // or in any held stock's kline. Simplest robust source: the scan dates plus
-  // every kline date within range from the picks' stocks. We use the union of
-  // kline dates across all scan-listed stocks so exits can fire between scans.
+  // Trading calendar: union of all bar dates >= startDate from every scan-listed
+  // stock's kline, PLUS the scan dates themselves. 重要:不設「≤最新掃描日」的
+  // 上限——延伸到最新 K 線日,讓持倉估值/出場檢查用「最新收盤」而非「最新掃描
+  // 日收盤」。這修正「持倉慢一天」:K 線每交易日盤後(~14:13)更新,獨立於
+  // 掃描是否跑完;買進仍只發生在掃描日(下方 scanDates.has 守門),故延伸的
+  // 交易日只做續抱→出場與逐日 mark-to-market,不會憑空進場。
   const calendar = new Set()
   for (const d of scanDates) {
     if (d < cfg.startDate) continue
     for (const s of (scans[d].top_stocks || [])) {
       const b = barsOf(s.stock_id); if (!b) continue
-      for (const bar of b) if (bar.time >= cfg.startDate && bar.time <= d) calendar.add(bar.time)
+      for (const bar of b) if (bar.time >= cfg.startDate) calendar.add(bar.time)
     }
   }
   // also include all scan dates themselves
