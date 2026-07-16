@@ -243,6 +243,20 @@ jobs:
             const stockCount = Object.keys(prices).filter(k => !k.startsWith('_')).length;
             console.log(`Total cached: ${stockCount} stocks, indices: ${!!prices['_idx_t00']}`);
 
+            // 防退化守門:若本輪抓到的檔數異常少(TWSE/TPEX 暫時抓壞),不要用
+            // 這份殘缺資料覆蓋上一份完整快取——保留舊的,等下一輪 API 恢復。
+            // 門檻取「上一份的一半」與 20 檔的較大者,避免正常波動誤判。
+            let prevCount = 0;
+            try {
+              const prev = JSON.parse(fs.readFileSync('live_prices.json', 'utf8'));
+              prevCount = Object.keys(prev.prices || {}).filter(k => !k.startsWith('_')).length;
+            } catch { /* 首次或壞檔 */ }
+            const floor = Math.max(20, Math.floor(prevCount / 2));
+            if (stockCount < floor && prevCount > 0) {
+              console.warn(`本輪僅 ${stockCount} 檔(< 門檻 ${floor},上一份 ${prevCount} 檔)→ 保留舊快取不覆蓋`);
+              return;
+            }
+
             fs.writeFileSync('live_prices.json', JSON.stringify({
               updatedAt: new Date().toISOString(),
               prices,
