@@ -286,7 +286,14 @@ export function useLivePrices(stockIds, { pollInterval = 60000, refreshTrigger =
           setLastUpdate(new Date())
           setError(null)
         } else if (cacheFresh) {
-          setPrices(prev => ({ ...prev, ...official, ...cacheStocks }))
+          // 開盤中:cache(可能是 Shioaji 券商即時盤)優先蓋過 official
+          //   (STOCK_DAY_ALL 盤中回的是昨日收盤,最不即時)。
+          // 收盤後:反過來,新抓的 official(STOCK_DAY_ALL 已結算=今日收盤)
+          //   才權威;cache 可能停在盤中/昨日值(如聯電 07-15=166 vs 07-16=160),
+          //   讓 official 蓋過 cache,修正「持倉現價慢一天」。
+          setPrices(prev => open
+            ? ({ ...prev, ...official, ...cacheStocks })
+            : ({ ...prev, ...cacheStocks, ...official }))
           setLastUpdate(new Date())
           setError(open ? null : '今日收盤')
         } else if (officialHas) {
