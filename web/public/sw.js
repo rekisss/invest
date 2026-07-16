@@ -5,7 +5,9 @@
 // bundle for a launch or more after each deploy — fixed here.
 // v3: data.json 曾以「完整 URL(含 ?t=時間戳)」當快取 key，每次載入囤一份 ~25MB
 // 且離線查找永遠 miss;升版讓 activate 清掉 v2 累積的肥大快取。
-const CACHE = 'invest-pwa-v3'
+// v4:強制汰換卡在舊版 data.json 的客戶端。activate 會刪掉所有非本版快取,
+// 下次開頁 data.json 一律回網路重抓最新(修「持倉顯示前天價格」的快取殘留)。
+const CACHE = 'invest-pwa-v4'
 const BASE = '/invest/'
 const SHELL = [BASE, BASE + 'index.html', BASE + 'manifest.json', BASE + 'icon.svg']
 
