@@ -187,6 +187,27 @@ export default function App() {
 
   useEffect(() => { loadData(false) }, [loadData])
 
+  // 強制更新:清掉所有快取 + 反註冊 Service Worker 後硬重載。給「手機卡在
+  // 舊版、連自動更新邏輯都拿不到」的最後手段——一鍵保證抓到最新部署。
+  const [hardBusy, setHardBusy] = useState(false)
+  const hardRefresh = useCallback(async () => {
+    setHardBusy(true)
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map(k => caches.delete(k)))
+      }
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(regs.map(r => r.unregister()))
+      }
+    } catch { /* 清不掉就直接硬重載 */ }
+    // 帶時間戳繞過 HTTP 快取,確保連 index.html 都重抓
+    const u = new URL(window.location.href)
+    u.searchParams.set('_fresh', Date.now())
+    window.location.replace(u.toString())
+  }, [])
+
   useEffect(() => {
     const handler = () => setTabIdx(TABS.findIndex(t => t.key === 'studio'))
     window.addEventListener('navigate-to-studio', handler)
@@ -408,10 +429,12 @@ export default function App() {
         <button
           className="ios-refresh-btn"
           onClick={() => loadData(true)}
+          onContextMenu={(e) => { e.preventDefault(); hardRefresh() }}
           disabled={refreshing}
+          title="點一下：刷新資料　·　長按/右鍵:強制更新(清快取)"
         >
-          <span style={{ display: 'inline-block', animation: refreshing ? 'spin 0.8s linear infinite' : 'none', fontSize: 14 }}>↻</span>
-          {refreshing ? '更新中' : '刷新'}
+          <span style={{ display: 'inline-block', animation: (refreshing || hardBusy) ? 'spin 0.8s linear infinite' : 'none', fontSize: 14 }}>↻</span>
+          {hardBusy ? '清快取' : refreshing ? '更新中' : '刷新'}
         </button>
       </div>
 
@@ -431,6 +454,18 @@ export default function App() {
         >
           {TAB_TITLES[tab]}
         </div>
+        {/* 資料日期 + 強制更新:讓使用者一眼看到載入的是哪天的資料,舊了可一鍵
+            清快取重載(手機卡舊版的最後手段) */}
+        {data?.dates?.[0] && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, fontSize: 10.5, color: 'var(--ios-label4)' }}>
+            <span>資料日期 {data.dates[0]}</span>
+            <button
+              onClick={hardRefresh}
+              disabled={hardBusy}
+              style={{ background: 'none', border: '0.5px solid var(--ios-sep)', borderRadius: 6, padding: '1px 7px', fontSize: 10, color: 'var(--ios-blue)', cursor: 'pointer' }}
+            >{hardBusy ? '清快取中…' : '強制更新'}</button>
+          </div>
+        )}
       </div>
 
       {/* ── Content ──────────────────────────────────────────────── */}
