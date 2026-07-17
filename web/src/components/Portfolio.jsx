@@ -364,7 +364,12 @@ export default function Portfolio({ data }) {
 
   // ── Computed entries ──────────────────────────────────────────────────────
   const entries = useMemo(() => Object.entries(positions).map(([id, p], i) => {
-    const curPrice  = livePrices[id] ?? getScanClose(id, scanRowsCached) ?? getHistoriesClose(id, { stocks: compareHistories })
+    // 已結算收盤(來自今日掃描/K 線,build 時就是今日收盤,不依賴瀏覽器抓
+    // TWSE)。開盤中:即時價優先(真即時);收盤後:已結算收盤優先——即時
+    // 報價快取可能停在盤中/昨日值(如聯電 07-15=166 vs 07-16 實際收盤 160),
+    // 收盤後用掃描/K 線的今日收盤才正確,根治「持倉現價慢一天」。
+    const settledClose = getScanClose(id, scanRowsCached) ?? getHistoriesClose(id, { stocks: compareHistories })
+    const curPrice  = mktOpen ? (livePrices[id] ?? settledClose) : (settledClose ?? livePrices[id])
     const scan      = getScanInfo(id, scanRowsCached)
     const pnlPct    = curPrice ? (curPrice - p.buyPrice) / p.buyPrice * 100 : null
     const pnlAmt    = curPrice ? (curPrice - p.buyPrice) * p.qty : null
@@ -377,7 +382,7 @@ export default function Portfolio({ data }) {
     const stopLoss  = tg.stopLoss
     const takePrft  = tg.takePrft
     return { id, p, curPrice, scan, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft, targets: tg, color: PALETTE[i % PALETTE.length] }
-  }), [positions, scanRowsCached, livePrices, compareHistories])
+  }), [positions, scanRowsCached, livePrices, compareHistories, mktOpen])
 
   const sorted = useMemo(() => [...entries].sort((a, b) => {
     if (sortBy === 'pnlPct') return (b.pnlPct ?? -Infinity) - (a.pnlPct ?? -Infinity)
