@@ -335,139 +335,159 @@
     "name": "冠星-KY",
     "close": 101.0,
     "entry_score": 1134.0,
-    "ret_1d": 0.0297
+    "ret_1d": 0.0297,
+    "ret_5d": -0.0099
    },
    {
     "stock_id": "4764",
     "name": "雙鍵",
     "close": 336.0,
     "entry_score": 1098.9,
-    "ret_1d": -0.0997
+    "ret_1d": -0.0997,
+    "ret_5d": -0.119
    },
    {
     "stock_id": "2356",
     "name": "英業達",
     "close": 69.8,
     "entry_score": 1073.6,
-    "ret_1d": -0.0731
+    "ret_1d": -0.0731,
+    "ret_5d": -0.1619
    },
    {
     "stock_id": "5471",
     "name": "松翰",
     "close": 67.6,
     "entry_score": 1051.2,
-    "ret_1d": -0.0385
+    "ret_1d": -0.0385,
+    "ret_5d": -0.1731
    },
    {
     "stock_id": "4995",
     "name": "晶達",
     "close": 46.05,
     "entry_score": 1032.8,
-    "ret_1d": 0.0141
+    "ret_1d": 0.0141,
+    "ret_5d": -0.0185
    },
    {
     "stock_id": "5880",
     "name": "合庫金",
     "close": 25.15,
     "entry_score": 1014.2,
-    "ret_1d": 0.002
+    "ret_1d": 0.002,
+    "ret_5d": 0.008
    },
    {
     "stock_id": "1615",
     "name": "大山",
     "close": 46.4,
     "entry_score": 1010.7,
-    "ret_1d": 0.0097
+    "ret_1d": 0.0097,
+    "ret_5d": 0.0194
    },
    {
     "stock_id": "5876",
     "name": "上海商銀",
     "close": 42.8,
     "entry_score": 1006.2,
-    "ret_1d": 0.0315
+    "ret_1d": 0.0315,
+    "ret_5d": 0.0561
    },
    {
     "stock_id": "3026",
     "name": "禾伸堂",
     "close": 1005.0,
     "entry_score": 984.2,
-    "ret_1d": -0.0995
+    "ret_1d": -0.0995,
+    "ret_5d": -0.3134
    },
    {
     "stock_id": "6024",
     "name": "群益期",
     "close": 64.5,
     "entry_score": 976.6,
-    "ret_1d": -0.0109
+    "ret_1d": -0.0109,
+    "ret_5d": 0.0
    },
    {
     "stock_id": "3558",
     "name": "神準",
     "close": 145.0,
     "entry_score": 972.3,
-    "ret_1d": -0.0138
+    "ret_1d": -0.0138,
+    "ret_5d": -0.1103
    },
    {
     "stock_id": "8039",
     "name": "台虹",
     "close": 154.0,
     "entry_score": 963.3,
-    "ret_1d": 0.0974
+    "ret_1d": 0.0974,
+    "ret_5d": 0.25
    },
    {
     "stock_id": "1718",
     "name": "中纖",
     "close": 14.2,
-    "entry_score": 957.9
+    "entry_score": 957.9,
+    "ret_5d": -0.0387
    },
    {
     "stock_id": "6202",
     "name": "盛群",
     "close": 73.3,
     "entry_score": 956.5,
-    "ret_1d": -0.0423
+    "ret_1d": -0.0423,
+    "ret_5d": -0.2128
    },
    {
     "stock_id": "8091",
     "name": "翔名",
     "close": 295.0,
     "entry_score": 945.7,
-    "ret_1d": -0.0593
+    "ret_1d": -0.0593,
+    "ret_5d": -0.0915
    },
    {
     "stock_id": "1418",
     "name": "東華",
     "close": 19.2,
     "entry_score": 943.7,
-    "ret_1d": -0.0365
+    "ret_1d": -0.0365,
+    "ret_5d": -0.0443
    },
    {
     "stock_id": "3709",
     "name": "鑫聯大投控",
     "close": 79.6,
     "entry_score": 934.8,
-    "ret_1d": 0.0226
+    "ret_1d": 0.0226,
+    "ret_5d": -0.0704
    },
    {
     "stock_id": "6288",
     "name": "聯嘉",
     "close": 24.25,
     "entry_score": 933.8,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": 0.0
    },
    {
     "stock_id": "5519",
     "name": "隆大",
     "close": 34.45,
     "entry_score": 930.6,
-    "ret_1d": -0.1611
+    "ret_1d": -0.1611,
+    "ret_5d": -0.1872
    },
    {
     "stock_id": "2495",
     "name": "普安",
     "close": 52.5,
     "entry_score": 894.2,
-    "ret_1d": -0.0971
+    "ret_1d": -0.0971,
+    "ret_5d": -0.2495
    }
   ]
  },
@@ -913,121 +933,266 @@
     "stock_id": "5871",
     "name": "中租-KY",
     "close": 120.5,
-    "entry_score": 1085.3
+    "entry_score": 1085.3,
+    "ret_1d": -0.0083
    },
    {
     "stock_id": "8028",
     "name": "昇陽半導體",
     "close": 350.0,
-    "entry_score": 1079.6
+    "entry_score": 1079.6,
+    "ret_1d": -0.1
    },
    {
     "stock_id": "4736",
     "name": "泰博",
     "close": 130.0,
-    "entry_score": 1066.3
+    "entry_score": 1066.3,
+    "ret_1d": -0.0077
    },
    {
     "stock_id": "2849",
     "name": "安泰銀",
     "close": 14.9,
-    "entry_score": 1016.0
+    "entry_score": 1016.0,
+    "ret_1d": 0.0034
    },
    {
     "stock_id": "3178",
     "name": "公準",
     "close": 70.7,
-    "entry_score": 1014.0
+    "entry_score": 1014.0,
+    "ret_1d": 0.0
    },
    {
     "stock_id": "5306",
     "name": "桂盟",
     "close": 99.2,
-    "entry_score": 1014.0
+    "entry_score": 1014.0,
+    "ret_1d": -0.0333
    },
    {
     "stock_id": "5880",
     "name": "合庫金",
     "close": 25.5,
-    "entry_score": 997.5
+    "entry_score": 997.5,
+    "ret_1d": -0.0059
    },
    {
     "stock_id": "6141",
     "name": "柏承",
     "close": 43.75,
-    "entry_score": 990.0
+    "entry_score": 990.0,
+    "ret_1d": -0.0697
    },
    {
     "stock_id": "1723",
     "name": "中碳",
     "close": 89.7,
-    "entry_score": 977.6
+    "entry_score": 977.6,
+    "ret_1d": -0.0167
    },
    {
     "stock_id": "2348",
     "name": "海悅",
     "close": 79.9,
-    "entry_score": 974.7
+    "entry_score": 974.7,
+    "ret_1d": -0.0238
    },
    {
     "stock_id": "6288",
     "name": "聯嘉",
     "close": 24.25,
-    "entry_score": 933.8
+    "entry_score": 933.8,
+    "ret_1d": 0.0
    },
    {
     "stock_id": "5876",
     "name": "上海商銀",
     "close": 44.95,
-    "entry_score": 918.8
+    "entry_score": 918.8,
+    "ret_1d": 0.0056
    },
    {
     "stock_id": "4807",
     "name": "日成-KY",
     "close": 42.8,
-    "entry_score": 909.6
+    "entry_score": 909.6,
+    "ret_1d": -0.0514
    },
    {
     "stock_id": "6870",
     "name": "騰雲",
     "close": 330.0,
-    "entry_score": 899.4
+    "entry_score": 899.4,
+    "ret_1d": -0.0303
    },
    {
     "stock_id": "5434",
     "name": "崇越",
     "close": 596.0,
-    "entry_score": 897.0
+    "entry_score": 897.0,
+    "ret_1d": -0.057
    },
    {
     "stock_id": "6949",
     "name": "沛爾生醫-創",
     "close": 1105.0,
-    "entry_score": 893.8
+    "entry_score": 893.8,
+    "ret_1d": -0.0679
    },
    {
     "stock_id": "6732",
     "name": "昇佳電子",
     "close": 214.0,
-    "entry_score": 890.0
+    "entry_score": 890.0,
+    "ret_1d": -0.0958
    },
    {
     "stock_id": "4770",
     "name": "上品",
     "close": 226.5,
-    "entry_score": 880.6
+    "entry_score": 880.6,
+    "ret_1d": -0.0552
    },
    {
     "stock_id": "8150",
     "name": "南茂",
     "close": 122.5,
-    "entry_score": 877.3
+    "entry_score": 877.3,
+    "ret_1d": -0.098
    },
    {
     "stock_id": "1231",
     "name": "聯華食",
     "close": 91.9,
-    "entry_score": 859.8
+    "entry_score": 859.8,
+    "ret_1d": -0.0141
+   }
+  ]
+ },
+ {
+  "date": "2026-07-17",
+  "stocks": [
+   {
+    "stock_id": "6811",
+    "name": "宏碁資訊",
+    "close": 239.5,
+    "entry_score": 1083.1
+   },
+   {
+    "stock_id": "5450",
+    "name": "寶聯通",
+    "close": 17.05,
+    "entry_score": 1051.4
+   },
+   {
+    "stock_id": "6288",
+    "name": "聯嘉",
+    "close": 24.25,
+    "entry_score": 993.8
+   },
+   {
+    "stock_id": "5871",
+    "name": "中租-KY",
+    "close": 119.5,
+    "entry_score": 951.2
+   },
+   {
+    "stock_id": "5876",
+    "name": "上海商銀",
+    "close": 45.2,
+    "entry_score": 941.6
+   },
+   {
+    "stock_id": "1216",
+    "name": "統一",
+    "close": 80.0,
+    "entry_score": 939.0
+   },
+   {
+    "stock_id": "1726",
+    "name": "永記",
+    "close": 80.5,
+    "entry_score": 886.6
+   },
+   {
+    "stock_id": "5880",
+    "name": "合庫金",
+    "close": 25.35,
+    "entry_score": 877.2
+   },
+   {
+    "stock_id": "4133",
+    "name": "亞諾法",
+    "close": 22.35,
+    "entry_score": 876.5
+   },
+   {
+    "stock_id": "6277",
+    "name": "宏正",
+    "close": 80.5,
+    "entry_score": 874.0
+   },
+   {
+    "stock_id": "4736",
+    "name": "泰博",
+    "close": 129.0,
+    "entry_score": 871.2
+   },
+   {
+    "stock_id": "2867",
+    "name": "三商壽",
+    "close": 8.98,
+    "entry_score": 863.7
+   },
+   {
+    "stock_id": "2105",
+    "name": "正新",
+    "close": 33.6,
+    "entry_score": 854.2
+   },
+   {
+    "stock_id": "1232",
+    "name": "大統益",
+    "close": 168.5,
+    "entry_score": 829.0
+   },
+   {
+    "stock_id": "6024",
+    "name": "群益期",
+    "close": 64.5,
+    "entry_score": 824.0
+   },
+   {
+    "stock_id": "2701",
+    "name": "萬企",
+    "close": 10.85,
+    "entry_score": 815.0
+   },
+   {
+    "stock_id": "1718",
+    "name": "中纖",
+    "close": 13.65,
+    "entry_score": 814.6
+   },
+   {
+    "stock_id": "4807",
+    "name": "日成-KY",
+    "close": 40.6,
+    "entry_score": 795.1
+   },
+   {
+    "stock_id": "6505",
+    "name": "台塑化",
+    "close": 81.3,
+    "entry_score": 794.0
+   },
+   {
+    "stock_id": "6598",
+    "name": "ABC-KY",
+    "close": 27.65,
+    "entry_score": 784.0
    }
   ]
  }
