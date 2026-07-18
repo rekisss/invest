@@ -657,11 +657,26 @@ export default function PredictionPanel({ prediction, history = [] }) {
             if (Math.abs((xgb_prob_up ?? 0.5) - 0.5) < 0.05) reasons.push('機率接近五五波')
             const rwin = regime?.win_rate == null ? null : (regime.win_rate > 1 ? regime.win_rate : regime.win_rate * 100)
             if (rwin != null && rwin < 40) reasons.push('此盤勢歷史勝率偏低')
-            if (!reasons.length) return null
+            // 模型 vs 明確空方事實的分歧:夜盤重挫且外資大空單,模型卻看多。
+            // 這種日子(如 07-17:夜盤 −735、期空 −84,453 口,模型 64% 看多,
+            // 且美股特徵缺失)方向判讀不可信——紅色警告直接放標題卡,不讓
+            // 大大的「看多」誤導(詳細逐條驗證在下方交叉驗證卡)。
+            const hardBear = (md.night_change != null && md.night_change < -150 ? 1 : 0)
+              + (md.futures_net != null && md.futures_net < -30000 ? 1 : 0)
+            const divergeBull = hardBear >= 2 && (xgb_prob_up ?? 0.5) >= 0.55
             return (
-              <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(255,159,10,0.1)', border: '0.5px solid rgba(255,159,10,0.35)', borderRadius: 10, fontSize: 12, color: 'var(--ios-yellow)', fontWeight: 600, lineHeight: 1.5 }}>
-                ⚠️ 低信心：{reasons.join('、')} — 建議降低倉位、別當鐵口
-              </div>
+              <>
+                {divergeBull && (
+                  <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(255,51,64,0.1)', border: '0.5px solid rgba(255,51,64,0.4)', borderRadius: 10, fontSize: 12, color: 'var(--ios-red)', fontWeight: 700, lineHeight: 1.6 }}>
+                    🚨 模型看多,但夜盤重挫({Math.round(md.night_change)} 點)+ 外資期貨大空單({Math.round(md.futures_net).toLocaleString()} 口)——訊號與模型嚴重分歧,今日方向判讀不可信,建議只做風控不做方向
+                  </div>
+                )}
+                {reasons.length > 0 && (
+                  <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(255,159,10,0.1)', border: '0.5px solid rgba(255,159,10,0.35)', borderRadius: 10, fontSize: 12, color: 'var(--ios-yellow)', fontWeight: 600, lineHeight: 1.5 }}>
+                    ⚠️ 低信心：{reasons.join('、')} — 建議降低倉位、別當鐵口
+                  </div>
+                )}
+              </>
             )
           })()}
           {regime?.label_zh && (
