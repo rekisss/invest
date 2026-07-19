@@ -190,6 +190,61 @@ if (Array.isArray(ai.variants) && ai.variants.length) {
   lines.push(`🧪 規則排行第一:${top.label}(${pct(top.return_pct, 1)})${adaptiveText}`)
 }
 
+// 📅 本週總結:資料日是週五時(或 FORCE_WEEKLY=1 測試),附一段週回顧——
+// 權益週變化 vs 基準、本週平倉戰績、本週預測命中、自學切換。全部由
+// data.json 既有欄位算出,不需要新排程/新 workflow。
+const isFriday = new Date(`${asOf}T00:00:00Z`).getUTCDay() === 5
+if ((isFriday || process.env.FORCE_WEEKLY === '1') && Array.isArray(ai.equity_curve) && ai.equity_curve.length >= 2) {
+  const weekAgo = new Date(new Date(`${asOf}T00:00:00Z`).getTime() - 6 * 86400000).toISOString().slice(0, 10)
+  const curve = ai.equity_curve
+  const inWeek = curve.filter(p => p.date >= weekAgo && p.date <= asOf)
+  const prevPt = curve.filter(p => p.date < weekAgo).at(-1) || null
+  if (inWeek.length && (prevPt || inWeek.length >= 2)) {
+    const startEq = prevPt ? prevPt.equity : inWeek[0].equity
+    const endEq = inWeek.at(-1).equity
+    const wkRet = Math.round((endEq / startEq - 1) * 10000) / 100
+    // 基準同窗週報酬(累計水位相除)
+    let vsWk = ''
+    if (benchCurve.length >= 2) {
+      const bPrev = benchCurve.filter(p => p.date < weekAgo).at(-1)
+      const bIn = benchCurve.filter(p => p.date >= weekAgo && p.date <= asOf)
+      if (bIn.length) {
+        const s = 1 + (bPrev ? bPrev.ret_pct : bIn[0].ret_pct) / 100
+        const e = 1 + bIn.at(-1).ret_pct / 100
+        const benchWk = Math.round((e / s - 1) * 10000) / 100
+        const diff = Math.round((wkRet - benchWk) * 10) / 10
+        vsWk = ` · 基準週 ${pct(benchWk)} → ${diff >= 0 ? '領先' : '落後'} ${Math.abs(diff).toFixed(1)}pp`
+      }
+    }
+    const parts = [`本週 ${pct(wkRet)}${vsWk}`]
+    const wkTrades = (ai.trades || []).filter(t => t.exit_date >= weekAgo && t.exit_date <= asOf)
+    if (wkTrades.length) {
+      const wins = wkTrades.filter(t => t.ret_pct > 0).length
+      const pnl = wkTrades.reduce((a, t) => a + (t.pnl || 0), 0)
+      parts.push(`平倉 ${wkTrades.length} 筆(勝 ${wins},NT$${nf(pnl)})`)
+    }
+    if (ph.length && benchCurve.length >= 2) {
+      const dayRet = {}
+      for (let i = 1; i < benchCurve.length; i++) {
+        dayRet[benchCurve[i].date] = Math.round((benchCurve[i].ret_pct - benchCurve[i - 1].ret_pct) * 100) / 100
+      }
+      let wHits = 0, wTotal = 0
+      for (const p of ph) {
+        if (p.date < weekAgo || p.date > asOf) continue
+        const r = dayRet[p.date]
+        if (r == null || !p.xgb_label) continue
+        wTotal++
+        const bull = p.xgb_label.includes('多'), bear = p.xgb_label.includes('空')
+        if (bull ? r > 0 : bear ? r < 0 : Math.abs(r) <= 0.4) wHits++
+      }
+      if (wTotal > 0) parts.push(`預測命中 ${wHits}/${wTotal}`)
+    }
+    const wkSwitches = (ai.adaptive?.switches || []).filter(s => s.date >= weekAgo && s.date <= asOf)
+    if (wkSwitches.length) parts.push(`自學換規則 ${wkSwitches.length} 次(→${ai.adaptive.follow_label})`)
+    lines.push(`📅 本週總結:${parts.join(' · ')}`)
+  }
+}
+
 lines.push(`-# 虛擬帳戶紀錄,非投資建議;正式數據以網頁 AI操盤分頁為準`)
 
 const content = lines.join('\n').slice(0, 1990) // Discord 2000 字上限
