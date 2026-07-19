@@ -1,6 +1,7 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useLayoutEffect } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
+import { animateListRows } from '../utils/animeUtils'
 gsap.registerPlugin(useGSAP)
 
 const HIST_PAGE_SIZE = 20
@@ -291,6 +292,78 @@ function Tag({ text, color }) {
 }
 
 // Calibration analysis: actual win-rate per prediction confidence band
+// 預測回顧:盤前預測(偏多/中性/偏空)逐日對照「掃描池等權當日報酬」打分。
+// 與 Discord 日報的 🔮 預測回顧完全同一套判定(等權日報酬 = 基準曲線相鄰兩點
+// 累計值相減;中性 ±0.4% 內算命中),前端看到的命中率和日報數字一致。
+function PredictionReviewPanel({ history, benchCurve }) {
+  const listRef = useRef(null)
+  const rows = useMemo(() => {
+    const curve = benchCurve || []
+    if (curve.length < 2 || !history?.length) return []
+    const dayRet = {}
+    for (let i = 1; i < curve.length; i++) {
+      dayRet[curve[i].date] = Math.round((curve[i].ret_pct - curve[i - 1].ret_pct) * 100) / 100
+    }
+    const isHit = (label, r) => {
+      if (label === '偏多' || label === '看多') return r > 0
+      if (label === '偏空' || label === '看空') return r < 0
+      return Math.abs(r) <= 0.4
+    }
+    return history
+      .filter(p => p.date && p.xgb_label && dayRet[p.date] != null)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 14)
+      .map(p => ({
+        date: p.date,
+        label: p.xgb_label,
+        prob: p.xgb_prob_up,
+        ret: dayRet[p.date],
+        hit: isHit(p.xgb_label, dayRet[p.date]),
+      }))
+  }, [history, benchCurve])
+
+  useLayoutEffect(() => {
+    const el = listRef.current
+    if (!el || !rows.length) return
+    for (const r of el.querySelectorAll('[data-row]')) { r.style.opacity = '0' }
+    animateListRows(el)
+  }, [rows.length])
+
+  if (rows.length < 3) return null
+
+  const hits = rows.filter(r => r.hit).length
+  const hitPct = Math.round(hits / rows.length * 100)
+  const rateColor = hitPct >= 60 ? 'var(--ios-green)' : hitPct >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)'
+  const labelColor = (label) => label.includes('多') ? 'var(--ios-red)' : label.includes('空') ? 'var(--ios-green)' : 'var(--ios-yellow)'
+
+  return (
+    <Card title="🔮 預測回顧" accent={rateColor}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 24, fontWeight: 700, color: rateColor, fontFamily: 'var(--font-mono)', letterSpacing: '-0.5px' }}>{hitPct}%</span>
+        <span style={{ fontSize: 12, color: 'var(--ios-label2)' }}>近 {rows.length} 個可驗證交易日命中 {hits} 次</span>
+      </div>
+      <div ref={listRef}>
+        {rows.map(r => (
+          <div key={r.date} data-row style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '0.5px solid var(--ios-sep)' }}>
+            <span style={{ fontSize: 11, color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)', minWidth: 40 }}>{r.date.slice(5)}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: labelColor(r.label), minWidth: 34 }}>{r.label}</span>
+            {r.prob != null && (
+              <span style={{ fontSize: 10, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)', minWidth: 32 }}>{Math.round(r.prob * 100)}%</span>
+            )}
+            <span style={{ flex: 1, textAlign: 'right', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-mono)', color: r.ret > 0 ? 'var(--ios-red)' : r.ret < 0 ? 'var(--ios-green)' : 'var(--ios-label2)' }}>
+              {r.ret > 0 ? '+' : ''}{r.ret.toFixed(2)}%
+            </span>
+            <span style={{ fontSize: 13, minWidth: 20, textAlign: 'right' }}>{r.hit ? '✅' : '❌'}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 8, lineHeight: 1.5 }}>
+        實際 = 掃描池等權當日報酬(與 AI操盤基準、Discord 日報同一基準);中性預測在 ±0.4% 內算命中
+      </div>
+    </Card>
+  )
+}
+
 function CalibrationPanel({ history }) {
   const containerRef = useRef(null)
   const bands = useMemo(() => {
@@ -584,7 +657,7 @@ function HistoryRow({ entry }) {
   )
 }
 
-export default function PredictionPanel({ prediction, history = [] }) {
+export default function PredictionPanel({ prediction, history = [], benchCurve = [] }) {
   // NOTE: all hooks must run before the empty-state return — `prediction` can flip
   // from null to an object on the SAME mounted component (刷新 after the morning
   // prediction lands), and an early return above hooks would change the hook count
@@ -691,6 +764,9 @@ export default function PredictionPanel({ prediction, history = [] }) {
 
         {/* Probability trend across recent days */}
         <ProbTrend history={history} />
+
+        {/* Daily prediction vs actual scoreboard */}
+        <PredictionReviewPanel history={history} benchCurve={benchCurve} />
 
         {/* Calibration & error analysis */}
         <CalibrationPanel history={history} />
