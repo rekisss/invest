@@ -33,6 +33,10 @@ jobs:
           # 兩個 secret 擇一設定即可;都是 optional input,沒設的那個留空字串無妨。
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # 明確指定 API 可用的標準模型。不指定時新版 Claude Code 會解析到
+          # 「claude-opus-4-8[1m]」(1M context beta 別名),API 金鑰無此權限
+          # → 執行 788ms 即 is_error 失敗(2026-07-19 健檢 run 實例)。
+          claude_args: "--model claude-sonnet-5"
           # v1 使用 `prompt`;若你的 action 版本報「unknown input」,改成 `direct_prompt`。
           prompt: |
             請對這個台股 invest 專案做每日健檢。嚴格遵守 repo 根目錄 CLAUDE.md 的所有規則
