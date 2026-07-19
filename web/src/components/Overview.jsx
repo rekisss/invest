@@ -947,6 +947,43 @@ function SectorHeatmap({ stocks, onStockClick }) {
 }
 
 /* ── Main Export ─────────────────────────────────────────────────── */
+/* ── AI 交易員摘要卡(首頁)──────────────────────────────────────────────
+   一眼看到虛擬帳戶:報酬 vs 基準、自學帳戶跟隨誰、持倉數與明日動作;
+   點擊發 navigate-to-tab 事件跳到 AI操盤分頁。無 aiTrader 資料時不顯示。 */
+function AITraderMini({ ai }) {
+  if (!ai) return null
+  const up = (v) => v == null ? 'var(--ios-label3)' : v >= 0 ? 'var(--ios-red)' : 'var(--ios-green)'
+  const pct = (v, d = 2) => v == null ? '—' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(d)}%`
+  const diff = ai.benchmark?.return_pct != null ? Math.round((ai.return_pct - ai.benchmark.return_pct) * 100) / 100 : null
+  const planBuys = ai.plan?.buys || []
+  const nextAction = planBuys.length
+    ? `明日補進 ${planBuys[0].name || planBuys[0].stock_id}${planBuys.length > 1 ? ` 等 ${planBuys.length} 檔` : ''}`
+    : (ai.plan?.free_slots === 0 ? '滿倉續抱' : '明日無新單,續抱等訊號')
+  return (
+    <div
+      className="glass-panel"
+      onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-tab', { detail: 'aitrader' }))}
+      style={{ padding: '11px 14px', cursor: 'pointer' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--ios-label)' }}>🤖 AI 交易員</span>
+        <span style={{ fontSize: 17, fontWeight: 900, fontFamily: 'var(--font-mono)', color: up(ai.return_pct) }}>{pct(ai.return_pct)}</span>
+        {diff != null && (
+          <span style={{ fontSize: 10, fontWeight: 700, color: up(diff) }}>
+            {diff >= 0 ? '贏' : '輸'}大盤 {Math.abs(diff).toFixed(1)}pp
+          </span>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--ios-label4)' }}>›</span>
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 5, fontSize: 10, color: 'var(--ios-label3)', flexWrap: 'wrap' }}>
+        <span>持倉 {ai.positions?.length ?? 0} 檔</span>
+        <span>{nextAction}</span>
+        {ai.adaptive?.follow_label && <span style={{ color: '#30D158' }}>🎓 跟隨「{ai.adaptive.follow_label}」</span>}
+      </div>
+    </div>
+  )
+}
+
 export default function Overview({ data, error }) {
   const pred = data?.prediction || null
   const sortedDates = [...(data?.dates || [])].sort((a, b) => b.localeCompare(a))
@@ -1042,6 +1079,9 @@ export default function Overview({ data, error }) {
               </div>
           }
         </div>
+
+        {/* AI 交易員摘要卡:首頁一眼看到虛擬帳戶狀態,點擊跳到 AI操盤分頁 */}
+        <AITraderMini ai={data?.aiTrader} />
 
         {/* Live Market Strip: real-time SPX/SOX/NDX + USD/TWD */}
         <LiveMarketStrip />

@@ -211,7 +211,16 @@ export default function App() {
   useEffect(() => {
     const handler = () => setTabIdx(TABS.findIndex(t => t.key === 'studio'))
     window.addEventListener('navigate-to-studio', handler)
-    return () => window.removeEventListener('navigate-to-studio', handler)
+    // 通用分頁跳轉(首頁摘要卡等用):detail 為 tab key
+    const navTo = (e) => {
+      const i = TABS.findIndex(t => t.key === e.detail)
+      if (i >= 0) setTabIdx(i)
+    }
+    window.addEventListener('navigate-to-tab', navTo)
+    return () => {
+      window.removeEventListener('navigate-to-studio', handler)
+      window.removeEventListener('navigate-to-tab', navTo)
+    }
   }, [])
 
   // Resolve a (possibly partial) {stock_id} into a full scan stock object
