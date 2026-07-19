@@ -284,7 +284,7 @@ function MarketSentiment({ data }) {
 }
 
 /* ── SVG Direction Gauge ─────────────────────────────────────────── */
-const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
+const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate, hitRate }) {
   const { pct, isBull, isBear, color, confidence, cx, cy, r, nx, ny, nx2, ny2 } = useMemo(() => {
     const pct = Math.max(2, Math.min(98, Math.round((prob ?? 0.5) * 100)))
     const isBull = pct >= 55, isBear = pct <= 45
@@ -350,6 +350,13 @@ const DirectionGauge = memo(function DirectionGauge({ prob = 0.5, winRate }) {
           <div style={{ fontSize: 11, color: 'var(--ios-label2)', marginTop: 3, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
             勝率 ~{winRate > 1 ? Math.round(winRate) : Math.round(winRate * 100)}%
             <InfoTip term="勝率" />
+          </div>
+        )}
+        {/* 模型近況實測(與預測分頁 🔮 預測回顧同一套判定)——讓「偏多/偏空」旁邊
+            永遠帶著「這模型最近到底準不準」,不用點進去才知道 */}
+        {hitRate != null && (
+          <div style={{ fontSize: 10, marginTop: 2, color: hitRate.pct >= 60 ? 'var(--ios-green)' : hitRate.pct >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)', fontWeight: 700 }}>
+            近{hitRate.total}日實測命中 {hitRate.pct}%
           </div>
         )}
       </div>
@@ -1000,6 +1007,30 @@ export default function Overview({ data, error }) {
     return [...(scan.top_stocks || []), ...extras]
   }, [scan])
 
+  // 模型近況實測命中率(近 14 個可驗證日;判定與預測分頁 🔮 預測回顧一致:
+  // 等權日報酬 = 基準曲線相鄰兩點相減、中性 ±0.4% 內算命中)
+  const predHitRate = useMemo(() => {
+    const ph = data?.predictionHistory || []
+    const curve = data?.aiTrader?.benchmark?.curve || []
+    if (curve.length < 2 || !ph.length) return null
+    const dayRet = {}
+    for (let i = 1; i < curve.length; i++) {
+      dayRet[curve[i].date] = Math.round((curve[i].ret_pct - curve[i - 1].ret_pct) * 100) / 100
+    }
+    const rows = ph
+      .filter(p => p.date && p.xgb_label && dayRet[p.date] != null)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 14)
+    if (rows.length < 3) return null
+    let hits = 0
+    for (const p of rows) {
+      const r = dayRet[p.date]
+      const bull = p.xgb_label.includes('多'), bear = p.xgb_label.includes('空')
+      if (bull ? r > 0 : bear ? r < 0 : Math.abs(r) <= 0.4) hits++
+    }
+    return { hits, total: rows.length, pct: Math.round(hits / rows.length * 100) }
+  }, [data])
+
   // Stock detail modal state (triggered by sector heatmap stock clicks)
   const ovHistoriesRef = useRef(null)
   const [ovSelectedStock, setOvSelectedStock] = useState(null)
@@ -1071,7 +1102,7 @@ export default function Overview({ data, error }) {
 
         {/* Row 1: Gauge + Risk */}
         <div style={{ display: 'flex', gap: 10 }}>
-          <DirectionGauge prob={prob} winRate={winRate} />
+          <DirectionGauge prob={prob} winRate={winRate} hitRate={predHitRate} />
           {(risk || marketData || calendarRisk)
             ? <RiskCard risk={risk} marketData={marketData} calendarRisk={calendarRisk} />
             : <div className="glass-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
