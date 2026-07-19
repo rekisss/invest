@@ -46,3 +46,19 @@ jobs:
 
       - name: Run pytest suite
         run: pip install pytest && python -m pytest tests/ -q --tb=short
+
+  # 前端資料管線的 JS 單元測試(paper-trader 交易引擎等;node:test,零依賴不需 npm install)
+  web-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run web script tests
+        run: node --test web/scripts/*.test.mjs
