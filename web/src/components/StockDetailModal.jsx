@@ -2082,10 +2082,10 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
         onPick={(id) => { const p = STRATEGY_PRESETS.find(x => x.id === id); if (p) applyPreset(p) }}
       />
 
-      {/* Footer */}
-      {chartInterval !== '1d' && !priceHistoryWk && daily.length >= 2 && (
+      {/* Footer — 週/月線一律由日K重採樣;僅在日K樣本太少(指標暖身不足)時提醒 */}
+      {chartInterval !== '1d' && !priceHistoryWk && daily.length >= 2 && daily.length < 120 && (
         <div style={{ fontSize: 9.5, color: 'var(--ios-label3)', margin: '4px 0', padding: '5px 8px', background: 'rgba(255,159,10,0.08)', borderRadius: 6, border: '0.5px solid rgba(255,159,10,0.2)' }}>
-          ⚠️ {chartInterval === '1wk' ? '週線' : '月線'}由每日掃描紀錄重採樣，非連續交易日資料，指標值供趨勢參考（非精確量化）
+          ⚠️ {chartInterval === '1wk' ? '週線' : '月線'}由較短的日線紀錄重採樣，樣本較少，指標值供趨勢參考（非精確量化）
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, flexWrap: 'wrap', gap: 6 }}>

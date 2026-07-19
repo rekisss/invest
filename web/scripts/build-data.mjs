@@ -1309,21 +1309,20 @@ function getKlineBars(entry, interval) {
   return Array.isArray(bars) && bars.length >= 2 ? bars : undefined
 }
 
-// Inject price_history (all 3 intervals) into recent dates' stocks and persistent items
+// Inject daily price_history into recent dates' stocks and persistent items.
+// Weekly/monthly are NOT embedded: the cache's 1wk/1mo arrays cover the same
+// ~2-year range as the 1d array, so the frontend's resampleBars(daily) fallback
+// reproduces them exactly — embedding both tripled the kline payload in data.json.
 for (const d of recentDates) {
   for (const stock of (scans[d]?.top_stocks || [])) {
     const entry = klineMap[stock.stock_id]
     if (!entry) continue
-    stock.price_history    = getKlineBars(entry, '1d')
-    stock.price_history_wk = getKlineBars(entry, '1wk')
-    stock.price_history_mo = getKlineBars(entry, '1mo')
+    stock.price_history = getKlineBars(entry, '1d')
   }
   for (const item of (scans[d]?.persistent || [])) {
     const entry = klineMap[item.stock_id]
     if (!entry) continue
-    item.price_history    = getKlineBars(entry, '1d')
-    item.price_history_wk = getKlineBars(entry, '1wk')
-    item.price_history_mo = getKlineBars(entry, '1mo')
+    item.price_history = getKlineBars(entry, '1d')
   }
 }
 console.log(`K-line: injected into stocks across ${recentDates.length} dates`)
