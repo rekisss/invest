@@ -1792,6 +1792,16 @@ if (aiTrader) {
     open_positions: r.positions.length,
     // ret_pct 序列與主帳戶共用同一交易日曆(同 scans/klines),供疊圖
     curve: r.equity_curve.map(p => p.ret_pct),
+    // 交易明細(精簡欄位控制體積):實驗室點開變體可看它實際買賣了什麼
+    positions: r.positions.slice(0, 6).map(p => ({
+      stock_id: p.stock_id, name: p.name, entry: p.entry, price: p.price,
+      pnl_pct: p.pnl_pct, entry_date: p.entry_date,
+    })),
+    trades: r.trades.slice(0, 8).map(t => ({
+      stock_id: t.stock_id, name: t.name, entry: t.entry, exit: t.exit,
+      entry_date: t.entry_date, exit_date: t.exit_date,
+      reason: t.reason, ret_pct: t.ret_pct, hold_days: t.hold_days,
+    })),
   }))
   console.log(`AI trader variants: ${aiTrader.variants.map(v => `${v.id}=${v.return_pct}%`).join(' ')}`)
 

@@ -179,19 +179,60 @@ function BuyDetail({ date, price, shares, cost, dayRank, score, grade, signals, 
   )
 }
 
-function FragmentRow({ v, isMain }) {
+function FragmentRow({ v, isMain, open, onToggle }) {
   const dot = isMain ? 'var(--ios-blue)' : (VARIANT_COLORS[v.id] || 'var(--ios-label3)')
+  // 變體可點開看實際買賣明細;主帳戶明細在上方完整卡片,不重複展開
+  const clickable = !isMain && ((v.trades?.length || 0) + (v.positions?.length || 0) > 0)
+  const cellClick = clickable ? onToggle : undefined
+  const cellCursor = clickable ? 'pointer' : 'default'
   return (
     <>
-      <span style={{ minWidth: 0 }}>
+      <span onClick={cellClick} style={{ minWidth: 0, cursor: cellCursor }}>
         <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 4, background: dot, marginRight: 5, verticalAlign: 'middle' }} />
         <span style={{ fontSize: 11, fontWeight: isMain ? 800 : 600, color: isMain ? 'var(--ios-blue)' : 'var(--ios-label)' }}>{v.label}</span>
+        {clickable && <span style={{ fontSize: 8, color: 'var(--ios-label4)', marginLeft: 4 }}>{open ? '▲' : '▼'}</span>}
         {v.note && <span style={{ display: 'block', fontSize: 9, color: 'var(--ios-label4)' }}>{v.note}</span>}
       </span>
-      <span style={{ textAlign: 'right', fontWeight: 800, fontFamily: 'var(--font-mono)', color: colorOf(v.return_pct) }}>{pctStr(v.return_pct, 1)}</span>
-      <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--ios-label2)' }}>{v.win_rate == null ? '—' : `${Math.round(v.win_rate)}%`}</span>
-      <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--ios-label3)' }}>{v.max_drawdown_pct == null ? '—' : `-${v.max_drawdown_pct}%`}</span>
-      <span style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--ios-label3)' }}>{v.num_trades ?? '—'}</span>
+      <span onClick={cellClick} style={{ textAlign: 'right', fontWeight: 800, fontFamily: 'var(--font-mono)', color: colorOf(v.return_pct), cursor: cellCursor }}>{pctStr(v.return_pct, 1)}</span>
+      <span onClick={cellClick} style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--ios-label2)', cursor: cellCursor }}>{v.win_rate == null ? '—' : `${Math.round(v.win_rate)}%`}</span>
+      <span onClick={cellClick} style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--ios-label3)', cursor: cellCursor }}>{v.max_drawdown_pct == null ? '—' : `-${v.max_drawdown_pct}%`}</span>
+      <span onClick={cellClick} style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--ios-label3)', cursor: cellCursor }}>{v.num_trades ?? '—'}</span>
+      {open && !isMain && (
+        <div style={{ gridColumn: '1 / -1', background: 'var(--ios-fill4)', borderRadius: 10, padding: '8px 10px', marginBottom: 2 }}>
+          {(v.positions?.length || 0) > 0 && (
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--ios-label3)', marginBottom: 3 }}>目前持倉</div>
+              {v.positions.map(p => (
+                <div key={p.stock_id} style={{ display: 'flex', gap: 8, fontSize: 10.5, padding: '2px 0', alignItems: 'center' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--ios-blue)' }}>{p.stock_id}</span>
+                  <span style={{ color: 'var(--ios-label)' }}>{p.name}</span>
+                  <span style={{ color: 'var(--ios-label4)', fontSize: 9.5 }}>{p.entry_date} @{p.entry}</span>
+                  <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontWeight: 700, color: colorOf(p.pnl_pct) }}>{pctStr(p.pnl_pct, 1)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {(v.trades?.length || 0) > 0 ? (
+            <div>
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--ios-label3)', marginBottom: 3 }}>最近交易(新→舊)</div>
+              {v.trades.map((t, i) => {
+                const r = REASON[t.reason] || { t: t.reason, c: 'var(--ios-label3)' }
+                return (
+                  <div key={i} style={{ display: 'flex', gap: 7, fontSize: 10.5, padding: '2px 0', alignItems: 'center' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--ios-blue)' }}>{t.stock_id}</span>
+                    <span style={{ color: 'var(--ios-label)' }}>{t.name}</span>
+                    <span style={{ fontSize: 9, color: r.c, background: `${r.c}1a`, padding: '0 4px', borderRadius: 4 }}>{r.t}</span>
+                    <span style={{ color: 'var(--ios-label4)', fontSize: 9.5 }}>{t.entry_date}→{t.exit_date}</span>
+                    <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontWeight: 700, color: colorOf(t.ret_pct) }}>{pctStr(t.ret_pct, 1)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (v.positions?.length || 0) === 0 && (
+            <div style={{ fontSize: 10.5, color: 'var(--ios-label3)' }}>尚無交易紀錄。</div>
+          )}
+        </div>
+      )}
     </>
   )
 }
@@ -245,6 +286,7 @@ export default function AITrader({ data }) {
   // 盤中即時報價(由 LiveTraderPanel 的 WS/REST 分享上來)。持倉卡的 price
   // 是每晚 build 的收盤價,盤中會過期——有即時價時蓋過顯示並標 ⚡。
   const [liveQuotes, setLiveQuotes] = useState({})
+  const [openVariant, setOpenVariant] = useState(null) // 規則實驗室展開的變體
   const toggleTrade = useCallback((i) => setOpenTrade(cur => (cur === i ? null : i)), [])
   const togglePos = useCallback((i) => setOpenPos(cur => (cur === i ? null : i)), [])
 
@@ -477,7 +519,9 @@ export default function AITrader({ data }) {
             {[{ id: 'main', label: '主帳戶(現行)', note: '停利8%/停損12%', return_pct: ai.return_pct, win_rate: s.win_rate, max_drawdown_pct: s.max_drawdown_pct, num_trades: s.num_trades },
               ...[...ai.variants].sort((a, b) => (b.return_pct ?? -999) - (a.return_pct ?? -999))]
               .map(v => (
-                <FragmentRow key={v.id} v={v} isMain={v.id === 'main'} />
+                <FragmentRow key={v.id} v={v} isMain={v.id === 'main'}
+                  open={openVariant === v.id}
+                  onToggle={() => setOpenVariant(cur => (cur === v.id ? null : v.id))} />
               ))}
           </div>
           <div style={{ fontSize: 9.5, color: 'var(--ios-label4)', lineHeight: 1.6, marginTop: 8 }}>
