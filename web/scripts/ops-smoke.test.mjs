@@ -123,3 +123,32 @@ test('intraday-monitor:mock 報價觸發停利警示,狀態檔寫入', async () 
     server.close()
   }
 })
+
+test('intraday-monitor:價格逼近停損(1% 內)觸發接近停損預警', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ops-smoke-'))
+  const dataFile = join(dir, 'data.json')
+  const stateFile = join(dir, 'state.json')
+  writeFileSync(dataFile, JSON.stringify(fixtureData()))
+
+  // 持倉 8888 停損 88 → 報價 88.5 在 88×1.01=88.88 內,未觸發停損但應預警
+  const server = createServer((req, res) => {
+    res.setHeader('content-type', 'application/json')
+    res.end(JSON.stringify({ lastPrice: 88.5 }))
+  })
+  await new Promise((r) => server.listen(0, '127.0.0.1', r))
+
+  try {
+    const { code, out } = await runScript('intraday-monitor.mjs', {
+      DATA_URL: dataFile, STATE_FILE: stateFile,
+      FUGLE_BASE: `http://127.0.0.1:${server.address().port}`,
+      FUGLE_API_KEY: 'smoke-test-key',
+    })
+    assert.equal(code, 0, out)
+    assert.match(out, /接近停損/)
+    const state = JSON.parse(readFileSync(stateFile, 'utf8'))
+    assert.ok(state.keys.includes('near_sl:8888'), `state keys: ${JSON.stringify(state.keys)}`)
+    assert.ok(!state.keys.includes('sl:8888'), '88.5 未跌破 88,不該觸發正式停損')
+  } finally {
+    server.close()
+  }
+})

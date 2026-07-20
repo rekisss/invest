@@ -146,6 +146,9 @@ for (const p of positions) {
     await fire(`sl:${p.sym}`, `⚠️ **AI虛擬停損觸發**(背景)|${p.sym} ${p.name} 即時價 ${price} ≤ 停損價 ${p.sl}(−12%)。正式紀錄於今晚資料更新入帳。`)
   } else if (p.tp != null && price >= p.tp * 0.99) {
     await fire(`near_tp:${p.sym}`, `📈 **接近停利**(背景)|${p.sym} ${p.name} 即時價 ${price},距停利價 ${p.tp} 不到 1%。`)
+  } else if (p.sl != null && price <= p.sl * 1.01) {
+    // 對稱於接近停利:停損前 1% 先預警,讓人有時間反應,而不是觸發了才知道
+    await fire(`near_sl:${p.sym}`, `📉 **接近停損**(背景)|${p.sym} ${p.name} 即時價 ${price},距停損價 ${p.sl} 不到 1%,留意風險。`)
   }
 }
 for (const c of candidates) {

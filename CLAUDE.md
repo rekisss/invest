@@ -23,7 +23,7 @@
 - **新增的 workflow 一律不加 `schedule:` 排程**：使用者的排程統一由外部服務 cron-job.org 透過 `workflow_dispatch` API 觸發（使用者明確要求，2026-07-12）。既有 workflow 的排程維持不動。
 
 ## 開發分支
-- 所有開發在 `claude/cron-job-automation-0YoJr` 分支進行
+- 所有開發在當次任務指定的 `claude/*` 分支進行(每個 Claude 工作階段有各自的指定分支,不要寫死分支名)
 - Push 後自動建立 Draft PR
 
 ## 資料流
