@@ -32,7 +32,16 @@ globalThis.fetch = async (url) => {
   return { ok: true, status: 200, json: async () => ({ lastPrice: 100, previousClose: 99, total: { tradeVolume: 1000 } }) }
 }
 
-const { fetchFugleQuotes } = await import('../src/utils/fugleLive.js')
+// WebSocket stub:記錄送出的訊息,支援手動觸發 open/authenticated
+class FakeWS {
+  static OPEN = 1
+  constructor() { this.sent = []; this.readyState = FakeWS.OPEN; FakeWS.last = this }
+  send(m) { this.sent.push(JSON.parse(m)) }
+  close() { this.onclose?.() }
+}
+globalThis.WebSocket = FakeWS
+
+const { fetchFugleQuotes, createFugleClient } = await import('../src/utils/fugleLive.js')
 
 const quoteCalls = () => calls.filter(u => u.includes('/intraday/quote/')).length
 const snapCalls = () => calls.filter(u => u.includes('/snapshot/quotes/')).length
@@ -55,6 +64,18 @@ test('9+ 檔:改走 snapshot,一輪固定 2 個請求(TSE+OTC)', async () => {
   assert.equal(quoteCalls(), 0, '大清單不得逐檔打(速率預算)')
   assert.equal(out['2330'].price, 1000)   // snapshot 覆蓋到的檔有價
   assert.equal(out['2317'].price, 200)
+})
+
+test('WS 訂閱不超過免費方案 5 頻道,且依 wanted 順序(持倉優先)', () => {
+  const client = createFugleClient({ onQuote: () => {}, onStatus: () => {} })
+  client.watch(['2206', '3356', '2330', '2317', '2454', '1101', '1102']) // 7 檔
+  const ws = FakeWS.last
+  ws.onopen()                                                        // → 送 auth
+  ws.onmessage({ data: JSON.stringify({ event: 'authenticated' }) }) // → resubscribe
+  const subs = ws.sent.filter(m => m.event === 'subscribe').map(m => m.data.symbol)
+  assert.equal(subs.length, 5, `超過 5 檔會被 Fugle 拒絕:${JSON.stringify(subs)}`)
+  assert.deepEqual(subs, ['2206', '3356', '2330', '2317', '2454'], '必須照 wanted 順序取前 5(持倉在前)')
+  client.close()
 })
 
 test('撞 429:回空並進入冷卻,下一輪完全不打富果', async () => {

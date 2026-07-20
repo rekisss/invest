@@ -131,11 +131,18 @@ export function createFugleClient({ onQuote, onStatus }) {
     ws.onerror = () => { /* onclose follows and handles retry */ }
   }
 
+  // 免費方案 WS 同時訂閱上限 5 頻道:超額送出只會收到 error(狀態一直跳
+  // limited)。只訂 wanted 前 5 檔(呼叫端把持倉排在候選前 → 持倉自動優先),
+  // 沒上 WS 的檔由 LiveTraderPanel 的 20 秒 REST fallback 補價。
+  const WS_MAX_CHANNELS = 5
   function resubscribe() {
     if (!ws || ws.readyState !== WebSocket.OPEN) return
+    let room = WS_MAX_CHANNELS - subscribed.size
     for (const sym of wanted) {
       if (subscribed.has(sym)) continue
+      if (room <= 0) break
       try { ws.send(JSON.stringify({ event: 'subscribe', data: { channel: 'trades', symbol: sym } })) } catch { /* closed */ }
+      room--
     }
   }
 
