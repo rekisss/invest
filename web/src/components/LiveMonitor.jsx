@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { animate } from 'animejs'
-import { useLivePrices, fetchIndices, fetchPriceCache } from '../hooks/useLivePrices'
+import { useLivePrices, fetchIndices, fetchPriceCache, isScanDataCurrent } from '../hooks/useLivePrices'
 import { useShioajiStream, loadStreamCfg, saveStreamCfg } from '../hooks/useShioajiStream'
 import { flashPriceEl, animateListRows } from '../utils/animeUtils.js'
 import StockDetailModal from './StockDetailModal'
@@ -63,8 +63,11 @@ function fmtP(v) {
 // value shown everywhere else in the app), so prefer the scan close for stocks we
 // scanned, and only fall back to the live snapshot for custom watchlist stocks that
 // aren't in today's scan.
-function resolvePrice(live, scan, mktOpen) {
+// dataCurrent=false(收盤後、晚間資料建置前的空窗):scan.close 還是前一交易
+// 日的收盤,live 快取才有今日收盤 → 優先 live。資料建置完成後恢復 scan 優先。
+function resolvePrice(live, scan, mktOpen, dataCurrent = true) {
   if (mktOpen && live?.price != null) return live.price
+  if (!dataCurrent && live?.price != null) return live.price
   return (scan?.close ?? null) ?? (live?.price ?? null)
 }
 
@@ -230,7 +233,7 @@ function useCountdown(lastUpdate, intervalMs = 30000) {
 }
 
 // ── Stock row ─────────────────────────────────────────────────────────────
-function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, showRemove, onAlertChange, mktOpen }) {
+function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, showRemove, onAlertChange, mktOpen, dataCurrent = true }) {
   const upColor   = '#FF3340'
   const downColor = '#16D67E'
   const scanClose = scan?.close || null
@@ -239,8 +242,8 @@ function StockRow({ id, name, live, position, scan, isLast, onSelect, onRemove, 
   // scan CSV close so the price + P&L match the rest of the app (TWSE STOCK_DAY_ALL
   // can briefly disagree with the scan close after the session ends).
   const liveOk    = mktOpen && live?.price != null
-  const effPrice  = resolvePrice(live, scan, mktOpen)
-  const usingScan = !liveOk && scanClose != null
+  const effPrice  = resolvePrice(live, scan, mktOpen, dataCurrent)
+  const usingScan = !liveOk && dataCurrent && scanClose != null
 
   const pct       = liveOk ? (live?.pct ?? null) : null  // intraday % only meaningful during open
   const isSnap    = live?.isSnapshot ?? false
@@ -411,13 +414,13 @@ function SectionHeader({ title, count, collapsed, onToggle, rightSlot }) {
 }
 
 // ── Portfolio summary bar ─────────────────────────────────────────────────
-function PortfolioSummary({ items, mktOpen }) {
+function PortfolioSummary({ items, mktOpen, dataCurrent = true }) {
   if (!items.length) return null
   let totalCost = 0, totalValue = 0, todayPnl = 0
   for (const e of items) {
     const pos = e.position
     if (!pos) continue
-    const eff = resolvePrice(e.live, e.scan, mktOpen)
+    const eff = resolvePrice(e.live, e.scan, mktOpen, dataCurrent)
     const price = eff ?? pos.buyPrice
     totalCost  += pos.buyPrice * pos.qty
     totalValue += price * pos.qty
@@ -568,6 +571,8 @@ function AddStockPanel({ data, monitorList, onAdd, onClose }) {
 const SESSION_LABEL = { open: '🟢 盤中', pre: '⏰ 開盤前', closed: '⚫ 已收盤', weekend: '📆 假日' }
 
 export default function LiveMonitor({ data }) {
+  // 收盤後~晚間資料建置前,data.json 收盤價還是前一交易日 → 各列改用快取今日收盤
+  const dataCurrent = isScanDataCurrent(data?.dates?.[0])
   const [monitorList,   setMonitorList]   = useState(() => loadMonitorList())
   const [positions]                       = useState(() => loadPortfolio())
   const [showAdd,       setShowAdd]       = useState(false)
@@ -970,7 +975,7 @@ export default function LiveMonitor({ data }) {
           ) : (
             <div ref={watchListRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
               {watchItems.map((item, i) => (
-                <StockRow key={item.id} {...item} isLast={i === watchItems.length - 1} onSelect={openDetail} onRemove={removeFromMonitor} showRemove onAlertChange={reloadAlerts} mktOpen={mktOpen} />
+                <StockRow key={item.id} {...item} isLast={i === watchItems.length - 1} onSelect={openDetail} onRemove={removeFromMonitor} showRemove onAlertChange={reloadAlerts} mktOpen={mktOpen} dataCurrent={dataCurrent} />
               ))}
             </div>
           )
@@ -994,9 +999,9 @@ export default function LiveMonitor({ data }) {
               </div>
             ) : (
               <div ref={portListRef} style={{ background: 'var(--ios-bg2)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
-                <PortfolioSummary items={portItems} mktOpen={mktOpen} />
+                <PortfolioSummary items={portItems} mktOpen={mktOpen} dataCurrent={dataCurrent} />
                 {portItems.map((item, i) => (
-                  <StockRow key={item.id} {...item} isLast={i === portItems.length - 1} onSelect={openDetail} showRemove={false} onAlertChange={reloadAlerts} mktOpen={mktOpen} />
+                  <StockRow key={item.id} {...item} isLast={i === portItems.length - 1} onSelect={openDetail} showRemove={false} onAlertChange={reloadAlerts} mktOpen={mktOpen} dataCurrent={dataCurrent} />
                 ))}
               </div>
             )
@@ -1026,7 +1031,7 @@ export default function LiveMonitor({ data }) {
                   </div>
                 )}
                 {scanItems.map((item, i) => (
-                  <StockRow key={item.id} {...item} isLast={i === scanItems.length - 1} onSelect={openDetail} showRemove={false} onAlertChange={reloadAlerts} mktOpen={mktOpen} />
+                  <StockRow key={item.id} {...item} isLast={i === scanItems.length - 1} onSelect={openDetail} showRemove={false} onAlertChange={reloadAlerts} mktOpen={mktOpen} dataCurrent={dataCurrent} />
                 ))}
               </div>
             )

@@ -36,6 +36,21 @@ export function isTWSEOpen() {
   return min >= 540 && min <= 810  // 09:00–13:30
 }
 
+// 最新掃描/K線資料是否已是「今天的交易日」。false = 收盤後到晚間資料建置完成
+// 前(平日 ~13:30-21:30)的空窗:data.json 的收盤價還停在前一交易日,顯示層
+// 這段時間應優先用快取/即時來源的「今日收盤」,而不是 data.json 的舊收盤。
+// (國定假日誤判為 false 無害:快取當天也沒新價,fallback 值相同。)
+export function isScanDataCurrent(latestDate) {
+  if (!latestDate) return false
+  const now = new Date(Date.now() + 8 * 3600e3) // TW time via UTC fields
+  const dow = now.getUTCDay()
+  if (dow === 0 || dow === 6) return true       // 週末不會有更新的資料日
+  const today = now.toISOString().slice(0, 10)
+  if (today <= latestDate) return true
+  const mins = now.getUTCHours() * 60 + now.getUTCMinutes()
+  return mins < 9 * 60                          // 開盤前資料日=前一交易日是正常的
+}
+
 export function getTWSESession() {
   const now = new Date()
   const tw = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }))
