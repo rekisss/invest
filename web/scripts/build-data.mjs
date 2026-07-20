@@ -1776,7 +1776,20 @@ if (aiTrader) {
     { id: 'tp12', label: '停利 12%', note: '拉高目標', config: { takeProfit: 0.12 } },
     { id: 'tp5', label: '停利 5%', note: '高勝率短打', config: { takeProfit: 0.05 } },
     { id: 'pos3', label: '集中 3 檔', note: '重押高分股', config: { maxPositions: 3 } },
+    // 對照組:選股與任何策略訊號完全無關(股號固定雜湊排序 = 「亂選一籃股票」
+    // 的確定性版本,每次 build 結果相同可重現),出場紀律與主帳戶一致。
+    // 用途:量化「策略選股」相對「無訊號亂選」到底貢獻多少——這是可信度審計
+    // 缺的最後一塊對照。control: true → 不參與自適應帳戶的跟隨候選(對照組
+    // 只供比較,不該被學習層跟單)。
+    { id: 'random', label: '亂數對照組', note: '無訊號亂選,出場紀律相同', control: true,
+      config: { pickPool: 'filter', requireEntrySignal: false, rankBy: hashRank } },
   ]
+  function hashRank(s) {
+    const id = String(s.stock_id)
+    let h = 2166136261
+    for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0 }
+    return h % 100000
+  }
   const variantResults = VARIANTS.map(v => {
     try {
       const r = simulatePaperTrader({ scans, klineFor: (sid) => getKlineBars(klineMap[sid], '1d'), config: v.config })
@@ -1810,7 +1823,8 @@ if (aiTrader) {
   try {
     const adaptiveAccounts = [
       { id: 'main', label: '主帳戶', curve: aiTrader.equity_curve.map(p => ({ date: p.date, ret_pct: p.ret_pct })), exit_dates: aiTrader.exit_dates },
-      ...variantResults.map(({ v, r }) => ({ id: v.id, label: v.label, curve: r.equity_curve.map(p => ({ date: p.date, ret_pct: p.ret_pct })), exit_dates: r.exit_dates })),
+      // 對照組(control)不進跟隨候選:它存在的意義是被比較,不是被跟單
+      ...variantResults.filter(({ v }) => !v.control).map(({ v, r }) => ({ id: v.id, label: v.label, curve: r.equity_curve.map(p => ({ date: p.date, ret_pct: p.ret_pct })), exit_dates: r.exit_dates })),
     ]
     aiTrader.adaptive = simulateAdaptiveTrader({ accounts: adaptiveAccounts })
     if (aiTrader.adaptive) {
