@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
-import { useLivePrices } from '../hooks/useLivePrices'
+import { useLivePrices, isScanDataCurrent } from '../hooks/useLivePrices'
 import { getStockHistories } from '../utils/histCache'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
@@ -369,7 +369,12 @@ export default function Portfolio({ data }) {
     // 報價快取可能停在盤中/昨日值(如聯電 07-15=166 vs 07-16 實際收盤 160),
     // 收盤後用掃描/K 線的今日收盤才正確,根治「持倉現價慢一天」。
     const settledClose = getScanClose(id, scanRowsCached) ?? getHistoriesClose(id, { stocks: compareHistories })
-    const curPrice  = mktOpen ? (livePrices[id] ?? settledClose) : (settledClose ?? livePrices[id])
+    // 例外窗口(收盤後~晚間資料建置前):settledClose 還是「前一交易日」的收盤,
+    // 即時快取才有今日收盤 → 這段時間反過來即時優先(isScanDataCurrent=false)。
+    const dataCurrent = isScanDataCurrent(data?.dates?.[0])
+    const curPrice  = (mktOpen || !dataCurrent)
+      ? (livePrices[id] ?? settledClose)
+      : (settledClose ?? livePrices[id])
     const scan      = getScanInfo(id, scanRowsCached)
     const pnlPct    = curPrice ? (curPrice - p.buyPrice) / p.buyPrice * 100 : null
     const pnlAmt    = curPrice ? (curPrice - p.buyPrice) * p.qty : null
@@ -382,7 +387,7 @@ export default function Portfolio({ data }) {
     const stopLoss  = tg.stopLoss
     const takePrft  = tg.takePrft
     return { id, p, curPrice, scan, pnlPct, pnlAmt, cost, curVal, daysHeld, annReturn, stopLoss, takePrft, targets: tg, color: PALETTE[i % PALETTE.length] }
-  }), [positions, scanRowsCached, livePrices, compareHistories, mktOpen])
+  }), [positions, scanRowsCached, livePrices, compareHistories, mktOpen, data])
 
   const sorted = useMemo(() => [...entries].sort((a, b) => {
     if (sortBy === 'pnlPct') return (b.pnlPct ?? -Infinity) - (a.pnlPct ?? -Infinity)

@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react'
 import LiveTraderPanel from './LiveTraderPanel'
+import { useLivePrices, isTWSEOpen, isScanDataCurrent } from '../hooks/useLivePrices'
 
 const UP = 'var(--ios-red)'      // Taiwan: red = up/gain
 const DOWN = 'var(--ios-green)'  // green = down/loss
@@ -292,6 +293,14 @@ export default function AITrader({ data }) {
   const [openVariant, setOpenVariant] = useState(null) // 規則實驗室展開的變體
   const toggleTrade = useCallback((i) => setOpenTrade(cur => (cur === i ? null : i)), [])
   const togglePos = useCallback((i) => setOpenPos(cur => (cur === i ? null : i)), [])
+  // 後備即時層:WS(LiveTraderPanel)沒開/沒金鑰時,AI 持倉照樣跟即時價;
+  // 收盤後~晚間資料建置前的空窗(isScanDataCurrent=false),p.price 還是前一
+  // 交易日收盤 → 用快取的今日收盤。資料已是今日(晚間入帳後)就不用後備,
+  // 避免舊快取蓋過已結算價(「慢一天」bug 的老路)。
+  const posIds = useMemo(() => (ai?.positions || []).map(p => String(p.stock_id)), [ai])
+  const { prices: hookPrices } = useLivePrices(posIds)
+  const useHookPx = isTWSEOpen() || !isScanDataCurrent(ai?.as_of)
+  const pxOf = (id) => liveQuotes[id]?.price ?? (useHookPx ? hookPrices[id]?.price : undefined)
 
   if (!ai) {
     return (
@@ -335,15 +344,17 @@ export default function AITrader({ data }) {
           <span>持股市值 NT${nf(ai.invested)}</span>
         </div>
         {(() => {
-          // 盤中即時估值:任何持倉有即時價時,用即時價重算總資產(標 ⚡)
-          const hasLive = ai.positions?.some(p => liveQuotes[String(p.stock_id)]?.price != null)
+          // 即時估值:任何持倉有即時/今日價時,重算總資產(標 ⚡)。來源:
+          // WS 分享的 liveQuotes 優先,其次 useLivePrices 後備層(見上方)。
+          const hasLive = ai.positions?.some(p => pxOf(String(p.stock_id)) != null)
           if (!hasLive) return null
-          const liveInvested = ai.positions.reduce((a, p) => a + p.shares * (liveQuotes[String(p.stock_id)]?.price ?? p.price ?? p.entry), 0)
+          const liveInvested = ai.positions.reduce((a, p) => a + p.shares * (pxOf(String(p.stock_id)) ?? p.price ?? p.entry), 0)
           const liveEquity = Math.round(ai.cash + liveInvested)
           const liveRet = (liveEquity / c.start_capital - 1) * 100
+          const label = isTWSEOpen() ? '盤中即時估值' : '今日收盤估值(晚間正式入帳前)'
           return (
             <div style={{ fontSize: 10.5, marginTop: 4, color: '#66D4CF', fontWeight: 700 }}>
-              ⚡ 盤中即時估值 NT${nf(liveEquity)}(<span style={{ color: colorOf(liveRet) }}>{pctStr(liveRet, 2)}</span>)
+              ⚡ {label} NT${nf(liveEquity)}(<span style={{ color: colorOf(liveRet) }}>{pctStr(liveRet, 2)}</span>)
             </div>
           )
         })()}
@@ -416,9 +427,9 @@ export default function AITrader({ data }) {
           const open = openPos === i
           const signals = parseSignals(p.entry_reason)
           const hasDetail = p.entry_score != null || signals.length > 0 || p.cost != null
-          // 盤中有即時價(LiveTraderPanel 分享)就用即時價估值並標 ⚡;
+          // 有即時/今日價(WS 或後備層)就用它估值並標 ⚡;
           // 否則用每晚 build 的收盤價(p.price)——修正「持倉價位盤中過期」
-          const livePx = liveQuotes[String(p.stock_id)]?.price
+          const livePx = pxOf(String(p.stock_id))
           const px = livePx ?? p.price
           const pnlPct = (px != null && p.entry > 0) ? (px / p.entry - 1) * 100 : p.pnl_pct
           const unrealized = px != null && p.entry != null && p.shares != null
