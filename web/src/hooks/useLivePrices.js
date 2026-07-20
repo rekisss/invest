@@ -333,7 +333,9 @@ export function useLivePrices(stockIds, { pollInterval = 60000, refreshTrigger =
     // 輪詢加密到 15 秒(原 60 秒,頁面價位跟不上盤中波動)。固定用短間隔:
     // 收盤/盤前 run() 抓一次最終定價後就早退(closedFetchDone),不會多耗
     // 流量;開盤瞬間(09:00)同一個 interval 自動開始即時更新,不用重整頁面。
-    // 富果批次層 15 秒一輪 = snapshot 2 req × 4/min,遠低於 60 req/min 上限。
+    // 富果批次層 15 秒一輪:≤8 檔逐檔並行(≤32 req/min)、9 檔以上 snapshot
+    // (2 req/輪 = 8 req/min),皆低於免費方案 60 req/min;撞 429 時富果層
+    // 自帶 60 秒冷卻(見 fugleLive.js),期間本 hook 自然退回快取層。
     const t = setInterval(run, Math.min(pollInterval, 15000))
     return () => { cancelled = true; if (t) clearInterval(t) }
   }, [idsKey, pollInterval, refreshTrigger])

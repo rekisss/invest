@@ -161,9 +161,20 @@ export function createFugleClient({ onQuote, onStatus }) {
 // 策略:先試 snapshot(TSE+OTC 各 1 請求涵蓋全市場);方案不支援或失敗時,
 // 退回逐檔 quote(限 15 檔/輪,守住免費方案 60 req/min);CORS 或網路錯誤一律
 // 靜默回空物件,讓既有 TWSE/快取層接手 — 不會比現在更差。
+// 429 冷卻:撞到 Fugle 免費方案速率上限(60 req/min)後,60 秒內跳過富果層
+// 讓配額回復,期間由快取/TWSE 層接手。沒有冷卻的話每 15 秒輪詢會持續撞牆,
+// 整個盤中富果層永遠失敗(2026-07-20 使用者回報「即時報價一直失敗」的根因)。
+let fugleCooldownUntil = 0
+
 export async function fetchFugleQuotes(ids) {
   const apikey = getFugleKey()
   if (!apikey || !ids?.length) return {}
+  if (Date.now() < fugleCooldownUntil) return {}
+  let saw429 = false
+  const setCooldown = () => {
+    fugleCooldownUntil = Date.now() + 60_000
+    console.warn('[fugle] 429 rate limited — 富果層冷卻 60 秒,改用快取報價')
+  }
   const idSet = new Set(ids.map(String))
   const out = {}
   const mapQuote = (d) => {
@@ -194,22 +205,30 @@ export async function fetchFugleQuotes(ids) {
     const results = await Promise.all(syms.map(sym =>
       fetch(`https://api.fugle.tw/marketdata/v1.0/stock/intraday/quote/${sym}`, {
         headers: { 'X-API-KEY': apikey },
-      }).then(r => r.ok ? r.json() : null).then(j => [sym, j ? mapQuote(j) : null]).catch(() => [sym, null])
+      }).then(r => { if (r.status === 429) saw429 = true; return r.ok ? r.json() : null })
+        .then(j => [sym, j ? mapQuote(j) : null]).catch(() => [sym, null])
     ))
     for (const [sym, q] of results) if (q) out[sym] = q
     return out
   }
   try {
-    // 小清單(≤20 檔)直接逐檔並行——手機常見情境(持倉/自選數檔),避免每輪
-    // 下載整個市場快照(TSE+OTC 各 ~2MB)浪費流量、拖慢更新。
-    if (idSet.size <= 20) return await perSymbol()
-    // 大清單:snapshot 兩個請求涵蓋上市+上櫃全部,比逐檔省請求數。
+    // 速率預算:免費方案 60 req/min,useLivePrices 每 15 秒一輪(4 輪/分),
+    // 還要留餘裕給 WS、背景監控、AI 面板共用同一把金鑰。
+    // ≤8 檔逐檔並行(最多 32 req/min);9 檔以上改走 snapshot(固定 2 req/輪
+    // = 8 req/min,任何清單大小都安全)。舊門檻 20 檔會到 80 req/min → 整個
+    // 盤中連環 429,即時報價全面失敗。
+    if (idSet.size <= 8) {
+      const r = await perSymbol()
+      if (saw429) setCooldown()
+      return r
+    }
+    // snapshot 兩個請求涵蓋上市+上櫃全部,與清單大小無關。
     let snapshotOk = false
     for (const market of ['TSE', 'OTC']) {
       const res = await fetch(`https://api.fugle.tw/marketdata/v1.0/stock/snapshot/quotes/${market}`, {
         headers: { 'X-API-KEY': apikey },
       })
-      if (!res.ok) break // 方案不含 snapshot(401/403)→ 改走逐檔
+      if (!res.ok) { if (res.status === 429) saw429 = true; break } // 方案不含 snapshot(401/403)→ 改走逐檔
       const body = await res.json()
       for (const d of (body.data || [])) {
         const sym = String(d.symbol || '')
@@ -219,8 +238,11 @@ export async function fetchFugleQuotes(ids) {
       }
       snapshotOk = true
     }
+    if (saw429) { setCooldown(); return out }
     if (snapshotOk && Object.keys(out).length) return out
-    return await perSymbol() // snapshot 不可用 → 逐檔並行(前 20 檔)
+    const r = await perSymbol() // snapshot 不可用(非 429)→ 逐檔並行(前 20 檔)
+    if (saw429) setCooldown()
+    return r
   } catch { /* CORS / 網路失敗 → 空物件,讓既有層接手 */ }
   return out
 }
