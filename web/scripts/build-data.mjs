@@ -1797,7 +1797,7 @@ if (aiTrader) {
     } catch { return null }
   }).filter(Boolean)
   aiTrader.variants = variantResults.map(({ v, r }) => ({
-    id: v.id, label: v.label, note: v.note,
+    id: v.id, label: v.label, note: v.note, control: !!v.control,
     return_pct: r.return_pct, equity: r.equity,
     win_rate: r.stats.win_rate, num_trades: r.stats.num_trades,
     max_drawdown_pct: r.stats.max_drawdown_pct, profit_factor: r.stats.profit_factor,
