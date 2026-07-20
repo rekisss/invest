@@ -175,8 +175,9 @@ if (AI_KEY && !DRY) {
 
 // 規則實驗室:目前領先的規則 + 自我學習帳戶動態
 if (Array.isArray(ai.variants) && ai.variants.length) {
+  // 對照組(control,如亂數選股)只是基準線,不參與「排行第一」的角逐
   const all = [{ label: '主帳戶', return_pct: ai.return_pct }, ...ai.variants]
-    .filter(v => v.return_pct != null)
+    .filter(v => v.return_pct != null && !v.control)
     .sort((a, b) => b.return_pct - a.return_pct)
   const top = all[0]
   let adaptiveText = ''

@@ -190,6 +190,9 @@ function FragmentRow({ v, isMain, open, onToggle }) {
       <span onClick={cellClick} style={{ minWidth: 0, cursor: cellCursor }}>
         <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 4, background: dot, marginRight: 5, verticalAlign: 'middle' }} />
         <span style={{ fontSize: 11, fontWeight: isMain ? 800 : 600, color: isMain ? 'var(--ios-blue)' : 'var(--ios-label)' }}>{v.label}</span>
+        {v.control && (
+          <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--ios-label3)', border: '0.5px solid var(--ios-sep)', borderRadius: 5, padding: '0 4px', marginLeft: 4, verticalAlign: 'middle' }}>對照</span>
+        )}
         {clickable && <span style={{ fontSize: 8, color: 'var(--ios-label4)', marginLeft: 4 }}>{open ? '▲' : '▼'}</span>}
         {v.note && <span style={{ display: 'block', fontSize: 9, color: 'var(--ios-label4)' }}>{v.note}</span>}
       </span>
