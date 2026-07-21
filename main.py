@@ -2897,7 +2897,12 @@ def run_predict(args: argparse.Namespace, client: FinMindClient, config: Strateg
         except (TypeError, ValueError):
             return None
 
-    _us_row = us_df.iloc[-1] if not us_df.empty else {}
+    # 各 ticker 的最後交易日不同(匯率/期貨有週日夜盤,最後一列常是「今天」,
+    # 股指/VIX 在那一列是 NaN)——直接取 iloc[-1] 會讓 nasdaq/sox/vix 全變 null,
+    # 下游的劇本分析(VIX=nan)、Discord 美股區(全 N/A)、模型分歧警告全部失效
+    # (2026-07-21 診斷:31/33 天美股特徵缺失的根因)。先 ffill 讓每欄各自帶到
+    # 最新有效值,再取最後一列。
+    _us_row = us_df.ffill().iloc[-1] if not us_df.empty else {}
 
     # If tsm_adr_ret1 missing (yfinance + Stooq both blocked from CI),
     # proxy from FinMind 2330 daily return (same company, near-identical movement).
