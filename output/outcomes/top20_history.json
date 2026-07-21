@@ -664,7 +664,8 @@
     "name": "新建",
     "close": 14.5,
     "entry_score": 1118.3,
-    "ret_1d": -0.0448
+    "ret_1d": -0.0448,
+    "ret_5d": -0.0345
    },
    {
     "stock_id": "5306",
@@ -699,28 +700,32 @@
     "name": "味王",
     "close": 44.2,
     "entry_score": 1006.0,
-    "ret_1d": 0.0147
+    "ret_1d": 0.0147,
+    "ret_5d": 0.0713
    },
    {
     "stock_id": "6288",
     "name": "聯嘉",
     "close": 24.25,
     "entry_score": 993.8,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": 0.0
    },
    {
     "stock_id": "6829",
     "name": "千附精密",
     "close": 256.5,
     "entry_score": 966.3,
-    "ret_1d": 0.0019
+    "ret_1d": 0.0019,
+    "ret_5d": -0.1949
    },
    {
     "stock_id": "6226",
     "name": "光鼎",
     "close": 25.85,
     "entry_score": 954.5,
-    "ret_1d": 0.0754
+    "ret_1d": 0.0754,
+    "ret_5d": -0.2921
    },
    {
     "stock_id": "4439",
@@ -734,21 +739,24 @@
     "name": "台橡",
     "close": 25.0,
     "entry_score": 941.3,
-    "ret_1d": 0.024
+    "ret_1d": 0.024,
+    "ret_5d": -0.054
    },
    {
     "stock_id": "6486",
     "name": "互動",
     "close": 84.9,
     "entry_score": 904.9,
-    "ret_1d": -0.0518
+    "ret_1d": -0.0518,
+    "ret_5d": -0.0954
    },
    {
     "stock_id": "1506",
     "name": "正道",
     "close": 10.85,
     "entry_score": 902.3,
-    "ret_1d": 0.0092
+    "ret_1d": 0.0092,
+    "ret_5d": 0.0
    },
    {
     "stock_id": "8383",
@@ -769,14 +777,16 @@
     "name": "中美晶",
     "close": 253.0,
     "entry_score": 869.2,
-    "ret_1d": 0.0988
+    "ret_1d": 0.0988,
+    "ret_5d": -0.1285
    },
    {
     "stock_id": "3532",
     "name": "台勝科",
     "close": 510.0,
     "entry_score": 865.1,
-    "ret_1d": 0.0255
+    "ret_1d": 0.0255,
+    "ret_5d": -0.15
    },
    {
     "stock_id": "4572",
@@ -790,14 +800,16 @@
     "name": "倉和",
     "close": 156.0,
     "entry_score": 857.7,
-    "ret_1d": -0.0288
+    "ret_1d": -0.0288,
+    "ret_5d": -0.1186
    },
    {
     "stock_id": "8039",
     "name": "台虹",
     "close": 185.5,
     "entry_score": 857.4,
-    "ret_1d": -0.0216
+    "ret_1d": -0.0216,
+    "ret_5d": 0.1429
    }
   ]
  },
@@ -1260,7 +1272,8 @@
     "stock_id": "2546",
     "name": "根基",
     "close": 96.9,
-    "entry_score": 1036.3
+    "entry_score": 1036.3,
+    "ret_1d": 0.0093
    },
    {
     "stock_id": "5876",
@@ -1278,7 +1291,8 @@
     "stock_id": "2884",
     "name": "玉山金",
     "close": 35.85,
-    "entry_score": 941.5
+    "entry_score": 941.5,
+    "ret_1d": 0.0307
    },
    {
     "stock_id": "5515",
@@ -1290,7 +1304,8 @@
     "stock_id": "6288",
     "name": "聯嘉",
     "close": 24.25,
-    "entry_score": 913.8
+    "entry_score": 913.8,
+    "ret_1d": 0.0
    },
    {
     "stock_id": "4736",
@@ -1308,37 +1323,43 @@
     "stock_id": "6517",
     "name": "保勝光學",
     "close": 76.3,
-    "entry_score": 896.2
+    "entry_score": 896.2,
+    "ret_1d": -0.0275
    },
    {
     "stock_id": "2701",
     "name": "萬企",
     "close": 10.95,
-    "entry_score": 882.2
+    "entry_score": 882.2,
+    "ret_1d": 0.0046
    },
    {
     "stock_id": "1736",
     "name": "喬山",
     "close": 135.0,
-    "entry_score": 869.2
+    "entry_score": 869.2,
+    "ret_1d": 0.0481
    },
    {
     "stock_id": "5450",
     "name": "寶聯通",
     "close": 18.75,
-    "entry_score": 869.0
+    "entry_score": 869.0,
+    "ret_1d": -0.0427
    },
    {
     "stock_id": "3532",
     "name": "台勝科",
     "close": 466.0,
-    "entry_score": 852.1
+    "entry_score": 852.1,
+    "ret_1d": -0.0697
    },
    {
     "stock_id": "1216",
     "name": "統一",
     "close": 80.3,
-    "entry_score": 845.2
+    "entry_score": 845.2,
+    "ret_1d": -0.0087
    },
    {
     "stock_id": "4439",
@@ -1350,13 +1371,140 @@
     "stock_id": "2634",
     "name": "漢翔",
     "close": 65.0,
-    "entry_score": 839.0
+    "entry_score": 839.0,
+    "ret_1d": 0.1
    },
    {
     "stock_id": "2867",
     "name": "三商壽",
     "close": 9.23,
-    "entry_score": 837.0
+    "entry_score": 837.0,
+    "ret_1d": 0.0303
+   }
+  ]
+ },
+ {
+  "date": "2026-07-21",
+  "stocks": [
+   {
+    "stock_id": "4939",
+    "name": "亞電",
+    "close": 72.8,
+    "entry_score": 1272.9
+   },
+   {
+    "stock_id": "3276",
+    "name": "宇環",
+    "close": 18.3,
+    "entry_score": 1270.0
+   },
+   {
+    "stock_id": "2646",
+    "name": "星宇航空",
+    "close": 22.0,
+    "entry_score": 1257.5
+   },
+   {
+    "stock_id": "2905",
+    "name": "三商",
+    "close": 15.95,
+    "entry_score": 1248.5
+   },
+   {
+    "stock_id": "2704",
+    "name": "國賓",
+    "close": 46.65,
+    "entry_score": 1153.1
+   },
+   {
+    "stock_id": "2395",
+    "name": "研華",
+    "close": 567.0,
+    "entry_score": 1110.5
+   },
+   {
+    "stock_id": "6414",
+    "name": "樺漢",
+    "close": 445.5,
+    "entry_score": 1103.3
+   },
+   {
+    "stock_id": "1709",
+    "name": "和益",
+    "close": 28.1,
+    "entry_score": 1080.9
+   },
+   {
+    "stock_id": "3577",
+    "name": "泓格",
+    "close": 157.0,
+    "entry_score": 1069.0
+   },
+   {
+    "stock_id": "2615",
+    "name": "萬海",
+    "close": 85.2,
+    "entry_score": 1068.0
+   },
+   {
+    "stock_id": "8050",
+    "name": "廣積",
+    "close": 60.5,
+    "entry_score": 1058.3
+   },
+   {
+    "stock_id": "6477",
+    "name": "安集",
+    "close": 42.35,
+    "entry_score": 1017.5
+   },
+   {
+    "stock_id": "2634",
+    "name": "漢翔",
+    "close": 71.5,
+    "entry_score": 1013.6
+   },
+   {
+    "stock_id": "1736",
+    "name": "喬山",
+    "close": 141.5,
+    "entry_score": 1009.5
+   },
+   {
+    "stock_id": "2886",
+    "name": "兆豐金",
+    "close": 48.6,
+    "entry_score": 988.7
+   },
+   {
+    "stock_id": "3374",
+    "name": "精材",
+    "close": 380.0,
+    "entry_score": 986.8
+   },
+   {
+    "stock_id": "3005",
+    "name": "神基",
+    "close": 116.5,
+    "entry_score": 984.7
+   },
+   {
+    "stock_id": "2849",
+    "name": "安泰銀",
+    "close": 15.2,
+    "entry_score": 982.1
+   },
+   {
+    "stock_id": "6928",
+    "name": "攸泰科技",
+    "close": 57.7,
+    "entry_score": 975.2
+   },
+   {
+    "stock_id": "4582",
+    "name": "聚恆-創",
+    "close": 28.2,
+    "entry_score": 973.2
    }
   ]
  }
