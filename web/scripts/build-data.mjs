@@ -1664,19 +1664,33 @@ if (daysBehind === 0 && topStocks.length > 0) {
       }
     } catch (e2) { console.warn('  TPEX price fetch skipped:', e2.message) }
 
+    // 第二參照:kline(FinMind)同日收盤。晚間建置時 TWSE STOCK_DAY_ALL 常常
+    // 還沒更新到今日 → 當天大漲/漲停的股票全被誤標 mismatch(2026-07-20 實例:
+    // 晶心科漲停 231,STOCK_DAY_ALL 仍回前日 210,19/50「誤報」)。兩個獨立
+    // 來源(掃描、kline)同意時,視為參照過時而非資料錯誤。
+    const klineCloseOf = (sid) => {
+      const bars = getKlineBars(klineMap[sid], '1d')
+      if (!bars?.length) return null
+      const last = bars[bars.length - 1]
+      return last.time === latestDataDate && last.close > 0 ? last.close : null
+    }
     const mismatches = []
-    let checked = 0
+    let checked = 0, refStale = 0
     for (const stock of topStocks) {
       const twseClose = twsePriceMap[String(stock.stock_id)]
       const scanClose = toNum(stock.close)
       if (!twseClose || !scanClose) continue
       checked++
       const diffPct = Math.abs(scanClose - twseClose) / twseClose * 100
-      if (diffPct > 2) mismatches.push({
+      if (diffPct <= 2) continue
+      const kc = klineCloseOf(String(stock.stock_id))
+      if (kc != null && Math.abs(scanClose - kc) / kc * 100 <= 0.5) { refStale++; continue }
+      mismatches.push({
         stock_id: stock.stock_id,
         name: stock.name || '',
         scan_close: scanClose,
         twse_close: twseClose,
+        kline_close: kc,
         diff_pct: Math.round(diffPct * 10) / 10,
       })
     }
@@ -1684,17 +1698,18 @@ if (daysBehind === 0 && topStocks.length > 0) {
     dataQuality.price_validation = {
       ok: mismatches.length === 0,
       checked,
+      reference_stale: refStale, // 掃描與 kline 一致、僅 TWSE 落後的檔數
       total_in_twse: Object.keys(twsePriceMap).length,
       mismatches: sortedMismatches,
-      source: 'twse+tpex_opendata',
+      source: 'twse+tpex_opendata+kline',
     }
     if (mismatches.length > 0) {
-      console.log(`  Price cross-validation: ${mismatches.length}/${checked} stocks differ >2% from TWSE`)
+      console.log(`  Price cross-validation: ${mismatches.length}/${checked} stocks differ >2% from TWSE (kline 也不一致)${refStale ? `;另 ${refStale} 檔僅 TWSE 參照過時` : ''}`)
       for (const m of sortedMismatches.slice(0, 3)) {
-        console.log(`    ${m.stock_id} ${m.name}: scan=${m.scan_close} TWSE=${m.twse_close} diff=${m.diff_pct}%`)
+        console.log(`    ${m.stock_id} ${m.name}: scan=${m.scan_close} TWSE=${m.twse_close} kline=${m.kline_close ?? '—'} diff=${m.diff_pct}%`)
       }
     } else {
-      console.log(`  Price cross-validation: ${checked} stocks checked, all within 2% of TWSE`)
+      console.log(`  Price cross-validation: ${checked} stocks checked, all consistent${refStale ? `(${refStale} 檔 TWSE 參照過時,掃描與 kline 一致)` : ''}`)
     }
   } catch (e) {
     console.warn('  Price cross-validation skipped:', e.message)
