@@ -163,6 +163,19 @@ test('依 entry_score 排序、受 maxPositions 上限約束', () => {
   assert.equal(hi.day_rank, 1)
 })
 
+test('pickFilter 硬濾網:回傳 false 的股票不買', () => {
+  const r = run({
+    scans: { [D[0]]: mkScan([
+      { id: 'GROW', revenue_yoy: 0.2, entry_score: 1 },
+      { id: 'SHRINK', revenue_yoy: -0.1, entry_score: 9 },
+    ]) },
+    bars: { GROW: mkBars([{ c: 50 }]), SHRINK: mkBars([{ c: 50 }]) },
+    config: { pickFilter: (s) => (s.revenue_yoy ?? -1) > 0 },
+  })
+  assert.equal(r.positions.length, 1)
+  assert.equal(r.positions[0].stock_id, 'GROW') // 分數較高的 SHRINK 被濾網擋下
+})
+
 test('無 entry_signal 的股票預設不買;requireEntrySignal:false 則可', () => {
   const scans = { [D[0]]: { top_stocks: [{ stock_id: 'A', name: 'A', entry_signal: false, entry_score: 10 }] } }
   const bars = { A: mkBars([{ c: 100 }]) }

@@ -30,6 +30,7 @@ export const DEFAULT_CONFIG = {
   pickPool: 'top',         // 'top' = top_stocks | 'filter' = 全掃描池 filter_stocks
   requireEntrySignal: true, // false = 不要求 entry_signal(改用 rankBy 純排序選股)
   rankBy: null,            // (s)=>number 自訂排序分數(越大越優先)。null = entry_score
+  pickFilter: null,        // (s)=>bool 額外硬濾網(回傳 false 的股票不買)。null = 不過濾
 }
 
 // klineFor(sid) -> ascending [{time, open, high, low, close}] or null/undefined
@@ -200,7 +201,9 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
         : (scans[day].top_stocks || [])
       const score = cfg.rankBy || ((s) => s.entry_score || 0)
       const picks = pool
-        .filter(s => (cfg.requireEntrySignal === false || s.entry_signal) && !held.has(String(s.stock_id)))
+        .filter(s => (cfg.requireEntrySignal === false || s.entry_signal)
+          && (!cfg.pickFilter || cfg.pickFilter(s))
+          && !held.has(String(s.stock_id)))
         .sort((a, b) => score(b) - score(a))
       if (cfg.execution === 'next_open') {
         // queue picks for a later open; cap the queue at the free slots

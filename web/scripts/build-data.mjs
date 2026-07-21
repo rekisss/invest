@@ -1787,6 +1787,10 @@ if (aiTrader) {
     // 核心疑問:entry_score 是否輸給簡單的相對強勢動能。
     { id: 'rs_mom', label: '強勢股輪動', note: '不看訊號,買全池RS最強', config: { pickPool: 'filter', requireEntrySignal: false, rankBy: (s) => s.market_rs_rank || 0 } },
     { id: 'bear_filter', label: '避開偏空日', note: '盤前預測偏空不進場', config: { buyGate: (day) => !isBearish(predLabelByDate[day]) } },
+    // 準度實驗(2026-07-21 12 種選股規則 21 日實測的最佳者):進場訊號之上
+    // 再加「月營收年增為正」硬濾網。回測中唯一正報酬(+0.65%、勝率 67%、
+    // MDD −1.27%),避開了主帳戶的停損踩雷;樣本僅 3 筆,先進實驗室累積驗證。
+    { id: 'rev_growth', label: '營收成長濾網', note: '訊號+營收YoY>0', config: { pickFilter: (s) => (s.revenue_yoy ?? -1) > 0 } },
     { id: 'trail8', label: '移動停損 8%', note: '不停利,讓利潤跑', config: { takeProfit: null, trailingStop: 0.08 } },
     { id: 'tp12', label: '停利 12%', note: '拉高目標', config: { takeProfit: 0.12 } },
     { id: 'tp5', label: '停利 5%', note: '高勝率短打', config: { takeProfit: 0.05 } },
