@@ -172,6 +172,11 @@ export function createFugleClient({ onQuote, onStatus }) {
 // 讓配額回復,期間由快取/TWSE 層接手。沒有冷卻的話每 15 秒輪詢會持續撞牆,
 // 整個盤中富果層永遠失敗(2026-07-20 使用者回報「即時報價一直失敗」的根因)。
 let fugleCooldownUntil = 0
+// snapshot 端點被方案拒絕(401/403)後記住,之後直接走逐檔輪替,
+// 不再每輪浪費 2 個註定失敗的請求
+let snapshotUnsupported = false
+// 逐檔輪替視窗游標(>8 檔清單每輪換一批)
+let perSymbolCursor = 0
 
 export async function fetchFugleQuotes(ids) {
   const apikey = getFugleKey()
@@ -206,9 +211,19 @@ export async function fetchFugleQuotes(ids) {
     }
   }
   const perSymbol = async () => {
-    // 逐檔 quote(並行,守住免費方案 60 req/min → 上限 20 檔/輪)。並行比循序快
-    // 一個數量級(10 檔:10 次循序來回 → 1 波並行)。
-    const syms = [...idSet].slice(0, 20)
+    // 逐檔 quote(並行)。一輪最多 8 檔守住 60 req/min 預算(8×4 輪/分=32);
+    // 清單 >8 檔時用輪替視窗:每輪接著上一輪的位置取下一批,30-45 秒內全清單
+    // 都會更新一遍。舊版此處一次打 20 檔 → 80 req/min → 連環 429(2026-07-21
+    // 使用者盯盤仍失敗的殘餘路徑:snapshot 被拒後退回到這裡)。
+    const all = [...idSet]
+    let syms
+    if (all.length <= 8) {
+      syms = all
+    } else {
+      const start = perSymbolCursor % all.length
+      syms = [...all.slice(start), ...all.slice(0, start)].slice(0, 8)
+      perSymbolCursor = (start + 8) % all.length
+    }
     const results = await Promise.all(syms.map(sym =>
       fetch(`https://api.fugle.tw/marketdata/v1.0/stock/intraday/quote/${sym}`, {
         headers: { 'X-API-KEY': apikey },
@@ -231,23 +246,29 @@ export async function fetchFugleQuotes(ids) {
     }
     // snapshot 兩個請求涵蓋上市+上櫃全部,與清單大小無關。
     let snapshotOk = false
-    for (const market of ['TSE', 'OTC']) {
-      const res = await fetch(`https://api.fugle.tw/marketdata/v1.0/stock/snapshot/quotes/${market}`, {
-        headers: { 'X-API-KEY': apikey },
-      })
-      if (!res.ok) { if (res.status === 429) saw429 = true; break } // 方案不含 snapshot(401/403)→ 改走逐檔
-      const body = await res.json()
-      for (const d of (body.data || [])) {
-        const sym = String(d.symbol || '')
-        if (!idSet.has(sym)) continue
-        const q = mapQuote(d)
-        if (q) out[sym] = q
+    if (!snapshotUnsupported) {
+      for (const market of ['TSE', 'OTC']) {
+        const res = await fetch(`https://api.fugle.tw/marketdata/v1.0/stock/snapshot/quotes/${market}`, {
+          headers: { 'X-API-KEY': apikey },
+        })
+        if (!res.ok) {
+          if (res.status === 429) saw429 = true
+          else if (res.status === 401 || res.status === 403) snapshotUnsupported = true // 方案不含 snapshot → 之後直接逐檔輪替
+          break
+        }
+        const body = await res.json()
+        for (const d of (body.data || [])) {
+          const sym = String(d.symbol || '')
+          if (!idSet.has(sym)) continue
+          const q = mapQuote(d)
+          if (q) out[sym] = q
+        }
+        snapshotOk = true
       }
-      snapshotOk = true
+      if (saw429) { setCooldown(); return out }
+      if (snapshotOk && Object.keys(out).length) return out
     }
-    if (saw429) { setCooldown(); return out }
-    if (snapshotOk && Object.keys(out).length) return out
-    const r = await perSymbol() // snapshot 不可用(非 429)→ 逐檔並行(前 20 檔)
+    const r = await perSymbol() // snapshot 不可用 → 逐檔輪替(≤8 檔/輪,守速率預算)
     if (saw429) setCooldown()
     return r
   } catch { /* CORS / 網路失敗 → 空物件,讓既有層接手 */ }

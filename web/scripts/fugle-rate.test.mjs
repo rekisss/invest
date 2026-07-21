@@ -16,11 +16,12 @@ globalThis.localStorage = {
 }
 
 const calls = []
-let mode = 'ok' // 'ok' | 'rate-limited'
+let mode = 'ok' // 'ok' | 'rate-limited' | 'snapshot-forbidden'
 globalThis.fetch = async (url) => {
   calls.push(String(url))
   if (mode === 'rate-limited') return { ok: false, status: 429, json: async () => ({}) }
   if (String(url).includes('/snapshot/quotes/')) {
+    if (mode === 'snapshot-forbidden') return { ok: false, status: 403, json: async () => ({}) }
     return {
       ok: true, status: 200,
       json: async () => ({ data: [
@@ -64,6 +65,27 @@ test('9+ 檔:改走 snapshot,一輪固定 2 個請求(TSE+OTC)', async () => {
   assert.equal(quoteCalls(), 0, '大清單不得逐檔打(速率預算)')
   assert.equal(out['2330'].price, 1000)   // snapshot 覆蓋到的檔有價
   assert.equal(out['2317'].price, 200)
+})
+
+test('snapshot 被方案拒絕(403):退回逐檔也只打 ≤8 檔,且之後不再嘗試 snapshot', async () => {
+  mode = 'snapshot-forbidden'
+  calls.length = 0
+  const ids = Array.from({ length: 12 }, (_, i) => String(2101 + i))
+  const out1 = await fetchFugleQuotes(ids)
+  const q1 = calls.filter(u => u.includes('/intraday/quote/')).length
+  assert.equal(snapCalls(), 1, '403 後同輪不再打第二個 snapshot')
+  assert.ok(q1 <= 8, `退回逐檔一輪最多 8 檔(2026-07-21 盯盤仍失敗的殘餘路徑):${q1}`)
+  assert.ok(Object.keys(out1).length >= 1)
+
+  // 第二輪:記住 snapshot 不可用 → 零 snapshot 請求;輪替視窗涵蓋其餘檔
+  calls.length = 0
+  const out2 = await fetchFugleQuotes(ids)
+  assert.equal(snapCalls(), 0, '之後不再浪費 snapshot 請求')
+  const round2 = calls.filter(u => u.includes('/intraday/quote/')).map(u => u.split('/').pop())
+  assert.ok(round2.length <= 8)
+  const round1 = new Set(Object.keys(out1))
+  assert.ok(round2.some(s => !round1.has(s)), '輪替視窗要涵蓋上一輪沒更新的檔')
+  mode = 'ok'
 })
 
 test('WS 訂閱不超過免費方案 5 頻道,且依 wanted 順序(持倉優先)', () => {
