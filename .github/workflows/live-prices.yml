@@ -11,6 +11,11 @@ on:
 permissions:
   contents: write
 
+# 避免自身跑太久時前後兩輪重疊、同時搶推 data 分支。
+concurrency:
+  group: live-prices
+  cancel-in-progress: false
+
 jobs:
   cache-prices:
     runs-on: ubuntu-latest
@@ -271,5 +276,15 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git add live_prices.json
-          git diff --staged --quiet || git commit -m "prices $(TZ=Asia/Taipei date '+%H:%M:%S')"
-          git push origin data
+          git diff --staged --quiet && { echo "無變化,不需推送"; exit 0; }
+          git commit -m "prices $(TZ=Asia/Taipei date '+%H:%M:%S')"
+          # 與 live-prices-shioaji.yml 共用 data 分支且同排程 → push 會互相 rejected。
+          # 兩者寫不同檔,fetch+rebase 後重推必為 fast-forward、不衝突。
+          for i in 1 2 3 4 5; do
+            git push origin data && { echo "已推送"; exit 0; }
+            echo "push 被拒(並發寫入)→ rebase 重試 $i"
+            git fetch origin data && { git rebase origin/data || git rebase --abort; }
+            sleep $((i * 2))
+          done
+          echo "快取 push 連續 5 次失敗" >&2
+          exit 1
