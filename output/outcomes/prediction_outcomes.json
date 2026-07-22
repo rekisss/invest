@@ -1,0 +1,14 @@
+[
+ {
+  "date": "2026-07-22",
+  "taiex_close": 44232.87,
+  "taiex_change": 1783.17,
+  "taiex_pct": 0.042006657290864245,
+  "actual_up": true,
+  "pred_date": "2026-07-22",
+  "xgb_prob_up": 0.222,
+  "pred_label": "看空",
+  "directional": true,
+  "hit": false
+ }
+]
