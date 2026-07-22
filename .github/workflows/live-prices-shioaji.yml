@@ -55,5 +55,16 @@ jobs:
           git checkout data
           mv -f "${RUNNER_TEMP}/live_prices_shioaji.json" live_prices_shioaji.json
           git add live_prices_shioaji.json
-          git diff --staged --quiet || git commit -m "shioaji prices $(TZ=Asia/Taipei date '+%H:%M:%S')"
-          git push origin data
+          git diff --staged --quiet && { echo "無變化,不需推送"; exit 0; }
+          git commit -m "shioaji prices $(TZ=Asia/Taipei date '+%H:%M:%S')"
+          # 與 live-prices.yml 共用 data 分支且同排程(每3分鐘)→ 兩者的 push 會
+          # 互相 rejected(non-fast-forward)。因兩者寫不同檔(live_prices.json vs
+          # live_prices_shioaji.json),fetch+rebase 後重推必為 fast-forward、不衝突。
+          for i in 1 2 3 4 5; do
+            git push origin data && { echo "已推送"; exit 0; }
+            echo "push 被拒(並發寫入)→ rebase 重試 $i"
+            git fetch origin data && { git rebase origin/data || git rebase --abort; }
+            sleep $((i * 2))
+          done
+          echo "shioaji 快取 push 連續 5 次失敗" >&2
+          exit 1
