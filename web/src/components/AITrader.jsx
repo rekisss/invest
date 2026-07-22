@@ -87,7 +87,7 @@ function EquityCurve({ curve, startCapital, benchmark }) {
 
 // ── rule-lab overlay chart:主帳戶 + 變體 ret_pct 疊線 ───────────────────────
 const VARIANT_COLORS = { next_open: '#FF9F0A', rs_mom: '#66D4CF', bear_filter: '#5E5CE6', trail8: '#BF5AF2', tp12: '#64D2FF', tp5: '#FFD60A', pos3: '#FF6482', random: '#8E8E93', rev_growth: '#A2845E' }
-function VariantChart({ mainCurve, variants, adaptive }) {
+function VariantChart({ mainCurve, variants, adaptive, ensemble }) {
   const path = useMemo(() => {
     if (!mainCurve || mainCurve.length < 2) return null
     const W = 320, H = 84, pad = 4
@@ -97,6 +97,9 @@ function VariantChart({ mainCurve, variants, adaptive }) {
         .map(v => ({ id: v.id, color: VARIANT_COLORS[v.id] || 'var(--ios-label3)', vals: v.curve, width: 1.1 })),
       ...(adaptive?.curve?.length >= 2
         ? [{ id: 'adaptive', color: '#30D158', vals: adaptive.curve.map(p => p.ret_pct), width: 1.8 }]
+        : []),
+      ...(ensemble?.curve?.length >= 2
+        ? [{ id: 'ensemble', color: '#FF9F0A', vals: ensemble.curve.map(p => p.ret_pct), width: 1.8 }]
         : []),
     ]
     const all = series.flatMap(s => s.vals)
@@ -523,7 +526,34 @@ export default function AITrader({ data }) {
               )}
             </div>
           )}
-          <VariantChart mainCurve={ai.equity_curve} variants={ai.variants} adaptive={ai.adaptive} />
+          {ai.ensemble && (
+            <div style={{ background: 'rgba(255,159,10,0.08)', border: '0.5px solid rgba(255,159,10,0.3)', borderRadius: 10, padding: '8px 11px', marginBottom: 10 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 800, color: '#FF9F0A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                🧠 群體智慧帳戶
+                <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', color: colorOf(ai.ensemble.return_pct) }}>{pctStr(ai.ensemble.return_pct, 1)}</span>
+              </div>
+              <div style={{ fontSize: 10.5, color: 'var(--ios-label2)', lineHeight: 1.7, marginTop: 3 }}>
+                參考<b>全體交易員</b>、按近期績效分散配權(每週調整,保留分散地板)
+                {ai.ensemble.learning_active
+                  ? ` · 已調權 ${ai.ensemble.num_rebalances} 次`
+                  : ` · 樣本累積中(已結 ${ai.ensemble.samples?.closed_trades ?? 0}/${ai.ensemble.samples?.required ?? 10} 筆)`}
+              </div>
+              {ai.ensemble.weights?.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
+                  {ai.ensemble.weights.slice(0, 6).map((w) => (
+                    <span key={w.id} style={{ fontSize: 9.5, background: 'var(--ios-fill3)', borderRadius: 5, padding: '1px 6px', color: 'var(--ios-label2)' }}>
+                      <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 3, background: w.id === 'main' ? 'var(--ios-blue)' : (VARIANT_COLORS[w.id] || 'var(--ios-label3)'), marginRight: 4, verticalAlign: 'middle' }} />
+                      {w.label} <b style={{ fontFamily: 'var(--font-mono)' }}>{w.weight_pct}%</b>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 4, lineHeight: 1.5 }}>
+                與「自我學習帳戶」互補:那個押單一贏家,這個分散押全體 — 可直接比哪種學習方式好
+              </div>
+            </div>
+          )}
+          <VariantChart mainCurve={ai.equity_curve} variants={ai.variants} adaptive={ai.adaptive} ensemble={ai.ensemble} />
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) auto auto auto auto', gap: '6px 10px', fontSize: 11, alignItems: 'center' }}>
             <span style={{ fontSize: 9.5, color: 'var(--ios-label4)' }}>規則</span>
             <span style={{ fontSize: 9.5, color: 'var(--ios-label4)', textAlign: 'right' }}>報酬</span>
