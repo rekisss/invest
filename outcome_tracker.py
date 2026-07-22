@@ -67,28 +67,57 @@ def _f(v, default=None):
 
 # ── 1) 真實加權指數收盤 ────────────────────────────────────────────────────────
 
+# 加權指數的精確名稱。用完整字串「發行量加權股價指數」比對,可避免誤中
+# 「發行量加權股價報酬指數」(總報酬指數,值不同)——後者含「股價報酬指數」
+# 而非連續的「股價指數」,故不會被子字串命中。
+TAIEX_NAME = "發行量加權股價指數"
+
+
+def _field(item: dict, includes, excludes=()):
+    """回傳第一個「鍵名含 includes 任一關鍵字、且不含 excludes 任一字」的值。
+
+    TWSE openapi 的欄位名改過不只一次(指數名稱→指數、加/去英文鍵)。寫死
+    欄位名會在改版後靜默失敗:fetch_taiex 回 None → 被當成假日跳過 →
+    真實命中率永遠累積不到(2026-07 診斷:每個交易日都『無指數資料』)。
+    模糊比對讓抓取對欄位改名有韌性。
+    """
+    for k, v in item.items():
+        ks = str(k).lower()
+        if any(inc.lower() in ks for inc in includes) and not any(ex.lower() in ks for ex in excludes):
+            return v
+    return None
+
+
 def fetch_taiex() -> dict | None:
-    """回傳 {close, change, pct}（TWSE 公開 API，非交易日回 None）。"""
+    """回傳 {close, change, pct}（TWSE MI_INDEX openapi，非交易日回 None）。
+
+    Schema-agnostic:先用「任一欄位值含加權指數名稱」定位那一列(不預設
+    名稱放哪個鍵),再以模糊鍵比對取收盤/漲跌點數(避開漲跌百分比)。
+    """
     try:
         req = urllib.request.Request(TWSE_IDX, headers={"User-Agent": "outcome-tracker"})
         with urllib.request.urlopen(req, timeout=15) as r:
             data = json.loads(r.read().decode("utf-8"))
-        for item in data or []:
-            name = item.get("Index") or item.get("指數名稱") or ""
-            if "發行量加權" not in name and "加權股價指數" not in name:
-                continue
-            close = _f(item.get("ClosingIndex") or item.get("收盤指數"))
-            chg = _f(item.get("Change") or item.get("漲跌點數"))
-            if close is None:
-                continue
-            prev = close - chg if chg is not None else None
-            return {
-                "close": close,
-                "change": chg,
-                "pct": (chg / prev) if (chg is not None and prev) else None,
-            }
     except Exception as exc:  # noqa: BLE001
         print(f"[taiex] 抓取失敗: {exc}")
+        return None
+    for item in data or []:
+        if not isinstance(item, dict):
+            continue
+        if not any(TAIEX_NAME in str(v) for v in item.values()):
+            continue
+        close = _f(_field(item, ["收盤", "closing", "close"]))
+        # 漲跌點數:排除「漲跌百分比 / percent / %」避免取到百分比欄
+        chg = _f(_field(item, ["漲跌點數", "點數", "change"], excludes=["百分比", "percent", "%"]))
+        if close is None:
+            continue
+        prev = close - chg if chg is not None else None
+        return {
+            "close": close,
+            "change": chg,
+            "pct": (chg / prev) if (chg is not None and prev) else None,
+        }
+    print("[taiex] MI_INDEX 回應中找不到加權指數列(schema 可能再次改版)")
     return None
 
 
