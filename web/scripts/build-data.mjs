@@ -3,7 +3,7 @@ import { join, resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import https from 'https'
 import http from 'http'
-import { simulatePaperTrader, simulateAdaptiveTrader } from './paper-trader.mjs'
+import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader } from './paper-trader.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SCAN_DIR = resolve(__dirname, '../../output/full_scan')
@@ -1849,7 +1849,13 @@ if (aiTrader) {
     if (aiTrader.adaptive) {
       console.log(`AI trader adaptive: ${aiTrader.adaptive.return_pct}% follow=${aiTrader.adaptive.follow_id} switches=${aiTrader.adaptive.num_switches} learning=${aiTrader.adaptive.learning_active}`)
     }
-  } catch (e) { console.log(`AI trader adaptive: skipped (${e.message})`) }
+    // 群體智慧帳戶:同一組候選(主帳戶+非對照變體),但按績效分散配權而非單一跟隨
+    aiTrader.ensemble = simulateEnsembleTrader({ accounts: adaptiveAccounts })
+    if (aiTrader.ensemble) {
+      const w = aiTrader.ensemble.weights.slice(0, 3).map(x => `${x.id} ${x.weight_pct}%`).join(' ')
+      console.log(`AI trader ensemble: ${aiTrader.ensemble.return_pct}% rebalances=${aiTrader.ensemble.num_rebalances} 前三配權[${w}] learning=${aiTrader.ensemble.learning_active}`)
+    }
+  } catch (e) { console.log(`AI trader adaptive/ensemble: skipped (${e.message})`) }
   delete aiTrader.exit_dates // 只在 build 期用,不進 data.json
 }
 

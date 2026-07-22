@@ -407,3 +407,81 @@ export function simulateAdaptiveTrader({ accounts, window = 10, minTrades = 10, 
     config: { window, min_trades: minTrades, margin_pp: marginPp, switch_cost_pct: switchCostPct },
   }
 }
+
+// ── 群體智慧帳戶(集成/ensemble 學習層)──────────────────────────────────────
+// 與「自適應帳戶」互補:自適應是『贏家全拿』(同時只跟一個),這個是
+// 『參考全體』——把資金按近期績效分散到所有交易員,表現好的多配、但每個
+// 都保留分散地板(never abandon)。每 rebalanceDays 重新配權一次,調整時
+// 依換手率扣一點成本。樣本不足前用等權(純分散,還沒開始學)。
+// 完全確定性:constant-mix 組合,每日報酬 = 各帳戶當日報酬的權重和。
+export function simulateEnsembleTrader({ accounts, window = 10, minTrades = 10, rebalanceDays = 5, floorMix = 0.4, costPct = 0.1 }) {
+  const base = accounts?.[0]
+  if (!base?.curve?.length || accounts.length < 2) return null
+  const days = base.curve.map(p => p.date)
+  const n = days.length
+  const usable = accounts.filter(a => a.curve?.length === n)
+  const K = usable.length
+  if (K < 2) return null
+  const levels = usable.map(a => a.curve.map(p => 1 + p.ret_pct / 100))
+  const closedByDay = usable.map(a => {
+    const sorted = [...(a.exit_dates || [])].sort()
+    const m = new Array(n).fill(0); let j = 0
+    for (let i = 0; i < n; i++) { while (j < sorted.length && sorted[j] <= days[i]) j++; m[i] = j }
+    return m
+  })
+
+  let w = new Array(K).fill(1 / K)   // 目前權重(起始等權)
+  let level = 1
+  const curve = []
+  const rebalances = []
+  let eligibleSince = null
+
+  for (let i = 0; i < n; i++) {
+    if (i > 0) {
+      // constant-mix:組合當日毛報酬 = Σ 權重 × 各帳戶當日毛報酬
+      let g = 0
+      for (let k = 0; k < K; k++) g += w[k] * (levels[k][i] / levels[k][i - 1])
+      level *= g
+    }
+    curve.push({ date: days[i], ret_pct: round2((level - 1) * 100) })
+
+    if (i < window) continue
+    const totalClosed = closedByDay.reduce((a, m) => a + m[i], 0)
+    if (totalClosed < minTrades) continue
+    if (eligibleSince == null) eligibleSince = days[i]
+    if ((i - window) % rebalanceDays !== 0) continue   // 每 rebalanceDays 才調權一次
+
+    // 近 window 日各帳戶報酬 → 傾斜權重(平滑讓最差者仍非零)+ 分散地板
+    const trails = usable.map((_, k) => levels[k][i] / levels[k][i - window] - 1)
+    const lo = Math.min(...trails)
+    const raw = trails.map(t => (t - lo) + 0.02)     // 2pp 平滑
+    const rawSum = raw.reduce((a, b) => a + b, 0) || K
+    const wNew = raw.map(r => floorMix / K + (1 - floorMix) * (r / rawSum))
+    // rebalance 成本 = 換手率 × costPct(換手率 = ½Σ|Δw|)
+    let turnover = 0
+    for (let k = 0; k < K; k++) turnover += Math.abs(wNew[k] - w[k])
+    turnover *= 0.5
+    if (turnover > 0) {
+      level *= 1 - turnover * costPct / 100
+      curve[curve.length - 1].ret_pct = round2((level - 1) * 100)
+    }
+    w = wNew
+    rebalances.push({ date: days[i],
+      top: usable.map((a, k) => ({ id: a.id, w: round2(w[k] * 100) })).sort((a, b) => b.w - a.w).slice(0, 3) })
+  }
+
+  const totalClosedNow = closedByDay.reduce((a, m) => a + m[n - 1], 0)
+  const finalWeights = usable
+    .map((a, k) => ({ id: a.id, label: a.label || a.id, weight_pct: round2(w[k] * 100) }))
+    .sort((a, b) => b.weight_pct - a.weight_pct)
+  return {
+    return_pct: curve[n - 1].ret_pct,
+    curve,
+    weights: finalWeights,          // 目前各交易員的參考權重(高→低)
+    num_rebalances: rebalances.length,
+    learning_active: totalClosedNow >= minTrades,
+    samples: { closed_trades: totalClosedNow, required: minTrades },
+    eligible_since: eligibleSince,
+    config: { window, min_trades: minTrades, rebalance_days: rebalanceDays, floor_mix: floorMix, cost_pct: costPct },
+  }
+}
