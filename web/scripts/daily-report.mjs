@@ -109,7 +109,13 @@ if (ph.length && benchCurve.length >= 2) {
     if (p.date === asOf) todayLine = `今日 ${p.xgb_label} → 實際 ${pct(r)} ${ok ? '✅' : '❌'}`
   }
   if (total > 0) {
-    lines.push(`🔮 預測回顧:${todayLine ? todayLine + ' · ' : ''}近${total}日命中 ${hits}/${total}(${Math.round(hits / total * 100)}%)`)
+    // 真實收盤打分(outcome_tracker → realOutcomes.prediction_hit)比代理更準,
+    // 樣本足夠(≥5 日)才附上;不足時只用代理(避免 1/1 這種誤導數字)。
+    const rh = data.realOutcomes?.prediction_hit
+    const realStr = (rh && rh.total >= 5)
+      ? ` · 真實收盤 ${rh.hits}/${rh.total}(${Math.round(rh.hits / rh.total * 100)}%)`
+      : ''
+    lines.push(`🔮 預測回顧:${todayLine ? todayLine + ' · ' : ''}代理估算近${total}日 ${hits}/${total}(${Math.round(hits / total * 100)}%)${realStr}`)
   }
 }
 
