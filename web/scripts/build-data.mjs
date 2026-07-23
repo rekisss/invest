@@ -253,6 +253,46 @@ async function enrichUsMarketData(md) {
   return out
 }
 
+// Model-input feature groups (from prediction.market_data). Used to compute an
+// honest "本次預測輸入完整度" breakdown — when overnight-US feeds are down, the
+// XGB call runs on degraded input and shouldn't be treated as gospel. Grouped +
+// labelled here so the frontend just renders; adding this changes no decision.
+const PRED_FEATURE_GROUPS = [
+  { key: 'us_overnight', label: '美股隔夜', critical: true, fields: [
+    ['sp500_ret', 'S&P500'], ['nasdaq_ret', 'Nasdaq'], ['sox_ret', '費半SOX'], ['tsm_adr_ret', '台積ADR'], ['vix', 'VIX'] ] },
+  { key: 'derivatives', label: '期權籌碼', critical: false, fields: [
+    ['futures_net', '外資期貨'], ['night_change', '夜盤'], ['pcr', 'Put/Call'] ] },
+  { key: 'cross_asset', label: '跨資產', critical: false, fields: [
+    ['jpy_ret', '日圓'], ['arkk_ret', 'ARKK'], ['hyg_ret', '高收益債'] ] },
+  { key: 'tw_tech', label: '台股技術', critical: false, fields: [
+    ['taiex_rsi', 'RSI'], ['macd_hist', 'MACD'], ['dist_ma20', '距MA20'], ['dist_ma60', '距MA60'], ['taiex_ret_5d', '5日'], ['taiex_ret_20d', '20日'] ] },
+  { key: 'fundamental', label: '基本面', critical: false, fields: [
+    ['market_revenue_yoy', '營收YoY'], ['market_foreign_holding_chg', '外資持股'] ] },
+]
+
+function computePredCompleteness(md) {
+  md = md || {}
+  const has = v => v != null && !(typeof v === 'number' && Number.isNaN(v))
+  const groups = PRED_FEATURE_GROUPS.map(g => {
+    const missing = g.fields.filter(([k]) => !has(md[k]))
+    return {
+      key: g.key, label: g.label, critical: g.critical,
+      present: g.fields.length - missing.length, total: g.fields.length,
+      missing: missing.map(([, lbl]) => lbl),
+    }
+  })
+  const present = groups.reduce((s, g) => s + g.present, 0)
+  const total = groups.reduce((s, g) => s + g.total, 0)
+  const crit = groups.filter(g => g.critical)
+  const critPresent = crit.reduce((s, g) => s + g.present, 0)
+  const critTotal = crit.reduce((s, g) => s + g.total, 0)
+  return {
+    present, total, pct: total ? Math.round(present / total * 100) : null,
+    critical_present: critPresent, critical_total: critTotal,
+    groups,
+  }
+}
+
 // Enrich a prediction object in-place-ish (returns a new object). Safe no-op on null.
 async function enrichPrediction(prediction, articles) {
   if (!prediction) return prediction
@@ -1494,6 +1534,12 @@ try {
   prediction = await enrichPrediction(prediction, news)
 } catch (e) {
   console.warn('  Prediction enrichment skipped:', e.message)
+}
+// Attach honest input-completeness breakdown (after any US-market backfill).
+if (prediction) {
+  prediction.input_completeness = computePredCompleteness(prediction.market_data)
+  const ic = prediction.input_completeness
+  console.log(`  Prediction input completeness: ${ic.present}/${ic.total} (${ic.pct}%), 美股隔夜 ${ic.critical_present}/${ic.critical_total}`)
 }
 
 console.log('Fetching FinMind quota...')
