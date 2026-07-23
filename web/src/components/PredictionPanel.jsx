@@ -295,7 +295,7 @@ function Tag({ text, color }) {
 // 預測回顧:盤前預測(偏多/中性/偏空)逐日對照「掃描池等權當日報酬」打分。
 // 與 Discord 日報的 🔮 預測回顧完全同一套判定(等權日報酬 = 基準曲線相鄰兩點
 // 累計值相減;中性 ±0.4% 內算命中),前端看到的命中率和日報數字一致。
-function PredictionReviewPanel({ history, benchCurve }) {
+function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
   const listRef = useRef(null)
   const rows = useMemo(() => {
     const curve = benchCurve || []
@@ -336,12 +336,35 @@ function PredictionReviewPanel({ history, benchCurve }) {
   const rateColor = hitPct >= 60 ? 'var(--ios-green)' : hitPct >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)'
   const labelColor = (label) => label.includes('多') ? 'var(--ios-red)' : label.includes('空') ? 'var(--ios-green)' : 'var(--ios-yellow)'
 
+  // 真實收盤打分(outcome_tracker → realOutcomes.prediction_hit):比下方的
+  // 「掃描池等權代理」更準,但要等每日真實收盤累積。樣本足夠(≥REAL_MIN)才
+  // 當權威顯示,否則顯示累積進度。
+  const REAL_MIN = 5
+  const rh = realOutcomes?.prediction_hit
+  const realHit = rh && rh.total > 0
+    ? { total: rh.total, hits: rh.hits, pct: Math.round(rh.hits / rh.total * 100), ready: rh.total >= REAL_MIN }
+    : null
+  const realColor = realHit && (realHit.pct >= 60 ? 'var(--ios-green)' : realHit.pct >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)')
+
   return (
-    <Card title="🔮 預測回顧" accent={rateColor}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 24, fontWeight: 700, color: rateColor, fontFamily: 'var(--font-mono)', letterSpacing: '-0.5px' }}>{hitPct}%</span>
-        <span style={{ fontSize: 12, color: 'var(--ios-label2)' }}>近 {rows.length} 個可驗證交易日命中 {hits} 次</span>
+    <Card title="🔮 預測回顧" accent={realHit?.ready ? realColor : rateColor}>
+      {realHit?.ready && (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+          <span style={{ fontSize: 24, fontWeight: 700, color: realColor, fontFamily: 'var(--font-mono)', letterSpacing: '-0.5px' }}>{realHit.pct}%</span>
+          <span style={{ fontSize: 12, color: 'var(--ios-label2)' }}>真實收盤打分 · 近 {realHit.total} 日命中 {realHit.hits} 次</span>
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: realHit?.ready ? 4 : 10 }}>
+        <span style={{ fontSize: realHit?.ready ? 15 : 24, fontWeight: 700, color: rateColor, fontFamily: 'var(--font-mono)', letterSpacing: '-0.5px' }}>{hitPct}%</span>
+        <span style={{ fontSize: realHit?.ready ? 10.5 : 12, color: 'var(--ios-label3)' }}>
+          {realHit?.ready ? '掃描池代理估算 · ' : ''}近 {rows.length} 個可驗證交易日命中 {hits} 次
+        </span>
       </div>
+      {realHit && !realHit.ready && (
+        <div style={{ fontSize: 10.5, color: 'var(--ios-label3)', marginBottom: 8, background: 'var(--ios-fill4)', borderRadius: 6, padding: '4px 8px' }}>
+          🎯 真實收盤打分累積中({realHit.total}/{REAL_MIN} 日)— 足夠後改用更準的真實命中率
+        </div>
+      )}
       <div ref={listRef}>
         {rows.map(r => (
           <div key={r.date} data-row style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '0.5px solid var(--ios-sep)' }}>
@@ -657,7 +680,7 @@ function HistoryRow({ entry }) {
   )
 }
 
-export default function PredictionPanel({ prediction, history = [], benchCurve = [] }) {
+export default function PredictionPanel({ prediction, history = [], benchCurve = [], realOutcomes = null }) {
   // NOTE: all hooks must run before the empty-state return — `prediction` can flip
   // from null to an object on the SAME mounted component (刷新 after the morning
   // prediction lands), and an early return above hooks would change the hook count
@@ -766,7 +789,7 @@ export default function PredictionPanel({ prediction, history = [], benchCurve =
         <ProbTrend history={history} />
 
         {/* Daily prediction vs actual scoreboard */}
-        <PredictionReviewPanel history={history} benchCurve={benchCurve} />
+        <PredictionReviewPanel history={history} benchCurve={benchCurve} realOutcomes={realOutcomes} />
 
         {/* Calibration & error analysis */}
         <CalibrationPanel history={history} />
