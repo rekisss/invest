@@ -331,6 +331,39 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
 
 function round2(v) { return v == null || !isFinite(v) ? null : Math.round(v * 100) / 100 }
 
+// Risk metrics for an equity curve of [{date, ret_pct}] (ret_pct = cumulative % vs
+// start). The meta-accounts (adaptive/ensemble) report only return_pct, so raw
+// return alone can't show the ensemble's whole point — smoother ride (lower
+// drawdown/vol) at comparable return. This makes that comparable. Pure + testable.
+//   • max_drawdown_pct: worst peak-to-trough on the level series (same definition
+//     as the base accounts' equity-peak drawdown)
+//   • volatility_pct: sample stdev of daily returns, in %
+//   • return_over_mdd: total return per unit of max drawdown (報酬/回撤;越高越好),
+//     null when there is no drawdown to divide by
+export function computeCurveRisk(curve) {
+  if (!Array.isArray(curve) || curve.length < 2) return null
+  const levels = curve.map(p => 1 + (p.ret_pct || 0) / 100)
+  let peak = levels[0], maxDD = 0
+  for (const l of levels) { if (l > peak) peak = l; const dd = peak > 0 ? (peak - l) / peak : 0; if (dd > maxDD) maxDD = dd }
+  const daily = []
+  for (let i = 1; i < levels.length; i++) {
+    if (levels[i - 1] > 0) daily.push(levels[i] / levels[i - 1] - 1)
+  }
+  let vol = null
+  if (daily.length >= 2) {
+    const mean = daily.reduce((a, b) => a + b, 0) / daily.length
+    const variance = daily.reduce((a, b) => a + (b - mean) ** 2, 0) / (daily.length - 1)
+    vol = Math.sqrt(variance)
+  }
+  const returnPct = curve[curve.length - 1].ret_pct
+  const mddPct = maxDD * 100
+  return {
+    max_drawdown_pct: round2(mddPct),
+    volatility_pct: vol == null ? null : round2(vol * 100),
+    return_over_mdd: mddPct > 0 ? round2(returnPct / mddPct) : null,
+  }
+}
+
 // ── 自適應帳戶(自我學習層)──────────────────────────────────────────────────
 // 透明的績效跟隨機制,不是黑箱 ML:每個交易日看「過去 window 個交易日」哪個
 // 帳戶(主帳戶+變體)的實績最好,滿足保護欄才切換跟隨對象:
@@ -401,6 +434,7 @@ export function simulateAdaptiveTrader({ accounts, window = 10, minTrades = 10, 
     switches,
     num_switches: switches.length,
     curve,
+    risk: computeCurveRisk(curve),
     learning_active: totalClosedNow >= minTrades,
     samples: { closed_trades: totalClosedNow, required: minTrades },
     eligible_since: eligibleSince,
@@ -477,6 +511,7 @@ export function simulateEnsembleTrader({ accounts, window = 10, minTrades = 10, 
   return {
     return_pct: curve[n - 1].ret_pct,
     curve,
+    risk: computeCurveRisk(curve),
     weights: finalWeights,          // 目前各交易員的參考權重(高→低)
     num_rebalances: rebalances.length,
     learning_active: totalClosedNow >= minTrades,
