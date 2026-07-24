@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseFuturesInstitutional, fetchFuturesChips } from './futures-chips.mjs'
+import { parseFuturesInstitutional, fetchFuturesChips, parseFuturesDaily, computeBasis } from './futures-chips.mjs'
 
 // Realistic FinMind TaiwanFuturesInstitutionalInvestors shape (long/short OI balance).
 const mkRow = (date, inst, longOI, shortOI) => ({
@@ -86,4 +86,89 @@ test('fetch: parses a successful FinMind response via injected fetchUrl', async 
   })
   const out = await fetchFuturesChips({ token: 't', fetchUrl: stub })
   assert.equal(out.institutions.find(i => i.key === 'foreign').net, -68337)
+})
+
+// ── parseFuturesDaily ────────────────────────────────────────────────────────
+const mkDaily = (date, close, volume, extra = {}) => ({
+  date, contract_date: '202607', close, volume, open_interest: 70000, ...extra,
+})
+
+test('daily: picks latest-date front month (highest volume)', () => {
+  const rows = [
+    mkDaily('2026-07-22', 22800, 50000),
+    mkDaily('2026-07-23', 23010, 120000),           // 近月(量最大)
+    { ...mkDaily('2026-07-23', 22500, 8000), contract_date: '202609' }, // 次月(量小)
+  ]
+  const out = parseFuturesDaily(rows)
+  assert.equal(out.as_of, '2026-07-23')
+  assert.equal(out.close, 23010)
+  assert.equal(out.open_interest, 70000)
+})
+
+test('daily: excludes night/after-hours session rows', () => {
+  const rows = [
+    { ...mkDaily('2026-07-23', 23010, 120000), trading_session: 'position' },   // 日盤
+    { ...mkDaily('2026-07-23', 23120, 200000), trading_session: 'after_market' }, // 夜盤(量更大但要排除)
+  ]
+  const out = parseFuturesDaily(rows)
+  assert.equal(out.close, 23010) // 取日盤,不因夜盤量大而選到它
+})
+
+test('daily: returns null when no close column / empty', () => {
+  assert.equal(parseFuturesDaily([]), null)
+  assert.equal(parseFuturesDaily([{ date: '2026-07-23', foo: 1 }]), null)
+})
+
+// ── computeBasis ─────────────────────────────────────────────────────────────
+test('basis: 正價差 when futures > spot', () => {
+  const b = computeBasis(23010, 22950)
+  assert.equal(b.basis, 60)
+  assert.equal(b.kind, '正價差')
+  assert.equal(b.basis_pct, round2(60 / 22950 * 100))
+})
+
+test('basis: 逆價差 when futures < spot', () => {
+  const b = computeBasis(22900, 22950)
+  assert.equal(b.basis, -50)
+  assert.equal(b.kind, '逆價差')
+})
+
+test('basis: null on missing input', () => {
+  assert.equal(computeBasis(null, 22950), null)
+  assert.equal(computeBasis(23010, null), null)
+  assert.equal(computeBasis(23010, 0), null)
+})
+
+// small local rounding helper mirroring the module's
+function round2(v) { return Math.round(v * 100) / 100 }
+
+test('fetch: attaches daily close via injected fetchUrl (two datasets)', async () => {
+  const stub = async (url) => {
+    if (url.includes('TaiwanFuturesInstitutionalInvestors')) {
+      return JSON.stringify({ status: 200, data: [
+        { date: '2026-07-23', institutional_investors: '外資', long_open_interest_balance_volume: 32000, short_open_interest_balance_volume: 100337 },
+      ] })
+    }
+    if (url.includes('TaiwanFuturesDaily')) {
+      return JSON.stringify({ status: 200, data: [mkDaily('2026-07-23', 23010, 120000)] })
+    }
+    return '{}'
+  }
+  const out = await fetchFuturesChips({ token: 't', fetchUrl: stub })
+  assert.equal(out.institutions.find(i => i.key === 'foreign').net, -68337)
+  assert.equal(out.daily.close, 23010)
+})
+
+test('fetch: daily failure does not sink the institutional result', async () => {
+  const stub = async (url) => {
+    if (url.includes('TaiwanFuturesInstitutionalInvestors')) {
+      return JSON.stringify({ status: 200, data: [
+        { date: '2026-07-23', name: '外資', net_open_interest: -68337 },
+      ] })
+    }
+    throw new Error('daily endpoint down')
+  }
+  const out = await fetchFuturesChips({ token: 't', fetchUrl: stub })
+  assert.equal(out.institutions.find(i => i.key === 'foreign').net, -68337)
+  assert.equal(out.daily, undefined) // 沒有 daily 但主結果仍在
 })
