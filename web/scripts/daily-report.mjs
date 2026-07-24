@@ -119,6 +119,18 @@ if (ph.length && benchCurve.length >= 2) {
   }
 }
 
+// 輸入完整度提示:最新預測若「美股隔夜」關鍵群組缺料,模型跑在降級輸入上,
+// 方向判讀該保守看待——只在關鍵群組不完整時提示(好日子不洗版)。
+{
+  const ic = data.prediction?.input_completeness
+  if (ic && ic.critical_total > 0 && ic.critical_present < ic.critical_total) {
+    const usg = (ic.groups || []).find(g => g.key === 'us_overnight')
+    const missStr = usg && usg.missing?.length ? `(缺 ${usg.missing.join('、')})` : ''
+    const sev = ic.critical_present === 0 ? '🚨 美股隔夜訊號全缺' : '⚠️ 美股隔夜訊號部分缺'
+    lines.push(`${sev}${missStr} — 本次預測輸入僅 ${ic.present}/${ic.total},方向判讀宜保守`)
+  }
+}
+
 // 持倉相關新聞(確定性關鍵字比對:新聞標題含持倉/明日補進的股名或代號)
 const watchStocks = [
   ...(ai.positions || []).map(p => ({ id: String(p.stock_id), name: p.name || '' })),

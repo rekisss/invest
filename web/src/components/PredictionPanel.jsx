@@ -115,6 +115,157 @@ function BearishCrossCheck({ market_data, prob }) {
   )
 }
 
+// Honest "本次預測輸入完整度" — surfaces how many model-input feature groups
+// actually had data today. When the overnight-US feeds are down the XGB call runs
+// on degraded input; showing this (rather than a single buried flag) tells the user
+// *when* to trust the big 看多/看空 number. Build-time computed (input_completeness).
+function InputCompletenessCard({ completeness }) {
+  const ic = completeness
+  if (!ic || !Array.isArray(ic.groups) || ic.groups.length === 0) return null
+  // Reliability tier is driven by the CRITICAL group (US overnight) — the strongest
+  // model driver. All present → green; partial → yellow; none → red.
+  const cp = ic.critical_present, ct = ic.critical_total
+  const tier = ct > 0 && cp === 0 ? 'red' : (cp < ct || ic.pct < 70) ? 'yellow' : 'green'
+  const tierColor = tier === 'red' ? 'var(--ios-red)' : tier === 'yellow' ? 'var(--ios-yellow)' : 'var(--ios-green)'
+  const tierText = tier === 'red' ? '美股隔夜訊號全缺 — 方向判讀不可信,建議只做風控'
+    : tier === 'yellow' ? '部分關鍵訊號缺漏 — 可靠度打折,降低倉位' : '關鍵訊號齊全 — 輸入品質良好'
+  return (
+    <Card title="本次預測輸入完整度" accent={tierColor}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-mono)', color: tierColor }}>{ic.present}/{ic.total}</span>
+        {ic.pct != null && <span style={{ fontSize: 13, color: 'var(--ios-label3)', fontFamily: 'var(--font-mono)' }}>{ic.pct}%</span>}
+        <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>模型輸入特徵</span>
+      </div>
+      <div style={{ marginBottom: 10, padding: '7px 10px', background: `${tierColor}1a`, border: `0.5px solid ${tierColor}59`, borderRadius: 8, fontSize: 12, color: tierColor, fontWeight: 600, lineHeight: 1.5 }}>
+        {tier === 'red' ? '🚨' : tier === 'yellow' ? '⚠️' : '✓'} {tierText}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {ic.groups.map(g => {
+          const full = g.present === g.total
+          const none = g.present === 0
+          const dot = full ? '🟢' : none ? (g.critical ? '🔴' : '⚪') : '🟡'
+          return (
+            <div key={g.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, fontSize: 12 }}>
+              <span style={{ color: 'var(--ios-label2)', whiteSpace: 'nowrap' }}>
+                {dot} {g.label}{g.critical ? ' ★' : ''}
+              </span>
+              <span style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {g.missing.length > 0 && (
+                  <span style={{ fontSize: 11, color: 'var(--ios-label4)' }}>缺 {g.missing.join('、')}</span>
+                )}
+                <span style={{ fontFamily: 'var(--font-mono)', color: full ? 'var(--ios-green)' : none ? 'var(--ios-label3)' : 'var(--ios-yellow)' }}>{g.present}/{g.total}</span>
+              </span>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--ios-label4)', marginTop: 8, lineHeight: 1.5 }}>
+        ★ = 關鍵群組(美股隔夜),對模型影響最大。輸入缺漏越多,預測越應保守看待。
+      </div>
+    </Card>
+  )
+}
+
+// 期貨籌碼面板 — 三大法人 TX 期貨未平倉(build 層抓的 futuresChips)+ 夜盤。
+// 台股慣例:淨多=紅、淨空=綠。futuresChips 缺席時退回 prediction.market_data
+// 既有的 futures_net(外資期貨淨部位),整卡在完全無資料時才隱藏。
+function FuturesChipsPanel({ futuresChips, market_data, history = [] }) {
+  const fc = futuresChips
+  const md = market_data || {}
+  const hasInst = fc && Array.isArray(fc.institutions) && fc.institutions.some(i => i.net != null)
+  const foreignNet = hasInst ? (fc.institutions.find(i => i.key === 'foreign')?.net ?? null) : (md.futures_net ?? null)
+  const night = typeof md.night_change === 'number' ? md.night_change : null
+  const nightTrend = md.night_trend || ''
+  const pcr = typeof md.pcr === 'number' ? md.pcr : null
+
+  // Trend series (外資期貨淨部位):prefer futuresChips history, else predictionHistory futures_net.
+  const series = useMemo(() => {
+    const fromFc = (fc?.history || []).filter(h => typeof h.foreign_net === 'number').map(h => ({ date: h.date, v: h.foreign_net }))
+    if (fromFc.length >= 3) return fromFc.slice(-20)
+    const fromHist = [...(history || [])]
+      .filter(h => h.date && typeof h.market_data?.futures_net === 'number')
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(h => ({ date: h.date, v: h.market_data.futures_net }))
+    return fromHist.slice(-20)
+  }, [fc, history])
+
+  if (foreignNet == null && night == null && !hasInst) return null
+
+  const netColor = n => n == null ? 'var(--ios-label3)' : n > 0 ? 'var(--ios-red)' : n < 0 ? 'var(--ios-green)' : 'var(--ios-label3)'
+  const netStr = n => n == null ? '—' : `${n > 0 ? '淨多' : n < 0 ? '淨空' : '持平'} ${Math.abs(n).toLocaleString()} 口`
+
+  // Sparkline geometry.
+  let spark = null
+  if (series.length >= 3) {
+    const W = 300, H = 44, PX = 4, PY = 6
+    const vs = series.map(d => d.v)
+    const lo = Math.min(...vs), hi = Math.max(...vs)
+    const range = (hi - lo) || 1
+    const n = series.length - 1
+    const xs = i => PX + (i / n) * (W - PX * 2)
+    const ys = v => PY + (1 - (v - lo) / range) * (H - PY * 2)
+    const pts = series.map((d, i) => `${xs(i).toFixed(1)},${ys(d.v).toFixed(1)}`)
+    const line = `M ${pts[0]} ` + pts.slice(1).map(p => `L ${p}`).join(' ')
+    const lastV = vs[vs.length - 1]
+    const zeroY = (lo <= 0 && hi >= 0) ? ys(0) : null
+    spark = { W, H, line, lastV, zeroY, xs, ys, n }
+  }
+
+  return (
+    <Card title="期貨籌碼 · 三大法人未平倉" accent="var(--ios-teal)">
+      {hasInst ? (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          {fc.institutions.map(i => (
+            <div key={i.key} style={{ flex: '1 1 30%', minWidth: 92, background: 'var(--ios-bg3)', borderRadius: 10, padding: '8px 10px' }}>
+              <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginBottom: 3 }}>{i.label}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-mono)', color: netColor(i.net) }}>
+                {i.net == null ? '—' : (i.net > 0 ? '+' : '') + i.net.toLocaleString()}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--ios-label4)' }}>{i.net == null ? '' : i.net > 0 ? '淨多口' : '淨空口'}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-mono)', color: netColor(foreignNet) }}>{netStr(foreignNet)}</span>
+          <span style={{ fontSize: 12, color: 'var(--ios-label3)' }}>外資期貨</span>
+        </div>
+      )}
+
+      {spark && (
+        <svg width="100%" viewBox={`0 0 ${spark.W} ${spark.H}`} style={{ display: 'block', marginBottom: 6, overflow: 'visible' }}>
+          {spark.zeroY != null && (
+            <line x1="0" y1={spark.zeroY} x2={spark.W} y2={spark.zeroY} stroke="var(--ios-sep)" strokeWidth="1" strokeDasharray="3 3" />
+          )}
+          <path d={spark.line} fill="none" stroke={netColor(spark.lastV)} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+          <circle cx={spark.xs(spark.n)} cy={spark.ys(spark.lastV)} r="2.6" fill={netColor(spark.lastV)} />
+        </svg>
+      )}
+      {spark && <div style={{ fontSize: 10, color: 'var(--ios-label4)', marginBottom: 8 }}>外資期貨淨部位近 {series.length} 日走勢(線越低 = 空單越重)</div>}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {night != null && (
+          <div style={{ flex: '1 1 45%', minWidth: 120, background: 'var(--ios-bg3)', borderRadius: 10, padding: '8px 10px' }}>
+            <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginBottom: 2 }}>夜盤 {nightTrend}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-mono)', color: night > 0 ? 'var(--ios-red)' : night < 0 ? 'var(--ios-green)' : 'var(--ios-label3)' }}>
+              {night > 0 ? '+' : ''}{Math.round(night).toLocaleString()} 點
+            </div>
+          </div>
+        )}
+        {pcr != null && (
+          <div style={{ flex: '1 1 45%', minWidth: 120, background: 'var(--ios-bg3)', borderRadius: 10, padding: '8px 10px' }}>
+            <div style={{ fontSize: 11, color: 'var(--ios-label3)', marginBottom: 2 }}>Put/Call 比</div>
+            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--ios-label)' }}>{pcr.toFixed(2)}</div>
+          </div>
+        )}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--ios-label4)', marginTop: 8, lineHeight: 1.5 }}>
+        籌碼為三大法人期貨「未平倉」淨部位(非當日買賣)。外資大額淨空常伴隨避險/看空,惟軋空風險亦高。{hasInst ? '' : '（三大法人明細待資料更新後顯示，目前僅外資期貨淨額）'}
+      </div>
+    </Card>
+  )
+}
+
 // Probability trend chart — redesigned with gradient area + animated line drawing.
 function ProbTrend({ history }) {
   const lineRef = useRef(null)
@@ -680,12 +831,12 @@ function HistoryRow({ entry }) {
   )
 }
 
-export default function PredictionPanel({ prediction, history = [], benchCurve = [], realOutcomes = null }) {
+export default function PredictionPanel({ prediction, history = [], benchCurve = [], realOutcomes = null, futuresChips = null }) {
   // NOTE: all hooks must run before the empty-state return — `prediction` can flip
   // from null to an object on the SAME mounted component (刷新 after the morning
   // prediction lands), and an early return above hooks would change the hook count
   // between renders and crash the whole tab.
-  const { xgb_prob_up, xgb_label, date, generated_at, regime, scenario, risk, news_sentiment, market_data, ai_insight } = prediction || {}
+  const { xgb_prob_up, xgb_label, date, generated_at, regime, scenario, risk, news_sentiment, market_data, ai_insight, input_completeness } = prediction || {}
   // data.json ships lowercase levels ('medium'); legacy entries may carry a
   // 'RiskLevel.' prefix — normalize both into the uppercase RISK_COLOR/LABEL keys.
   const riskLevel = (risk?.level?.replace('RiskLevel.', '') || 'MEDIUM').toUpperCase()
@@ -781,6 +932,12 @@ export default function PredictionPanel({ prediction, history = [], benchCurve =
             </div>
           )}
         </Card>
+
+        {/* Honest input-completeness breakdown — when to trust the call */}
+        <InputCompletenessCard completeness={input_completeness} />
+
+        {/* 期貨籌碼 — 三大法人未平倉 + 夜盤 */}
+        <FuturesChipsPanel futuresChips={futuresChips} market_data={market_data} history={history} />
 
         {/* Rule-based bearish cross-check vs the model */}
         <BearishCrossCheck market_data={market_data} prob={xgb_prob_up} />
