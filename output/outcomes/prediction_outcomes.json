@@ -22,5 +22,17 @@
   "pred_label": "中性",
   "directional": false,
   "hit": null
+ },
+ {
+  "date": "2026-07-24",
+  "taiex_close": 44850.81,
+  "taiex_change": 25.03,
+  "taiex_pct": 0.0005583840370429695,
+  "actual_up": true,
+  "pred_date": "2026-07-23",
+  "xgb_prob_up": 0.508,
+  "pred_label": "中性",
+  "directional": false,
+  "hit": null
  }
 ]
