@@ -3,7 +3,7 @@ import { join, resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import https from 'https'
 import http from 'http'
-import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader } from './paper-trader.mjs'
+import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader, returnOverMdd } from './paper-trader.mjs'
 import { fetchFuturesChips, computeBasis } from './futures-chips.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -1850,7 +1850,10 @@ try {
     scans,
     klineFor: (sid) => getKlineBars(klineMap[sid], '1d'),
   })
-  if (aiTrader) console.log(`AI trader: ${aiTrader.stats.num_trades} trades, ${aiTrader.stats.trading_days} days, return ${aiTrader.return_pct}% (equity ${aiTrader.equity})`)
+  if (aiTrader) {
+    aiTrader.return_over_mdd = returnOverMdd(aiTrader.return_pct, aiTrader.stats.max_drawdown_pct)
+    console.log(`AI trader: ${aiTrader.stats.num_trades} trades, ${aiTrader.stats.trading_days} days, return ${aiTrader.return_pct}% (equity ${aiTrader.equity})`)
+  }
 } catch (e) { console.log(`AI trader: skipped (${e.message})`) }
 
 // 規則實驗室:同一份掃描資料 + 同一起點,只換出場/成交規則的平行虛擬帳戶。
@@ -1904,6 +1907,7 @@ if (aiTrader) {
     return_pct: r.return_pct, equity: r.equity,
     win_rate: r.stats.win_rate, num_trades: r.stats.num_trades,
     max_drawdown_pct: r.stats.max_drawdown_pct, profit_factor: r.stats.profit_factor,
+    return_over_mdd: returnOverMdd(r.return_pct, r.stats.max_drawdown_pct),
     open_positions: r.positions.length,
     // ret_pct 序列與主帳戶共用同一交易日曆(同 scans/klines),供疊圖
     curve: r.equity_curve.map(p => p.ret_pct),

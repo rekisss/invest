@@ -5,7 +5,7 @@
 // 的重構悄悄改變損益數字。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader, computeCurveRisk } from './paper-trader.mjs'
+import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader, computeCurveRisk, returnOverMdd } from './paper-trader.mjs'
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 const D = ['2026-01-05', '2026-01-06', '2026-01-07', '2026-01-08', '2026-01-09']
@@ -311,4 +311,25 @@ test('computeCurveRisk: guards short / empty input', () => {
   assert.equal(computeCurveRisk([]), null)
   assert.equal(computeCurveRisk([{ date: 'a', ret_pct: 3 }]), null)
   assert.equal(computeCurveRisk(null), null)
+})
+
+// ── returnOverMdd ────────────────────────────────────────────────────────────
+test('returnOverMdd: 報酬 ÷ 回落', () => {
+  assert.equal(returnOverMdd(10, 25), 0.4)
+  assert.equal(returnOverMdd(-5, 10), -0.5) // 負報酬照算(方向仍有意義)
+})
+
+test('returnOverMdd: 回落為 0 / 缺值 → null', () => {
+  assert.equal(returnOverMdd(10, 0), null)
+  assert.equal(returnOverMdd(10, null), null)
+  assert.equal(returnOverMdd(null, 25), null)
+})
+
+test('returnOverMdd 與 computeCurveRisk 定義一致', () => {
+  const curve = [
+    { date: 'a', ret_pct: 0 }, { date: 'b', ret_pct: 20 },
+    { date: 'c', ret_pct: -10 }, { date: 'd', ret_pct: 10 },
+  ]
+  const r = computeCurveRisk(curve)
+  assert.equal(r.return_over_mdd, returnOverMdd(10, r.max_drawdown_pct))
 })

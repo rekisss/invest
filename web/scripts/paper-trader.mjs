@@ -360,8 +360,15 @@ export function computeCurveRisk(curve) {
   return {
     max_drawdown_pct: round2(mddPct),
     volatility_pct: vol == null ? null : round2(vol * 100),
-    return_over_mdd: mddPct > 0 ? round2(returnPct / mddPct) : null,
+    return_over_mdd: returnOverMdd(returnPct, mddPct),
   }
+}
+
+// 報酬 ÷ 最大回落(每承受 1% 回落換到多少報酬;越高=風險調整後越好)。
+// 回落為 0 或缺值時回 null(無法比較)。抽成獨立函式讓 variants/主帳戶共用同一定義。
+export function returnOverMdd(returnPct, mddPct) {
+  if (returnPct == null || mddPct == null || !(mddPct > 0)) return null
+  return round2(returnPct / mddPct)
 }
 
 // ── 自適應帳戶(自我學習層)──────────────────────────────────────────────────
