@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 import https from 'https'
 import http from 'http'
 import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader } from './paper-trader.mjs'
-import { fetchFuturesChips } from './futures-chips.mjs'
+import { fetchFuturesChips, computeBasis } from './futures-chips.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SCAN_DIR = resolve(__dirname, '../../output/full_scan')
@@ -1557,6 +1557,26 @@ try {
   if (futuresChips) {
     const f = futuresChips.institutions.find(i => i.key === 'foreign')
     console.log(`  期貨籌碼 ${futuresChips.as_of}:外資淨${(f?.net ?? 0) < 0 ? '空' : '多'} ${Math.abs(f?.net ?? 0).toLocaleString()} 口,三大法人合計 ${futuresChips.total_net?.toLocaleString() ?? 'n/a'}`)
+    // 期現價差(基差):期貨近月收盤 vs 加權指數收盤。spot 取自 realOutcomes 的
+    // 逐日 taiex_close(優先對齊期貨 daily 日期,否則用最新收盤並標記日期不一致)。
+    if (futuresChips.daily?.close != null && Array.isArray(realOutcomes?.prediction) && realOutcomes.prediction.length) {
+      const spotByDate = {}
+      for (const e of realOutcomes.prediction) {
+        const dt = String(e.date || '').slice(0, 10)
+        if (dt && typeof e.taiex_close === 'number') spotByDate[dt] = e.taiex_close
+      }
+      const fDate = futuresChips.daily.as_of
+      const spotDates = Object.keys(spotByDate).sort()
+      const spotDate = spotByDate[fDate] != null ? fDate : spotDates[spotDates.length - 1]
+      const spotClose = spotDate ? spotByDate[spotDate] : null
+      const basis = computeBasis(futuresChips.daily.close, spotClose)
+      if (basis) {
+        basis.spot_date = spotDate
+        basis.date_aligned = spotDate === fDate
+        futuresChips.basis = basis
+        console.log(`  期現價差:期${basis.futures_close} − 現${basis.spot_close} = ${basis.basis > 0 ? '+' : ''}${basis.basis}(${basis.kind}${basis.date_aligned ? '' : ',日期未對齊'})`)
+      }
+    }
   } else {
     console.log('  期貨籌碼:無資料(no token 或抓取失敗)— 前端退回 futures_net')
   }

@@ -90,21 +90,87 @@ export function parseFuturesInstitutional(rows) {
   return { as_of: asOf, institutions, total_net: totalNet, history }
 }
 
+const round2 = v => v == null || !Number.isFinite(v) ? null : Math.round(v * 100) / 100
+
+// Given raw FinMind TaiwanFuturesDaily rows, return the latest day-session
+// front-month close (front month = highest volume per date, mirroring
+// taiwan_futures.py). Night/after-hours rows are excluded so the close pairs
+// cleanly with the spot index close for basis. Returns null when unusable.
+export function parseFuturesDaily(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return null
+  const norm = rows.map(r => {
+    const o = {}
+    for (const k of Object.keys(r)) o[k.toLowerCase().trim()] = r[k]
+    return o
+  })
+  const cols = Object.keys(norm[0])
+  const closeCol = cols.find(c => c === 'close')
+  if (!closeCol) return null
+  const volCol = cols.find(c => c === 'volume' || c === 'trading_volume')
+  const oiCol  = cols.find(c => c === 'open_interest' || c === 'open_interest_balance')
+  const sessionCol = cols.find(c => c.includes('session') || c.includes('夜盤'))
+  const isNight = row => {
+    if (!sessionCol) return false
+    const v = String(row[sessionCol] ?? '').toLowerCase()
+    return v.includes('after') || v.includes('night') || v.includes('夜')
+  }
+
+  const day = norm.filter(r => !isNight(r) && r.date)
+  if (day.length === 0) return null
+  const asOf = day.map(r => String(r.date).slice(0, 10)).sort().slice(-1)[0]
+  const rowsAsOf = day.filter(r => String(r.date).slice(0, 10) === asOf)
+  // front month = highest volume among that date's contract rows
+  rowsAsOf.sort((a, b) => (toNum(b[volCol]) ?? -Infinity) - (toNum(a[volCol]) ?? -Infinity))
+  const front = rowsAsOf[0]
+  const close = toNum(front[closeCol])
+  if (close == null) return null
+  return {
+    as_of: asOf,
+    close,
+    volume: volCol ? toNum(front[volCol]) : null,
+    open_interest: oiCol ? toNum(front[oiCol]) : null,
+  }
+}
+
+// 期現價差(基差)= 期貨收盤 − 加權指數收盤。正值=正價差(市場偏多/期貨溢價),
+// 負值=逆價差(避險買盤/期貨折價)。回 null 若任一輸入缺。
+export function computeBasis(futuresClose, spotClose) {
+  if (futuresClose == null || spotClose == null || spotClose === 0) return null
+  const basis = futuresClose - spotClose
+  return {
+    futures_close: round2(futuresClose),
+    spot_close: round2(spotClose),
+    basis: round2(basis),
+    basis_pct: round2(basis / spotClose * 100),
+    kind: basis >= 0 ? '正價差' : '逆價差',
+  }
+}
+
 // Guarded FinMind fetch. `fetchUrl` is injected so build-data.mjs reuses its own
 // helper (and tests can stub it). Returns null on any failure — never throws.
+// Also pulls TaiwanFuturesDaily for the front-month close (for 期現價差); that
+// second call is independently guarded so it never blocks the institutional data.
 export async function fetchFuturesChips({ token, fetchUrl, endDate, startDate, code = 'TX' } = {}) {
   if (!token || typeof fetchUrl !== 'function') return null
   const end = endDate || new Date().toISOString().slice(0, 10)
   const start = startDate || new Date(Date.now() - 45 * 86400000).toISOString().slice(0, 10)
-  const url = `https://api.finmindtrade.com/api/v4/data?token=${encodeURIComponent(token)}`
-    + `&dataset=TaiwanFuturesInstitutionalInvestors&data_id=${encodeURIComponent(code)}`
-    + `&start_date=${start}&end_date=${end}`
+  const mkUrl = dataset => `https://api.finmindtrade.com/api/v4/data?token=${encodeURIComponent(token)}`
+    + `&dataset=${dataset}&data_id=${encodeURIComponent(code)}&start_date=${start}&end_date=${end}`
+
+  let chips = null
   try {
-    const body = await fetchUrl(url, 12000)
-    const json = JSON.parse(body)
-    if (json.status !== 200 || !Array.isArray(json.data)) return null
-    return parseFuturesInstitutional(json.data)
-  } catch {
-    return null
-  }
+    const json = JSON.parse(await fetchUrl(mkUrl('TaiwanFuturesInstitutionalInvestors'), 12000))
+    if (json.status === 200 && Array.isArray(json.data)) chips = parseFuturesInstitutional(json.data)
+  } catch { chips = null }
+  if (!chips) return null
+
+  // Best-effort front-month daily close (for basis). Never fails the whole result.
+  try {
+    const json = JSON.parse(await fetchUrl(mkUrl('TaiwanFuturesDaily'), 12000))
+    if (json.status === 200 && Array.isArray(json.data)) {
+      const daily = parseFuturesDaily(json.data)
+      if (daily) chips.daily = daily
+    }
+  } catch { /* keep chips without daily */ }
+  return chips
 }

@@ -243,6 +243,19 @@ function FuturesChipsPanel({ futuresChips, market_data, history = [] }) {
       )}
       {spark && <div style={{ fontSize: 10, color: 'var(--ios-label4)', marginBottom: 8 }}>外資期貨淨部位近 {series.length} 日走勢(線越低 = 空單越重)</div>}
 
+      {fc?.basis && typeof fc.basis.basis === 'number' && (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8, padding: '8px 10px', background: 'var(--ios-bg3)', borderRadius: 10 }}>
+          <span style={{ fontSize: 11, color: 'var(--ios-label3)' }}>期現價差</span>
+          <span style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: fc.basis.basis > 0 ? 'var(--ios-red)' : fc.basis.basis < 0 ? 'var(--ios-green)' : 'var(--ios-label3)' }}>
+            {fc.basis.basis > 0 ? '+' : ''}{fc.basis.basis} 點
+          </span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: fc.basis.kind === '正價差' ? 'var(--ios-red)' : 'var(--ios-green)' }}>{fc.basis.kind}</span>
+          <span style={{ fontSize: 10, color: 'var(--ios-label4)', marginLeft: 'auto' }}>
+            期{Math.round(fc.basis.futures_close)} / 現{Math.round(fc.basis.spot_close)}{fc.basis.date_aligned === false ? ' · 日期未對齊' : ''}
+          </span>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {night != null && (
           <div style={{ flex: '1 1 45%', minWidth: 120, background: 'var(--ios-bg3)', borderRadius: 10, padding: '8px 10px' }}>
