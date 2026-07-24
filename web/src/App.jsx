@@ -376,7 +376,7 @@ export default function App() {
       case 'perf':       return <Performance data={data} />
       case 'monitor':    return <LiveMonitor data={data} />
       case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} data={data} />
-      case 'predict':    return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} benchCurve={data?.aiTrader?.benchmark?.curve || []} realOutcomes={data?.realOutcomes || null} />
+      case 'predict':    return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} benchCurve={data?.aiTrader?.benchmark?.curve || []} realOutcomes={data?.realOutcomes || null} futuresChips={data?.futuresChips || null} />
       case 'studio':     return null
       case 'quota':      return <QuotaPanel quota={data?.quota} generatedAt={data?.generated_at} />
       case 'ai':         return <AgentPanel

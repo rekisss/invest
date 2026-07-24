@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url'
 import https from 'https'
 import http from 'http'
 import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader } from './paper-trader.mjs'
+import { fetchFuturesChips } from './futures-chips.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SCAN_DIR = resolve(__dirname, '../../output/full_scan')
@@ -1546,6 +1547,23 @@ console.log('Fetching FinMind quota...')
 const quota = await fetchFinMindQuota()
 console.log(`Quota: ${quota.length} accounts`)
 
+// 期貨籌碼:三大法人 TX 期貨未平倉(read-only,只讀公開籌碼、不碰任何交易 API)。
+// 全程 guarded — 無 token / 抓取失敗一律回 null,前端自動退回既有 futures_net。
+console.log('Fetching 期貨籌碼 (三大法人 TX 未平倉)...')
+let futuresChips = null
+try {
+  const fToken = (process.env.FINMIND_TOKEN || process.env.FINMIND_TOKEN_2 || process.env.FINMIND_TOKEN_10 || '').trim()
+  futuresChips = await fetchFuturesChips({ token: fToken, fetchUrl })
+  if (futuresChips) {
+    const f = futuresChips.institutions.find(i => i.key === 'foreign')
+    console.log(`  期貨籌碼 ${futuresChips.as_of}:外資淨${(f?.net ?? 0) < 0 ? '空' : '多'} ${Math.abs(f?.net ?? 0).toLocaleString()} 口,三大法人合計 ${futuresChips.total_net?.toLocaleString() ?? 'n/a'}`)
+  } else {
+    console.log('  期貨籌碼:無資料(no token 或抓取失敗)— 前端退回 futures_net')
+  }
+} catch (e) {
+  console.warn('  期貨籌碼 fetch skipped:', e.message)
+}
+
 console.log('Fetching Notion stocks...')
 const { notionMap, notionFullStocks } = await fetchNotionStocks()
 console.log(`Notion: ${Object.keys(notionMap).length} map entries, ${notionFullStocks.length} full records`)
@@ -1999,7 +2017,7 @@ try {
 } catch { /* 尚無日報 */ }
 
 const dataGeneratedAt = new Date().toISOString()
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
 
 // Small sidecar so the frontend can cheaply check "did anything change?" (a few
