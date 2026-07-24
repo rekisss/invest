@@ -5,7 +5,7 @@
 // 的重構悄悄改變損益數字。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader } from './paper-trader.mjs'
+import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader, computeCurveRisk } from './paper-trader.mjs'
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 const D = ['2026-01-05', '2026-01-06', '2026-01-07', '2026-01-08', '2026-01-09']
@@ -272,4 +272,43 @@ test('ensemble:組合報酬介於最好與最差帳戶之間(分散特性)', () 
   const downFinal = accts[1].curve[n - 1].ret_pct
   assert.ok(r.return_pct < upFinal && r.return_pct > downFinal,
     `組合 ${r.return_pct}% 應介於 ${downFinal}% 與 ${upFinal}% 之間`)
+})
+
+// ── computeCurveRisk ─────────────────────────────────────────────────────────
+test('computeCurveRisk: max drawdown is worst peak-to-trough', () => {
+  // level: 1.00 → 1.20(peak)→ 0.90 → 1.10;最大回撤 = (1.20−0.90)/1.20 = 25%
+  const curve = [
+    { date: 'a', ret_pct: 0 }, { date: 'b', ret_pct: 20 },
+    { date: 'c', ret_pct: -10 }, { date: 'd', ret_pct: 10 },
+  ]
+  const r = computeCurveRisk(curve)
+  assert.equal(r.max_drawdown_pct, 25)
+})
+
+test('computeCurveRisk: monotonic-up curve has zero drawdown and null ratio', () => {
+  const curve = [{ date: 'a', ret_pct: 0 }, { date: 'b', ret_pct: 5 }, { date: 'c', ret_pct: 12 }]
+  const r = computeCurveRisk(curve)
+  assert.equal(r.max_drawdown_pct, 0)
+  assert.equal(r.return_over_mdd, null) // 不可除以 0 回撤
+})
+
+test('computeCurveRisk: return_over_mdd = 總報酬 ÷ 最大回撤', () => {
+  const curve = [
+    { date: 'a', ret_pct: 0 }, { date: 'b', ret_pct: 20 },
+    { date: 'c', ret_pct: -10 }, { date: 'd', ret_pct: 10 },
+  ]
+  const r = computeCurveRisk(curve) // 報酬 10、MDD 25 → 0.4
+  assert.equal(r.return_over_mdd, 0.4)
+})
+
+test('computeCurveRisk: volatility is sample stdev of daily returns (smoother = lower)', () => {
+  const smooth = [0, 1, 2, 3, 4].map((v, i) => ({ date: String(i), ret_pct: v }))
+  const jumpy = [0, 8, -4, 9, -3].map((v, i) => ({ date: String(i), ret_pct: v }))
+  assert.ok(computeCurveRisk(smooth).volatility_pct < computeCurveRisk(jumpy).volatility_pct)
+})
+
+test('computeCurveRisk: guards short / empty input', () => {
+  assert.equal(computeCurveRisk([]), null)
+  assert.equal(computeCurveRisk([{ date: 'a', ret_pct: 3 }]), null)
+  assert.equal(computeCurveRisk(null), null)
 })

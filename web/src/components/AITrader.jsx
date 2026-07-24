@@ -87,6 +87,27 @@ function EquityCurve({ curve, startCapital, benchmark }) {
 
 // ── rule-lab overlay chart:主帳戶 + 變體 ret_pct 疊線 ───────────────────────
 const VARIANT_COLORS = { next_open: '#FF9F0A', rs_mom: '#66D4CF', bear_filter: '#5E5CE6', trail8: '#BF5AF2', tp12: '#64D2FF', tp5: '#FFD60A', pos3: '#FF6482', random: '#8E8E93', rev_growth: '#A2845E' }
+// 風險指標 chips — 讓 meta 帳戶(自我學習/群體智慧)除了報酬,也能比「顛簸程度」。
+// 群體智慧的賣點就是分散 → 理論上回落/波動較低,這排數字讓使用者直接看得到。
+function RiskChips({ risk }) {
+  if (!risk) return null
+  const items = [
+    risk.max_drawdown_pct != null && ['最大回落', `-${risk.max_drawdown_pct}%`, DOWN],
+    risk.volatility_pct != null && ['日波動', `${risk.volatility_pct}%`, 'var(--ios-label2)'],
+    risk.return_over_mdd != null && ['報酬÷回落', `${risk.return_over_mdd}`, colorOf(risk.return_over_mdd)],
+  ].filter(Boolean)
+  if (!items.length) return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
+      {items.map(([label, val, color]) => (
+        <span key={label} style={{ fontSize: 9.5, background: 'var(--ios-fill3)', borderRadius: 5, padding: '1px 6px', color: 'var(--ios-label3)' }}>
+          {label} <b style={{ fontFamily: 'var(--font-mono)', color }}>{val}</b>
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function VariantChart({ mainCurve, variants, adaptive, ensemble }) {
   const path = useMemo(() => {
     if (!mainCurve || mainCurve.length < 2) return null
@@ -524,6 +545,7 @@ export default function AITrader({ data }) {
                   ))}
                 </div>
               )}
+              <RiskChips risk={ai.adaptive.risk} />
             </div>
           )}
           {ai.ensemble && (
@@ -548,8 +570,9 @@ export default function AITrader({ data }) {
                   ))}
                 </div>
               )}
+              <RiskChips risk={ai.ensemble.risk} />
               <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginTop: 4, lineHeight: 1.5 }}>
-                與「自我學習帳戶」互補:那個押單一贏家,這個分散押全體 — 可直接比哪種學習方式好
+                與「自我學習帳戶」互補:那個押單一贏家,這個分散押全體 — 可直接比哪種學習方式好(含回落/波動)
               </div>
             </div>
           )}
