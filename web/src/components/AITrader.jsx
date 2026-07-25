@@ -224,6 +224,7 @@ function FragmentRow({ v, isMain, open, onToggle }) {
       <span onClick={cellClick} style={{ textAlign: 'right', fontWeight: 800, fontFamily: 'var(--font-mono)', color: colorOf(v.return_pct), cursor: cellCursor }}>{pctStr(v.return_pct, 1)}</span>
       <span onClick={cellClick} style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--ios-label2)', cursor: cellCursor }}>{v.win_rate == null ? '—' : `${Math.round(v.win_rate)}%`}</span>
       <span onClick={cellClick} style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--ios-label3)', cursor: cellCursor }}>{v.max_drawdown_pct == null ? '—' : `-${v.max_drawdown_pct}%`}</span>
+      <span onClick={cellClick} style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: v.return_over_mdd == null ? 'var(--ios-label4)' : colorOf(v.return_over_mdd), cursor: cellCursor }}>{v.return_over_mdd == null ? '—' : v.return_over_mdd.toFixed(2)}</span>
       <span onClick={cellClick} style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--ios-label3)', cursor: cellCursor }}>{v.num_trades ?? '—'}</span>
       {open && !isMain && (
         <div style={{ gridColumn: '1 / -1', background: 'var(--ios-fill4)', borderRadius: 10, padding: '8px 10px', marginBottom: 2 }}>
@@ -577,13 +578,14 @@ export default function AITrader({ data }) {
             </div>
           )}
           <VariantChart mainCurve={ai.equity_curve} variants={ai.variants} adaptive={ai.adaptive} ensemble={ai.ensemble} />
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.4fr) auto auto auto auto', gap: '6px 10px', fontSize: 11, alignItems: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) auto auto auto auto auto', gap: '6px 8px', fontSize: 11, alignItems: 'center' }}>
             <span style={{ fontSize: 9.5, color: 'var(--ios-label4)' }}>規則</span>
             <span style={{ fontSize: 9.5, color: 'var(--ios-label4)', textAlign: 'right' }}>報酬</span>
             <span style={{ fontSize: 9.5, color: 'var(--ios-label4)', textAlign: 'right' }}>勝率</span>
             <span style={{ fontSize: 9.5, color: 'var(--ios-label4)', textAlign: 'right' }}>回落</span>
+            <span title="報酬÷最大回落:每承受 1% 回落換到多少報酬,越高風險調整後越好" style={{ fontSize: 9.5, color: 'var(--ios-label4)', textAlign: 'right' }}>報酬/回落</span>
             <span style={{ fontSize: 9.5, color: 'var(--ios-label4)', textAlign: 'right' }}>筆數</span>
-            {[{ id: 'main', label: '主帳戶(現行)', note: '停利8%/停損12%', return_pct: ai.return_pct, win_rate: s.win_rate, max_drawdown_pct: s.max_drawdown_pct, num_trades: s.num_trades },
+            {[{ id: 'main', label: '主帳戶(現行)', note: '停利8%/停損12%', return_pct: ai.return_pct, win_rate: s.win_rate, max_drawdown_pct: s.max_drawdown_pct, return_over_mdd: ai.return_over_mdd, num_trades: s.num_trades },
               ...[...ai.variants].sort((a, b) => (b.return_pct ?? -999) - (a.return_pct ?? -999))]
               .map(v => (
                 <FragmentRow key={v.id} v={v} isMain={v.id === 'main'}
