@@ -148,25 +148,40 @@ export function computeBasis(futuresClose, spotClose) {
 
 // Guarded FinMind fetch. `fetchUrl` is injected so build-data.mjs reuses its own
 // helper (and tests can stub it). Returns null on any failure — never throws.
-// Also pulls TaiwanFuturesDaily for the front-month close (for 期現價差); that
-// second call is independently guarded so it never blocks the institutional data.
-export async function fetchFuturesChips({ token, fetchUrl, endDate, startDate, code = 'TX' } = {}) {
-  if (!token || typeof fetchUrl !== 'function') return null
+//
+// Token fallback: futures datasets aren't on every FinMind plan tier, and any one
+// token can be rate-limited/exhausted. Accept a list (`tokens`) and try each until
+// one returns usable institutional data — otherwise this whole feature silently
+// stays blank in production even when other tokens would have worked. `token`
+// (singular) is still accepted for back-compat.
+// Also pulls TaiwanFuturesDaily (with the winning token) for the front-month close
+// (期現價差); that second call is independently guarded so it never blocks chips.
+export async function fetchFuturesChips({ token, tokens, fetchUrl, endDate, startDate, code = 'TX' } = {}) {
+  const list = [...(Array.isArray(tokens) ? tokens : []), token]
+    .map(t => (t || '').trim()).filter(Boolean)
+  const seen = new Set()
+  const uniq = list.filter(t => (seen.has(t) ? false : seen.add(t)))
+  if (uniq.length === 0 || typeof fetchUrl !== 'function') return null
   const end = endDate || new Date().toISOString().slice(0, 10)
   const start = startDate || new Date(Date.now() - 45 * 86400000).toISOString().slice(0, 10)
-  const mkUrl = dataset => `https://api.finmindtrade.com/api/v4/data?token=${encodeURIComponent(token)}`
+  const mkUrl = (dataset, tk) => `https://api.finmindtrade.com/api/v4/data?token=${encodeURIComponent(tk)}`
     + `&dataset=${dataset}&data_id=${encodeURIComponent(code)}&start_date=${start}&end_date=${end}`
 
-  let chips = null
-  try {
-    const json = JSON.parse(await fetchUrl(mkUrl('TaiwanFuturesInstitutionalInvestors'), 12000))
-    if (json.status === 200 && Array.isArray(json.data)) chips = parseFuturesInstitutional(json.data)
-  } catch { chips = null }
+  let chips = null, winToken = null
+  for (const tk of uniq) {
+    try {
+      const json = JSON.parse(await fetchUrl(mkUrl('TaiwanFuturesInstitutionalInvestors', tk), 12000))
+      if (json.status === 200 && Array.isArray(json.data)) {
+        const c = parseFuturesInstitutional(json.data)
+        if (c) { chips = c; winToken = tk; break }
+      }
+    } catch { /* try next token */ }
+  }
   if (!chips) return null
 
   // Best-effort front-month daily close (for basis). Never fails the whole result.
   try {
-    const json = JSON.parse(await fetchUrl(mkUrl('TaiwanFuturesDaily'), 12000))
+    const json = JSON.parse(await fetchUrl(mkUrl('TaiwanFuturesDaily', winToken), 12000))
     if (json.status === 200 && Array.isArray(json.data)) {
       const daily = parseFuturesDaily(json.data)
       if (daily) chips.daily = daily
