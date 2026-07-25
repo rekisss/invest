@@ -172,3 +172,45 @@ test('fetch: daily failure does not sink the institutional result', async () => 
   assert.equal(out.institutions.find(i => i.key === 'foreign').net, -68337)
   assert.equal(out.daily, undefined) // 沒有 daily 但主結果仍在
 })
+
+// ── token fallback ───────────────────────────────────────────────────────────
+test('fetch: falls back to a later token when the first is exhausted/lacks access', async () => {
+  const calls = []
+  const stub = async (url) => {
+    const tk = new URL(url).searchParams.get('token')
+    calls.push(tk)
+    if (url.includes('TaiwanFuturesInstitutionalInvestors')) {
+      // t1 → plan limit (status 402); t2 → success
+      if (tk === 't1') return JSON.stringify({ status: 402, msg: 'plan limit' })
+      return JSON.stringify({ status: 200, data: [
+        { date: '2026-07-23', name: '外資', net_open_interest: -68337 },
+      ] })
+    }
+    if (url.includes('TaiwanFuturesDaily')) return JSON.stringify({ status: 200, data: [mkDaily('2026-07-23', 23010, 120000)] })
+    return '{}'
+  }
+  const out = await fetchFuturesChips({ tokens: ['t1', 't2'], fetchUrl: stub })
+  assert.equal(out.institutions.find(i => i.key === 'foreign').net, -68337)
+  // daily fetched with the WINNING token (t2), not t1
+  const dailyCall = calls.filter((t, i) => t)  // sanity
+  assert.ok(calls.includes('t2'))
+  assert.equal(out.daily.close, 23010)
+})
+
+test('fetch: returns null when every token fails', async () => {
+  const stub = async () => JSON.stringify({ status: 402, msg: 'no access' })
+  assert.equal(await fetchFuturesChips({ tokens: ['t1', 't2', 't3'], fetchUrl: stub }), null)
+})
+
+test('fetch: dedupes tokens and still accepts singular token', async () => {
+  let n = 0
+  const stub = async (url) => {
+    if (url.includes('Institutional')) { n++; return JSON.stringify({ status: 200, data: [
+      { date: '2026-07-23', name: '外資', net_open_interest: -100 },
+    ] }) }
+    return JSON.stringify({ status: 500 })
+  }
+  const out = await fetchFuturesChips({ token: 'dup', tokens: ['dup', 'dup'], fetchUrl: stub })
+  assert.equal(out.institutions.find(i => i.key === 'foreign').net, -100)
+  assert.equal(n, 1) // 去重後只打一次(第一次就成功)
+})

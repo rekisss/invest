@@ -1552,8 +1552,13 @@ console.log(`Quota: ${quota.length} accounts`)
 console.log('Fetching 期貨籌碼 (三大法人 TX 未平倉)...')
 let futuresChips = null
 try {
-  const fToken = (process.env.FINMIND_TOKEN || process.env.FINMIND_TOKEN_2 || process.env.FINMIND_TOKEN_10 || '').trim()
-  futuresChips = await fetchFuturesChips({ token: fToken, fetchUrl })
+  // 給整串 token 讓 fetchFuturesChips 逐一嘗試(期貨資料集不是每個方案都有、
+  // 單一 token 也可能額度用盡)——只要有一個 token 拿得到就成功。
+  const fTokens = [
+    process.env.FINMIND_TOKEN, process.env.FINMIND_TOKEN_2, process.env.FINMIND_TOKEN_3,
+    process.env.FINMIND_TOKEN_4, process.env.FINMIND_TOKEN_5, process.env.FINMIND_TOKEN_10,
+  ].map(t => (t || '').trim()).filter(Boolean)
+  futuresChips = await fetchFuturesChips({ tokens: fTokens, fetchUrl })
   if (futuresChips) {
     const f = futuresChips.institutions.find(i => i.key === 'foreign')
     console.log(`  期貨籌碼 ${futuresChips.as_of}:外資淨${(f?.net ?? 0) < 0 ? '空' : '多'} ${Math.abs(f?.net ?? 0).toLocaleString()} 口,三大法人合計 ${futuresChips.total_net?.toLocaleString() ?? 'n/a'}`)
