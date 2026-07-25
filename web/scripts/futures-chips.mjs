@@ -146,6 +146,68 @@ export function computeBasis(futuresClose, spotClose) {
   }
 }
 
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+
+// 台指期「籌碼面偏向」分數(純規則、確定性、可解釋)。**不是保證、不是下單訊號**——
+// 只把手上的期貨籌碼(外資淨部位、期現價差、外資部位趨勢、夜盤)組合成一個 −100~+100
+// 的偏多/偏空傾向,並逐項列出每個因子貢獻多少,讓使用者看得懂「為什麼偏這邊」。
+//
+// 每個因子先標準化到 [−1,1](多頭為正),乘權重加總,再對「有資料的因子」normalize,
+// 缺資料的因子自動跳過(不強塞 0 稀釋)。門檻:≥+20 偏多、≤−20 偏空、之間中性。
+const BIAS_FACTORS = [
+  { key: 'foreign_oi', label: '外資期貨淨部位', weight: 0.40, scale: 60000,
+    note: n => n < 0 ? `淨空 ${Math.abs(Math.round(n)).toLocaleString()} 口(偏空)` : `淨多 ${Math.round(n).toLocaleString()} 口(偏多)` },
+  { key: 'basis', label: '期現價差', weight: 0.25, scale: 80,
+    note: b => `${b >= 0 ? '正價差' : '逆價差'} ${b > 0 ? '+' : ''}${Math.round(b)} 點` },
+  { key: 'oi_trend', label: '外資部位趨勢', weight: 0.20, scale: 15000,
+    note: d => d > 0 ? `近日減空/加多(偏多動能)` : d < 0 ? `近日增空(偏空動能)` : '持平' },
+  { key: 'night', label: '夜盤', weight: 0.15, scale: 150,
+    note: c => `${c > 0 ? '+' : ''}${Math.round(c)} 點` },
+]
+
+// chips = futuresChips (institutions/basis/history);opts.nightChange 由 market_data 傳入。
+// 回 null 若完全沒有可用因子。
+export function computeFuturesBias(chips, opts = {}) {
+  if (!chips || typeof chips !== 'object') return null
+  const foreign = Array.isArray(chips.institutions) ? chips.institutions.find(i => i.key === 'foreign') : null
+  const foreignNet = foreign && typeof foreign.net === 'number' ? foreign.net : null
+
+  // 外資部位趨勢:最新 − 約 5 個交易日前(history 為 foreign_net 升冪)
+  let oiTrend = null
+  const hist = Array.isArray(chips.history) ? chips.history.filter(h => typeof h.foreign_net === 'number') : []
+  if (hist.length >= 2) {
+    const last = hist[hist.length - 1].foreign_net
+    const backIdx = Math.max(0, hist.length - 6)
+    oiTrend = last - hist[backIdx].foreign_net
+  }
+
+  const basis = chips.basis && typeof chips.basis.basis === 'number' ? chips.basis.basis : null
+  const night = typeof opts.nightChange === 'number' ? opts.nightChange : null
+
+  const raw = { foreign_oi: foreignNet, basis, oi_trend: oiTrend, night }
+  const components = []
+  let weighted = 0, wSum = 0
+  for (const f of BIAS_FACTORS) {
+    const v = raw[f.key]
+    if (v == null) continue
+    const r = clamp(v / f.scale, -1, 1)   // 標準化 [-1,1],多頭為正
+    weighted += r * f.weight
+    wSum += f.weight
+    components.push({ key: f.key, label: f.label, raw_value: round2(v), signal: round2(r),
+      contribution: round2(r * f.weight), detail: f.note(v) })
+  }
+  if (wSum === 0) return null
+
+  const score = Math.round(weighted / wSum * 100)   // −100 ~ +100
+  const label = score >= 20 ? '偏多' : score <= -20 ? '偏空' : '中性'
+
+  // 極端淨空的軋空反轉警語(方向仍偏空,但提醒風險,不翻轉分數)
+  let caution = null
+  if (foreignNet != null && foreignNet <= -80000) caution = '外資極度淨空,一旦回補易軋空反彈,別重壓單邊'
+
+  return { score, label, components, caution, factors_used: components.length }
+}
+
 // Guarded FinMind fetch. `fetchUrl` is injected so build-data.mjs reuses its own
 // helper (and tests can stub it). Returns null on any failure — never throws.
 //

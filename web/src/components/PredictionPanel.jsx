@@ -213,6 +213,39 @@ function FuturesChipsPanel({ futuresChips, market_data, history = [] }) {
 
   return (
     <Card title="期貨籌碼 · 三大法人未平倉" accent="var(--ios-teal)">
+      {fc?.bias && typeof fc.bias.score === 'number' && (() => {
+        const bias = fc.bias
+        const bColor = bias.score >= 20 ? 'var(--ios-red)' : bias.score <= -20 ? 'var(--ios-green)' : 'var(--ios-yellow)'
+        return (
+          <div style={{ marginBottom: 12, padding: '10px 12px', background: `${bColor}14`, border: `0.5px solid ${bColor}55`, borderRadius: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 11, color: 'var(--ios-label3)' }}>台指期籌碼偏向</span>
+              <span style={{ fontSize: 20, fontWeight: 800, color: bColor }}>{bias.label}</span>
+              <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: bColor, marginLeft: 'auto' }}>{bias.score > 0 ? '+' : ''}{bias.score}</span>
+            </div>
+            {/* −100 ~ +100 指針條 */}
+            <div style={{ position: 'relative', height: 6, borderRadius: 3, background: 'linear-gradient(90deg, var(--ios-green), var(--ios-yellow), var(--ios-red))', marginBottom: 8 }}>
+              <div style={{ position: 'absolute', top: -2, left: `calc(${(bias.score + 100) / 2}% - 1px)`, width: 2, height: 10, background: 'var(--ios-label)', borderRadius: 1 }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {bias.components.map(c => (
+                <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                  <span style={{ color: 'var(--ios-label2)' }}>
+                    {c.contribution > 0 ? '🔴' : c.contribution < 0 ? '🟢' : '⚪'} {c.label}
+                  </span>
+                  <span style={{ color: 'var(--ios-label3)', fontSize: 10 }}>{c.detail}</span>
+                </div>
+              ))}
+            </div>
+            {bias.caution && (
+              <div style={{ marginTop: 6, fontSize: 10.5, color: 'var(--ios-orange)', fontWeight: 600, lineHeight: 1.5 }}>⚠️ {bias.caution}</div>
+            )}
+            <div style={{ marginTop: 6, fontSize: 9.5, color: 'var(--ios-label4)', lineHeight: 1.5 }}>
+              籌碼面規則加權(外資淨部位/期現價差/部位趨勢/夜盤),**僅供參考、非保證、非下單訊號**;分數越偏紅/綠代表籌碼越偏多/空。
+            </div>
+          </div>
+        )
+      })()}
       {hasInst ? (
         <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
           {fc.institutions.map(i => (
