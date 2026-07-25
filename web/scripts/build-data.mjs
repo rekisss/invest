@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 import https from 'https'
 import http from 'http'
 import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader, returnOverMdd } from './paper-trader.mjs'
-import { fetchFuturesChips, computeBasis } from './futures-chips.mjs'
+import { fetchFuturesChips, computeBasis, computeFuturesBias } from './futures-chips.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -1584,6 +1584,14 @@ try {
         futuresChips.basis = basis
         console.log(`  期現價差:期${basis.futures_close} − 現${basis.spot_close} = ${basis.basis > 0 ? '+' : ''}${basis.basis}(${basis.kind}${basis.date_aligned ? '' : ',日期未對齊'})`)
       }
+    }
+    // 台指期籌碼偏向(純規則、確定性):把外資淨部位/期現價差/部位趨勢/夜盤組成
+    // −100~+100 偏多偏空分數。夜盤取自盤前預測的 market_data。**非保證、非下單訊號**。
+    const nightChange = typeof prediction?.market_data?.night_change === 'number' ? prediction.market_data.night_change : null
+    const bias = computeFuturesBias(futuresChips, { nightChange })
+    if (bias) {
+      futuresChips.bias = bias
+      console.log(`  台指期籌碼偏向:${bias.label}(分數 ${bias.score >= 0 ? '+' : ''}${bias.score},${bias.factors_used} 因子)`)
     }
   } else {
     console.log('  期貨籌碼:無資料(no token 或抓取失敗)— 前端退回 futures_net')

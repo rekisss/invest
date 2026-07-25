@@ -214,3 +214,75 @@ test('fetch: dedupes tokens and still accepts singular token', async () => {
   assert.equal(out.institutions.find(i => i.key === 'foreign').net, -100)
   assert.equal(n, 1) // 去重後只打一次(第一次就成功)
 })
+
+// ── computeFuturesBias ───────────────────────────────────────────────────────
+import { computeFuturesBias } from './futures-chips.mjs'
+
+const mkChips = (over = {}) => ({
+  institutions: [
+    { key: 'foreign', label: '外資', net: over.foreignNet ?? 0 },
+    { key: 'trust', label: '投信', net: 0 },
+    { key: 'dealer', label: '自營', net: 0 },
+  ],
+  basis: over.basis == null ? null : { basis: over.basis },
+  history: over.history ?? [],
+})
+
+test('bias: all-bearish inputs → 偏空 (negative score)', () => {
+  const b = computeFuturesBias(mkChips({
+    foreignNet: -70000, basis: -60,
+    history: [{ date: 'a', foreign_net: -40000 }, { date: 'b', foreign_net: -70000 }], // 增空
+  }), { nightChange: -120 })
+  assert.equal(b.label, '偏空')
+  assert.ok(b.score < -20, `score ${b.score} should be clearly bearish`)
+  assert.equal(b.factors_used, 4)
+})
+
+test('bias: all-bullish inputs → 偏多 (positive score)', () => {
+  const b = computeFuturesBias(mkChips({
+    foreignNet: 50000, basis: 70,
+    history: [{ date: 'a', foreign_net: 10000 }, { date: 'b', foreign_net: 50000 }], // 加多
+  }), { nightChange: 130 })
+  assert.equal(b.label, '偏多')
+  assert.ok(b.score > 20)
+})
+
+test('bias: mixed/small inputs → 中性', () => {
+  const b = computeFuturesBias(mkChips({ foreignNet: 3000, basis: -5 }), { nightChange: 10 })
+  assert.equal(b.label, '中性')
+  assert.ok(Math.abs(b.score) < 20)
+})
+
+test('bias: skips missing factors and renormalizes over available', () => {
+  // 只有外資淨部位(淨多),其餘全缺 → 分數應為滿分偏多(單因子 normalize)
+  const b = computeFuturesBias(mkChips({ foreignNet: 60000 }))
+  assert.equal(b.factors_used, 1)
+  assert.equal(b.score, 100)
+  assert.equal(b.label, '偏多')
+})
+
+test('bias: extreme 淨空 attaches 軋空 caution but stays 偏空', () => {
+  const b = computeFuturesBias(mkChips({ foreignNet: -90000 }))
+  assert.equal(b.label, '偏空')
+  assert.ok(b.caution && b.caution.includes('軋空'))
+})
+
+test('bias: null when no usable factors', () => {
+  // 外資 net 缺、無 basis、無 history、無夜盤 → 沒有任何可用因子
+  const empty = { institutions: [{ key: 'foreign', label: '外資', net: null }], basis: null, history: [] }
+  assert.equal(computeFuturesBias(empty), null)
+})
+
+test('bias: guards non-object input', () => {
+  assert.equal(computeFuturesBias(null), null)
+  assert.equal(computeFuturesBias(undefined), null)
+})
+
+test('bias: each component reports transparent contribution', () => {
+  const b = computeFuturesBias(mkChips({ foreignNet: -60000, basis: 40 }))
+  const f = b.components.find(c => c.key === 'foreign_oi')
+  assert.ok(f && f.detail.includes('淨空'))
+  const sum = b.components.reduce((a, c) => a + c.contribution, 0)
+  // 分數 = Σcontribution / Σweight × 100(此處只有兩因子)
+  assert.ok(Number.isFinite(sum))
+})
