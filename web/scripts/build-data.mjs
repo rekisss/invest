@@ -5,6 +5,7 @@ import https from 'https'
 import http from 'http'
 import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader, returnOverMdd } from './paper-trader.mjs'
 import { fetchFuturesChips, computeBasis } from './futures-chips.mjs'
+import { computePickRiskFlags } from './pick-risk.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SCAN_DIR = resolve(__dirname, '../../output/full_scan')
@@ -603,6 +604,8 @@ function processScanData() {
       sma10: r2(row.sma10),
       // attach price history only for latest date (to keep JSON lean)
       price_history: isLatest ? (priceHistoryMap[row.stock_id] || []) : undefined,
+      // 風險註記:進場候選同時帶出場/出貨/轉弱/過熱等矛盾訊號時的短標籤(清單列用)
+      risk_flags: computePickRiskFlags(row),
       ...extra,
     })
     // 壞價（close<=0，停牌/下市殘影）不得進榜/過濾池——前端會顯示 0.00 且百分比運算全爆

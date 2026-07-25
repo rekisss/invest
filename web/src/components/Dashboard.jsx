@@ -576,6 +576,9 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
           const expectedHoldDays = s.expected_hold_days || 0
           const baseExitSignal = s.base_exit_signal || false
           const baseExitReason = s.base_exit_reason || ''
+          // 風險註記(build 期算好):出場訊號已由 ⚡出場 徽章顯示,這裡聚合「其餘」
+          // 矛盾訊號(動能衰退/出貨型態/轉弱/過熱)成一個 ⚠疑慮 N 徽章,tooltip 列細節。
+          const extraRiskFlags = (Array.isArray(s.risk_flags) ? s.risk_flags : []).filter(f => f.key !== 'exit')
           const gapTo20dHigh = s.gap_to_20d_high_pct ?? null
           const nearBreakout = gapTo20dHigh !== null && gapTo20dHigh >= 0 && gapTo20dHigh < 2
           const volumeBreak = s.volume_break || false
@@ -637,6 +640,12 @@ function WatchlistView({ stocks, onSelect, notionMap = {}, globalMaxScore, watch
                     title={marginChg > 5 ? `融資5日暴增 +${marginChg.toFixed(1)}%` : `融券比率 ${shortRatio.toFixed(1)}%`}
                     style={{ fontSize: 10, fontWeight: 700, color: '#FF9F0A', background: 'rgba(255,159,10,0.12)', border: '1px solid rgba(255,159,10,0.3)', borderRadius: 9999, padding: '2px 6px', flexShrink: 0 }}
                   >⚠</span>
+                )}
+                {extraRiskFlags.length > 0 && (
+                  <span
+                    title={`進場訊號成立,但同時出現:${extraRiskFlags.map(f => f.label).join('、')} — 訊號互相矛盾,追高前留意`}
+                    style={{ fontSize: 10, fontWeight: 700, color: '#FF9F0A', background: 'rgba(255,159,10,0.1)', border: '1px solid rgba(255,159,10,0.3)', borderRadius: 9999, padding: '2px 7px', flexShrink: 0 }}
+                  >⚠疑慮{extraRiskFlags.length > 1 ? ` ${extraRiskFlags.length}` : ''}</span>
                 )}
                 {dataQualitySuspect && (
                   <span
