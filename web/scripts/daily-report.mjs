@@ -147,6 +147,27 @@ if (ph.length && benchCurve.length >= 2) {
   }
 }
 
+// 選股準確度:精選前10名 vs 全體(baseline)近N日勝率 —— 直接回答「選股準不準」。
+// win_rate 在樣本 <10 時為 null(不顯示誤導數字);取最有資料的水平(5日優先)。
+{
+  const sa = data.strategyAccuracy
+  const pick = g => {
+    if (!g) return null
+    for (const h of ['d5', 'd1', 'd10']) if (g[h]?.win_rate != null) return { h, ...g[h] }
+    return null
+  }
+  const t = pick(sa?.top10)
+  if (t) {
+    const hLabel = { d1: '1日', d5: '5日', d10: '10日' }[t.h]
+    const bw = sa?.baseline?.[t.h]?.win_rate
+    const edge = bw != null
+      ? ` · 全體 ${bw}%(前10名 ${t.win_rate - bw >= 0 ? '+' : ''}${Math.round((t.win_rate - bw) * 10) / 10}pp)`
+      : ''
+    const avg = t.avg_return_pct != null ? `、均報 ${t.avg_return_pct >= 0 ? '+' : ''}${t.avg_return_pct}%` : ''
+    lines.push(`🎯 選股準確度(近${hLabel} ${t.total} 筆):前10名 勝率 ${t.win_rate}%${avg}${edge} — 追蹤中,樣本越多越準`)
+  }
+}
+
 // 持倉相關新聞(確定性關鍵字比對:新聞標題含持倉/明日補進的股名或代號)
 const watchStocks = [
   ...(ai.positions || []).map(p => ({ id: String(p.stock_id), name: p.name || '' })),
