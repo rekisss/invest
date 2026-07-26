@@ -131,6 +131,22 @@ if (ph.length && benchCurve.length >= 2) {
   }
 }
 
+// 台指期籌碼面偏向(純規則、僅供參考)——有資料才顯示,附主要因子與軋空警語。
+{
+  const bias = data.futuresChips?.bias
+  if (bias && typeof bias.score === 'number') {
+    const emoji = bias.score >= 20 ? '🔴' : bias.score <= -20 ? '🟢' : '⚪'
+    // 取貢獻絕對值最大的兩個因子做「主因」摘要
+    const top = [...(bias.components || [])]
+      .sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution))
+      .slice(0, 2)
+      .map(c => `${c.label} ${c.detail}`)
+      .join('、')
+    const cautionStr = bias.caution ? ` ⚠️${bias.caution}` : ''
+    lines.push(`⚙️ 台指期籌碼偏向:${emoji}${bias.label}(${bias.score > 0 ? '+' : ''}${bias.score})${top ? ` · ${top}` : ''}${cautionStr} — 僅供參考`)
+  }
+}
+
 // 持倉相關新聞(確定性關鍵字比對:新聞標題含持倉/明日補進的股名或代號)
 const watchStocks = [
   ...(ai.positions || []).map(p => ({ id: String(p.stock_id), name: p.name || '' })),
