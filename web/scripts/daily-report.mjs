@@ -147,6 +147,16 @@ if (ph.length && benchCurve.length >= 2) {
   }
 }
 
+// 雙訊號一致性:模型 vs 期貨籌碼(兩個獨立方向估計)。只在「一致」或「分歧」時提示,
+// 一致=高信心、分歧=方向不明該保守;單邊(mixed)不洗版。
+{
+  const ag = data.prediction?.signal_agreement
+  if (ag && (ag.state === 'agree' || ag.state === 'diverge')) {
+    const icon = ag.state === 'agree' ? '✅' : '⚠️'
+    lines.push(`${icon} 雙訊號${ag.state === 'agree' ? '一致' : '分歧'}:${ag.label} — ${ag.note}`)
+  }
+}
+
 // 選股準確度:精選前10名 vs 全體(baseline)近N日勝率 —— 直接回答「選股準不準」。
 // win_rate 在樣本 <10 時為 null(不顯示誤導數字);取最有資料的水平(5日優先)。
 {
