@@ -882,7 +882,7 @@ export default function PredictionPanel({ prediction, history = [], benchCurve =
   // from null to an object on the SAME mounted component (刷新 after the morning
   // prediction lands), and an early return above hooks would change the hook count
   // between renders and crash the whole tab.
-  const { xgb_prob_up, xgb_label, date, generated_at, regime, scenario, risk, news_sentiment, market_data, ai_insight, input_completeness } = prediction || {}
+  const { xgb_prob_up, xgb_label, date, generated_at, regime, scenario, risk, news_sentiment, market_data, ai_insight, input_completeness, signal_agreement } = prediction || {}
   // data.json ships lowercase levels ('medium'); legacy entries may carry a
   // 'RiskLevel.' prefix — normalize both into the uppercase RISK_COLOR/LABEL keys.
   const riskLevel = (risk?.level?.replace('RiskLevel.', '') || 'MEDIUM').toUpperCase()
@@ -970,6 +970,18 @@ export default function PredictionPanel({ prediction, history = [], benchCurve =
                   </div>
                 )}
               </>
+            )
+          })()}
+          {signal_agreement && (() => {
+            const ag = signal_agreement
+            const c = ag.state === 'agree' ? (ag.model_dir > 0 ? 'var(--ios-red)' : 'var(--ios-green)')
+              : ag.state === 'diverge' ? 'var(--ios-orange)' : 'var(--ios-label3)'
+            const icon = ag.state === 'agree' ? '✓' : ag.state === 'diverge' ? '⚠️' : '·'
+            return (
+              <div style={{ marginTop: 10, padding: '8px 12px', background: `${c}14`, border: `0.5px solid ${c}45`, borderRadius: 10, fontSize: 12, color: c, fontWeight: 600, lineHeight: 1.5 }}>
+                {icon} 雙訊號{ag.state === 'agree' ? '一致' : ag.state === 'diverge' ? '分歧' : ''}:{ag.label}
+                <div style={{ fontSize: 10.5, color: 'var(--ios-label3)', fontWeight: 400, marginTop: 2 }}>{ag.note}</div>
+              </div>
             )
           })()}
           {regime?.label_zh && (

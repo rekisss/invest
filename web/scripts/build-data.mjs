@@ -5,6 +5,7 @@ import https from 'https'
 import http from 'http'
 import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader, returnOverMdd } from './paper-trader.mjs'
 import { fetchFuturesChips, computeBasis, computeFuturesBias } from './futures-chips.mjs'
+import { computeSignalAgreement } from './signals.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -1592,6 +1593,14 @@ try {
     if (bias) {
       futuresChips.bias = bias
       console.log(`  台指期籌碼偏向:${bias.label}(分數 ${bias.score >= 0 ? '+' : ''}${bias.score},${bias.factors_used} 因子)`)
+      // 模型 vs 期貨籌碼 雙訊號一致性(兩個獨立方向估計)——掛到 prediction 供前端/日報用
+      if (prediction) {
+        const ag = computeSignalAgreement({ modelProb: prediction.xgb_prob_up, biasScore: bias.score })
+        if (ag) {
+          prediction.signal_agreement = ag
+          console.log(`  雙訊號一致性:${ag.state}(${ag.label})`)
+        }
+      }
     }
   } else {
     console.log('  期貨籌碼:無資料(no token 或抓取失敗)— 前端退回 futures_net')
