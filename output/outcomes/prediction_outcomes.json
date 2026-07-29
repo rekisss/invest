@@ -58,5 +58,17 @@
   "pred_label": "偏多",
   "directional": true,
   "hit": true
+ },
+ {
+  "date": "2026-07-29",
+  "taiex_close": 41603.36,
+  "taiex_change": 2030.83,
+  "taiex_pct": 0.05131918530354263,
+  "actual_up": true,
+  "pred_date": "2026-07-29",
+  "xgb_prob_up": 0.582,
+  "pred_label": "偏多",
+  "directional": true,
+  "hit": true
  }
 ]
