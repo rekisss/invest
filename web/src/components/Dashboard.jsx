@@ -3078,6 +3078,16 @@ export default function Dashboard({ data, error }) {
                   background: 'rgba(10,132,255,0.12)', borderRadius: 8, padding: '2px 8px', fontWeight: 600,
                 }}>{pred.regime.label_zh}</span>
               )}
+              {pred.signal_agreement && (pred.signal_agreement.state === 'agree' || pred.signal_agreement.state === 'diverge') && (() => {
+                const ag = pred.signal_agreement
+                const agree = ag.state === 'agree'
+                const c = agree ? (ag.model_dir > 0 ? 'var(--ios-red)' : 'var(--ios-green)') : 'var(--ios-orange)'
+                return (
+                  <span title={ag.note} style={{ fontSize: 12, color: c, background: `${c}1f`, borderRadius: 8, padding: '2px 8px', fontWeight: 700 }}>
+                    {agree ? '✓ 雙訊號一致' : '⚠️ 雙訊號分歧'}
+                  </span>
+                )
+              })()}
             </div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {pred.market_data?.vix != null && <span style={{ fontSize: 12, color: 'var(--ios-label2)' }}>VIX <b style={{ color: 'var(--ios-label)' }}>{pred.market_data.vix}</b></span>}
