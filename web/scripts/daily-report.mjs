@@ -178,6 +178,18 @@ if (ph.length && benchCurve.length >= 2) {
   }
 }
 
+// 今日精選評級品質:A/B/C/D 分佈 +(有資料時)各評級真實歷史勝率。只在有可操作精選時顯示。
+{
+  const gd = data.gradeDigest
+  if (gd && gd.actionable > 0) {
+    const c = gd.counts
+    const realStr = gd.real
+      ? ' · 真實勝率 ' + ['A', 'B', 'C'].filter(g => gd.real[g]).map(g => `${g}${gd.real[g].win_rate}%`).join('/')
+      : ''
+    lines.push(`🏅 精選品質:A${c.A}/B${c.B}/C${c.C}（可操作 ${gd.actionable} 檔、D${c.D} 只追蹤）${realStr}`)
+  }
+}
+
 // 營收成長精選:進場訊號 + 月營收年增為正的較高勝率子集(rev_growth 濾網)。
 // 附實測勝率對比,誠實標「樣本累積中、非保證」。
 {

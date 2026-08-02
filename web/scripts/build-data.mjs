@@ -8,6 +8,8 @@ import { fetchFuturesChips, computeBasis, computeFuturesBias } from './futures-c
 import { computeSignalAgreement } from './signals.mjs'
 import { computeSectorConcentration } from './concentration.mjs'
 import { computeQualityPicks } from './pick-quality.mjs'
+import { computeGradeDigest } from './grade-digest.mjs'
+import { recomputeRealHits } from './outcome-fix.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -1508,6 +1510,10 @@ try {
   const po = readOutcomes('prediction_outcomes.json')
   const th = readOutcomes('top20_history.json')
   if (!po.length && !th.length) throw new Error('no outcome files yet')
+  // 修正 outcome_tracker 的符號 bug(見 outcome-fix.mjs):TWSE 漲跌點數只有幅度、
+  // 缺正負號 → actual_up 全 True → 真實命中率虛高。以 taiex_close 逐日差重算方向/命中。
+  const flippedHits = recomputeRealHits(po)
+  if (flippedHits > 0) console.log(`  ⚠️ 真實命中率修正:${flippedHits} 筆 hit 因符號錯誤被重算`)
   const scored = po.filter(e => e.hit != null)
   const horizons = [1, 5, 10, 20]
   const top20Summary = {}
@@ -2095,8 +2101,16 @@ try {
   }
 } catch (e) { console.warn('Rev-growth picks skipped:', e.message) }
 
+// 今日精選評級品質摘要(A/B/C/D 分佈 + 各評級真實勝率),供日報快速判斷候選品質。
+let gradeDigest = null
+try {
+  const latest = scans?.[dates?.[0]]
+  gradeDigest = computeGradeDigest(latest?.top_stocks || [], outcomeStats)
+  if (gradeDigest) console.log(`Grade digest: A${gradeDigest.counts.A}/B${gradeDigest.counts.B}/C${gradeDigest.counts.C}/D${gradeDigest.counts.D}(可操作 ${gradeDigest.actionable}${gradeDigest.real ? ',含真實勝率' : ''})`)
+} catch (e) { console.warn('Grade digest skipped:', e.message) }
+
 const dataGeneratedAt = new Date().toISOString()
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks, gradeDigest }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
 
 // Small sidecar so the frontend can cheaply check "did anything change?" (a few
