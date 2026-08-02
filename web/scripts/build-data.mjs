@@ -9,6 +9,7 @@ import { computeSignalAgreement } from './signals.mjs'
 import { computeSectorConcentration } from './concentration.mjs'
 import { computeQualityPicks } from './pick-quality.mjs'
 import { computeGradeDigest } from './grade-digest.mjs'
+import { recomputeRealHits } from './outcome-fix.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -1509,6 +1510,10 @@ try {
   const po = readOutcomes('prediction_outcomes.json')
   const th = readOutcomes('top20_history.json')
   if (!po.length && !th.length) throw new Error('no outcome files yet')
+  // 修正 outcome_tracker 的符號 bug(見 outcome-fix.mjs):TWSE 漲跌點數只有幅度、
+  // 缺正負號 → actual_up 全 True → 真實命中率虛高。以 taiex_close 逐日差重算方向/命中。
+  const flippedHits = recomputeRealHits(po)
+  if (flippedHits > 0) console.log(`  ⚠️ 真實命中率修正:${flippedHits} 筆 hit 因符號錯誤被重算`)
   const scored = po.filter(e => e.hit != null)
   const horizons = [1, 5, 10, 20]
   const top20Summary = {}
