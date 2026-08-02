@@ -178,6 +178,19 @@ if (ph.length && benchCurve.length >= 2) {
   }
 }
 
+// 營收成長精選:進場訊號 + 月營收年增為正的較高勝率子集(rev_growth 濾網)。
+// 附實測勝率對比,誠實標「樣本累積中、非保證」。
+{
+  const rg = data.revGrowthPicks
+  if (rg && rg.total > 0) {
+    const names = rg.items.slice(0, 5).map(i => `${i.stock_id}${i.name ? ' ' + i.name : ''}`).join('、')
+    const edge = rg.edge
+      ? `(此濾網回測勝率 ${rg.edge.filter_win}% vs 主帳戶 ${rg.edge.main_win}%,樣本 ${rg.edge.filter_trades}/${rg.edge.main_trades} 筆仍少)`
+      : ''
+    lines.push(`🎯 營收成長精選 ${rg.total} 檔${edge}:${names}${rg.total > 5 ? ' …' : ''} — 基本面有撐、回測勝率較高,可優先觀察(非保證)`)
+  }
+}
+
 // 選股產業集中度:今日進場候選若高度集中單一產業 → 分散不足,只在示警時提醒。
 {
   const pc = data.pickConcentration

@@ -74,7 +74,7 @@ function BriefSection({ title, hint, color, items, emptyText, onSelect }) {
   )
 }
 
-export default function DailyActionBrief({ scan, prevScan, allScanStocks = [], persistent = [], dataQuality, pickConcentration = null, onSelect }) {
+export default function DailyActionBrief({ scan, prevScan, allScanStocks = [], persistent = [], dataQuality, pickConcentration = null, revGrowthPicks = null, onSelect }) {
   const topStocks = scan?.top_stocks || []
   if (!scan || (!topStocks.length && !allScanStocks.length)) return null
 
@@ -156,6 +156,11 @@ export default function DailyActionBrief({ scan, prevScan, allScanStocks = [], p
           <BriefPill color="var(--ios-green)">{entryCount} 進場</BriefPill>
           <BriefPill color="var(--ios-blue)">{totalScanned} 掃描</BriefPill>
           {steadyLeaders.length > 0 && <BriefPill color="var(--ios-yellow)">{stockTitle(steadyLeaders[0].stock)} 連榜{steadyLeaders[0].days}天</BriefPill>}
+          {revGrowthPicks?.total > 0 && (
+            <BriefPill color="var(--ios-green)">
+              🎯 營收精選{revGrowthPicks.total}{revGrowthPicks.edge ? `·勝率${revGrowthPicks.edge.filter_win}%` : ''}
+            </BriefPill>
+          )}
           {pickConcentration?.warn && <BriefPill color="var(--ios-orange)">🧯 {pickConcentration.top_sector}占{pickConcentration.top_share_pct}%</BriefPill>}
           {institutionalWeak && <BriefPill color="var(--ios-orange)">法人資料不足</BriefPill>}
           {stale && <BriefPill color="var(--ios-red)">資料非最新</BriefPill>}
