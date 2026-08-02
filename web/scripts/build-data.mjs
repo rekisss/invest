@@ -7,6 +7,7 @@ import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader, re
 import { fetchFuturesChips, computeBasis, computeFuturesBias } from './futures-chips.mjs'
 import { computeSignalAgreement } from './signals.mjs'
 import { computeSectorConcentration } from './concentration.mjs'
+import { computeQualityPicks } from './pick-quality.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -2076,8 +2077,26 @@ try {
   if (pickConcentration) console.log(`Pick concentration: ${pickConcentration.top_sector} ${pickConcentration.top_share_pct}% (${pickConcentration.total} 檔精選${pickConcentration.warn ? ',⚠️集中' : ''})`)
 } catch (e) { console.warn('Pick concentration skipped:', e.message) }
 
+// 營收成長精選:今日進場候選中「月營收年增為正」的較高勝率子集(rev_growth 濾網)。
+// 附上規則實驗室的實測勝率對比(此濾網 vs 主帳戶),讓「較高勝率」有據可查、非空話。
+let revGrowthPicks = null
+try {
+  const latest = scans?.[dates?.[0]]
+  const q = computeQualityPicks(latest?.top_stocks || [])
+  if (q.total > 0) {
+    const rv = (aiTrader?.variants || []).find(v => v.id === 'rev_growth')
+    revGrowthPicks = {
+      ...q,
+      edge: (rv && rv.win_rate != null && aiTrader?.stats?.win_rate != null)
+        ? { filter_win: rv.win_rate, main_win: aiTrader.stats.win_rate, filter_trades: rv.num_trades, main_trades: aiTrader.stats.num_trades }
+        : null,
+    }
+    console.log(`Rev-growth picks: ${q.total} 檔營收成長精選${revGrowthPicks.edge ? `(濾網回測勝率 ${revGrowthPicks.edge.filter_win}% vs 主帳戶 ${revGrowthPicks.edge.main_win}%)` : ''}`)
+  }
+} catch (e) { console.warn('Rev-growth picks skipped:', e.message) }
+
 const dataGeneratedAt = new Date().toISOString()
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
 
 // Small sidecar so the frontend can cheaply check "did anything change?" (a few
