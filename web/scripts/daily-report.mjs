@@ -178,6 +178,14 @@ if (ph.length && benchCurve.length >= 2) {
   }
 }
 
+// 選股產業集中度:今日進場候選若高度集中單一產業 → 分散不足,只在示警時提醒。
+{
+  const pc = data.pickConcentration
+  if (pc && pc.warn) {
+    lines.push(`🧯 選股集中:今日精選 ${pc.total} 檔有 ${pc.top_count} 檔在【${pc.top_sector}】(${pc.top_share_pct}%)— 分散不足,該族群回檔會一起跌,留意產業風險`)
+  }
+}
+
 // 持倉相關新聞(確定性關鍵字比對:新聞標題含持倉/明日補進的股名或代號)
 const watchStocks = [
   ...(ai.positions || []).map(p => ({ id: String(p.stock_id), name: p.name || '' })),
