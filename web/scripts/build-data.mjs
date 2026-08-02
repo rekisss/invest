@@ -8,6 +8,7 @@ import { fetchFuturesChips, computeBasis, computeFuturesBias } from './futures-c
 import { computeSignalAgreement } from './signals.mjs'
 import { computeSectorConcentration } from './concentration.mjs'
 import { computeQualityPicks } from './pick-quality.mjs'
+import { computeGradeDigest } from './grade-digest.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -2095,8 +2096,16 @@ try {
   }
 } catch (e) { console.warn('Rev-growth picks skipped:', e.message) }
 
+// 今日精選評級品質摘要(A/B/C/D 分佈 + 各評級真實勝率),供日報快速判斷候選品質。
+let gradeDigest = null
+try {
+  const latest = scans?.[dates?.[0]]
+  gradeDigest = computeGradeDigest(latest?.top_stocks || [], outcomeStats)
+  if (gradeDigest) console.log(`Grade digest: A${gradeDigest.counts.A}/B${gradeDigest.counts.B}/C${gradeDigest.counts.C}/D${gradeDigest.counts.D}(可操作 ${gradeDigest.actionable}${gradeDigest.real ? ',含真實勝率' : ''})`)
+} catch (e) { console.warn('Grade digest skipped:', e.message) }
+
 const dataGeneratedAt = new Date().toISOString()
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks, gradeDigest }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
 
 // Small sidecar so the frontend can cheaply check "did anything change?" (a few
