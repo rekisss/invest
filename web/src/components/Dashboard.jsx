@@ -3045,6 +3045,7 @@ export default function Dashboard({ data, error }) {
           allScanStocks={allScanStocks}
           persistent={persistent}
           dataQuality={data.dataQuality}
+          pickConcentration={data.pickConcentration}
           onSelect={setSelectedStock}
         />
 

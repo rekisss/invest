@@ -6,6 +6,7 @@ import http from 'http'
 import { simulatePaperTrader, simulateAdaptiveTrader, simulateEnsembleTrader, returnOverMdd } from './paper-trader.mjs'
 import { fetchFuturesChips, computeBasis, computeFuturesBias } from './futures-chips.mjs'
 import { computeSignalAgreement } from './signals.mjs'
+import { computeSectorConcentration } from './concentration.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -2065,8 +2066,18 @@ try {
   if (aiReports.length) console.log(`AI reports: ${aiReports.length} 份(最新 ${aiReports[0]?.date})`)
 } catch { /* 尚無日報 */ }
 
+// 選股產業集中度:最新掃描「精選前 N 名」候選池若高度集中單一產業 → 分散不足,示警。
+// 用 top_stocks(使用者實際看到的精選清單)而非稀疏的 entry_signal 子集,較具代表性。
+let pickConcentration = null
+try {
+  const latest = scans?.[dates?.[0]]
+  const picks = latest?.top_stocks || []
+  pickConcentration = computeSectorConcentration(picks)
+  if (pickConcentration) console.log(`Pick concentration: ${pickConcentration.top_sector} ${pickConcentration.top_share_pct}% (${pickConcentration.total} 檔精選${pickConcentration.warn ? ',⚠️集中' : ''})`)
+} catch (e) { console.warn('Pick concentration skipped:', e.message) }
+
 const dataGeneratedAt = new Date().toISOString()
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
 
 // Small sidecar so the frontend can cheaply check "did anything change?" (a few
