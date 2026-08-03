@@ -4,18 +4,18 @@
   "taiex_close": 44232.87,
   "taiex_change": 1783.17,
   "taiex_pct": 0.042006657290864245,
-  "actual_up": true,
+  "actual_up": null,
   "pred_date": "2026-07-22",
   "xgb_prob_up": 0.222,
   "pred_label": "看空",
   "directional": true,
-  "hit": false
+  "hit": null
  },
  {
   "date": "2026-07-23",
   "taiex_close": 44825.78,
   "taiex_change": 592.91,
-  "taiex_pct": 0.013404285093867978,
+  "taiex_pct": 0.01340428509386789,
   "actual_up": true,
   "pred_date": "2026-07-23",
   "xgb_prob_up": 0.508,
@@ -27,7 +27,7 @@
   "date": "2026-07-24",
   "taiex_close": 44850.81,
   "taiex_change": 25.03,
-  "taiex_pct": 0.0005583840370429695,
+  "taiex_pct": 0.0005583840370429436,
   "actual_up": true,
   "pred_date": "2026-07-23",
   "xgb_prob_up": 0.508,
@@ -38,49 +38,61 @@
  {
   "date": "2026-07-27",
   "taiex_close": 43654.84,
-  "taiex_change": 1195.97,
-  "taiex_pct": 0.02816773032348718,
-  "actual_up": true,
+  "taiex_change": -1195.97,
+  "taiex_pct": -0.02666551618577237,
+  "actual_up": false,
   "pred_date": "2026-07-27",
   "xgb_prob_up": 0.567,
   "pred_label": "偏多",
   "directional": true,
-  "hit": true
+  "hit": false
  },
  {
   "date": "2026-07-28",
   "taiex_close": 43634.19,
-  "taiex_change": 20.65,
-  "taiex_pct": 0.00047347681476899144,
-  "actual_up": true,
+  "taiex_change": -20.65,
+  "taiex_pct": -0.0004730288783556229,
+  "actual_up": false,
   "pred_date": "2026-07-28",
   "xgb_prob_up": 0.615,
   "pred_label": "偏多",
   "directional": true,
-  "hit": true
+  "hit": false
  },
  {
   "date": "2026-07-29",
   "taiex_close": 41603.36,
-  "taiex_change": 2030.83,
-  "taiex_pct": 0.05131918530354263,
-  "actual_up": true,
+  "taiex_change": -2030.83,
+  "taiex_pct": -0.04654217254863678,
+  "actual_up": false,
   "pred_date": "2026-07-29",
   "xgb_prob_up": 0.582,
   "pred_label": "偏多",
   "directional": true,
-  "hit": true
+  "hit": false
  },
  {
   "date": "2026-07-30",
   "taiex_close": 40039.18,
-  "taiex_change": 1564.18,
-  "taiex_pct": 0.04065445094217024,
-  "actual_up": true,
+  "taiex_change": -1564.18,
+  "taiex_pct": -0.03759744405259576,
+  "actual_up": false,
   "pred_date": "2026-07-30",
   "xgb_prob_up": 0.58,
   "pred_label": "偏多",
   "directional": true,
-  "hit": true
+  "hit": false
+ },
+ {
+  "date": "2026-08-03",
+  "taiex_close": 43119.75,
+  "taiex_change": 3080.57,
+  "taiex_pct": 0.0769388883588525,
+  "actual_up": true,
+  "pred_date": "2026-08-03",
+  "xgb_prob_up": 0.386,
+  "pred_label": "偏空",
+  "directional": true,
+  "hit": false
  }
 ]
