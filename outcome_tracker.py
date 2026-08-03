@@ -88,11 +88,33 @@ def _field(item: dict, includes, excludes=()):
     return None
 
 
+def _sign(item: dict) -> int | None:
+    """取 TWSE 獨立的「漲跌」方向欄 → +1 / -1 / 0(取不到回 None)。
+
+    2026-08 診斷:MI_INDEX 的「漲跌點數」只有**幅度**,正負號放在另一個
+    「漲跌(+/-)」欄。舊碼只讀點數 → change 恆為正 → actual_up 每天都 True
+    → 真實命中率虛高(現場顯示 80%,實際 0/4)。這裡把方向欄讀回來。
+    值可能是 +/-、▲/▼、紅/綠(台股慣例 綠=跌),或帶 HTML 標籤。
+    """
+    raw = _field(item, ["漲跌"], excludes=["點數", "百分比", "percent", "%"])
+    if raw is None:
+        raw = _field(item, ["updown", "direction"], excludes=["percent", "%"])
+    if raw is None:
+        return None
+    s = str(raw).lower()
+    if "-" in s or "▼" in s or "green" in s or "跌" in s:
+        return -1
+    if "+" in s or "▲" in s or "red" in s or "漲" in s:
+        return 1
+    return 0
+
+
 def fetch_taiex() -> dict | None:
     """回傳 {close, change, pct}（TWSE MI_INDEX openapi，非交易日回 None）。
 
     Schema-agnostic:先用「任一欄位值含加權指數名稱」定位那一列(不預設
-    名稱放哪個鍵),再以模糊鍵比對取收盤/漲跌點數(避開漲跌百分比)。
+    名稱放哪個鍵),再以模糊鍵比對取收盤/漲跌點數(避開漲跌百分比),
+    並把獨立「漲跌」欄的正負號套回幅度(見 _sign)。
     """
     try:
         req = urllib.request.Request(TWSE_IDX, headers={"User-Agent": "outcome-tracker"})
@@ -111,6 +133,16 @@ def fetch_taiex() -> dict | None:
         chg = _f(_field(item, ["漲跌點數", "點數", "change"], excludes=["百分比", "percent", "%"]))
         if close is None:
             continue
+        # 幅度 × 獨立方向欄的正負號(方向欄不存在時,沿用點數本身的符號)
+        sign = _sign(item)
+        if chg is not None and sign is not None:
+            chg = abs(chg) * sign
+        # 合理性檢查:加權指數單日漲跌不可能超過 15%(2026-08 現場曾解析出
+        # +2030 點/+5% 這種值)。解析明顯有問題時寧可回 None,讓 score_prediction
+        # 改用「與前一交易日收盤相比」這個不依賴 schema 的方式判方向。
+        if chg is not None and close and abs(chg) / close > 0.15:
+            print(f"[taiex] 漲跌點數 {chg} 相對收盤 {close} 不合理 → 捨棄,改用收盤差判方向")
+            chg = None
         prev = close - chg if chg is not None else None
         return {
             "close": close,
@@ -119,6 +151,42 @@ def fetch_taiex() -> dict | None:
         }
     print("[taiex] MI_INDEX 回應中找不到加權指數列(schema 可能再次改版)")
     return None
+
+
+def repair_history(records: list) -> int:
+    """就地重算既有紀錄的 方向/命中/漲跌(依收盤序列),回傳被更正的筆數。
+
+    2026-08 之前寫入的紀錄帶著「漲跌點數缺正負號」的 bug:actual_up 恆為 True、
+    偏多預測一律算命中(現場 4/5=80%,實際 0/4)。這裡用「當日收盤 vs 前一交易日
+    收盤」把歷史一次校正,讓存檔本身就是對的(而不只是前端顯示層繞過)。
+    只更正衍生欄位,不刪任何紀錄。
+    """
+    asc = sorted(
+        (e for e in records if isinstance(e.get("taiex_close"), (int, float)) and e.get("date")),
+        key=lambda e: e["date"],
+    )
+    fixed = 0
+    prev_close = None
+    for e in asc:
+        if prev_close is None:          # 首筆沒有前一日可比,方向不可知
+            up, chg, pct = None, None, None
+        else:
+            up = e["taiex_close"] > prev_close
+            chg = round(e["taiex_close"] - prev_close, 2)
+            pct = ((e["taiex_close"] - prev_close) / prev_close) if prev_close else None
+        prob = e.get("xgb_prob_up")
+        hit = None
+        if up is not None and isinstance(prob, (int, float)) and abs(prob - 0.5) > 0.05:
+            hit = (prob > 0.5) == up
+        if e.get("hit") != hit or e.get("actual_up") != up:
+            fixed += 1
+        e["actual_up"], e["hit"] = up, hit
+        if chg is not None:
+            e["taiex_change"], e["taiex_pct"] = chg, pct
+        prev_close = e["taiex_close"]
+    if fixed:
+        print(f"[pred] ⚠️ 校正 {fixed} 筆歷史紀錄(舊版漲跌點數缺正負號 → 方向/命中重算)")
+    return fixed
 
 
 def score_prediction(today: str, taiex: dict) -> None:
@@ -135,29 +203,50 @@ def score_prediction(today: str, taiex: dict) -> None:
             pred = None
     out = _load_json(PRED_OUT, [])
     out = [e for e in out if e.get("date") != today]  # 冪等
+
+    # 方向的權威來源 = 「今日收盤 vs 前一個已記錄交易日收盤」。不依賴 TWSE 的
+    # 漲跌欄 schema,因此對欄位改版/缺正負號免疫(這正是 2026-08 命中率虛高的根因)。
+    close = taiex["close"]
+    chg, pct = taiex.get("change"), taiex.get("pct")
+    prev_rec = max(
+        (e for e in out if e.get("date", "") < today and isinstance(e.get("taiex_close"), (int, float))),
+        key=lambda e: e["date"], default=None,
+    )
+    if prev_rec:
+        pc = prev_rec["taiex_close"]
+        chg = round(close - pc, 2)
+        pct = ((close - pc) / pc) if pc else None
+        up = close > pc
+    else:
+        up = (chg > 0) if chg is not None else None   # 首筆無前值:只能靠漲跌欄
+
     entry = {
         "date": today,
-        "taiex_close": taiex["close"],
-        "taiex_change": taiex["change"],
-        "taiex_pct": taiex["pct"],
-        "actual_up": (taiex["change"] or 0) > 0,
+        "taiex_close": close,
+        "taiex_change": chg,
+        "taiex_pct": pct,
+        "actual_up": up,
     }
     if pred:
         prob = float(pred["xgb_prob_up"])
+        directional = abs(prob - 0.5) > 0.05
         entry.update({
             "pred_date": pred["date"],
             "xgb_prob_up": prob,
             "pred_label": pred.get("xgb_label"),
             # 只有明確方向的預測才算命中率（|prob-0.5|>0.05；中性不計分）
-            "directional": abs(prob - 0.5) > 0.05,
-            "hit": (prob > 0.5) == ((taiex["change"] or 0) > 0) if abs(prob - 0.5) > 0.05 else None,
+            "directional": directional,
+            # 方向未知(首筆無前值且漲跌欄也缺)時不打分,不猜
+            "hit": ((prob > 0.5) == up) if (directional and up is not None) else None,
         })
     out.append(entry)
     out.sort(key=lambda e: e["date"])
+    repair_history(out)
     _save_json(PRED_OUT, out)
     scored = [e for e in out if e.get("hit") is not None]
     hits = sum(1 for e in scored if e["hit"])
-    print(f"[pred] {today} 加權 {taiex['close']:.0f} ({taiex['change']:+.0f}) · "
+    chg_str = f"{chg:+.0f}" if isinstance(chg, (int, float)) else "—"
+    print(f"[pred] {today} 加權 {close:.0f} ({chg_str}) · "
           f"預測 {entry.get('xgb_prob_up', '—')} → hit={entry.get('hit')} · "
           f"累計真實命中 {hits}/{len(scored)}")
 
@@ -238,6 +327,10 @@ def main() -> int:
         score_prediction(today, taiex)
     else:
         print("[pred] 今日無指數資料（假日或 API 失敗），跳過預測打分")
+        # 即使今天沒新資料,也把歷史的方向/命中校正一次(修舊版符號 bug)
+        recs = _load_json(PRED_OUT, [])
+        if recs and repair_history(recs):
+            _save_json(PRED_OUT, recs)
     track_top20(today)
     return 0
 
