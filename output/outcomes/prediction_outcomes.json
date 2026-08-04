@@ -94,5 +94,17 @@
   "pred_label": "偏空",
   "directional": true,
   "hit": false
+ },
+ {
+  "date": "2026-08-04",
+  "taiex_close": 43386.41,
+  "taiex_change": 266.66,
+  "taiex_pct": 0.006184173145716371,
+  "actual_up": true,
+  "pred_date": "2026-08-04",
+  "xgb_prob_up": 0.217,
+  "pred_label": "看空",
+  "directional": true,
+  "hit": false
  }
 ]
