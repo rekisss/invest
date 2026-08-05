@@ -71,3 +71,33 @@ test('guards non-array input', () => {
   assert.equal(recomputeRealHits(null), 0)
   assert.equal(recomputeRealHits(undefined), 0)
 })
+
+// ── 期距打分 ─────────────────────────────────────────────────────────────────
+import { scoreHorizonHits } from './outcome-fix.mjs'
+
+const closes = seq => seq.map(([c, p], i) => ({
+  date: `2026-07-${String(i + 1).padStart(2, '0')}`, taiex_close: c, xgb_prob_up: p,
+}))
+
+test('horizon scoring judges at the 5th trading day, not the next day', () => {
+  // 隔天跌,但第 5 個交易日大漲 → 偏多預測應命中
+  const recs = closes([[100, 0.65], [98, 0.5], [97, 0.5], [99, 0.5], [101, 0.5], [105, 0.5]])
+  scoreHorizonHits(recs)
+  assert.equal(recs[0].hit_h5, true)
+  assert.equal(recs[0].ret_h5, 5)
+})
+
+test('horizon scoring leaves immature records unscored', () => {
+  const recs = closes([[100, 0.65], [101, 0.7], [102, 0.3]])
+  scoreHorizonHits(recs)
+  assert.ok(recs.every(e => e.hit_h5 === null), '期距未到不可打分')
+})
+
+test('horizon scoring skips neutral predictions and honours the 0.3% threshold', () => {
+  const neutral = closes([[100, 0.52], [101, 0.5], [102, 0.5], [103, 0.5], [104, 0.5], [110, 0.5]])
+  scoreHorizonHits(neutral)
+  assert.equal(neutral[0].hit_h5, null)
+  const thin = closes([[100, 0.65], [100, 0.5], [100, 0.5], [100, 0.5], [100, 0.5], [100.2, 0.5]])
+  scoreHorizonHits(thin)
+  assert.equal(thin[0].hit_h5, false, '+0.2% 未達 0.3% 門檻 → 不算上漲')
+})

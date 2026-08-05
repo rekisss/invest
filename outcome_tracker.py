@@ -153,6 +153,48 @@ def fetch_taiex() -> dict | None:
     return None
 
 
+# 模型的預測期距。MarketPredictor(horizon=5) 在 main.py / discord_bot.py 都是 5,
+# 代表預測的是「5 個交易日後是否上漲 ≥0.3%」,不是隔天。過去把它當隔天預測打分,
+# 等於拿五天後的天氣預報去對一小時後有沒有下雨——命中率結構上就不可能對。
+PRED_HORIZON = 5
+UP_THRESHOLD = 1.003   # 與 train 時的 target 定義一致(漲幅需 >0.3% 才算「上漲」)
+
+
+def score_horizon_hits(records: list, horizon: int = PRED_HORIZON) -> int:
+    """依模型真正的預測期距(預設 5 個交易日)回填 hit_h{n},回傳新打分的筆數。
+
+    對每一筆有方向性預測的紀錄,取其後第 horizon 個交易日的收盤與當日收盤比較
+    (門檻與訓練時相同:需漲逾 0.3%)。尚未到期的紀錄不打分(hit_h5=None),
+    會在資料累積足夠後自動補上。
+    """
+    asc = sorted(
+        (e for e in records if isinstance(e.get("taiex_close"), (int, float)) and e.get("date")),
+        key=lambda e: e["date"],
+    )
+    key = f"hit_h{horizon}"
+    ret_key = f"ret_h{horizon}"
+    scored = 0
+    for i, e in enumerate(asc):
+        prob = e.get("xgb_prob_up")
+        if not isinstance(prob, (int, float)) or abs(prob - 0.5) <= 0.05:
+            e[key] = None          # 中性/無預測不計分
+            continue
+        j = i + horizon
+        if j >= len(asc):
+            e[key] = None          # 期距未到,之後補
+            continue
+        base, future = e["taiex_close"], asc[j]["taiex_close"]
+        if not base:
+            e[key] = None
+            continue
+        up = future > base * UP_THRESHOLD
+        e[key] = (prob > 0.5) == up
+        e[ret_key] = round((future - base) / base * 100, 2)
+        e[f"{key}_date"] = asc[j]["date"]
+        scored += 1
+    return scored
+
+
 def repair_history(records: list) -> int:
     """就地重算既有紀錄的 方向/命中/漲跌(依收盤序列),回傳被更正的筆數。
 
@@ -242,13 +284,18 @@ def score_prediction(today: str, taiex: dict) -> None:
     out.append(entry)
     out.sort(key=lambda e: e["date"])
     repair_history(out)
+    score_horizon_hits(out)          # 依模型真正的 5 日期距打分(hit_h5)
     _save_json(PRED_OUT, out)
     scored = [e for e in out if e.get("hit") is not None]
     hits = sum(1 for e in scored if e["hit"])
+    h_key = f"hit_h{PRED_HORIZON}"
+    h_scored = [e for e in out if e.get(h_key) is not None]
+    h_hits = sum(1 for e in h_scored if e[h_key])
     chg_str = f"{chg:+.0f}" if isinstance(chg, (int, float)) else "—"
     print(f"[pred] {today} 加權 {close:.0f} ({chg_str}) · "
-          f"預測 {entry.get('xgb_prob_up', '—')} → hit={entry.get('hit')} · "
-          f"累計真實命中 {hits}/{len(scored)}")
+          f"預測 {entry.get('xgb_prob_up', '—')} → 隔日 hit={entry.get('hit')} · "
+          f"隔日命中 {hits}/{len(scored)} · "
+          f"{PRED_HORIZON}日期距命中 {h_hits}/{len(h_scored)}(模型真正的預測期距)")
 
 
 # ── 2) TOP20 快照 + 回填報酬 ──────────────────────────────────────────────────
@@ -329,8 +376,11 @@ def main() -> int:
         print("[pred] 今日無指數資料（假日或 API 失敗），跳過預測打分")
         # 即使今天沒新資料,也把歷史的方向/命中校正一次(修舊版符號 bug)
         recs = _load_json(PRED_OUT, [])
-        if recs and repair_history(recs):
-            _save_json(PRED_OUT, recs)
+        if recs:
+            changed = repair_history(recs)
+            score_horizon_hits(recs)       # 到期的預測補上 5 日期距打分
+            if changed or recs:
+                _save_json(PRED_OUT, recs)
     track_top20(today)
     return 0
 

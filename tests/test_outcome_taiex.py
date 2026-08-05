@@ -166,3 +166,54 @@ def test_score_prediction_uses_prev_close_not_change_column(tmp_path, monkeypatc
     assert today["actual_up"] is False, "收盤低於前一日 → 必須判為跌(不可採信 change 的正號)"
     assert today["hit"] is False, "偏多預測遇到下跌 → 未命中"
     assert today["taiex_change"] < 0, "漲跌應以收盤差重算為負值"
+
+
+# ── 期距不符的回歸測試 ────────────────────────────────────────────────────────
+# MarketPredictor(horizon=5) 預測的是「5 個交易日後漲逾 0.3%」,不是隔天。
+# 過去用隔天結果打分,等於拿五天後的預報去對一小時後的天氣。
+
+def _closes(seq):
+    """把收盤序列轉成 outcome 紀錄(含方向性預測機率)。"""
+    return [{"date": f"2026-07-{i+1:02d}", "taiex_close": c, "xgb_prob_up": p}
+            for i, (c, p) in enumerate(seq)]
+
+
+def test_horizon_scoring_uses_fifth_trading_day():
+    """偏多預測 + 5 日後上漲 → hit_h5 為 True(即使隔天是跌的)。"""
+    # 隔天先跌,但第 5 個交易日明顯高於起點
+    recs = _closes([(100.0, 0.65), (98.0, 0.5), (97.0, 0.5),
+                    (99.0, 0.5), (101.0, 0.5), (105.0, 0.5)])
+    ot.score_horizon_hits(recs)
+    first = recs[0]
+    assert first["hit_h5"] is True, "5 日後 105 > 100×1.003 → 偏多預測應命中"
+    assert first["hit_h5_date"] == "2026-07-06"
+    assert first["ret_h5"] == 5.0
+
+
+def test_horizon_scoring_marks_miss_when_lower_after_five_days():
+    recs = _closes([(100.0, 0.65), (101.0, 0.5), (102.0, 0.5),
+                    (101.0, 0.5), (99.0, 0.5), (95.0, 0.5)])
+    ot.score_horizon_hits(recs)
+    assert recs[0]["hit_h5"] is False, "5 日後 95 < 起點 → 偏多預測未命中"
+
+
+def test_horizon_scoring_leaves_immature_records_unscored():
+    """尚未滿 5 個交易日的預測不可打分(之後補),不能拿來充數。"""
+    recs = _closes([(100.0, 0.65), (101.0, 0.7), (102.0, 0.3)])
+    ot.score_horizon_hits(recs)
+    assert all(e["hit_h5"] is None for e in recs), "期距未到一律不打分"
+
+
+def test_horizon_scoring_skips_neutral_predictions():
+    recs = _closes([(100.0, 0.52), (101.0, 0.5), (102.0, 0.5),
+                    (103.0, 0.5), (104.0, 0.5), (110.0, 0.5)])
+    ot.score_horizon_hits(recs)
+    assert recs[0]["hit_h5"] is None, "|prob-0.5|<=0.05 為中性,不計分"
+
+
+def test_horizon_scoring_respects_up_threshold():
+    """漲幅未達 0.3% 不算上漲(與訓練時的 target 定義一致)。"""
+    recs = _closes([(100.0, 0.65), (100.0, 0.5), (100.0, 0.5),
+                    (100.0, 0.5), (100.0, 0.5), (100.2, 0.5)])
+    ot.score_horizon_hits(recs)
+    assert recs[0]["hit_h5"] is False, "+0.2% 未達 0.3% 門檻 → 不算上漲"

@@ -533,11 +533,14 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
   const rateColor = hitPct >= 60 ? 'var(--ios-green)' : hitPct >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)'
   const labelColor = (label) => label.includes('多') ? 'var(--ios-red)' : label.includes('空') ? 'var(--ios-green)' : 'var(--ios-yellow)'
 
-  // 真實收盤打分(outcome_tracker → realOutcomes.prediction_hit):比下方的
+  // 真實收盤打分(outcome_tracker → realOutcomes):比下方的
   // 「掃描池等權代理」更準,但要等每日真實收盤累積。樣本足夠(≥REAL_MIN)才
   // 當權威顯示,否則顯示累積進度。
   const REAL_MIN = 5
-  const rh = realOutcomes?.prediction_hit
+  // 模型預測的是「5 個交易日後」,不是隔天。有期距正確的打分就以它為準。
+  const rhH = realOutcomes?.prediction_hit_h5
+  const rh = rhH || realOutcomes?.prediction_hit
+  const rhHorizon = rhH ? (rhH.horizon || 5) : null
   const realHit = rh && rh.total > 0
     ? { total: rh.total, hits: rh.hits, pct: Math.round(rh.hits / rh.total * 100), ready: rh.total >= REAL_MIN }
     : null
@@ -548,7 +551,7 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
       {realHit?.ready && (
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
           <span style={{ fontSize: 24, fontWeight: 700, color: realColor, fontFamily: 'var(--font-mono)', letterSpacing: '-0.5px' }}>{realHit.pct}%</span>
-          <span style={{ fontSize: 12, color: 'var(--ios-label2)' }}>真實收盤打分 · 近 {realHit.total} 日命中 {realHit.hits} 次</span>
+          <span style={{ fontSize: 12, color: 'var(--ios-label2)' }}>真實收盤打分{rhHorizon ? `(${rhHorizon}日期距)` : ''} · {realHit.total} 筆命中 {realHit.hits} 次</span>
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: realHit?.ready ? 4 : 10 }}>
@@ -559,7 +562,7 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
       </div>
       {realHit && !realHit.ready && (
         <div style={{ fontSize: 10.5, color: 'var(--ios-label3)', marginBottom: 8, background: 'var(--ios-fill4)', borderRadius: 6, padding: '4px 8px' }}>
-          🎯 真實收盤打分累積中({realHit.total}/{REAL_MIN} 日)— 足夠後改用更準的真實命中率
+          🎯 真實收盤打分累積中({realHit.total}/{REAL_MIN} 筆{rhHorizon ? `,${rhHorizon} 日期距` : ''})— 模型預測的是 {rhHorizon || 5} 個交易日後,需等期距到期才能打分
         </div>
       )}
       <div ref={listRef}>
@@ -936,11 +939,11 @@ export default function PredictionPanel({ prediction, history = [], benchCurve =
       <div style={{ padding: '14px 16px 0' }}>
         {modelHealth?.verdict === 'suspect_inverted' && (
           <div style={{ marginBottom: 12, padding: '10px 12px', background: 'rgba(255,51,64,0.1)', border: '0.5px solid rgba(255,51,64,0.4)', borderRadius: 12, fontSize: 12.5, color: 'var(--ios-red)', fontWeight: 700, lineHeight: 1.6 }}>
-            🩺 模型健檢異常:模型機率與美股隔夜訊號呈<b>反向</b>
+            🩺 模型健檢:模型機率與美股隔夜訊號呈<b>反向</b>
             <div style={{ fontSize: 11, color: 'var(--ios-label2)', fontWeight: 400, marginTop: 4 }}>
               {(modelHealth.features || []).filter(f => f.inverted).slice(0, 3)
                 .map(f => `${f.label} ${f.corr > 0 ? '+' : ''}${f.corr}`).join('、')}
-              {` — 依 ${modelHealth.verdict_sample} 日樣本${modelHealth.low_sample ? '(仍在累積)' : ''}。下方方向判讀先別採信,建議檢查模型或重訓。`}
+              {` — 依 ${modelHealth.verdict_sample} 日樣本${modelHealth.low_sample ? '(仍在累積)' : ''}。部分可由「模型預測的是 5 個交易日後、美股隔夜影響多集中在隔天」解釋;短線方向仍宜保守看待。`}
             </div>
           </div>
         )}

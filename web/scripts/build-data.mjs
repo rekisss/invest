@@ -9,7 +9,7 @@ import { computeSignalAgreement } from './signals.mjs'
 import { computeSectorConcentration } from './concentration.mjs'
 import { computeQualityPicks } from './pick-quality.mjs'
 import { computeGradeDigest } from './grade-digest.mjs'
-import { recomputeRealHits } from './outcome-fix.mjs'
+import { recomputeRealHits, scoreHorizonHits, PRED_HORIZON } from './outcome-fix.mjs'
 import { computeModelHealth } from './model-health.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 
@@ -1515,6 +1515,10 @@ try {
   // 缺正負號 → actual_up 全 True → 真實命中率虛高。以 taiex_close 逐日差重算方向/命中。
   const flippedHits = recomputeRealHits(po)
   if (flippedHits > 0) console.log(`  ⚠️ 真實命中率修正:${flippedHits} 筆 hit 因符號錯誤被重算`)
+  // 依模型真正的 5 日期距打分(見 outcome-fix.mjs):隔日打分是錯的期距。
+  scoreHorizonHits(po)
+  const hKey = `hit_h${PRED_HORIZON}`
+  const hScored = po.filter(e => e[hKey] != null)
   const scored = po.filter(e => e.hit != null)
   const horizons = [1, 5, 10, 20]
   const top20Summary = {}
@@ -1529,10 +1533,13 @@ try {
   realOutcomes = {
     prediction: po.slice(-60),   // 最近 60 筆逐日紀錄（含 taiex 收盤、hit）
     prediction_hit: scored.length ? { hits: scored.filter(e => e.hit).length, total: scored.length } : null,
+    // 期距正確的命中率(模型預測的是 5 個交易日後)。前端應以此為準,隔日僅供參考。
+    prediction_hit_h5: hScored.length ? { hits: hScored.filter(e => e[hKey]).length, total: hScored.length, horizon: PRED_HORIZON } : null,
+    horizon: PRED_HORIZON,
     top20_summary: Object.keys(top20Summary).length ? top20Summary : null,
     top20_snapshots: th.length,
   }
-  console.log(`Real outcomes: ${po.length} pred days (scored ${scored.length}), ${th.length} top20 snapshots`)
+  console.log(`Real outcomes: ${po.length} pred days (隔日 scored ${scored.length} / ${PRED_HORIZON}日期距 scored ${hScored.length}), ${th.length} top20 snapshots`)
 } catch { console.log('Real outcomes: none yet (outcome_tracker not run)') }
 
 console.log('Reading news corpus...')
