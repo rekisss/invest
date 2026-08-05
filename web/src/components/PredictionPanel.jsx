@@ -877,7 +877,7 @@ function HistoryRow({ entry }) {
   )
 }
 
-export default function PredictionPanel({ prediction, history = [], benchCurve = [], realOutcomes = null, futuresChips = null }) {
+export default function PredictionPanel({ prediction, history = [], benchCurve = [], realOutcomes = null, futuresChips = null, modelHealth = null }) {
   // NOTE: all hooks must run before the empty-state return — `prediction` can flip
   // from null to an object on the SAME mounted component (刷新 after the morning
   // prediction lands), and an early return above hooks would change the hook count
@@ -934,6 +934,17 @@ export default function PredictionPanel({ prediction, history = [], benchCurve =
       </div>
 
       <div style={{ padding: '14px 16px 0' }}>
+        {modelHealth?.verdict === 'suspect_inverted' && (
+          <div style={{ marginBottom: 12, padding: '10px 12px', background: 'rgba(255,51,64,0.1)', border: '0.5px solid rgba(255,51,64,0.4)', borderRadius: 12, fontSize: 12.5, color: 'var(--ios-red)', fontWeight: 700, lineHeight: 1.6 }}>
+            🩺 模型健檢異常:模型機率與美股隔夜訊號呈<b>反向</b>
+            <div style={{ fontSize: 11, color: 'var(--ios-label2)', fontWeight: 400, marginTop: 4 }}>
+              {(modelHealth.features || []).filter(f => f.inverted).slice(0, 3)
+                .map(f => `${f.label} ${f.corr > 0 ? '+' : ''}${f.corr}`).join('、')}
+              {` — 依 ${modelHealth.verdict_sample} 日樣本${modelHealth.low_sample ? '(仍在累積)' : ''}。下方方向判讀先別採信,建議檢查模型或重訓。`}
+            </div>
+          </div>
+        )}
+
         {/* Prediction probability */}
         <Card title="AI 大盤預測" accent="var(--ios-blue)">
           <ProbBar prob={xgb_prob_up} />

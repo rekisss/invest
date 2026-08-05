@@ -178,6 +178,16 @@ if (ph.length && benchCurve.length >= 2) {
   }
 }
 
+// 模型健檢:模型機率與它自己的輸入呈反向時示警(方向判讀先別採信)。正常則不洗版。
+{
+  const mh = data.modelHealth
+  if (mh && mh.verdict === 'suspect_inverted') {
+    const worst = (mh.features || []).filter(f => f.inverted).slice(0, 3)
+      .map(f => `${f.label} ${f.corr > 0 ? '+' : ''}${f.corr}`).join('、')
+    lines.push(`🩺 模型健檢異常:機率與美股隔夜訊號呈**反向**(${worst})— 近期方向判讀先別採信,建議檢查模型/重訓(樣本 ${mh.verdict_sample} 日${mh.low_sample ? ',仍在累積' : ''})`)
+  }
+}
+
 // 今日精選評級品質:A/B/C/D 分佈 +(有資料時)各評級真實歷史勝率。只在有可操作精選時顯示。
 {
   const gd = data.gradeDigest

@@ -10,6 +10,7 @@ import { computeSectorConcentration } from './concentration.mjs'
 import { computeQualityPicks } from './pick-quality.mjs'
 import { computeGradeDigest } from './grade-digest.mjs'
 import { recomputeRealHits } from './outcome-fix.mjs'
+import { computeModelHealth } from './model-health.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -2101,6 +2102,16 @@ try {
   }
 } catch (e) { console.warn('Rev-growth picks skipped:', e.message) }
 
+// 模型健檢:模型機率 vs 它自己吃的特徵是否同向。2026-08 診斷發現美股隔夜特徵
+// 與機率呈反向(修好命中率符號 bug 後才看得出來),這裡持續量化監看。
+let modelHealth = null
+try {
+  modelHealth = computeModelHealth(predictionHistory)
+  if (modelHealth) {
+    console.log(`Model health: ${modelHealth.verdict}(反向 ${modelHealth.inverted_count} 項/美股 ${modelHealth.us_inverted_count},支撐樣本 ${modelHealth.verdict_sample}${modelHealth.low_sample ? ',樣本偏少' : ''})`)
+  }
+} catch (e) { console.warn('Model health skipped:', e.message) }
+
 // 今日精選評級品質摘要(A/B/C/D 分佈 + 各評級真實勝率),供日報快速判斷候選品質。
 let gradeDigest = null
 try {
@@ -2110,7 +2121,7 @@ try {
 } catch (e) { console.warn('Grade digest skipped:', e.message) }
 
 const dataGeneratedAt = new Date().toISOString()
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks, gradeDigest }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks, gradeDigest, modelHealth }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
 
 // Small sidecar so the frontend can cheaply check "did anything change?" (a few
