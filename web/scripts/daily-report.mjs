@@ -111,9 +111,12 @@ if (ph.length && benchCurve.length >= 2) {
   if (total > 0) {
     // 真實收盤打分(outcome_tracker → realOutcomes.prediction_hit)比代理更準,
     // 樣本足夠(≥5 日)才附上;不足時只用代理(避免 1/1 這種誤導數字)。
-    const rh = data.realOutcomes?.prediction_hit
+    // 模型預測的是 5 個交易日後(MarketPredictor horizon=5),期距正確的打分優先
+    const rhH = data.realOutcomes?.prediction_hit_h5
+    const rh = rhH || data.realOutcomes?.prediction_hit
+    const hz = rhH ? `${rhH.horizon || 5}日期距` : '隔日'
     const realStr = (rh && rh.total >= 5)
-      ? ` · 真實收盤 ${rh.hits}/${rh.total}(${Math.round(rh.hits / rh.total * 100)}%)`
+      ? ` · 真實收盤${hz} ${rh.hits}/${rh.total}(${Math.round(rh.hits / rh.total * 100)}%)`
       : ''
     lines.push(`🔮 預測回顧:${todayLine ? todayLine + ' · ' : ''}代理估算近${total}日 ${hits}/${total}(${Math.round(hits / total * 100)}%)${realStr}`)
   }
@@ -184,7 +187,7 @@ if (ph.length && benchCurve.length >= 2) {
   if (mh && mh.verdict === 'suspect_inverted') {
     const worst = (mh.features || []).filter(f => f.inverted).slice(0, 3)
       .map(f => `${f.label} ${f.corr > 0 ? '+' : ''}${f.corr}`).join('、')
-    lines.push(`🩺 模型健檢異常:機率與美股隔夜訊號呈**反向**(${worst})— 近期方向判讀先別採信,建議檢查模型/重訓(樣本 ${mh.verdict_sample} 日${mh.low_sample ? ',仍在累積' : ''})`)
+    lines.push(`🩺 模型健檢:機率與美股隔夜訊號呈反向(${worst})— 部分可由「模型預測 5 日後、美股影響多在隔天」解釋,短線方向仍宜保守(樣本 ${mh.verdict_sample} 日${mh.low_sample ? ',仍在累積' : ''})`)
   }
 }
 
