@@ -1,5 +1,74 @@
 [
   {
+    "date": "2026-08-06",
+    "generated_at": "08:01",
+    "xgb_prob_up": 0.5,
+    "xgb_label": "中性",
+    "market_data": {
+      "vix": 15.81,
+      "sp500_ret": -0.0017,
+      "nasdaq_ret": -0.0083,
+      "sox_ret": -0.014,
+      "tsm_adr_ret": -0.0076,
+      "futures_net": -87199.0,
+      "night_change": -302.0,
+      "pcr": null,
+      "taiex_rsi": 54.043754253330235,
+      "macd_hist": 100.89040895204062,
+      "dist_ma20": 2.1327064810999774,
+      "dist_ma60": 1.6160860894419482,
+      "taiex_ret_5d": 11.502209439159383,
+      "taiex_ret_20d": -1.4706559838848277,
+      "buyback_count": 0,
+      "disposition_count": 40,
+      "jpy_ret": 0.001,
+      "arkk_ret": -0.0076,
+      "hyg_ret": -0.0004,
+      "night_trend": "↓ 走弱",
+      "market_revenue_yoy": 0.1392,
+      "market_foreign_holding_chg": 1.4838
+    },
+    "regime": {
+      "label": "long_liquidate",
+      "label_zh": "💥 多殺多日",
+      "win_rate": 35.0
+    },
+    "scenario": {
+      "main_scenario": "夜盤大跌 -302pt，多頭倉位鬆動，開盤可能持續賣壓，避免搶反彈",
+      "best_strategy": "等開盤30分鐘後觀察量能是否縮減，再考慮進場",
+      "danger_signals": [
+        "外資空單極重（-87,199口），軋空風險高",
+        "夜盤缺口 -302pt 過大，易反轉"
+      ],
+      "forbidden_actions": [
+        "禁止追空缺口超過200pt",
+        "禁止反彈高點追多（軋空陷阱）"
+      ]
+    },
+    "risk": {
+      "level": "medium",
+      "score": 0.4,
+      "factors": [
+        {
+          "name": "外資空單極重",
+          "description": "-87,199口，軋空/崩潰雙向風險",
+          "action": "避免重押方向"
+        },
+        {
+          "name": "夜盤大缺口",
+          "description": "夜盤 -302pt，開盤後可能快速反轉",
+          "action": "禁止追缺口超過200pt"
+        }
+      ]
+    },
+    "news_sentiment": {
+      "market_impact": 0.15,
+      "key_events": [],
+      "bullish_count": 0,
+      "bearish_count": 0
+    }
+  },
+  {
     "date": "2026-08-05",
     "generated_at": "08:01",
     "xgb_prob_up": 0.46,
