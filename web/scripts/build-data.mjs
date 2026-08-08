@@ -1359,11 +1359,18 @@ function getKlineBars(entry, interval) {
   return Array.isArray(bars) && bars.length >= 2 ? bars : undefined
 }
 
-// Inject daily price_history into recent dates' stocks and persistent items.
+// Inject daily price_history into the LATEST date's stocks and persistent items.
 // Weekly/monthly are NOT embedded: the cache's 1wk/1mo arrays cover the same
 // ~2-year range as the 1d array, so the frontend's resampleBars(daily) fallback
 // reproduces them exactly — embedding both tripled the kline payload in data.json.
-for (const d of recentDates) {
+//
+// 只嵌最新一天(原本嵌 3 天):每檔 ~50KB 的逐點物件 × 50 檔 × (top_stocks+persistent),
+// 3 天就佔掉 data.json 約 10MB。較舊日期的個股改由前端既有的 fallback 供圖——
+// Dashboard 的 allScanStocks 會用 stock_histories.json(1546 檔、欄式壓縮、獨立
+// lazy-load)補上任何缺 price_history 的股票,對「當前選取的任一日期」都成立。
+// 保留最新一天是為了開頁即有圖,不必等 8MB 的 histories 下載完。
+const EMBED_HISTORY_DATES = dates.slice(0, 1)
+for (const d of EMBED_HISTORY_DATES) {
   for (const stock of (scans[d]?.top_stocks || [])) {
     const entry = klineMap[stock.stock_id]
     if (!entry) continue
@@ -1375,7 +1382,7 @@ for (const d of recentDates) {
     item.price_history = getKlineBars(entry, '1d')
   }
 }
-console.log(`K-line: injected into stocks across ${recentDates.length} dates`)
+console.log(`K-line: injected into stocks across ${EMBED_HISTORY_DATES.length} date(s)`)
 
 // Compute return_1d (next-day forward return) from kline data, then inject into scan stocks.
 // Uses kline daily bars first, falls back to priceHistoryMap (scan-date closes).
