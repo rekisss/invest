@@ -21,35 +21,56 @@ export function hitForLabel(label, ret) {
   return Math.abs(ret) <= FLAT_BAND     // 中性:走平才算命中
 }
 
-// 對每筆預測算出「期距內累積報酬」與命中與否。
-// 回傳 [{date, label, prob, ret, hit, end_date}],僅含期距已到期的預測(新到舊)。
-export function scoreProxyPredictions(history, benchCurve, opts = {}) {
+// 每筆預測「起算 N 個交易日」的實際結果:Map<date, {ret, dir, end_date}>。
+// dir:1 漲 / -1 跌 / 0 走平(以 ±FLAT_BAND 判定)。期距未到期者不列入。
+// 校準圖、誤差分析、機率走勢圖都應該用這個,而不是「隔天夜盤」——模型看的是 N 日後。
+export function horizonOutcomeMap(history, benchCurve, opts = {}) {
   const horizon = opts.horizon ?? PROXY_HORIZON
-  const limit = opts.limit ?? 14
   const curve = Array.isArray(benchCurve) ? benchCurve : []
-  if (curve.length < horizon + 1 || !Array.isArray(history) || history.length === 0) return []
+  const out = new Map()
+  if (curve.length < horizon + 1 || !Array.isArray(history)) return out
 
   const asc = [...curve]
     .filter(p => p && p.date && typeof p.ret_pct === 'number')
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
   const idxOf = new Map(asc.map((p, i) => [p.date, i]))
 
-  const out = []
   for (const p of history) {
-    if (!p || !p.date || !p.xgb_label) continue
+    if (!p || !p.date) continue
     const i = idxOf.get(p.date)
     if (i == null) continue
     const j = i + horizon
     if (j >= asc.length) continue            // 期距未到期,先不打分
     // 累積曲線相減 = 這段期間的報酬(小數量級下近似區間報酬)
     const ret = Math.round((asc[j].ret_pct - asc[i].ret_pct) * 100) / 100
+    out.set(p.date, {
+      ret,
+      dir: ret > FLAT_BAND ? 1 : ret < -FLAT_BAND ? -1 : 0,
+      end_date: asc[j].date,
+    })
+  }
+  return out
+}
+
+// 對每筆預測算出「期距內累積報酬」與命中與否。
+// 回傳 [{date, label, prob, ret, hit, end_date}],僅含期距已到期的預測(新到舊)。
+export function scoreProxyPredictions(history, benchCurve, opts = {}) {
+  const limit = opts.limit ?? 14
+  if (!Array.isArray(history) || history.length === 0) return []
+  const outcomes = horizonOutcomeMap(history, benchCurve, opts)
+
+  const out = []
+  for (const p of history) {
+    if (!p || !p.date || !p.xgb_label) continue
+    const o = outcomes.get(p.date)
+    if (!o) continue
     out.push({
       date: p.date,
       label: p.xgb_label,
       prob: p.xgb_prob_up,
-      ret,
-      hit: hitForLabel(p.xgb_label, ret),
-      end_date: asc[j].date,
+      ret: o.ret,
+      hit: hitForLabel(p.xgb_label, o.ret),
+      end_date: o.end_date,
     })
   }
   out.sort((a, b) => String(b.date).localeCompare(String(a.date)))
