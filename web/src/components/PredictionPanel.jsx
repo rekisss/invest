@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useLayoutEffect } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { animateListRows } from '../utils/animeUtils'
+import { scoreProxyPredictions, PROXY_HORIZON } from '../utils/proxyScore.js'
 gsap.registerPlugin(useGSAP)
 
 const HIST_PAGE_SIZE = 20
@@ -495,28 +496,8 @@ function Tag({ text, color }) {
 function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
   const listRef = useRef(null)
   const rows = useMemo(() => {
-    const curve = benchCurve || []
-    if (curve.length < 2 || !history?.length) return []
-    const dayRet = {}
-    for (let i = 1; i < curve.length; i++) {
-      dayRet[curve[i].date] = Math.round((curve[i].ret_pct - curve[i - 1].ret_pct) * 100) / 100
-    }
-    const isHit = (label, r) => {
-      if (label === '偏多' || label === '看多') return r > 0
-      if (label === '偏空' || label === '看空') return r < 0
-      return Math.abs(r) <= 0.4
-    }
-    return history
-      .filter(p => p.date && p.xgb_label && dayRet[p.date] != null)
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, 14)
-      .map(p => ({
-        date: p.date,
-        label: p.xgb_label,
-        prob: p.xgb_prob_up,
-        ret: dayRet[p.date],
-        hit: isHit(p.xgb_label, dayRet[p.date]),
-      }))
+    // 模型預測的是 PROXY_HORIZON(5)個交易日後,故以同期距的累積報酬打分
+    return scoreProxyPredictions(history, benchCurve, { limit: 14 })
   }, [history, benchCurve])
 
   useLayoutEffect(() => {
@@ -557,7 +538,7 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: realHit?.ready ? 4 : 10 }}>
         <span style={{ fontSize: realHit?.ready ? 15 : 24, fontWeight: 700, color: rateColor, fontFamily: 'var(--font-mono)', letterSpacing: '-0.5px' }}>{hitPct}%</span>
         <span style={{ fontSize: realHit?.ready ? 10.5 : 12, color: 'var(--ios-label3)' }}>
-          {realHit?.ready ? '掃描池代理估算 · ' : ''}近 {rows.length} 個可驗證交易日命中 {hits} 次
+          {realHit?.ready ? '掃描池代理估算 · ' : ''}{PROXY_HORIZON} 日期距 · 近 {rows.length} 筆命中 {hits} 次
         </span>
       </div>
       {realHit && !realHit.ready && (

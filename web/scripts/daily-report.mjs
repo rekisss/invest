@@ -9,6 +9,7 @@
 // 測試)、DRY_RUN=1(列印不發送)、FORCE_RUN=1(略過資料過期檢查)
 
 import { readFileSync } from 'node:fs'
+import { scoreProxyPredictions, summarizeProxy, PROXY_HORIZON } from '../src/utils/proxyScore.js'
 
 const DATA_URL = process.env.DATA_URL || 'https://rekisss.github.io/invest/data.json'
 const WEBHOOK = process.env.DISCORD_WEBHOOK_URL || ''
@@ -90,24 +91,16 @@ if (plan) {
 const ph = data.predictionHistory || []
 const benchCurve = ai.benchmark?.curve || []
 if (ph.length && benchCurve.length >= 2) {
-  const dayRet = {}
-  for (let i = 1; i < benchCurve.length; i++) {
-    dayRet[benchCurve[i].date] = Math.round((benchCurve[i].ret_pct - benchCurve[i - 1].ret_pct) * 100) / 100
-  }
-  const isHit = (label, r) => {
-    if (label === '偏多' || label === '看多') return r > 0
-    if (label === '偏空' || label === '看空') return r < 0
-    return Math.abs(r) <= 0.4 // 中性:當日等權漲跌在 ±0.4% 內算命中
-  }
-  let hits = 0, total = 0, todayLine = null
-  for (const p of ph) {
-    const r = dayRet[p.date]
-    if (r == null || !p.xgb_label) continue
-    total++
-    const ok = isHit(p.xgb_label, r)
-    if (ok) hits++
-    if (p.date === asOf) todayLine = `今日 ${p.xgb_label} → 實際 ${pct(r)} ${ok ? '✅' : '❌'}`
-  }
+  // 模型預測的是 5 個交易日後 → 代理命中率也必須用同期距的累積報酬打分
+  // (與前端共用 scoreProxyPredictions,數字保證一致)
+  const proxyRows = scoreProxyPredictions(ph, benchCurve, { limit: 60 })
+  const summary = summarizeProxy(proxyRows)
+  const hits = summary?.hits ?? 0
+  const total = summary?.total ?? 0
+  const todayRow = proxyRows.find(r => r.date === asOf)
+  const todayLine = todayRow
+    ? `今日 ${todayRow.label} → ${PROXY_HORIZON}日 ${pct(todayRow.ret)} ${todayRow.hit ? '✅' : '❌'}`
+    : null
   if (total > 0) {
     // 真實收盤打分(outcome_tracker → realOutcomes.prediction_hit)比代理更準,
     // 樣本足夠(≥5 日)才附上;不足時只用代理(避免 1/1 這種誤導數字)。
@@ -118,7 +111,7 @@ if (ph.length && benchCurve.length >= 2) {
     const realStr = (rh && rh.total >= 5)
       ? ` · 真實收盤${hz} ${rh.hits}/${rh.total}(${Math.round(rh.hits / rh.total * 100)}%)`
       : ''
-    lines.push(`🔮 預測回顧:${todayLine ? todayLine + ' · ' : ''}代理估算近${total}日 ${hits}/${total}(${Math.round(hits / total * 100)}%)${realStr}`)
+    lines.push(`🔮 預測回顧:${todayLine ? todayLine + ' · ' : ''}代理估算(${PROXY_HORIZON}日期距)${hits}/${total}(${Math.round(hits / total * 100)}%)${realStr}`)
   }
 }
 
