@@ -2,22 +2,13 @@ import { useState, useMemo, useRef, useLayoutEffect } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { animateListRows } from '../utils/animeUtils'
-import { scoreProxyPredictions, PROXY_HORIZON } from '../utils/proxyScore.js'
+import { scoreProxyPredictions, horizonOutcomeMap, PROXY_HORIZON } from '../utils/proxyScore.js'
 gsap.registerPlugin(useGSAP)
 
 const HIST_PAGE_SIZE = 20
 
 const RISK_COLOR = { LOW: 'var(--ios-green)', MEDIUM: 'var(--ios-yellow)', HIGH: 'var(--ios-orange)', EXTREME: 'var(--ios-red)' }
 const RISK_LABEL = { LOW: '低風險', MEDIUM: '中風險', HIGH: '高風險', EXTREME: '極高風險' }
-
-// 預測是用「下一次執行紀錄」的 night_change 當實際結果打分；但 cron 缺跑會讓
-// history 相鄰兩筆差好幾天，硬配對會拿好幾天後的夜盤替早前的預測打分，默默污染
-// 命中率/校準統計。只接受間隔 ≤5 天（涵蓋週五→週一＋連假一天），更大的缺口不配對。
-function isConsecutiveRun(dateA, dateB) {
-  if (!dateA || !dateB) return false
-  const gap = (new Date(dateB) - new Date(dateA)) / 86400000
-  return gap > 0 && gap <= 5
-}
 
 function ProbBar({ prob }) {
   const pct = Math.round((prob ?? 0.5) * 100)
@@ -314,22 +305,19 @@ function FuturesChipsPanel({ futuresChips, market_data, history = [] }) {
 }
 
 // Probability trend chart — redesigned with gradient area + animated line drawing.
-function ProbTrend({ history }) {
+function ProbTrend({ history, benchCurve }) {
   const lineRef = useRef(null)
 
   const pts = useMemo(() => {
     const sorted = [...(history || [])]
       .filter(h => h.xgb_prob_up != null && h.date)
       .sort((a, b) => a.date.localeCompare(b.date))
-    const recent = sorted.slice(-20)
-    return recent.map((h, i) => {
-      const nextH = sorted[sorted.length - recent.length + i + 1]
-      const nc = nextH?.market_data?.night_change
-      const paired = nc != null && isConsecutiveRun(h.date, nextH?.date)
-      const actual = paired ? (nc > 20 ? 1 : nc < -20 ? -1 : 0) : null
-      return { date: h.date, p: h.xgb_prob_up, actual }
-    })
-  }, [history])
+    // 實際方向要用模型的預測期距(5 個交易日),不是隔天夜盤
+    const outcomes = horizonOutcomeMap(sorted, benchCurve)
+    return sorted.slice(-20).map(h => ({
+      date: h.date, p: h.xgb_prob_up, actual: outcomes.get(h.date)?.dir ?? null,
+    }))
+  }, [history, benchCurve])
 
   useGSAP(() => {
     const el = lineRef.current
@@ -568,7 +556,7 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
   )
 }
 
-function CalibrationPanel({ history }) {
+function CalibrationPanel({ history, benchCurve }) {
   const containerRef = useRef(null)
   const bands = useMemo(() => {
     const sorted = [...(history || [])]
@@ -583,17 +571,18 @@ function CalibrationPanel({ history }) {
       { label: '強多', lo: 0.65, hi: 1.01, center: 0.70 },
     ].map(d => ({ ...d, total: 0, actualUp: 0 }))
 
-    for (let i = 0; i < sorted.length - 1; i++) {
-      const nc = sorted[i + 1].market_data?.night_change
-      if (nc == null || !isConsecutiveRun(sorted[i].date, sorted[i + 1].date)) continue
-      const p = sorted[i].xgb_prob_up
-      const up = nc > 20
+    // 校準要看「模型說的期距」內是否真的上漲,而不是隔天夜盤
+    const outcomes = horizonOutcomeMap(sorted, benchCurve)
+    for (const h of sorted) {
+      const o = outcomes.get(h.date)
+      if (!o) continue
+      const p = h.xgb_prob_up
       const b = defs.find(d => p >= d.lo && p < d.hi)
-      if (b) { b.total++; if (up) b.actualUp++ }
+      if (b) { b.total++; if (o.dir > 0) b.actualUp++ }
     }
 
     return defs.filter(b => b.total >= 3)
-  }, [history])
+  }, [history, benchCurve])
 
   useGSAP(() => {
     const el = containerRef.current
@@ -660,7 +649,7 @@ function CalibrationPanel({ history }) {
 }
 
 // Error pattern analysis: identify what conditions lead to wrong predictions
-function ErrorPatternPanel({ history }) {
+function ErrorPatternPanel({ history, benchCurve }) {
   const data = useMemo(() => {
     const sorted = [...(history || [])]
       .filter(h => h.xgb_prob_up != null && h.date)
@@ -669,13 +658,14 @@ function ErrorPatternPanel({ history }) {
     if (sorted.length < 8) return null
 
     const errors = [], corrects = []
-    for (let i = 0; i < sorted.length - 1; i++) {
-      const h = sorted[i]
-      const nc = sorted[i + 1].market_data?.night_change
-      if (nc == null || Math.abs(h.xgb_prob_up - 0.5) <= 0.05) continue
-      if (!isConsecutiveRun(h.date, sorted[i + 1].date)) continue
+    // 對錯要用模型的預測期距判定,不是隔天夜盤
+    const outcomes = horizonOutcomeMap(sorted, benchCurve)
+    for (const h of sorted) {
+      const o = outcomes.get(h.date)
+      if (!o || Math.abs(h.xgb_prob_up - 0.5) <= 0.05) continue
+      const nc = o.ret
       const predUp = h.xgb_prob_up > 0.55
-      const actualUp = nc > 20
+      const actualUp = o.dir > 0
       const entry = {
         date: h.date, p: h.xgb_prob_up, actualUp,
         vix: h.market_data?.vix ?? 0,
@@ -705,7 +695,7 @@ function ErrorPatternPanel({ history }) {
     const recentErrors = errors.slice(-3)
 
     return { total, errRate, highVixErrRate, heavyShortErrRate, bullTrap: bullTrap.length, bearTrap: bearTrap.length, recentErrors }
-  }, [history])
+  }, [history, benchCurve])
 
   if (!data) return null
 
@@ -956,7 +946,7 @@ export default function PredictionPanel({ prediction, history = [], benchCurve =
               <>
                 {divergeBull && (
                   <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(255,51,64,0.1)', border: '0.5px solid rgba(255,51,64,0.4)', borderRadius: 10, fontSize: 12, color: 'var(--ios-red)', fontWeight: 700, lineHeight: 1.6 }}>
-                    🚨 模型看多,但夜盤重挫({Math.round(md.night_change)} 點)+ 外資期貨大空單({Math.round(md.futures_net).toLocaleString()} 口)——訊號與模型嚴重分歧,今日方向判讀不可信,建議只做風控不做方向
+                    ⚠️ 模型偏多,但夜盤重挫({Math.round(md.night_change)} 點)+ 外資期貨大空單({Math.round(md.futures_net).toLocaleString()} 口)——注意兩者<b>期距不同</b>:模型看 {PROXY_HORIZON} 個交易日後,夜盤/期貨反映的是短線。短線壓力明顯,當沖與隔日操作宜保守
                   </div>
                 )}
                 {reasons.length > 0 && (
@@ -996,14 +986,14 @@ export default function PredictionPanel({ prediction, history = [], benchCurve =
         <BearishCrossCheck market_data={market_data} prob={xgb_prob_up} />
 
         {/* Probability trend across recent days */}
-        <ProbTrend history={history} />
+        <ProbTrend history={history} benchCurve={benchCurve} />
 
         {/* Daily prediction vs actual scoreboard */}
         <PredictionReviewPanel history={history} benchCurve={benchCurve} realOutcomes={realOutcomes} />
 
         {/* Calibration & error analysis */}
-        <CalibrationPanel history={history} />
-        <ErrorPatternPanel history={history} />
+        <CalibrationPanel history={history} benchCurve={benchCurve} />
+        <ErrorPatternPanel history={history} benchCurve={benchCurve} />
 
         {/* AI Insight */}
         {ai_insight && (
