@@ -1393,11 +1393,9 @@ for (const d of EMBED_HISTORY_DATES) {
     if (!entry) continue
     stock.price_history = getKlineBars(entry, '1d')
   }
-  for (const item of (scans[d]?.persistent || [])) {
-    const entry = klineMap[item.stock_id]
-    if (!entry) continue
-    item.price_history = getKlineBars(entry, '1d')
-  }
+  // persistent(連榜股)不再內嵌 K 線:前端點開時改以 allScanStocks 查找,
+  // 那份已由 stock_histories.json(欄式、獨立 lazy-load)補上 price_history。
+  // 20 檔 × ~50KB 的重複資料,佔 data.json 約 1MB。
 }
 console.log(`K-line: injected into stocks across ${EMBED_HISTORY_DATES.length} date(s)`)
 
