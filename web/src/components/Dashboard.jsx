@@ -3388,7 +3388,9 @@ export default function Dashboard({ data, error }) {
           <PersistentSection
             items={persistent}
             onSelect={item => {
-              const full = stocks.find(s => s.stock_id === item.stock_id)
+              // 用 allScanStocks(全掃描池,且已由 stock_histories.json 補上 price_history)
+              // 而非只有前 50 名的 stocks:連榜股若當日跌出前 50,才不會開出一張空白圖。
+              const full = allScanStocks.find(s => s.stock_id === item.stock_id)
               setSelectedStock(full || { stock_id: item.stock_id, name: item.name, industry_category: item.industry_category || '', entry_score: item.latest_score || 0, price_history: item.price_history || [], condition_count: 0, entry_signal: false })
             }}
           />
