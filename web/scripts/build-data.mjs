@@ -325,6 +325,23 @@ async function enrichPrediction(prediction, articles) {
 }
 
 
+// data.json 體積優化:掃描列有 ~23 個布林旗標,其中 91~100% 的值是 false。
+// JSON 裡每個 false 都要付「欄位名 + false」的成本(7841 列 × 23 欄 ≈ 3.5MB),
+// 但前端讀這些旗標一律是 truthy 判斷(!!s.x / s.x && ...),undefined 與 false 等價,
+// 所以 false 直接省略不寫即可。
+//
+// 例外(KEEP_FALSE_FLAGS):少數欄位前端是用 `=== false` 嚴格比對的,省略會讓
+// undefined === false 變成 false、行為靜默改變,必須原樣保留:
+//   entry_signal    → Performance.jsx 用 `scan.entry_signal === false` 判「有分數但無訊號」
+//   data_quality_ok → Dashboard.jsx 用 `s.data_quality_ok === false` 標示資料品質存疑
+const KEEP_FALSE_FLAGS = new Set(['entry_signal', 'data_quality_ok'])
+function stripFalseFlags(obj) {
+  for (const k of Object.keys(obj)) {
+    if (obj[k] === false && !KEEP_FALSE_FLAGS.has(k)) delete obj[k]
+  }
+  return obj
+}
+
 const TOP50_COLS = ['rank','stock_id','name','industry_category',
   'entry_score','entry_signal','close','open','high','low','volume','volume_ratio',
   'rsi14','adx14','atr14','macd','macd_hist','bb_pct_b','stoch_k','stoch_d',
@@ -503,7 +520,7 @@ function processScanData() {
     }
 
     const isLatest = date === dates[0]
-    const mapStock = (row, extra = {}) => ({
+    const mapStock = (row, extra = {}) => stripFalseFlags({
       stock_id: row.stock_id, name: row.name || '',
       industry_category: row.industry_category || '',
       close: r2(row.close), volume_ratio: r2(row.volume_ratio),
@@ -628,7 +645,7 @@ function processScanData() {
     // Slim profile for ALL scanned stocks — included on every date so grade/signal
     // filters in the Dashboard work against the full scan universe, not just top N.
     // Fields kept minimal to control data.json growth.
-    const filterStocks = pricedStocks.map(row => ({
+    const filterStocks = pricedStocks.map(row => stripFalseFlags({
       stock_id: row.stock_id,
       name: row.name || '',
       industry_category: row.industry_category || '',
