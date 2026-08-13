@@ -1212,14 +1212,16 @@
     "entry_score": 1085.3,
     "ret_1d": -0.0083,
     "ret_5d": 0.0,
-    "ret_10d": -0.083
+    "ret_10d": -0.083,
+    "ret_20d": -0.0539
    },
    {
     "stock_id": "8028",
     "name": "昇陽半導體",
     "close": 350.0,
     "entry_score": 1079.6,
-    "ret_1d": -0.1
+    "ret_1d": -0.1,
+    "ret_20d": -0.2357
    },
    {
     "stock_id": "4736",
@@ -1228,7 +1230,8 @@
     "entry_score": 1066.3,
     "ret_1d": -0.0077,
     "ret_5d": 0.0,
-    "ret_10d": -0.0231
+    "ret_10d": -0.0231,
+    "ret_20d": 0.0846
    },
    {
     "stock_id": "2849",
@@ -1237,7 +1240,8 @@
     "entry_score": 1016.0,
     "ret_1d": 0.0034,
     "ret_5d": -0.0235,
-    "ret_10d": 0.0268
+    "ret_10d": 0.0268,
+    "ret_20d": -0.0302
    },
    {
     "stock_id": "3178",
@@ -1246,7 +1250,8 @@
     "entry_score": 1014.0,
     "ret_1d": 0.0,
     "ret_5d": -0.0905,
-    "ret_10d": -0.2376
+    "ret_10d": -0.2376,
+    "ret_20d": -0.1655
    },
    {
     "stock_id": "5306",
@@ -1255,7 +1260,8 @@
     "entry_score": 1014.0,
     "ret_1d": -0.0333,
     "ret_5d": -0.0736,
-    "ret_10d": -0.1028
+    "ret_10d": -0.1028,
+    "ret_20d": -0.0333
    },
    {
     "stock_id": "5880",
@@ -1264,7 +1270,8 @@
     "entry_score": 997.5,
     "ret_1d": -0.0059,
     "ret_5d": 0.0039,
-    "ret_10d": 0.0588
+    "ret_10d": 0.0588,
+    "ret_20d": -0.051
    },
    {
     "stock_id": "6141",
@@ -1273,7 +1280,8 @@
     "entry_score": 990.0,
     "ret_1d": -0.0697,
     "ret_5d": -0.0194,
-    "ret_10d": -0.3314
+    "ret_10d": -0.3314,
+    "ret_20d": -0.1634
    },
    {
     "stock_id": "1723",
@@ -1282,7 +1290,8 @@
     "entry_score": 977.6,
     "ret_1d": -0.0167,
     "ret_5d": -0.0033,
-    "ret_10d": -0.0613
+    "ret_10d": -0.0613,
+    "ret_20d": -0.068
    },
    {
     "stock_id": "2348",
@@ -1291,7 +1300,8 @@
     "entry_score": 974.7,
     "ret_1d": -0.0238,
     "ret_5d": -0.0088,
-    "ret_10d": -0.0451
+    "ret_10d": -0.0451,
+    "ret_20d": -0.1264
    },
    {
     "stock_id": "6288",
@@ -1300,7 +1310,8 @@
     "entry_score": 933.8,
     "ret_1d": 0.0,
     "ret_5d": 0.0,
-    "ret_10d": -0.1361
+    "ret_10d": -0.1361,
+    "ret_20d": -0.1361
    },
    {
     "stock_id": "5876",
@@ -1309,7 +1320,8 @@
     "entry_score": 918.8,
     "ret_1d": 0.0056,
     "ret_5d": -0.0033,
-    "ret_10d": -0.0033
+    "ret_10d": -0.0033,
+    "ret_20d": -0.0601
    },
    {
     "stock_id": "4807",
@@ -1318,7 +1330,8 @@
     "entry_score": 909.6,
     "ret_1d": -0.0514,
     "ret_5d": -0.1075,
-    "ret_10d": -0.1355
+    "ret_10d": -0.1355,
+    "ret_20d": -0.264
    },
    {
     "stock_id": "6870",
@@ -1327,7 +1340,8 @@
     "entry_score": 899.4,
     "ret_1d": -0.0303,
     "ret_5d": -0.1848,
-    "ret_10d": -0.3197
+    "ret_10d": -0.3197,
+    "ret_20d": -0.2076
    },
    {
     "stock_id": "5434",
@@ -1336,7 +1350,8 @@
     "entry_score": 897.0,
     "ret_1d": -0.057,
     "ret_5d": -0.0621,
-    "ret_10d": -0.2022
+    "ret_10d": -0.2022,
+    "ret_20d": -0.1158
    },
    {
     "stock_id": "6949",
@@ -1345,7 +1360,8 @@
     "entry_score": 893.8,
     "ret_1d": -0.0679,
     "ret_5d": -0.0905,
-    "ret_10d": -0.2851
+    "ret_10d": -0.2851,
+    "ret_20d": -0.0769
    },
    {
     "stock_id": "6732",
@@ -1354,7 +1370,8 @@
     "entry_score": 890.0,
     "ret_1d": -0.0958,
     "ret_5d": -0.1612,
-    "ret_10d": -0.3154
+    "ret_10d": -0.3154,
+    "ret_20d": -0.2687
    },
    {
     "stock_id": "4770",
@@ -1363,7 +1380,8 @@
     "entry_score": 880.6,
     "ret_1d": -0.0552,
     "ret_5d": 0.0132,
-    "ret_10d": -0.064
+    "ret_10d": -0.064,
+    "ret_20d": -0.011
    },
    {
     "stock_id": "8150",
@@ -1372,7 +1390,8 @@
     "entry_score": 877.3,
     "ret_1d": -0.098,
     "ret_5d": -0.1984,
-    "ret_10d": -0.4612
+    "ret_10d": -0.4612,
+    "ret_20d": -0.2416
    },
    {
     "stock_id": "1231",
@@ -1381,7 +1400,8 @@
     "entry_score": 859.8,
     "ret_1d": -0.0141,
     "ret_5d": 0.0011,
-    "ret_10d": -0.1077
+    "ret_10d": -0.1077,
+    "ret_20d": -0.1219
    }
   ]
  },
@@ -3043,7 +3063,8 @@
     "close": 27.0,
     "entry_score": 1209.3,
     "ret_1d": 0.0222,
-    "ret_5d": -0.0333
+    "ret_5d": -0.0333,
+    "ret_10d": -0.1037
    },
    {
     "stock_id": "2892",
@@ -3051,7 +3072,8 @@
     "close": 35.5,
     "entry_score": 990.5,
     "ret_1d": 0.0352,
-    "ret_5d": 0.0
+    "ret_5d": 0.0,
+    "ret_10d": -0.0662
    },
    {
     "stock_id": "5876",
@@ -3059,7 +3081,8 @@
     "close": 44.8,
     "entry_score": 965.9,
     "ret_1d": 0.0145,
-    "ret_5d": -0.0301
+    "ret_5d": -0.0301,
+    "ret_10d": -0.0569
    },
    {
     "stock_id": "2867",
@@ -3067,7 +3090,8 @@
     "close": 9.58,
     "entry_score": 927.9,
     "ret_1d": 0.0334,
-    "ret_5d": 0.0198
+    "ret_5d": 0.0198,
+    "ret_10d": 0.0042
    },
    {
     "stock_id": "2888",
@@ -3083,7 +3107,8 @@
     "close": 147.0,
     "entry_score": 845.0,
     "ret_1d": 0.0034,
-    "ret_5d": -0.0034
+    "ret_5d": -0.0034,
+    "ret_10d": 0.0034
    },
    {
     "stock_id": "1476",
@@ -3091,7 +3116,8 @@
     "close": 352.0,
     "entry_score": 828.1,
     "ret_1d": -0.017,
-    "ret_5d": 0.0355
+    "ret_5d": 0.0355,
+    "ret_10d": -0.0724
    },
    {
     "stock_id": "2546",
@@ -3099,7 +3125,8 @@
     "close": 98.5,
     "entry_score": 822.3,
     "ret_1d": 0.0305,
-    "ret_5d": 0.0152
+    "ret_5d": 0.0152,
+    "ret_10d": 0.0558
    },
    {
     "stock_id": "6534",
@@ -3107,7 +3134,8 @@
     "close": 93.8,
     "entry_score": 821.5,
     "ret_1d": 0.0075,
-    "ret_5d": 0.0117
+    "ret_5d": 0.0117,
+    "ret_10d": 0.0117
    },
    {
     "stock_id": "4439",
@@ -3115,7 +3143,8 @@
     "close": 100.0,
     "entry_score": 815.1,
     "ret_1d": 0.02,
-    "ret_5d": 0.02
+    "ret_5d": 0.02,
+    "ret_10d": 0.01
    },
    {
     "stock_id": "5288",
@@ -3123,7 +3152,8 @@
     "close": 185.5,
     "entry_score": 789.0,
     "ret_1d": -0.0135,
-    "ret_5d": 0.0162
+    "ret_5d": 0.0162,
+    "ret_10d": 0.0216
    },
    {
     "stock_id": "8462",
@@ -3131,7 +3161,8 @@
     "close": 172.0,
     "entry_score": 765.9,
     "ret_1d": -0.0203,
-    "ret_5d": -0.0436
+    "ret_5d": -0.0436,
+    "ret_10d": 0.0436
    },
    {
     "stock_id": "5306",
@@ -3139,7 +3170,8 @@
     "close": 89.0,
     "entry_score": 759.8,
     "ret_1d": 0.0,
-    "ret_5d": 0.0472
+    "ret_5d": 0.0472,
+    "ret_10d": 0.0775
    },
    {
     "stock_id": "2008",
@@ -3147,7 +3179,8 @@
     "close": 31.0,
     "entry_score": 755.6,
     "ret_1d": -0.0016,
-    "ret_5d": -0.0048
+    "ret_5d": -0.0048,
+    "ret_10d": 0.0016
    },
    {
     "stock_id": "2027",
@@ -3155,7 +3188,8 @@
     "close": 43.7,
     "entry_score": 754.3,
     "ret_1d": -0.0114,
-    "ret_5d": 0.0549
+    "ret_5d": 0.0549,
+    "ret_10d": 0.1533
    },
    {
     "stock_id": "2207",
@@ -3163,7 +3197,8 @@
     "close": 551.0,
     "entry_score": 752.2,
     "ret_1d": 0.0127,
-    "ret_5d": -0.0635
+    "ret_5d": -0.0635,
+    "ret_10d": -0.049
    },
    {
     "stock_id": "4736",
@@ -3171,7 +3206,8 @@
     "close": 127.0,
     "entry_score": 749.9,
     "ret_1d": 0.0118,
-    "ret_5d": 0.0157
+    "ret_5d": 0.0157,
+    "ret_10d": 0.1102
    },
    {
     "stock_id": "2540",
@@ -3179,7 +3215,8 @@
     "close": 58.9,
     "entry_score": 745.3,
     "ret_1d": 0.0357,
-    "ret_5d": -0.0713
+    "ret_5d": -0.0713,
+    "ret_10d": -0.2394
    },
    {
     "stock_id": "2880",
@@ -3187,7 +3224,8 @@
     "close": 42.65,
     "entry_score": 725.6,
     "ret_1d": 0.0246,
-    "ret_5d": 0.0328
+    "ret_5d": 0.0328,
+    "ret_10d": -0.0832
    },
    {
     "stock_id": "1808",
@@ -3195,7 +3233,8 @@
     "close": 32.45,
     "entry_score": 724.0,
     "ret_1d": 0.0169,
-    "ret_5d": -0.0185
+    "ret_5d": -0.0185,
+    "ret_10d": 0.02
    }
   ]
  },
@@ -3863,140 +3902,160 @@
     "name": "晶宏",
     "close": 78.4,
     "entry_score": 1068.1,
-    "ret_1d": 0.0077
+    "ret_1d": 0.0077,
+    "ret_5d": -0.0357
    },
    {
     "stock_id": "6913",
     "name": "鴻呈",
     "close": 139.0,
     "entry_score": 945.7,
-    "ret_1d": 0.0504
+    "ret_1d": 0.0504,
+    "ret_5d": 0.0755
    },
    {
     "stock_id": "6161",
     "name": "捷波",
     "close": 55.9,
     "entry_score": 910.9,
-    "ret_1d": -0.0036
+    "ret_1d": -0.0036,
+    "ret_5d": -0.0644
    },
    {
     "stock_id": "3213",
     "name": "茂訊",
     "close": 138.5,
     "entry_score": 901.9,
-    "ret_1d": -0.0144
+    "ret_1d": -0.0144,
+    "ret_5d": -0.0253
    },
    {
     "stock_id": "6265",
     "name": "方土昶",
     "close": 54.7,
     "entry_score": 897.3,
-    "ret_1d": 0.0128
+    "ret_1d": 0.0128,
+    "ret_5d": 0.0768
    },
    {
     "stock_id": "1736",
     "name": "喬山",
     "close": 142.5,
     "entry_score": 896.7,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": -0.014
    },
    {
     "stock_id": "3260",
     "name": "威剛",
     "close": 421.0,
     "entry_score": 883.8,
-    "ret_1d": -0.0119
+    "ret_1d": -0.0119,
+    "ret_5d": -0.0285
    },
    {
     "stock_id": "2027",
     "name": "大成鋼",
     "close": 46.1,
     "entry_score": 870.4,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": 0.0933
    },
    {
     "stock_id": "3324",
     "name": "雙鴻",
     "close": 1060.0,
     "entry_score": 868.4,
-    "ret_1d": -0.0425
+    "ret_1d": -0.0425,
+    "ret_5d": -0.0236
    },
    {
     "stock_id": "2421",
     "name": "建準",
     "close": 154.5,
     "entry_score": 864.5,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": -0.0324
    },
    {
     "stock_id": "2032",
     "name": "新鋼",
     "close": 16.9,
     "entry_score": 845.7,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": 0.0178
    },
    {
     "stock_id": "2354",
     "name": "鴻準",
     "close": 61.0,
     "entry_score": 843.9,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": 0.0295
    },
    {
     "stock_id": "8464",
     "name": "億豐",
     "close": 382.0,
     "entry_score": 841.3,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": -0.0366
    },
    {
     "stock_id": "3135",
     "name": "凌航",
     "close": 186.5,
     "entry_score": 818.5,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": -0.0938
    },
    {
     "stock_id": "6756",
     "name": "威鋒電子",
     "close": 103.0,
     "entry_score": 816.1,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": -0.0301
    },
    {
     "stock_id": "7705",
     "name": "三商餐飲",
     "close": 31.55,
     "entry_score": 815.6,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": -0.0475
    },
    {
     "stock_id": "4576",
     "name": "大銀微系統",
     "close": 218.5,
     "entry_score": 814.6,
-    "ret_1d": -0.0023
+    "ret_1d": -0.0023,
+    "ret_5d": 0.0252
    },
    {
     "stock_id": "2535",
     "name": "達欣工",
     "close": 93.0,
     "entry_score": 812.5,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": -0.0591
    },
    {
     "stock_id": "3022",
     "name": "威強電",
     "close": 100.5,
     "entry_score": 812.2,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": -0.0239
    },
    {
     "stock_id": "4967",
     "name": "十銓",
     "close": 280.0,
     "entry_score": 800.6,
-    "ret_1d": 0.0
+    "ret_1d": 0.0,
+    "ret_5d": 0.0018
    }
   ]
  },
@@ -4440,73 +4499,85 @@
     "stock_id": "4763",
     "name": "材料*-KY",
     "close": 52.6,
-    "entry_score": 1048.4
+    "entry_score": 1048.4,
+    "ret_1d": -0.019
    },
    {
     "stock_id": "4414",
     "name": "如興",
     "close": 8.68,
-    "entry_score": 972.1
+    "entry_score": 972.1,
+    "ret_1d": -0.0069
    },
    {
     "stock_id": "6154",
     "name": "順發",
     "close": 14.05,
-    "entry_score": 922.2
+    "entry_score": 922.2,
+    "ret_1d": -0.0142
    },
    {
     "stock_id": "4540",
     "name": "全球傳動",
     "close": 60.6,
-    "entry_score": 903.8
+    "entry_score": 903.8,
+    "ret_1d": -0.005
    },
    {
     "stock_id": "4736",
     "name": "泰博",
     "close": 134.0,
-    "entry_score": 903.4
+    "entry_score": 903.4,
+    "ret_1d": 0.0522
    },
    {
     "stock_id": "1904",
     "name": "正隆",
     "close": 25.15,
-    "entry_score": 899.1
+    "entry_score": 899.1,
+    "ret_1d": -0.0199
    },
    {
     "stock_id": "5515",
     "name": "建國",
     "close": 45.9,
-    "entry_score": 898.2
+    "entry_score": 898.2,
+    "ret_1d": 0.098
    },
    {
     "stock_id": "2376",
     "name": "技嘉",
     "close": 375.5,
-    "entry_score": 891.9
+    "entry_score": 891.9,
+    "ret_1d": 0.0479
    },
    {
     "stock_id": "6546",
     "name": "正基",
     "close": 68.0,
-    "entry_score": 886.5
+    "entry_score": 886.5,
+    "ret_1d": -0.0294
    },
    {
     "stock_id": "2324",
     "name": "仁寶",
     "close": 39.9,
-    "entry_score": 874.0
+    "entry_score": 874.0,
+    "ret_1d": -0.015
    },
    {
     "stock_id": "1416",
     "name": "廣豐",
     "close": 11.4,
-    "entry_score": 874.0
+    "entry_score": 874.0,
+    "ret_1d": 0.0307
    },
    {
     "stock_id": "5287",
     "name": "數字",
     "close": 152.5,
-    "entry_score": 869.3
+    "entry_score": 869.3,
+    "ret_1d": 0.023
    },
    {
     "stock_id": "4931",
@@ -4518,31 +4589,36 @@
     "stock_id": "6265",
     "name": "方土昶",
     "close": 56.8,
-    "entry_score": 861.5
+    "entry_score": 861.5,
+    "ret_1d": 0.037
    },
    {
     "stock_id": "6174",
     "name": "安碁",
     "close": 44.05,
-    "entry_score": 858.7
+    "entry_score": 858.7,
+    "ret_1d": 0.0783
    },
    {
     "stock_id": "2364",
     "name": "倫飛",
     "close": 78.5,
-    "entry_score": 856.0
+    "entry_score": 856.0,
+    "ret_1d": 0.0357
    },
    {
     "stock_id": "3490",
     "name": "單井",
     "close": 33.5,
-    "entry_score": 855.3
+    "entry_score": 855.3,
+    "ret_1d": 0.1
    },
    {
     "stock_id": "5607",
     "name": "遠雄港",
     "close": 51.6,
-    "entry_score": 854.6
+    "entry_score": 854.6,
+    "ret_1d": 0.0116
    },
    {
     "stock_id": "5351",
@@ -4555,6 +4631,131 @@
     "name": "華星光",
     "close": 561.0,
     "entry_score": 847.6
+   }
+  ]
+ },
+ {
+  "date": "2026-08-13",
+  "stocks": [
+   {
+    "stock_id": "4736",
+    "name": "泰博",
+    "close": 141.0,
+    "entry_score": 1084.0
+   },
+   {
+    "stock_id": "5607",
+    "name": "遠雄港",
+    "close": 52.2,
+    "entry_score": 993.2
+   },
+   {
+    "stock_id": "5321",
+    "name": "美而快",
+    "close": 62.0,
+    "entry_score": 991.3
+   },
+   {
+    "stock_id": "6277",
+    "name": "宏正",
+    "close": 84.2,
+    "entry_score": 980.8
+   },
+   {
+    "stock_id": "5515",
+    "name": "建國",
+    "close": 50.4,
+    "entry_score": 942.6
+   },
+   {
+    "stock_id": "3490",
+    "name": "單井",
+    "close": 36.85,
+    "entry_score": 935.8
+   },
+   {
+    "stock_id": "4566",
+    "name": "時碩工業",
+    "close": 75.5,
+    "entry_score": 930.1
+   },
+   {
+    "stock_id": "6642",
+    "name": "富致",
+    "close": 86.7,
+    "entry_score": 908.6
+   },
+   {
+    "stock_id": "6265",
+    "name": "方土昶",
+    "close": 58.9,
+    "entry_score": 903.8
+   },
+   {
+    "stock_id": "6651",
+    "name": "全宇昕",
+    "close": 142.0,
+    "entry_score": 884.5
+   },
+   {
+    "stock_id": "5283",
+    "name": "禾聯碩",
+    "close": 56.6,
+    "entry_score": 876.6
+   },
+   {
+    "stock_id": "4555",
+    "name": "氣立",
+    "close": 51.0,
+    "entry_score": 876.4
+   },
+   {
+    "stock_id": "1709",
+    "name": "和益",
+    "close": 30.65,
+    "entry_score": 868.6
+   },
+   {
+    "stock_id": "2546",
+    "name": "根基",
+    "close": 104.0,
+    "entry_score": 868.1
+   },
+   {
+    "stock_id": "3130",
+    "name": "一零四",
+    "close": 210.5,
+    "entry_score": 864.8
+   },
+   {
+    "stock_id": "3357",
+    "name": "臺慶科",
+    "close": 253.5,
+    "entry_score": 860.5
+   },
+   {
+    "stock_id": "6906",
+    "name": "現觀科",
+    "close": 74.5,
+    "entry_score": 849.8
+   },
+   {
+    "stock_id": "6538",
+    "name": "倉和",
+    "close": 177.5,
+    "entry_score": 846.9
+   },
+   {
+    "stock_id": "7631",
+    "name": "聚賢研發-創",
+    "close": 148.0,
+    "entry_score": 845.3
+   },
+   {
+    "stock_id": "6840",
+    "name": "東研信超",
+    "close": 75.6,
+    "entry_score": 839.0
    }
   ]
  }
