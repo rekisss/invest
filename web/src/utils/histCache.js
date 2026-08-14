@@ -9,7 +9,10 @@ let cachedPromise = null
 
 export function getStockHistories(base = '/') {
   if (!cachedPromise) {
-    cachedPromise = fetch(`${base}stock_histories.json`)
+    // cache:'no-cache' 沿用 Dashboard 原本的語意——每次連線向伺服器驗證一次新鮮度
+    // (檔案每日重建)。未改動的話會拿到 304,不會重下 8MB;而 module 層的 promise
+    // 保證整個 session 只發一次請求。
+    cachedPromise = fetch(`${base}stock_histories.json`, { cache: 'no-cache' })
       .then(r => (r.ok ? r.json() : null))
       .catch(() => null)
       .then(h => h || {})

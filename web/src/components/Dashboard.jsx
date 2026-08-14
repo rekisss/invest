@@ -6,6 +6,7 @@ import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { animate, stagger, spring } from 'animejs'
 import { industryCategoryLabel } from '../utils/industryCategory'
+import { getStockHistories } from '../utils/histCache'
 gsap.registerPlugin(useGSAP)
 
 const PAGE_SIZE = 50
@@ -2238,8 +2239,10 @@ export default function Dashboard({ data, error }) {
   const [historyDates, setHistoryDates] = useState(null)
   const [scanHistories, setScanHistories] = useState(null)
   useEffect(() => {
-    fetch(`${BASE}stock_histories.json`, { cache: 'no-cache' })
-      .then(r => r.ok ? r.json() : null)
+    // 走共用的 histCache:Dashboard 原本自己 fetch,不會登記到那份 module 快取,
+    // 於是「開掃描頁 + 開任一個股明細」會把同一個 8MB 檔抓兩次。改用共用入口後
+    // 整個 session 只抓一次(App / Overview / Portfolio / 驗證 / 盯盤 都共用同一份)。
+    getStockHistories(BASE)
       .then(h => {
         if (h?.stocks) setSlimHistories(h.stocks)
         if (Array.isArray(h?.dates)) setHistoryDates(h.dates)
