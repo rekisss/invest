@@ -207,5 +207,18 @@
   "directional": true,
   "hit": false,
   "hit_h5": null
+ },
+ {
+  "date": "2026-08-14",
+  "taiex_close": 46021.48,
+  "taiex_change": 900.76,
+  "taiex_pct": 0.019963333918430425,
+  "actual_up": true,
+  "pred_date": "2026-08-14",
+  "xgb_prob_up": 0.411,
+  "pred_label": "偏空",
+  "directional": true,
+  "hit": false,
+  "hit_h5": null
  }
 ]
