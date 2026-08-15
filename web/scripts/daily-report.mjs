@@ -97,9 +97,11 @@ if (ph.length && benchCurve.length >= 2) {
   const summary = summarizeProxy(proxyRows)
   const hits = summary?.hits ?? 0
   const total = summary?.total ?? 0
-  const todayRow = proxyRows.find(r => r.date === asOf)
-  const todayLine = todayRow
-    ? `今日 ${todayRow.label} → ${PROXY_HORIZON}日 ${pct(todayRow.ret)} ${todayRow.hit ? '✅' : '❌'}`
+  // 今日的預測期距必然還沒到期(as_of 就是曲線最後一天),所以這裡顯示「今日預測是什麼」
+  // 而不是「今日有沒有命中」——原本用 proxyRows.find(date===asOf) 永遠找不到,整段直接消失。
+  const todayPred = ph.find(p => p.date === asOf && p.xgb_label)
+  const todayLine = todayPred
+    ? `今日預測 ${todayPred.xgb_label}(${Math.round((todayPred.xgb_prob_up ?? 0.5) * 100)}%),${PROXY_HORIZON} 個交易日後驗證`
     : null
   if (total > 0) {
     // 真實收盤打分(outcome_tracker → realOutcomes.prediction_hit)比代理更準,
