@@ -217,3 +217,44 @@ def test_horizon_scoring_respects_up_threshold():
                     (100.0, 0.5), (100.0, 0.5), (100.2, 0.5)])
     ot.score_horizon_hits(recs)
     assert recs[0]["hit_h5"] is False, "+0.2% 未達 0.3% 門檻 → 不算上漲"
+
+
+# ── 自我 code review 抓到的回歸 ────────────────────────────────────────────────
+
+def test_horizon_skips_when_records_are_missing():
+    """「第 N 筆紀錄」≠「第 N 個交易日」:中間缺紀錄時不可硬打分。
+
+    造 6 筆紀錄但日期橫跨三週(等於中間漏了很多天)→ 跨距遠超 5 個工作日,
+    應拒絕打分而不是回報一個用錯期間算出來的命中。
+    """
+    recs = [{"date": d, "taiex_close": c, "xgb_prob_up": p} for d, c, p in [
+        ("2026-07-01", 100.0, 0.65), ("2026-07-02", 101.0, 0.5), ("2026-07-03", 102.0, 0.5),
+        ("2026-07-06", 103.0, 0.5), ("2026-07-07", 104.0, 0.5), ("2026-07-31", 130.0, 0.5),
+    ]]
+    ot.score_horizon_hits(recs)
+    first = recs[0]
+    assert first["hit_h5"] is None, "跨距過長(缺紀錄)時必須放棄打分"
+    assert first["hit_h5_span_bdays"] > 5 + ot.SPAN_TOLERANCE
+
+
+def test_horizon_scores_when_span_is_within_tolerance():
+    """正常連續交易日(跨距 5 個工作日)照常打分。"""
+    recs = [{"date": d, "taiex_close": c, "xgb_prob_up": p} for d, c, p in [
+        ("2026-07-01", 100.0, 0.65), ("2026-07-02", 98.0, 0.5), ("2026-07-03", 97.0, 0.5),
+        ("2026-07-06", 99.0, 0.5), ("2026-07-07", 101.0, 0.5), ("2026-07-08", 105.0, 0.5),
+    ]]
+    ot.score_horizon_hits(recs)
+    assert recs[0]["hit_h5"] is True
+    assert recs[0]["hit_h5_span_bdays"] == 5
+
+
+def test_sign_strips_html_before_reading_direction():
+    """方向欄帶 HTML 時,屬性裡的連字號不可被誤判成「跌」。"""
+    assert ot._sign({"漲跌(+/-)": "<p style='font-weight:600;text-align:left'>+</p>"}) == 1
+    assert ot._sign({"漲跌(+/-)": "<p style='color:green'>-</p>"}) == -1
+
+
+def test_sign_returns_none_for_unrecognised_marker():
+    """認不出來要回 None,不能回 0(abs(chg)*0 會把有效漲跌歸零)。"""
+    assert ot._sign({"漲跌(+/-)": "?"}) is None
+    assert ot._sign({"漲跌(+/-)": ""}) is None

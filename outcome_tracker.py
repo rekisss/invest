@@ -26,6 +26,7 @@ import csv
 import glob
 import json
 import os
+import re
 import sys
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -101,12 +102,17 @@ def _sign(item: dict) -> int | None:
         raw = _field(item, ["updown", "direction"], excludes=["percent", "%"])
     if raw is None:
         return None
-    s = str(raw).lower()
-    if "-" in s or "▼" in s or "green" in s or "跌" in s:
+    s = str(raw)
+    # 方向欄有時帶 HTML(例:<p style='color:green'>-</p>)。屬性字串裡的連字號
+    # (font-weight、text-align…)會被誤判成「跌」,所以先把標籤整段剝掉再判讀。
+    s = re.sub(r"<[^>]*>", "", s).strip().lower()
+    if "▼" in s or "green" in s or "跌" in s or "-" in s:
         return -1
-    if "+" in s or "▲" in s or "red" in s or "漲" in s:
+    if "▲" in s or "red" in s or "漲" in s or "+" in s:
         return 1
-    return 0
+    # 認不出來就回 None(交由呼叫端沿用點數本身的符號)。
+    # 早期版本回 0,會讓 abs(chg) * 0 把有效的漲跌幅直接歸零。
+    return None
 
 
 def fetch_taiex() -> dict | None:
@@ -160,6 +166,21 @@ PRED_HORIZON = 5
 UP_THRESHOLD = 1.003   # 與 train 時的 target 定義一致(漲幅需 >0.3% 才算「上漲」)
 
 
+SPAN_TOLERANCE = 2     # 容許國定假日造成的 1~2 個工作日誤差
+
+
+def _bdays_between(a: str, b: str) -> int:
+    """a→b 之間的工作日數(週一~週五;不含國定假日)。"""
+    d = datetime.strptime(a, "%Y-%m-%d").date()
+    end = datetime.strptime(b, "%Y-%m-%d").date()
+    n = 0
+    while d < end:
+        d += timedelta(days=1)
+        if d.weekday() < 5:
+            n += 1
+    return n
+
+
 def score_horizon_hits(records: list, horizon: int = PRED_HORIZON) -> int:
     """依模型真正的預測期距(預設 5 個交易日)回填 hit_h{n},回傳新打分的筆數。
 
@@ -185,6 +206,14 @@ def score_horizon_hits(records: list, horizon: int = PRED_HORIZON) -> int:
             continue
         base, future = e["taiex_close"], asc[j]["taiex_close"]
         if not base:
+            e[key] = None
+            continue
+        # 「第 N 筆紀錄」≠「第 N 個交易日」:某天沒跑到就沒有紀錄,index+horizon 會
+        # 跨過比預期更長的期間(2026-08 實測:11 筆有 7 筆跨了 6 個工作日而非 5,
+        # 因為缺 07-31、08-13)。記錄實際跨距,明顯過長就不打分,寧可少算不誤報。
+        span = _bdays_between(e["date"], asc[j]["date"])
+        e[f"{key}_span_bdays"] = span
+        if span > horizon + SPAN_TOLERANCE:
             e[key] = None
             continue
         up = future > base * UP_THRESHOLD

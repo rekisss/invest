@@ -48,13 +48,34 @@ export function recomputeRealHits(records) {
 export const PRED_HORIZON = 5
 const UP_THRESHOLD = 1.003   // 與訓練時 target 定義一致
 
+// 兩個日期間的工作日數(週一~週五;不含國定假日,台股假日會讓實際交易日略少於此)。
+function businessDaysBetween(a, b) {
+  let d = new Date(`${a}T00:00:00Z`)
+  const end = new Date(`${b}T00:00:00Z`)
+  let n = 0
+  while (d < end) {
+    d = new Date(d.getTime() + 86400000)
+    const wd = d.getUTCDay()
+    if (wd !== 0 && wd !== 6) n++
+  }
+  return n
+}
+
 // 依預測期距回填 hit_h{n};就地修改並回傳「已打分」的筆數。期距未到者為 null。
+//
+// 注意「第 N 筆紀錄」≠「第 N 個交易日」:outcome_tracker 若某天沒跑(假日誤判、
+// workflow 失敗),那天就沒有紀錄,單純用 index+horizon 會跨過比預期更長的期間。
+// 2026-08 實測:11 筆有 7 筆實際跨了 6 個工作日而非 5(缺 07-31、08-13 兩天)。
+// 因此這裡額外記錄實際跨距(span_bdays)並在明顯過長時放棄打分,寧可少算也不誤報。
+const SPAN_TOLERANCE = 2      // 容許國定假日造成的 1~2 個工作日誤差
+
 export function scoreHorizonHits(records, horizon = PRED_HORIZON) {
   if (!Array.isArray(records)) return 0
   const asc = records
     .filter(e => e && typeof e.taiex_close === 'number' && e.date)
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
   const key = `hit_h${horizon}`
+  const spanKey = `${key}_span_bdays`
   let scored = 0
   for (let i = 0; i < asc.length; i++) {
     const e = asc[i]
@@ -64,6 +85,10 @@ export function scoreHorizonHits(records, horizon = PRED_HORIZON) {
     if (j >= asc.length) { e[key] = null; continue }       // 期距未到,之後補
     const base = e.taiex_close, future = asc[j].taiex_close
     if (!base) { e[key] = null; continue }
+    const span = businessDaysBetween(e.date, asc[j].date)
+    e[spanKey] = span
+    // 跨距明顯超出預期(多半是中間有紀錄缺漏)→ 不打分,避免用錯的期間算命中率
+    if (span > horizon + SPAN_TOLERANCE) { e[key] = null; continue }
     e[key] = (prob > 0.5) === (future > base * UP_THRESHOLD)
     e[`ret_h${horizon}`] = Math.round((future - base) / base * 10000) / 100
     scored++

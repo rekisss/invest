@@ -439,7 +439,7 @@ function ProbTrend({ history, benchCurve }) {
           <span style={{ color: '#16D67E', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
             <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#16D67E"/></svg>實際下跌
           </span>
-          <span style={{ color: 'var(--ios-label4)', fontSize: 10, marginLeft: 'auto' }}>夜盤 ±20點估算</span>
+          <span style={{ color: 'var(--ios-label4)', fontSize: 10, marginLeft: 'auto' }}>5日期距估算</span>
         </div>
       )}
     </Card>
@@ -478,9 +478,9 @@ function Tag({ text, color }) {
 }
 
 // Calibration analysis: actual win-rate per prediction confidence band
-// 預測回顧:盤前預測(偏多/中性/偏空)逐日對照「掃描池等權當日報酬」打分。
+// 預測回顧:盤前預測(偏多/中性/偏空)對照「掃描池等權 5 個交易日累積報酬」打分。
 // 與 Discord 日報的 🔮 預測回顧完全同一套判定(等權日報酬 = 基準曲線相鄰兩點
-// 累計值相減;中性 ±0.4% 內算命中),前端看到的命中率和日報數字一致。
+// 累計值相減;中性需在 ±0.3% 內走平才算命中),前端看到的命中率和日報數字一致。
 function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
   const listRef = useRef(null)
   const rows = useMemo(() => {
@@ -550,7 +550,7 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
         ))}
       </div>
       <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 8, lineHeight: 1.5 }}>
-        實際 = 掃描池等權當日報酬(與 AI操盤基準、Discord 日報同一基準);中性預測在 ±0.4% 內算命中
+        實際 = 掃描池等權「5 個交易日」累積報酬(與 AI操盤基準、Discord 日報同一基準);中性預測需在 ±0.3% 內走平才算命中
       </div>
     </Card>
   )
@@ -603,7 +603,7 @@ function CalibrationPanel({ history, benchCurve }) {
   return (
     <Card title="預測校準分析">
       <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginBottom: 10 }}>
-        各信心區間的實際上漲率（隔日夜盤估算），與預測中心對比越近代表校準越好
+        各信心區間的實際上漲率(5 個交易日後,與模型預測期距一致),與預測中心對比越近代表校準越好
       </div>
       <div ref={containerRef}>
       {bands.map(b => {
@@ -765,7 +765,7 @@ function ErrorPatternPanel({ history, benchCurve }) {
         </div>
       )}
       <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 8, lineHeight: 1.5 }}>
-        樣本 {data.total} 筆 · 以隔日夜盤 ±20點為實際方向基準
+        樣本 {data.total} 筆 · 以以掃描池等權 5 個交易日累積報酬(±0.3%)判定為實際方向基準
       </div>
     </Card>
   )
