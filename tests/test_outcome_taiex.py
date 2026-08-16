@@ -258,3 +258,18 @@ def test_sign_returns_none_for_unrecognised_marker():
     """認不出來要回 None,不能回 0(abs(chg)*0 會把有效漲跌歸零)。"""
     assert ot._sign({"漲跌(+/-)": "?"}) is None
     assert ot._sign({"漲跌(+/-)": ""}) is None
+
+
+def test_horizon_skips_windows_containing_a_suspect_close():
+    """區間內有可疑收盤(疑似比對到別的指數)時不可打分。"""
+    recs = [{"date": d, "taiex_close": c, "xgb_prob_up": p} for d, c, p in [
+        ("2026-07-01", 100.0, 0.65), ("2026-07-02", 101.0, 0.5), ("2026-07-03", 102.0, 0.5),
+        ("2026-07-06", 103.0, 0.5), ("2026-07-07", 104.0, 0.5), ("2026-07-08", 105.0, 0.5),
+    ]]
+    recs[3]["close_suspect"] = True          # 區間中間有一天可疑
+    ot.score_horizon_hits(recs)
+    assert recs[0]["hit_h5"] is None, "區間含可疑收盤 → 不打分"
+    # 沒有可疑標記時照常打分
+    recs[3].pop("close_suspect")
+    ot.score_horizon_hits(recs)
+    assert recs[0]["hit_h5"] is True
