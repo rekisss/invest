@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "data": "node scripts/build-data.mjs",
+    "build": "node scripts/data-preflight.mjs && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
