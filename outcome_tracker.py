@@ -150,10 +150,16 @@ def fetch_taiex() -> dict | None:
             print(f"[taiex] 漲跌點數 {chg} 相對收盤 {close} 不合理 → 捨棄,改用收盤差判方向")
             chg = None
         prev = close - chg if chg is not None else None
+        # 記錄實際比對到的那一列名稱。2026-08 診斷:存下來的收盤序列單日波動
+        # 中位數 1.34%、最大 7.69%(加權指數實際約 0.5~0.7%),且與掃描池等權
+        # 報酬在 15 天中有 5 天連方向都相反——高度懷疑不同日子比對到不同指數。
+        # 沙盒連不到 TWSE 無法直接驗證,因此把來源名稱寫進紀錄供事後稽核。
+        matched = next((str(v) for v in item.values() if TAIEX_NAME in str(v)), None)
         return {
             "close": close,
             "change": chg,
             "pct": (chg / prev) if (chg is not None and prev) else None,
+            "name": matched,
         }
     print("[taiex] MI_INDEX 回應中找不到加權指數列(schema 可能再次改版)")
     return None
@@ -167,6 +173,7 @@ UP_THRESHOLD = 1.003   # 與 train 時的 target 定義一致(漲幅需 >0.3% �
 
 
 SPAN_TOLERANCE = 2     # 容許國定假日造成的 1~2 個工作日誤差
+MAX_SESSION_MOVE = 0.06  # 單一交易日漲跌超過 6% 視為可疑(加權指數極罕見)
 
 
 def _bdays_between(a: str, b: str) -> int:
@@ -206,6 +213,10 @@ def score_horizon_hits(records: list, horizon: int = PRED_HORIZON) -> int:
             continue
         base, future = e["taiex_close"], asc[j]["taiex_close"]
         if not base:
+            e[key] = None
+            continue
+        # 區間內只要有任何一天的收盤被標記可疑,就不打分(寧可少算不誤報)
+        if any(x.get("close_suspect") for x in asc[i:j + 1]):
             e[key] = None
             continue
         # 「第 N 筆紀錄」≠「第 N 個交易日」:某天沒跑到就沒有紀錄,index+horizon 會
@@ -298,6 +309,12 @@ def score_prediction(today: str, taiex: dict) -> None:
         "taiex_pct": pct,
         "actual_up": up,
     }
+    if taiex.get("name"):
+        entry["taiex_name"] = taiex["name"]     # 來源稽核用
+    # 合理性:加權指數單一交易日極少超過 6%。超過就標記為可疑(多半是比對到別的
+    # 指數,或中間漏了交易日),打分時排除,避免把雜訊當成「真實命中率」。
+    if prev_rec and pct is not None and abs(pct) > MAX_SESSION_MOVE:
+        entry["close_suspect"] = True
     if pred:
         prob = float(pred["xgb_prob_up"])
         directional = abs(prob - 0.5) > 0.05
