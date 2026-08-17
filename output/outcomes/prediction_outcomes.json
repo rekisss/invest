@@ -12,7 +12,8 @@
   "hit": null,
   "hit_h5": true,
   "ret_h5": -5.94,
-  "hit_h5_date": "2026-07-29"
+  "hit_h5_date": "2026-07-29",
+  "hit_h5_span_bdays": 5
  },
  {
   "date": "2026-07-23",
@@ -53,7 +54,8 @@
   "hit": false,
   "hit_h5": false,
   "ret_h5": -0.61,
-  "hit_h5_date": "2026-08-04"
+  "hit_h5_date": "2026-08-04",
+  "hit_h5_span_bdays": 6
  },
  {
   "date": "2026-07-28",
@@ -68,7 +70,8 @@
   "hit": false,
   "hit_h5": false,
   "ret_h5": -0.63,
-  "hit_h5_date": "2026-08-05"
+  "hit_h5_date": "2026-08-05",
+  "hit_h5_span_bdays": 6
  },
  {
   "date": "2026-07-29",
@@ -83,7 +86,8 @@
   "hit": false,
   "hit_h5": true,
   "ret_h5": 7.23,
-  "hit_h5_date": "2026-08-06"
+  "hit_h5_date": "2026-08-06",
+  "hit_h5_span_bdays": 6
  },
  {
   "date": "2026-07-30",
@@ -98,7 +102,8 @@
   "hit": false,
   "hit_h5": true,
   "ret_h5": 10.88,
-  "hit_h5_date": "2026-08-07"
+  "hit_h5_date": "2026-08-07",
+  "hit_h5_span_bdays": 6
  },
  {
   "date": "2026-08-03",
@@ -113,7 +118,8 @@
   "hit": false,
   "hit_h5": false,
   "ret_h5": 2.57,
-  "hit_h5_date": "2026-08-10"
+  "hit_h5_date": "2026-08-10",
+  "hit_h5_span_bdays": 5
  },
  {
   "date": "2026-08-04",
@@ -128,7 +134,8 @@
   "hit": false,
   "hit_h5": false,
   "ret_h5": 3.55,
-  "hit_h5_date": "2026-08-11"
+  "hit_h5_date": "2026-08-11",
+  "hit_h5_span_bdays": 5
  },
  {
   "date": "2026-08-05",
@@ -167,7 +174,10 @@
   "pred_label": "偏空",
   "directional": true,
   "hit": true,
-  "hit_h5": null
+  "hit_h5": false,
+  "hit_h5_span_bdays": 6,
+  "ret_h5": 3.19,
+  "hit_h5_date": "2026-08-17"
  },
  {
   "date": "2026-08-10",
@@ -217,6 +227,20 @@
   "pred_date": "2026-08-14",
   "xgb_prob_up": 0.411,
   "pred_label": "偏空",
+  "directional": true,
+  "hit": false,
+  "hit_h5": null
+ },
+ {
+  "date": "2026-08-17",
+  "taiex_close": 45811.01,
+  "taiex_change": -210.47,
+  "taiex_pct": -0.004573299250697742,
+  "actual_up": false,
+  "taiex_name": "發行量加權股價指數",
+  "pred_date": "2026-08-17",
+  "xgb_prob_up": 0.553,
+  "pred_label": "偏多",
   "directional": true,
   "hit": false,
   "hit_h5": null
