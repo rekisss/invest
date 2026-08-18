@@ -26,7 +26,8 @@
   "pred_label": "中性",
   "directional": false,
   "hit": null,
-  "hit_h5": null
+  "hit_h5": null,
+  "prev_gap_bdays": 1
  },
  {
   "date": "2026-07-24",
@@ -39,7 +40,8 @@
   "pred_label": "中性",
   "directional": false,
   "hit": null,
-  "hit_h5": null
+  "hit_h5": null,
+  "prev_gap_bdays": 1
  },
  {
   "date": "2026-07-27",
@@ -55,7 +57,8 @@
   "hit_h5": false,
   "ret_h5": -0.61,
   "hit_h5_date": "2026-08-04",
-  "hit_h5_span_bdays": 6
+  "hit_h5_span_bdays": 6,
+  "prev_gap_bdays": 1
  },
  {
   "date": "2026-07-28",
@@ -71,7 +74,8 @@
   "hit_h5": false,
   "ret_h5": -0.63,
   "hit_h5_date": "2026-08-05",
-  "hit_h5_span_bdays": 6
+  "hit_h5_span_bdays": 6,
+  "prev_gap_bdays": 1
  },
  {
   "date": "2026-07-29",
@@ -87,7 +91,8 @@
   "hit_h5": true,
   "ret_h5": 7.23,
   "hit_h5_date": "2026-08-06",
-  "hit_h5_span_bdays": 6
+  "hit_h5_span_bdays": 6,
+  "prev_gap_bdays": 1
  },
  {
   "date": "2026-07-30",
@@ -103,23 +108,25 @@
   "hit_h5": true,
   "ret_h5": 10.88,
   "hit_h5_date": "2026-08-07",
-  "hit_h5_span_bdays": 6
+  "hit_h5_span_bdays": 6,
+  "prev_gap_bdays": 1
  },
  {
   "date": "2026-08-03",
   "taiex_close": 43119.75,
   "taiex_change": 3080.57,
   "taiex_pct": 0.0769388883588525,
-  "actual_up": true,
+  "actual_up": null,
   "pred_date": "2026-08-03",
   "xgb_prob_up": 0.386,
   "pred_label": "偏空",
   "directional": true,
-  "hit": false,
+  "hit": null,
   "hit_h5": false,
   "ret_h5": 2.57,
   "hit_h5_date": "2026-08-10",
-  "hit_h5_span_bdays": 5
+  "hit_h5_span_bdays": 5,
+  "prev_gap_bdays": 2
  },
  {
   "date": "2026-08-04",
@@ -135,7 +142,8 @@
   "hit_h5": false,
   "ret_h5": 3.55,
   "hit_h5_date": "2026-08-11",
-  "hit_h5_span_bdays": 5
+  "hit_h5_span_bdays": 5,
+  "prev_gap_bdays": 1
  },
  {
   "date": "2026-08-05",
@@ -148,7 +156,8 @@
   "pred_label": "偏空",
   "directional": false,
   "hit": null,
-  "hit_h5": null
+  "hit_h5": null,
+  "prev_gap_bdays": 1
  },
  {
   "date": "2026-08-06",
@@ -161,7 +170,8 @@
   "pred_label": "中性",
   "directional": false,
   "hit": null,
-  "hit_h5": null
+  "hit_h5": null,
+  "prev_gap_bdays": 1
  },
  {
   "date": "2026-08-07",
@@ -177,7 +187,8 @@
   "hit_h5": false,
   "hit_h5_span_bdays": 6,
   "ret_h5": 3.19,
-  "hit_h5_date": "2026-08-17"
+  "hit_h5_date": "2026-08-17",
+  "prev_gap_bdays": 1
  },
  {
   "date": "2026-08-10",
@@ -190,7 +201,11 @@
   "pred_label": "偏空",
   "directional": true,
   "hit": true,
-  "hit_h5": null
+  "hit_h5": false,
+  "prev_gap_bdays": 1,
+  "hit_h5_span_bdays": 6,
+  "ret_h5": 3.69,
+  "hit_h5_date": "2026-08-18"
  },
  {
   "date": "2026-08-11",
@@ -203,7 +218,8 @@
   "pred_label": "偏多",
   "directional": false,
   "hit": null,
-  "hit_h5": null
+  "hit_h5": null,
+  "prev_gap_bdays": 1
  },
  {
   "date": "2026-08-12",
@@ -216,20 +232,22 @@
   "pred_label": "看空",
   "directional": true,
   "hit": false,
-  "hit_h5": null
+  "hit_h5": null,
+  "prev_gap_bdays": 1
  },
  {
   "date": "2026-08-14",
   "taiex_close": 46021.48,
   "taiex_change": 900.76,
   "taiex_pct": 0.019963333918430425,
-  "actual_up": true,
+  "actual_up": null,
   "pred_date": "2026-08-14",
   "xgb_prob_up": 0.411,
   "pred_label": "偏空",
   "directional": true,
-  "hit": false,
-  "hit_h5": null
+  "hit": null,
+  "hit_h5": null,
+  "prev_gap_bdays": 2
  },
  {
   "date": "2026-08-17",
@@ -243,6 +261,22 @@
   "pred_label": "偏多",
   "directional": true,
   "hit": false,
+  "hit_h5": null,
+  "prev_gap_bdays": 1
+ },
+ {
+  "date": "2026-08-18",
+  "taiex_close": 45857.27,
+  "taiex_change": 46.26,
+  "taiex_pct": 0.0010098009190365976,
+  "actual_up": true,
+  "taiex_name": "發行量加權股價指數",
+  "pred_date": "2026-08-18",
+  "xgb_prob_up": 0.361,
+  "pred_label": "看空",
+  "directional": true,
+  "hit": false,
+  "prev_gap_bdays": 1,
   "hit_h5": null
  }
 ]
