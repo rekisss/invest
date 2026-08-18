@@ -273,3 +273,45 @@ def test_horizon_skips_windows_containing_a_suspect_close():
     recs[3].pop("close_suspect")
     ot.score_horizon_hits(recs)
     assert recs[0]["hit_h5"] is True
+
+
+def test_repair_history_skips_non_adjacent_records():
+    """紀錄之間缺了交易日時,不可把跨多日的累積波動寫成「當日漲跌」。
+
+    outcome_tracker 若某天沒跑(假日誤判、workflow 失敗)就沒有那天的紀錄。
+    舊版一律拿「前一筆紀錄」的收盤相減,等於把 3 個交易日的波動記成單日,
+    並覆蓋掉 TWSE 當天回報的、正負號已修好的真實單日漲跌。
+    """
+    recs = [
+        {"date": "2026-07-06", "xgb_prob_up": 0.60, "taiex_close": 100.0},
+        {"date": "2026-07-07", "xgb_prob_up": 0.62, "taiex_close": 105.0},   # 相鄰 → 改寫
+        # 07-08、07-09 缺紀錄;07-10 距 07-07 有 3 個工作日 → 不得改寫
+        {"date": "2026-07-10", "xgb_prob_up": 0.62, "taiex_close": 130.0,
+         "taiex_change": 2.0, "taiex_pct": 0.0156},
+    ]
+    ot.repair_history(recs)
+    by = {e["date"]: e for e in recs}
+
+    adj = by["2026-07-07"]
+    assert adj["prev_gap_bdays"] == 1
+    assert adj["taiex_change"] == 5.0 and adj["actual_up"] is True and adj["hit"] is True
+
+    gapped = by["2026-07-10"]
+    assert gapped["prev_gap_bdays"] == 3, "跨距必須被記錄下來供稽核"
+    assert gapped["taiex_change"] == 2.0, "TWSE 的單日漲跌不可被 3 日累積差覆蓋"
+    assert gapped["taiex_pct"] == 0.0156
+    assert gapped["actual_up"] is None, "跨距不明時不猜方向"
+    assert gapped["hit"] is None, "寧可不打分也不誤報"
+
+
+def test_repair_history_weekend_gap_is_still_adjacent():
+    """週五 → 週一只隔 1 個工作日,仍屬相鄰,必須照常改寫。"""
+    recs = [
+        {"date": "2026-07-03", "xgb_prob_up": 0.60, "taiex_close": 100.0},   # 週五
+        {"date": "2026-07-06", "xgb_prob_up": 0.30, "taiex_close": 98.0},    # 週一,偏空且跌
+    ]
+    ot.repair_history(recs)
+    mon = recs[1]
+    assert mon["prev_gap_bdays"] == 1
+    assert mon["actual_up"] is False and mon["hit"] is True
+    assert mon["taiex_change"] == -2.0

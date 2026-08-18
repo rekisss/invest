@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useLayoutEffect } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { animateListRows } from '../utils/animeUtils'
-import { scoreProxyPredictions, horizonOutcomeMap, PROXY_HORIZON } from '../utils/proxyScore.js'
+import { scoreProxyPredictions, summarizeProxy, horizonOutcomeMap, PROXY_HORIZON } from '../utils/proxyScore.js'
 gsap.registerPlugin(useGSAP)
 
 const HIST_PAGE_SIZE = 20
@@ -478,9 +478,12 @@ function Tag({ text, color }) {
 }
 
 // Calibration analysis: actual win-rate per prediction confidence band
-// 預測回顧:盤前預測(偏多/中性/偏空)對照「掃描池等權 5 個交易日累積報酬」打分。
-// 與 Discord 日報的 🔮 預測回顧完全同一套判定(等權日報酬 = 基準曲線相鄰兩點
-// 累計值相減;中性需在 ±0.3% 內走平才算命中),前端看到的命中率和日報數字一致。
+// 預測回顧:盤前預測對照「掃描池等權 5 個交易日累積報酬」打分。
+// 與 Discord 日報的 🔮 預測回顧完全同一套判定(等權報酬 = 基準曲線兩點累計值相減),
+// 前端看到的命中率和日報數字一致。
+// 判定規則自 2026-08 起與 outcome_tracker.py 的真實計分統一為模型自己的二元定義:
+// 命中 ⟺ (prob > 0.5) === (期距報酬 > +0.3%);中性帶(|prob-0.5| ≤ 0.05)不計分。
+// 理由見 utils/proxyScore.js——模型只預測「會不會漲逾 0.3%」,不預測「會跌」。
 function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
   const listRef = useRef(null)
   const rows = useMemo(() => {
@@ -495,10 +498,14 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
     animateListRows(el)
   }, [rows.length])
 
-  if (rows.length < 3) return null
+  // 中性預測 hit=null(不計分),不能進分母——否則命中率被不存在的「未命中」稀釋。
+  // 用 summarizeProxy 保證和 Discord 日報用同一條算式。
+  const proxy = summarizeProxy(rows)
+  if (!proxy || proxy.total < 3) return null
 
-  const hits = rows.filter(r => r.hit).length
-  const hitPct = Math.round(hits / rows.length * 100)
+  const hits = proxy.hits
+  const hitPct = proxy.pct
+  const skipped = rows.length - proxy.total
   const rateColor = hitPct >= 60 ? 'var(--ios-green)' : hitPct >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)'
   const labelColor = (label) => label.includes('多') ? 'var(--ios-red)' : label.includes('空') ? 'var(--ios-green)' : 'var(--ios-yellow)'
 
@@ -526,7 +533,7 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: realHit?.ready ? 4 : 10 }}>
         <span style={{ fontSize: realHit?.ready ? 15 : 24, fontWeight: 700, color: rateColor, fontFamily: 'var(--font-mono)', letterSpacing: '-0.5px' }}>{hitPct}%</span>
         <span style={{ fontSize: realHit?.ready ? 10.5 : 12, color: 'var(--ios-label3)' }}>
-          {realHit?.ready ? '掃描池代理估算 · ' : ''}{PROXY_HORIZON} 日期距 · 近 {rows.length} 筆命中 {hits} 次
+          {realHit?.ready ? '掃描池代理估算 · ' : ''}{PROXY_HORIZON} 日期距 · 近 {proxy.total} 筆命中 {hits} 次{skipped > 0 ? `(另 ${skipped} 筆中性不計分)` : ''}
         </span>
       </div>
       {realHit && !realHit.ready && (
@@ -545,12 +552,15 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
             <span style={{ flex: 1, textAlign: 'right', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-mono)', color: r.ret > 0 ? 'var(--ios-red)' : r.ret < 0 ? 'var(--ios-green)' : 'var(--ios-label2)' }}>
               {r.ret > 0 ? '+' : ''}{r.ret.toFixed(2)}%
             </span>
-            <span style={{ fontSize: 13, minWidth: 20, textAlign: 'right' }}>{r.hit ? '✅' : '❌'}</span>
+            <span style={{ fontSize: 13, minWidth: 20, textAlign: 'right' }}
+                  title={r.hit == null ? '中性預測:模型未表態,不計分' : r.hit ? '命中' : '未命中'}>
+              {r.hit == null ? '—' : r.hit ? '✅' : '❌'}
+            </span>
           </div>
         ))}
       </div>
       <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 8, lineHeight: 1.5 }}>
-        實際 = 掃描池等權「5 個交易日」累積報酬(與 AI操盤基準、Discord 日報同一基準);中性預測需在 ±0.3% 內走平才算命中
+        實際 = 掃描池等權「5 個交易日」累積報酬(與 AI操盤基準、Discord 日報同一基準)。命中定義同模型訓練目標:看多/偏多需漲逾 +0.3%;偏空/看空只要「沒漲逾 +0.3%」即命中(模型預測的是漲跌機率,不是跌幅);中性不計分
       </div>
     </Card>
   )
@@ -765,7 +775,7 @@ function ErrorPatternPanel({ history, benchCurve }) {
         </div>
       )}
       <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 8, lineHeight: 1.5 }}>
-        樣本 {data.total} 筆 · 以以掃描池等權 5 個交易日累積報酬(±0.3%)判定為實際方向基準
+        樣本 {data.total} 筆 · 以掃描池等權 5 個交易日累積報酬、+0.3% 門檻判定實際結果(與真實收盤計分同一定義)
       </div>
     </Card>
   )
