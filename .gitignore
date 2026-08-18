@@ -16,6 +16,9 @@ sponsor_log.txt
 training_data/*.csv
 web/node_modules/
 web/dist/
+# build 產物,每次部署都由 web/scripts/build-data.mjs 重新產生。
+# 曾經被誤 commit 進 repo(24.7 MB、且很快就過期),本機開發請跑 `npm run data`。
+web/public/data.json
 *.db
 logs/
 .claude/worktrees/
