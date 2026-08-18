@@ -1,5 +1,67 @@
 [
   {
+    "date": "2026-08-18",
+    "generated_at": "08:01",
+    "xgb_prob_up": 0.361,
+    "xgb_label": "看空",
+    "market_data": {
+      "vix": 15.19,
+      "sp500_ret": -0.0017,
+      "nasdaq_ret": -0.0028,
+      "sox_ret": -0.0031,
+      "tsm_adr_ret": -0.0096,
+      "futures_net": -83474.0,
+      "night_change": -189.0,
+      "pcr": null,
+      "taiex_rsi": 59.018853683649745,
+      "macd_hist": 804.2604594699762,
+      "dist_ma20": 4.422747383789938,
+      "dist_ma60": 3.0858882522927455,
+      "taiex_ret_5d": 2.127137608750296,
+      "taiex_ret_20d": 8.28908875753207,
+      "buyback_count": 0,
+      "disposition_count": 25,
+      "jpy_ret": 0.0006,
+      "arkk_ret": -0.018,
+      "hyg_ret": -0.001,
+      "night_trend": "↓ 走弱",
+      "market_revenue_yoy": 0.1601,
+      "market_foreign_holding_chg": 4.2831
+    },
+    "regime": {
+      "label": "long_liquidate",
+      "label_zh": "💥 多殺多日",
+      "win_rate": 35.0
+    },
+    "scenario": {
+      "main_scenario": "夜盤大跌 -189pt，多頭倉位鬆動，開盤可能持續賣壓，避免搶反彈",
+      "best_strategy": "等開盤30分鐘後觀察量能是否縮減，再考慮進場",
+      "danger_signals": [
+        "外資空單極重（-83,474口），軋空風險高"
+      ],
+      "forbidden_actions": [
+        "禁止反彈高點追多（軋空陷阱）"
+      ]
+    },
+    "risk": {
+      "level": "medium",
+      "score": 0.25,
+      "factors": [
+        {
+          "name": "外資空單極重",
+          "description": "-83,474口，軋空/崩潰雙向風險",
+          "action": "避免重押方向"
+        }
+      ]
+    },
+    "news_sentiment": {
+      "market_impact": -0.03,
+      "key_events": [],
+      "bullish_count": 0,
+      "bearish_count": 0
+    }
+  },
+  {
     "date": "2026-08-17",
     "generated_at": "08:01",
     "xgb_prob_up": 0.553,
