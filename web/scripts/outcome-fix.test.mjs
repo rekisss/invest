@@ -101,3 +101,37 @@ test('horizon scoring skips neutral predictions and honours the 0.3% threshold',
   scoreHorizonHits(thin)
   assert.equal(thin[0].hit_h5, false, '+0.2% 未達 0.3% 門檻 → 不算上漲')
 })
+
+// 與 outcome_tracker.repair_history 對應的守門:紀錄之間缺了交易日時,
+// 不可把跨多日的累積波動寫成「當日漲跌」,也不可覆蓋 TWSE 的真實單日值。
+test('recomputeRealHits 只改寫相鄰一個工作日的紀錄', () => {
+  const recs = [
+    { date: '2026-07-06', xgb_prob_up: 0.60, taiex_close: 100 },
+    { date: '2026-07-07', xgb_prob_up: 0.62, taiex_close: 105 },
+    // 07-08、07-09 缺紀錄 → 07-10 距前一筆有 3 個工作日
+    { date: '2026-07-10', xgb_prob_up: 0.62, taiex_close: 130, taiex_change: 2, taiex_pct: 0.0156 },
+  ]
+  recomputeRealHits(recs)
+  const by = Object.fromEntries(recs.map(e => [e.date, e]))
+
+  assert.equal(by['2026-07-07'].prev_gap_bdays, 1)
+  assert.equal(by['2026-07-07'].taiex_change, 5)
+  assert.equal(by['2026-07-07'].hit, true)
+
+  assert.equal(by['2026-07-10'].prev_gap_bdays, 3, '跨距要記錄供稽核')
+  assert.equal(by['2026-07-10'].taiex_change, 2, '不可被 3 日累積差覆蓋')
+  assert.equal(by['2026-07-10'].actual_up, null, '跨距不明時不猜方向')
+  assert.equal(by['2026-07-10'].hit, null)
+})
+
+test('週五→週一算相鄰(只隔 1 個工作日)', () => {
+  const recs = [
+    { date: '2026-07-03', xgb_prob_up: 0.60, taiex_close: 100 },
+    { date: '2026-07-06', xgb_prob_up: 0.30, taiex_close: 98 },
+  ]
+  recomputeRealHits(recs)
+  assert.equal(recs[1].prev_gap_bdays, 1)
+  assert.equal(recs[1].actual_up, false)
+  assert.equal(recs[1].hit, true)
+  assert.equal(recs[1].taiex_change, -2)
+})

@@ -1291,6 +1291,13 @@ const MA_LINES_DEF = [
   { label: 'MA60',  color: '#FFD60A', fn: c => smaCalc(c, 60), },
 ]
 
+// 日線預設顯示根數。指標是「拿全部可用 K 棒暖身、再切到顯示區間」(見 useMemo
+// 裡的 warmBars/off),所以顯示根數必須比可用根數少至少 60(MA60 的週期),
+// 否則畫面左側會有一段畫不出均線的空白。stock_histories.json 供應 260 根,
+// 預設 120 → 140 根暖身,所有指標從第一根就有值。
+// 250 這個選項仍在(260 根足夠啟用),只是切過去時左側均線會較短。
+const DAILY_DEFAULT_BARS = 120
+
 const STRATEGY_PRESETS = [
   { id: 'all',        label: '全部', color: '#8E8E93', desc: '同時顯示全部 10 項指標，一覽無遺',
     state: { ma: true,  bb: true,  macd: true,  rsi: true,  kd: true,  obv: true,  adx: true,  wr: true,  cci: true,  mfi: true  } },
@@ -1455,7 +1462,7 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
   const [lockedIdx, setLockedIdx] = useState(null)
   const [logScale, setLogScale] = useState(false)
   const [measureMode, setMeasureMode] = useState(false)
-  const [barCount, setBarCount] = useState(250)
+  const [barCount, setBarCount] = useState(DAILY_DEFAULT_BARS)
   const [params, setParams] = useState(() => {
     try { return { ...PARAM_DEFAULTS, ...JSON.parse(localStorage.getItem('indicatorParams') || '{}') } }
     catch { return PARAM_DEFAULTS }
@@ -1478,13 +1485,13 @@ function KLineChart({ stockId, priceHistory, priceHistoryWk, priceHistoryMo, loa
   const handleLock = useCallback((idx) => setLockedIdx(idx), [])
   const scrollRef = useRef(null)
   const pinchRef = useRef(null)
-  const barCountRef = useRef(250)
+  const barCountRef = useRef(DAILY_DEFAULT_BARS)
   const maxBarsRef = useRef(0)
 
   // Auto-reset barCount when interval changes so warm-up bars are available
   useEffect(() => {
     const defaults = { '1wk': 60, '1mo': 24 }
-    setBarCount(defaults[chartInterval] || 250)
+    setBarCount(defaults[chartInterval] || DAILY_DEFAULT_BARS)
     setLockedIdx(null)
     setMeasureMode(false)
   }, [chartInterval])

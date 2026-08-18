@@ -14,19 +14,27 @@ export function recomputeRealHits(records) {
     .filter(e => e && typeof e.taiex_close === 'number' && e.date)
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
 
-  let prevClose = null
+  // 「前一筆紀錄」不等於「前一個交易日」:outcome_tracker 若某天沒跑(假日誤判、
+  // workflow 失敗)那天就沒有紀錄,兩筆之間可能隔了好幾個交易日。拿那種差額當
+  // 「當日漲跌」會把跨兩三個交易日的累積波動寫成單日波動,而且會覆蓋掉 TWSE
+  // 當天回報的、正負號已修好的真實單日漲跌。因此只有相鄰一個工作日時才改寫;
+  // 跨距更大時保留原值、方向設 null(寧可不打分也不誤報),跨距記在 prev_gap_bdays。
+  let prev = null
   const fix = new Map()
   for (const e of asc) {
     const prob = typeof e.xgb_prob_up === 'number' ? e.xgb_prob_up : null
+    const gap = prev ? businessDaysBetween(prev.date, e.date) : null
+    const adjacent = gap === 1
+    const prevClose = adjacent ? prev.taiex_close : null
     const up = prevClose != null ? e.taiex_close > prevClose : null
     let hit = null
     if (up != null && prob != null && Math.abs(prob - 0.5) > NEUTRAL) hit = (prob > 0.5) === up
     fix.set(e.date, {
-      up, hit,
+      up, hit, gap,
       change: prevClose != null ? Math.round((e.taiex_close - prevClose) * 100) / 100 : null,
       pct: (prevClose != null && prevClose !== 0) ? (e.taiex_close - prevClose) / prevClose : null,
     })
-    prevClose = e.taiex_close
+    prev = e
   }
 
   let flipped = 0
@@ -36,6 +44,7 @@ export function recomputeRealHits(records) {
     if (e.hit !== f.hit) flipped++
     e.actual_up = f.up
     e.hit = f.hit
+    if (f.gap != null) e.prev_gap_bdays = f.gap
     if (f.change != null) e.taiex_change = f.change
     if (f.pct != null) e.taiex_pct = f.pct
   }

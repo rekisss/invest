@@ -242,20 +242,37 @@ def repair_history(records: list) -> int:
     偏多預測一律算命中(現場 4/5=80%,實際 0/4)。這裡用「當日收盤 vs 前一交易日
     收盤」把歷史一次校正,讓存檔本身就是對的(而不只是前端顯示層繞過)。
     只更正衍生欄位,不刪任何紀錄。
+
+    僅在兩筆紀錄相隔剛好一個工作日時才改寫;跨距更大時保留 TWSE 原值並把
+    方向/命中設為 None(見迴圈內註解),跨距一律記在 prev_gap_bdays。
     """
     asc = sorted(
         (e for e in records if isinstance(e.get("taiex_close"), (int, float)) and e.get("date")),
         key=lambda e: e["date"],
     )
     fixed = 0
-    prev_close = None
+    prev = None
     for e in asc:
-        if prev_close is None:          # 首筆沒有前一日可比,方向不可知
+        # 「前一筆紀錄」不等於「前一個交易日」:outcome_tracker 若某天沒跑(假日
+        # 誤判、workflow 失敗),那天就沒有紀錄,兩筆之間可能隔了好幾個交易日。
+        # 拿那種差額當「當日漲跌」會把跨兩三個交易日的累積波動寫成單日波動,而且
+        # 會覆蓋掉 TWSE 當天回報的、正負號已修好的真實單日漲跌(見 _sign)。
+        # 因此只有相鄰一個工作日時才用收盤差改寫;跨距更大時保留 TWSE 原值,
+        # 並把跨距記在 prev_gap_bdays 供稽核。
+        gap = _bdays_between(prev["date"], e["date"]) if prev else None
+        adjacent = gap == 1
+        if prev is None:                # 首筆沒有前一日可比,方向不可知
+            up, chg, pct = None, None, None
+        elif not adjacent:
+            # 跨距不明的「隔日方向」不是隔日方向,寧可不打分也不誤報。
             up, chg, pct = None, None, None
         else:
+            prev_close = prev["taiex_close"]
             up = e["taiex_close"] > prev_close
             chg = round(e["taiex_close"] - prev_close, 2)
             pct = ((e["taiex_close"] - prev_close) / prev_close) if prev_close else None
+        if gap is not None:
+            e["prev_gap_bdays"] = gap
         prob = e.get("xgb_prob_up")
         hit = None
         if up is not None and isinstance(prob, (int, float)) and abs(prob - 0.5) > 0.05:
@@ -265,7 +282,7 @@ def repair_history(records: list) -> int:
         e["actual_up"], e["hit"] = up, hit
         if chg is not None:
             e["taiex_change"], e["taiex_pct"] = chg, pct
-        prev_close = e["taiex_close"]
+        prev = e
     if fixed:
         print(f"[pred] ⚠️ 校正 {fixed} 筆歷史紀錄(舊版漲跌點數缺正負號 → 方向/命中重算)")
     return fixed

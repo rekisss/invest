@@ -1446,7 +1446,7 @@ for (const d of dates) {
 }
 console.log(`return_1d: computed from kline data for ${Object.keys(klineReturn1dMap).length} stocks`)
 
-// Write stock_histories.json — last ~120 OHLCV bars for ALL stocks (for Dashboard lazy load).
+// Write stock_histories.json — last OHLC_BARS OHLCV bars for ALL stocks (for Dashboard lazy load).
 // Carries full open/high/low/close/volume + dates so the detail modal can draw real candles
 // and compute KD / ADX / OBV-based indicators + strategy backtest for every scanned stock
 // (not just the rich top_stocks). Loaded lazily so it doesn't block the initial render.
@@ -1455,7 +1455,13 @@ console.log(`return_1d: computed from kline data for ${Object.keys(klineReturn1d
 //   { generated_at, dates: ["YYYY-MM-DD", ...], stocks: { id: { o, h, l, c, v } } }
 // Each per-stock array is aligned to `dates`; missing bars are null.
 const HISTORIES_FILE = join(PUBLIC_DIR, 'stock_histories.json')
-const OHLC_BARS = 200
+// 深度取捨(2026-08):曾經每個掃描日各自內嵌 525 根 K 棒,重複到 13 MB;改成
+// 這份共用檔後掉到 200 根,但 StockDetailModal 的指標是「拿全部可用 K 棒暖身、
+// 再切到顯示區間」——200 根配上預設顯示 250 根等於暖身歸零,MA60 在畫面左側
+// 60 根畫不出來。260 根讓「顯示 120 根」有 140 根暖身(所有指標最長週期 60,
+// 完整覆蓋),同時把「250」這個縮放選項救回來。
+// 成本:gzip 後約 +0.9 MB(2.97 → 3.9 MB),仍遠低於改版前的內嵌做法。
+const OHLC_BARS = 260
 const round2 = v => (v == null || !isFinite(v)) ? null : Math.round(v * 100) / 100
 const perStockRecent = {}
 const dateSet = new Set()

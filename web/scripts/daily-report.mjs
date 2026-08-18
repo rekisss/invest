@@ -86,8 +86,9 @@ if (plan) {
   }
 }
 
-// 預測回顧:盤前預測(偏多/中性/偏空)用「掃描池等權當日報酬」驗證。
-// 等權日報酬取自基準曲線相鄰兩點的差(累計值相減,小數值下近似日報酬)。
+// 預測回顧:盤前預測用「掃描池等權 5 個交易日累積報酬」驗證。
+// 報酬取自基準曲線兩點的累計值相減。命中定義與 outcome_tracker.py 的真實計分統一:
+// (prob > 0.5) === (期距報酬 > +0.3%),中性帶不計分(見 utils/proxyScore.js)。
 const ph = data.predictionHistory || []
 const benchCurve = ai.benchmark?.curve || []
 if (ph.length && benchCurve.length >= 2) {
