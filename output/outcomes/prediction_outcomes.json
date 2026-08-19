@@ -278,5 +278,20 @@
   "hit": false,
   "prev_gap_bdays": 1,
   "hit_h5": null
+ },
+ {
+  "date": "2026-08-19",
+  "taiex_close": 45308.68,
+  "taiex_change": -548.59,
+  "taiex_pct": -0.01196298863844264,
+  "actual_up": false,
+  "taiex_name": "發行量加權股價指數",
+  "pred_date": "2026-08-19",
+  "xgb_prob_up": 0.556,
+  "pred_label": "偏多",
+  "directional": true,
+  "hit": false,
+  "prev_gap_bdays": 1,
+  "hit_h5": null
  }
 ]
