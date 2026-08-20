@@ -1,5 +1,67 @@
 [
   {
+    "date": "2026-08-20",
+    "generated_at": "08:01",
+    "xgb_prob_up": 0.393,
+    "xgb_label": "偏空",
+    "market_data": {
+      "vix": 14.89,
+      "sp500_ret": 0.0021,
+      "nasdaq_ret": 0.0016,
+      "sox_ret": -0.0212,
+      "tsm_adr_ret": -0.0032,
+      "futures_net": -81501.0,
+      "night_change": 171.0,
+      "pcr": null,
+      "taiex_rsi": 51.51875598153839,
+      "macd_hist": 431.7723237669502,
+      "dist_ma20": 1.7094429523100807,
+      "dist_ma60": 0.3471418315569075,
+      "taiex_ret_5d": -1.7077582544363312,
+      "taiex_ret_20d": -0.03150905006170657,
+      "buyback_count": 0,
+      "disposition_count": 8,
+      "jpy_ret": 0.0013,
+      "arkk_ret": 0.0526,
+      "hyg_ret": 0.0023,
+      "night_trend": "↓ 走弱",
+      "market_revenue_yoy": 0.1601,
+      "market_foreign_holding_chg": 2.3526
+    },
+    "regime": {
+      "label": "double_whipsaw",
+      "label_zh": "🔄 多空雙巴日",
+      "win_rate": 45.0
+    },
+    "scenario": {
+      "main_scenario": "VIX=14.9 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+      "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
+      "danger_signals": [
+        "外資空單極重（-81,501口），軋空風險高"
+      ],
+      "forbidden_actions": [
+        "禁止反彈高點追多（軋空陷阱）"
+      ]
+    },
+    "risk": {
+      "level": "medium",
+      "score": 0.25,
+      "factors": [
+        {
+          "name": "外資空單極重",
+          "description": "-81,501口，軋空/崩潰雙向風險",
+          "action": "避免重押方向"
+        }
+      ]
+    },
+    "news_sentiment": {
+      "market_impact": 0.02,
+      "key_events": [],
+      "bullish_count": 0,
+      "bearish_count": 0
+    }
+  },
+  {
     "date": "2026-08-19",
     "generated_at": "08:01",
     "xgb_prob_up": 0.556,
