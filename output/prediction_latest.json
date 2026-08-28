@@ -1,31 +1,31 @@
 {
-  "date": "2026-08-27",
+  "date": "2026-08-28",
   "generated_at": "08:01",
-  "xgb_prob_up": 0.212,
+  "xgb_prob_up": 0.361,
   "xgb_label": "看空",
   "market_data": {
-    "vix": 15.21,
-    "sp500_ret": -0.0002,
-    "nasdaq_ret": -0.0008,
-    "sox_ret": 0.002,
-    "tsm_adr_ret": 0.0007,
-    "futures_net": -83654.0,
-    "night_change": -9.0,
+    "vix": 14.51,
+    "sp500_ret": 0.0072,
+    "nasdaq_ret": 0.0157,
+    "sox_ret": 0.0233,
+    "tsm_adr_ret": 0.023,
+    "futures_net": -84836.0,
+    "night_change": 256.0,
     "pcr": null,
-    "taiex_rsi": 57.84780916750476,
-    "macd_hist": 153.86509287127512,
-    "dist_ma20": 2.7918191096990785,
-    "dist_ma60": 2.5912728118238526,
-    "taiex_ret_5d": 2.5041070114473207,
-    "taiex_ret_20d": 14.666125881832803,
+    "taiex_rsi": 58.69669254875168,
+    "macd_hist": 204.50461523704053,
+    "dist_ma20": 2.4242355461362664,
+    "dist_ma60": 2.8869858219094935,
+    "taiex_ret_5d": 2.3375974215876116,
+    "taiex_ret_20d": 15.291002221858685,
     "buyback_count": 0,
-    "disposition_count": 23,
-    "jpy_ret": 0.0005,
-    "arkk_ret": -0.0068,
-    "hyg_ret": -0.0003,
+    "disposition_count": 25,
+    "jpy_ret": 0.0002,
+    "arkk_ret": 0.0187,
+    "hyg_ret": -0.0004,
     "night_trend": "↑ 偏強",
     "market_revenue_yoy": 0.1601,
-    "market_foreign_holding_chg": 1.3998
+    "market_foreign_holding_chg": 2.5967
   },
   "regime": {
     "label": "double_whipsaw",
@@ -33,28 +33,35 @@
     "win_rate": 45.0
   },
   "scenario": {
-    "main_scenario": "VIX=15.2 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+    "main_scenario": "VIX=14.5 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
     "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
     "danger_signals": [
-      "外資空單極重（-83,654口），軋空風險高"
+      "外資空單極重（-84,836口），軋空風險高",
+      "夜盤缺口 +256pt 過大，易反轉"
     ],
     "forbidden_actions": [
+      "禁止追多缺口超過200pt",
       "禁止反彈高點追多（軋空陷阱）"
     ]
   },
   "risk": {
     "level": "medium",
-    "score": 0.25,
+    "score": 0.4,
     "factors": [
       {
         "name": "外資空單極重",
-        "description": "-83,654口，軋空/崩潰雙向風險",
+        "description": "-84,836口，軋空/崩潰雙向風險",
         "action": "避免重押方向"
+      },
+      {
+        "name": "夜盤大缺口",
+        "description": "夜盤 +256pt，開盤後可能快速反轉",
+        "action": "禁止追缺口超過200pt"
       }
     ]
   },
   "news_sentiment": {
-    "market_impact": 0.11,
+    "market_impact": 0.45,
     "key_events": [],
     "bullish_count": 0,
     "bearish_count": 0
