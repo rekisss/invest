@@ -2,6 +2,7 @@ import { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { safeUrl } from '../utils/safeUrl'
+import TradingViewChart from './TradingViewChart'
 gsap.registerPlugin(useGSAP)
 
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
@@ -2771,6 +2772,11 @@ export default function StockDetailModal({ stock, stocks, initialIndex = 0, noti
         {/* K 線圖 + 指標子圖 */}
         <Section title="K 線圖 &amp; 技術指標">
           <KLineChart key={s.stock_id} stockId={s.stock_id} priceHistory={s.price_history} priceHistoryWk={s.price_history_wk} priceHistoryMo={s.price_history_mo} loading={!!s.price_history_loading} compareId={compareStockId || null} compareHistories={compareHistories} historyDates={historyDates} />
+        </Section>
+
+        {/* TradingView 互動圖表(官方嵌入 widget,點擊才載入) */}
+        <Section title="TradingView 圖表">
+          <TradingViewChart key={s.stock_id} stockId={s.stock_id} stockName={s.name} />
         </Section>
 
         {/* Notion 連結 */}
