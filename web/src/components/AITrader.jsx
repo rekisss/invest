@@ -266,6 +266,36 @@ function FragmentRow({ v, isMain, open, onToggle }) {
   )
 }
 
+// 出場目標的單一格子(停利/停損/期滿共用)：標籤 + 價位 + 距離註記，三欄並排易讀
+function ExitTarget({ label, value, note, color }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
+      <div style={{ fontSize: 9, color: 'var(--ios-label4)', marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 13.5, fontWeight: 800, fontFamily: 'var(--font-mono)', color, lineHeight: 1.2 }}>{value}</div>
+      {note && <div style={{ fontSize: 8.5, color: 'var(--ios-label4)', marginTop: 1 }}>{note}</div>}
+    </div>
+  )
+}
+
+// 出場計畫：停利 / 停損 / 期滿 三格並排，取代原本擠成一行的長文字
+function ExitPlan({ tp, sl, daysLeft, maxHold, toTp, slBuffer, unrealized, px, isLive }) {
+  return (
+    <div style={{ padding: '8px 9px', background: 'var(--ios-fill4)', borderRadius: 8, marginTop: 5 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--ios-label3)', marginBottom: 6 }}>🎯 出場計畫</div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <ExitTarget label="停利" value={tp ?? '—'} note={toTp != null ? `還差 ${pctStr(toTp, 1)}` : null} color={UP} />
+        <ExitTarget label="停損" value={sl ?? '—'} note={slBuffer != null ? `緩衝 ${slBuffer.toFixed(1)}%` : null} color={DOWN} />
+        <ExitTarget label="期滿出場" value={`${daysLeft} 日`} note={`最長 ${maxHold} 日`} color="var(--ios-label2)" />
+      </div>
+      {unrealized != null && (
+        <div style={{ fontSize: 10, color: colorOf(unrealized), marginTop: 6, textAlign: 'center' }}>
+          未實現損益 NT${nf(unrealized)}(現價 {px}{isLive ? ' ⚡即時' : ''})
+        </div>
+      )}
+    </div>
+  )
+}
+
 function exitText(t, maxHold) {
   if (t.reason === 'take_profit') return `觸及停利 +8%${t.tp_price != null ? `(${t.tp_price} 元)` : ''}`
   if (t.reason === 'stop') return `觸及停損 −12%${t.sl_price != null ? `(${t.sl_price} 元)` : ''}`
@@ -460,6 +490,8 @@ export default function AITrader({ data }) {
           const unrealized = px != null && p.entry != null && p.shares != null
             ? Math.round((px - p.entry) * p.shares) : null
           const toTp = (p.tp_price != null && px > 0) ? (p.tp_price / px - 1) * 100 : null
+          const slBuffer = (p.sl_price != null && px > 0) ? (px / p.sl_price - 1) * 100 : null
+          const daysLeft = Math.max(0, (c.max_hold ?? 15) - (p.hold_days ?? 0))
           return (
             <div key={p.stock_id} style={{ borderTop: '0.5px solid var(--ios-sep)' }}>
               <div onClick={() => togglePos(i)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', cursor: 'pointer' }}>
@@ -474,13 +506,8 @@ export default function AITrader({ data }) {
                 <div style={{ paddingBottom: 10 }}>
                   <BuyDetail date={p.entry_date} price={p.entry} shares={p.shares} cost={p.cost}
                     dayRank={p.day_rank} score={p.entry_score} grade={p.grade} signals={signals} hasDetail={hasDetail} />
-                  <div style={{ padding: '7px 9px', background: 'var(--ios-fill4)', borderRadius: 8, marginTop: 5, fontSize: 10.5, color: 'var(--ios-label2)', lineHeight: 1.7 }}>
-                    <span style={{ fontWeight: 700 }}>🎯 出場計畫</span>
-                    {p.tp_price != null && <> · 停利 <b style={{ color: UP, fontFamily: 'var(--font-mono)' }}>{p.tp_price}</b>{toTp != null ? `(還差 ${pctStr(toTp, 1)})` : ''}</>}
-                    {p.sl_price != null && <> · 停損 <b style={{ color: DOWN, fontFamily: 'var(--font-mono)' }}>{p.sl_price}</b></>}
-                    <> · 期滿 {c.max_hold} 日</>
-                    {unrealized != null && <div style={{ fontSize: 10, color: colorOf(unrealized), marginTop: 2 }}>未實現損益 NT${nf(unrealized)}(現價 {px}{livePx != null ? ' ⚡即時' : ''})</div>}
-                  </div>
+                  <ExitPlan tp={p.tp_price} sl={p.sl_price} daysLeft={daysLeft} maxHold={c.max_hold ?? 15}
+                    toTp={toTp} slBuffer={slBuffer} unrealized={unrealized} px={px} isLive={livePx != null} />
                 </div>
               )}
             </div>
