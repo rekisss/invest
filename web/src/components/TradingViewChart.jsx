@@ -51,8 +51,26 @@ export default function TradingViewChart({ stockId, stockName }) {
   const [open, setOpen]         = useState(false)
   const [interval, setIntervalId] = useState('D')
   const [failed, setFailed]     = useState(false)
+  // 手機上圖表要換配置(側邊繪圖工具列在窄screen 沒有可用性,只會吃掉寬度)。
+  // 用 matchMedia 而非一次性 innerWidth:轉橫向時要跟著重建 widget。
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
+  )
+  // iframe 會吃掉觸控手勢:在可捲動的 Modal 裡,手指劃過圖表會變成平移 K 線
+  // 而不是捲頁面,使用者會卡住。手機預設鎖住互動,點一下才啟用。
+  const [touchArmed, setTouchArmed] = useState(false)
   const hostRef  = useRef(null)   // script 注入的容器(TradingView 會把 iframe 塞進來)
   const panelRef = useRef(null)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)')
+    const onChange = e => setNarrow(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+
+  // 收合後重開、或切換週期重建圖表時,重新鎖住觸控
+  useEffect(() => { if (!open) setTouchArmed(false) }, [open])
 
   // 展開動畫(專案規則:新動畫一律 anime.js;動畫前先指令式設初始狀態避免首幀閃爍)
   useLayoutEffect(() => {
@@ -92,8 +110,8 @@ export default function TradingViewChart({ stockId, stockName }) {
       locale: 'zh_TW',
       enable_publishing: false,
       allow_symbol_change: false, // 標的由 Modal 決定,不讓 widget 自己換
-      hide_side_toolbar: false,
-      withdateranges: true,
+      hide_side_toolbar: narrow,  // 手機沒空間放繪圖工具列
+      withdateranges: !narrow,
       details: false,
       studies: ['MASimple@tv-basicstudies', 'Volume@tv-basicstudies'],
       support_host: 'https://www.tradingview.com',
@@ -118,7 +136,7 @@ export default function TradingViewChart({ stockId, stockName }) {
     }, 8000)
 
     return () => { clearTimeout(probe); host.innerHTML = '' }
-  }, [open, symbol, interval])
+  }, [open, symbol, interval, narrow])
 
   if (!symbol) return null
 
@@ -157,11 +175,25 @@ export default function TradingViewChart({ stockId, stockName }) {
             {iv.label}
           </button>
         ))}
+        {/* 啟用互動後圖表會吃掉觸控,給一個鎖回去的出口,否則手機使用者被卡在圖表上 */}
+        {narrow && touchArmed && (
+          <button
+            onClick={() => setTouchArmed(false)}
+            style={{
+              marginLeft: 'auto', background: 'var(--ios-fill4)',
+              border: '0.5px solid var(--ios-sep)', borderRadius: 7,
+              padding: '4px 10px', fontSize: 11, cursor: 'pointer', color: 'var(--ios-label2)',
+            }}
+          >
+            鎖定捲動
+          </button>
+        )}
         <button
           onClick={() => setOpen(false)}
           style={{
-            marginLeft: 'auto', background: 'transparent', border: 'none',
-            color: 'var(--ios-label3)', fontSize: 11, cursor: 'pointer', padding: '4px 6px',
+            marginLeft: (narrow && touchArmed) ? 0 : 'auto', background: 'transparent',
+            border: 'none', color: 'var(--ios-label3)', fontSize: 11,
+            cursor: 'pointer', padding: '4px 6px',
           }}
         >
           收合
@@ -184,11 +216,34 @@ export default function TradingViewChart({ stockId, stockName }) {
           </a>
         </div>
       ) : (
-        <div
-          ref={hostRef}
-          className="tradingview-widget-container"
-          style={{ height: 420, width: '100%', borderRadius: 10, overflow: 'hidden' }}
-        />
+        <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden' }}>
+          <div
+            ref={hostRef}
+            className="tradingview-widget-container"
+            style={{ height: narrow ? 320 : 420, width: '100%' }}
+          />
+          {/* 手機:未啟用前蓋一層透明罩,讓手指可以正常捲動 Modal 而不是平移 K 線 */}
+          {narrow && !touchArmed && (
+            <button
+              onClick={() => setTouchArmed(true)}
+              aria-label="啟用圖表互動"
+              style={{
+                position: 'absolute', inset: 0, width: '100%',
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+                padding: 0, paddingBottom: 10,
+              }}
+            >
+              <span style={{
+                background: 'rgba(0,0,0,0.62)', color: '#fff', fontSize: 11,
+                padding: '5px 12px', borderRadius: 999, backdropFilter: 'blur(8px)',
+                pointerEvents: 'none',
+              }}>
+                點一下啟用圖表操作
+              </span>
+            </button>
+          )}
+        </div>
       )}
 
       <div style={{ marginTop: 6, fontSize: 10, color: 'var(--ios-label3)', lineHeight: 1.5 }}>
