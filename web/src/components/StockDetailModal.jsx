@@ -555,16 +555,12 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     return { bars, W, CH, H, PL, PR, PT, n, slotW, bW, toY, toX, gridLevels, xLabels }
   }, [data, bbBands, cdpSeries, propChartW, logScale])
 
-  if (!chart) return (
-    <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
-      暫無歷史 K 線資料
-    </div>
-  )
-
-  const { bars, W, CH, H, PL, PR, PT, n, slotW, bW, toY, toX, gridLevels, xLabels } = chart
-
   // Feature 1: Build compare percentage-change series aligned to bars by date
+  // hook 不能放在下方 `if (!chart) return` 之後：chart 由 null 變成有值時
+  // (歷史 K 線非同步載入完成) 兩次 render 的 hook 數量會不同而丟錯。
   const comparePolyline = useMemo(() => {
+    if (!chart) return null
+    const { bars, CH, PT, toX } = chart
     if (!compareId || !compareHistories?.[compareId] || !historyDates || !bars.length) return null
     const cData = compareHistories[compareId]
     // Build a date→close map for the compare stock
@@ -601,7 +597,15 @@ function CandleSVG({ data, maLines, bbBands, cdpSeries, showFib, showPatterns, o
     }
     if (points.length < 2) return null
     return points.join(' ')
-  }, [compareId, compareHistories, historyDates, bars, toX])
+  }, [chart, compareId, compareHistories, historyDates])
+
+  if (!chart) return (
+    <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ios-label3)', fontSize: 12, background: 'var(--ios-bg)', borderRadius: 10 }}>
+      暫無歷史 K 線資料
+    </div>
+  )
+
+  const { bars, W, CH, H, PL, PR, PT, n, slotW, bW, toY, toX, gridLevels, xLabels } = chart
 
   const getIdx = (clientX, svgEl) => {
     const rect = svgEl.getBoundingClientRect()

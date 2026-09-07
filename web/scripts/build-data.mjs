@@ -622,9 +622,8 @@ function processScanData() {
       margin_shrinking: r2(row.margin_change_5d) < -1,
       volume_surge_3x: r2(row.volume_ratio) >= 3,
       // extra numeric fields not previously exported
+      // (sma5 / sma10 已在上方輸出過,重複的 key 只會被後者覆蓋 → 移除以免誤導)
       volume_ma20: r2(row.volume_ma20),
-      sma5: r2(row.sma5),
-      sma10: r2(row.sma10),
       // attach price history only for latest date (to keep JSON lean)
       price_history: isLatest ? (priceHistoryMap[row.stock_id] || []) : undefined,
       // 風險註記:進場候選同時帶出場/出貨/轉弱/過熱等矛盾訊號時的短標籤(清單列用)

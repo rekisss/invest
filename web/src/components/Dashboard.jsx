@@ -985,10 +985,16 @@ function Sparkline({ data, stockId, width = 56, height = 20, days = 60 }) {
 
 /* ── BB Position Bar ─────────────────────────────────────────────── */
 function BBPositionBar({ bbPctB, width = 56 }) {
-  if (bbPctB == null) return null
   // bb_pct_b: 0=lower band, 0.5=mid, 1=upper band, >1=above upper (breakout)
-  const clamped = Math.max(-0.2, Math.min(1.5, bbPctB))
+  const clamped = Math.max(-0.2, Math.min(1.5, bbPctB ?? 0))
   const pct = Math.min(((clamped + 0.2) / 1.7) * 100, 100)
+  // hook 必須無條件呼叫：同一個位置的列在 bb_pct_b 有/無之間切換時，
+  // 早退再呼叫 useRef/useGSAP 會讓該次 render 的 hook 數量對不上而丟錯。
+  const fillRef = useRef(null)
+  useGSAP(() => {
+    if (fillRef.current) gsap.from(fillRef.current, { scaleX: 0, transformOrigin: 'left center', duration: 0.55, ease: 'power2.out' })
+  }, { dependencies: [pct] })
+  if (bbPctB == null) return null
   let color
   if (bbPctB > 1.1) color = '#16D67E'
   else if (bbPctB > 0.8) color = '#34C759'
@@ -996,10 +1002,6 @@ function BBPositionBar({ bbPctB, width = 56 }) {
   else if (bbPctB > 0.2) color = '#FF9F0A'
   else color = '#FF3340'
   const label = bbPctB > 1.1 ? '突破上軌' : bbPctB > 0.8 ? '強勢上半' : bbPctB > 0.5 ? '中上' : bbPctB > 0.2 ? '中下' : '近下軌'
-  const fillRef = useRef(null)
-  useGSAP(() => {
-    if (fillRef.current) gsap.from(fillRef.current, { scaleX: 0, transformOrigin: 'left center', duration: 0.55, ease: 'power2.out' })
-  }, { dependencies: [pct] })
   return (
     <div title={`BB%B ${bbPctB.toFixed(2)} — ${label}`} style={{ width, height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
       <div ref={fillRef} style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 9999 }}/>
@@ -2339,18 +2341,7 @@ export default function Dashboard({ data, error }) {
   const marketOpen = isTWSEOpen()
   const { prices: liveData } = useLivePrices(liveStockIds)
 
-  if (error || !data || !data.dates || data.dates.length === 0) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, padding: 24, textAlign: 'center' }}>
-        <div style={{ fontSize: 48, marginBottom: 4 }}>📭</div>
-        <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--ios-label)' }}>尚無掃描資料</div>
-        <div style={{ fontSize: 14, color: 'var(--ios-label2)', maxWidth: 260, lineHeight: 1.5 }}>等待 GitHub Actions 完成掃描後自動更新</div>
-        {error && <div style={{ fontSize: 12, color: 'var(--ios-red)', fontFamily: 'var(--font-mono)', marginTop: 4 }}>錯誤：{error}</div>}
-      </div>
-    )
-  }
-
-  const scan = data.scans[selectedDate] || {}
+  const scan = data?.scans?.[selectedDate] || {}
   const stocks = scan.top_stocks || []
   const persistent = scan.persistent || []
   const limitDownAlerts = scan.limit_down_alerts || []
@@ -2414,15 +2405,15 @@ export default function Dashboard({ data, error }) {
   // would re-run that effect (and re-filters up to ~1500 rows) needlessly.
   const entryStocks = useMemo(() => allScanStocks.filter(s => s.entry_signal), [allScanStocks])
   const globalMaxScore = Math.max(...stocks.map(s => s.entry_score || 0), 1)
-  const pred = data.prediction || null
+  const pred = data?.prediction || null
   const aiText = scan.ai_picks_text || ''
   const aggLatest = data?.aggregateLatest
   const calendarRisk = scan.calendar_risk || (aggLatest?.date === selectedDate ? aggLatest.calendar_risk : '') || ''
   const marginStats = scan.margin_stats || {}
-  const outcomeStats = data.outcomeStats || null
+  const outcomeStats = data?.outcomeStats || null
   const prevDateIdx = sortedDates.indexOf(selectedDate)
   const prevScan = prevDateIdx >= 0 && prevDateIdx + 1 < sortedDates.length
-    ? (data.scans[sortedDates[prevDateIdx + 1]] || null)
+    ? (data?.scans?.[sortedDates[prevDateIdx + 1]] || null)
     : null
 
   const watchlistStocks = useMemo(() => {
@@ -2649,6 +2640,24 @@ export default function Dashboard({ data, error }) {
       const dx = (e.changedTouches?.[0]?.clientX ?? s.x0) - s.x0
       if (dx > 60) setPage(p => p - 1)
     }
+  }
+
+  // 空狀態守衛必須放在所有 hook 之後：React 要求每次 render 呼叫相同數量的 hook。
+  // 舊寫法把這段 early return 放在 useMemo/useState/useEffect 之前，一旦條件翻面
+  // (例如刷新失敗讓 error 從 null 變成字串) 就會丟出
+  // "Rendered fewer hooks than expected"，整個掃描分頁被 ErrorBoundary 接走。
+  //
+  // 另外，「刷新失敗」不等於「沒資料」：App 已經有一條刷新失敗橫幅，
+  // 這裡只要 data 還在就繼續顯示舊資料，不把畫面清成空狀態。
+  if (!data?.dates?.length) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, padding: 24, textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 4 }}>📭</div>
+        <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--ios-label)' }}>尚無掃描資料</div>
+        <div style={{ fontSize: 14, color: 'var(--ios-label2)', maxWidth: 260, lineHeight: 1.5 }}>等待 GitHub Actions 完成掃描後自動更新</div>
+        {error && <div style={{ fontSize: 12, color: 'var(--ios-red)', fontFamily: 'var(--font-mono)', marginTop: 4 }}>錯誤：{error}</div>}
+      </div>
+    )
   }
 
   return (
