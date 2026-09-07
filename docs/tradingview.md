@@ -62,14 +62,32 @@ TradingView 是**資料被授權方,不是資料擁有者**。即時價格來自
 
 需要本機有 `uv`/`uvx`,且首次使用要在互動式 session 授權。
 
-**務必知道它實際給什麼:**
+安裝 uv:
 
-- 報價來源是 **Yahoo Finance**,不是 TradingView
-- screener 走 TradingView 的公開 screener 端點
-- 台股要用 Yahoo 格式(`2330.TW`),且是延遲報價
+```powershell
+# Windows
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+```bash
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-換句話說,對台股而言它**不會比你既有的富果/Shioaji 好**。它的價值在於
-backtest 策略、技術指標評分、跨市場(美股/加密貨幣)查詢這類對話式分析。
+之後在專案目錄開 Claude Code,它會提示授權 `.mcp.json` 裡的專案 MCP server,
+用 `/mcp` 可確認連線狀態。**不需要 TradingView 帳號、API key 或任何憑證。**
+
+**實測結果(v1.29.1,37 個工具):**
+
+- 台股走 TradingView 的公開 screener 端點 `scanner.tradingview.com/taiwan/scan`,
+  代號格式 `TWSE:2330` / `TPEX:6488` —— **不是** Yahoo
+- `yahoo_price` 是另一個獨立工具(用 `2330.TW` 格式),Yahoo 對機房 IP 會回 403,
+  在家用網路才穩
+- 主要工具:`stock_prices`(注意參數名是 `tickers`,且要**逗號分隔字串**不是陣列)、
+  `coin_analysis`、`stock_screener`、`backtest_strategy`、`compare_strategies`
+  (9 種策略)、`multi_timeframe_analysis`、`futures_*`(CME/COMEX/NYMEX/CBOT)
+
+仍要注意:screener 給的是**延遲**報價,盤中即時價仍以富果/Shioaji 為準。
+它的價值在 backtest、技術指標評分、跨市場(美股/期貨/加密貨幣)這類對話式分析。
 
 ## 台股即時報價的真正主力
 
