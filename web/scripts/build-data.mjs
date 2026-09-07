@@ -13,6 +13,7 @@ import { recomputeRealHits, scoreHorizonHits, PRED_HORIZON } from './outcome-fix
 import { computeModelHealth } from './model-health.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 import { buildForwardReturn } from './forward-return.mjs'
+import { buildOrderTicket, summarizeTickets, addTradingDaysEst } from '../src/utils/tradePlan.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SCAN_DIR = resolve(__dirname, '../../output/full_scan')
@@ -2080,15 +2081,30 @@ if (aiTrader) {
     .filter(s => s.entry_signal && !heldBefore.has(String(s.stock_id)))
     .sort((a, b) => (b.entry_score || 0) - (a.entry_score || 0))
     .slice(0, freeSlots)
-    .map((s, i) => ({
-      stock_id: String(s.stock_id), name: s.name || '', rank: i + 1,
-      entry_score: Math.round(s.entry_score || 0), grade: s.grade || '', close: s.close ?? null,
-    }))
+    .map((s, i) => ({ ...s, rank: i + 1 }))
+  const budgetEach = planBuys.length ? Math.floor(cashBefore / Math.min(freeSlots, planBuys.length)) : null
+  // 預計進場日 = 最新掃描日的下一個交易日(掃描在收盤後才跑完,拿不到當日收盤價)
+  const entryDateEst = addTradingDaysEst(latestDate, 1)
+  // 完整委託票:晚上就能把限價買單 + 停損 + 停利掛完,盤中不必再判斷。
+  // 限價 = 跳空放棄門檻 → 跳空過頭自然不成交,等於自動放棄(見 tradePlan.js)。
+  const tickets = planBuys
+    .map(s => buildOrderTicket(s, { budget: budgetEach, entryDate: entryDateEst, equity: aiTrader.equity }))
+    .filter(Boolean)
+    .map((t, i) => ({ ...t, rank: i + 1 }))
   aiTrader.plan = {
     as_of: latestDate,
+    entry_date_est: entryDateEst,
     free_slots: freeSlots,
-    est_budget_each: planBuys.length ? Math.floor(cashBefore / Math.min(freeSlots, planBuys.length)) : null,
-    buys: planBuys,
+    est_budget_each: budgetEach,
+    buys: planBuys.map(s => ({
+      stock_id: String(s.stock_id), name: s.name || '', rank: s.rank,
+      entry_score: Math.round(s.entry_score || 0), grade: s.grade || '', close: s.close ?? null,
+    })),
+    // 出場規則用 ATR 動態(與「持倉」分頁的 computeTargets 同一套),不是回放帳戶
+    // 的固定 8%/12% → 面板/日報必須標示「這套規則沒有回測實績」。
+    exit_rule: 'atr',
+    tickets,
+    exposure: summarizeTickets(tickets, aiTrader.equity),
     exits: aiTrader.positions.map(p => ({
       stock_id: p.stock_id, name: p.name,
       tp_price: p.tp_price, sl_price: p.sl_price,

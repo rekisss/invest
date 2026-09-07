@@ -84,6 +84,31 @@ if (plan) {
     lines.push(`🎯 出場單:${plan.exits.map(e =>
       `${e.stock_id} 停利${e.tp_price ?? '—'}/停損${e.sl_price ?? '—'}${e.days_left != null ? `/剩${e.days_left}日` : ''}`).join('、')}`)
   }
+  // 完整委託票:晚上一次掛完,盤中不必操作。限價 = 跳空放棄門檻(開盤高於它
+  // 就不成交 = 自動放棄)。出場用 ATR 動態規則,與回放帳戶的固定 8%/12% 不同,
+  // 所以要標明「無回測實績」,不能讓上面的勝率數字被誤讀成適用於這份單。
+  const tk = plan.tickets || []
+  if (tk.length) {
+    lines.push(`　`)
+    lines.push(`🎫 **明日委託單**(${plan.entry_date_est || ''} 開盤前掛完 · ROD 限價)`)
+    for (const t of tk) {
+      if (t.lots_zero) {
+        lines.push(`　• ${t.stock_id} ${t.name} — 預算不足一張,跳過`)
+        continue
+      }
+      lines.push(
+        `　• **${t.stock_id} ${t.name}** ${t.lots}張 ≈ NT$${nf(t.est_cost)}\n` +
+        `　　買 限價 \`${t.limit_price}\`(${t.limit_basis};開盤高於此價不成交=放棄)\n` +
+        `　　停損 \`${t.sl_price}\`(${t.sl_basis}) · 停利 \`${t.tp_price}\`(${t.tp_basis})\n` +
+        `　　最壞 −NT$${nf(t.risk_amount)}(資產 ${t.risk_pct}%) · 風報比 ${t.rr ?? '—'}${t.rr_warn ? ' ⚠️' : ''} · 最晚 ${t.exit_by_est} 出場`
+      )
+    }
+    const ex = plan.exposure
+    if (ex) {
+      lines.push(`　↳ 合計投入 NT$${nf(ex.total_cost)} · 全部觸及停損最壞 −NT$${nf(ex.total_risk)}(總資產 ${ex.risk_pct}%) · 整體風報比 ${ex.rr ?? '—'}${ex.rr_warn_count ? ` · ${ex.rr_warn_count} 檔風報比<1` : ''}`)
+    }
+    lines.push(`　⚠️ 此委託單用 ATR 動態停損停利,非回放帳戶的固定 8%/12% → 上方勝率/期望值不適用,尚無回測實績。本站不連接下單 API。`)
+  }
 }
 
 // 預測回顧:盤前預測用「掃描池等權 5 個交易日累積報酬」驗證。

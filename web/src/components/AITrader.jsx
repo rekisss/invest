@@ -144,6 +144,103 @@ function VariantChart({ mainCurve, variants, adaptive, ensemble }) {
   )
 }
 
+
+// ── 🎫 明日委託單 ───────────────────────────────────────────────────────────
+// 目的:晚上一次把「限價買 + 停損 + 停利」掛完,隔天盤中不需要任何操作。
+// 進場限價同時是「跳空放棄門檻」——開盤跳空超過門檻就不會成交,等於自動放棄,
+// 不必臨場判斷(見 utils/tradePlan.js)。
+function OrderRow({ label, children, mono = true }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '3px 0' }}>
+      <span style={{ fontSize: 10, color: 'var(--ios-label3)', width: 34, flexShrink: 0, fontWeight: 700 }}>{label}</span>
+      <span style={{ fontSize: 11.5, color: 'var(--ios-label)', fontFamily: mono ? 'var(--font-mono)' : undefined, lineHeight: 1.5 }}>{children}</span>
+    </div>
+  )
+}
+
+function OrderTicketCard({ plan }) {
+  const tickets = plan?.tickets || []
+  if (!tickets.length) return null
+  const ex = plan.exposure
+
+  return (
+    <Card title="🎫 明日委託單" hint={`${plan.entry_date_est || ''} 開盤前掛完`}>
+      <div style={{ fontSize: 10.5, color: 'var(--ios-label3)', lineHeight: 1.55, marginBottom: 10 }}>
+        限價即「跳空放棄門檻」：開盤高於限價就不會成交＝自動放棄，盤中不必判斷。
+        建議掛 ROD（當日有效），開盤沒成交則回落到限價以下才買。
+      </div>
+
+      {ex && (
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(78px, 1fr))', gap: 6,
+          padding: '8px 10px', background: 'var(--ios-fill4)', borderRadius: 10, marginBottom: 10,
+        }}>
+          <div><div style={{ fontSize: 9, color: 'var(--ios-label3)' }}>投入</div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, fontFamily: 'var(--font-mono)' }}>{nf(ex.total_cost)}</div></div>
+          <div><div style={{ fontSize: 9, color: 'var(--ios-label3)' }}>最壞損失</div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, fontFamily: 'var(--font-mono)', color: DOWN }}>−{nf(ex.total_risk)}</div></div>
+          <div><div style={{ fontSize: 9, color: 'var(--ios-label3)' }}>佔總資產</div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, fontFamily: 'var(--font-mono)' }}>{ex.risk_pct}%</div></div>
+          <div><div style={{ fontSize: 9, color: 'var(--ios-label3)' }}>整體風報比</div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, fontFamily: 'var(--font-mono)', color: ex.rr != null && ex.rr < 1 ? DOWN : UP }}>{ex.rr ?? '—'}</div></div>
+        </div>
+      )}
+
+      {tickets.map(t => (
+        <div key={t.stock_id} style={{ padding: '9px 0', borderTop: '0.5px solid var(--ios-sep)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--ios-blue)' }}>{t.stock_id}</span>
+            <span style={{ fontSize: 12, color: 'var(--ios-label)' }}>{t.name}</span>
+            <span style={{ fontSize: 9.5, color: 'var(--ios-label4)' }}>第 {t.rank} 順位 · 分 {t.entry_score}{t.grade ? ` · ${t.grade}` : ''}</span>
+            {t.rr_warn && (
+              <span style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--ios-orange)', background: 'rgba(255,159,10,0.14)', borderRadius: 5, padding: '1px 6px' }}>
+                ⚠️ 風報比 {t.rr}
+              </span>
+            )}
+          </div>
+
+          {t.lots_zero ? (
+            <div style={{ fontSize: 11, color: 'var(--ios-orange)' }}>預算不足一張（今收 {t.ref_close}），本單跳過。</div>
+          ) : (
+            <>
+              <OrderRow label="買">
+                限價 <b style={{ fontSize: 13 }}>{t.limit_price}</b> · {t.lots} 張 ≈ NT${nf(t.est_cost)}
+                <span style={{ color: 'var(--ios-label4)', fontSize: 10 }}>　{t.limit_basis}</span>
+              </OrderRow>
+              <OrderRow label="停損">
+                <b style={{ color: DOWN, fontSize: 13 }}>{t.sl_price}</b>
+                <span style={{ color: 'var(--ios-label4)', fontSize: 10 }}>　{t.sl_basis}</span>
+              </OrderRow>
+              <OrderRow label="停利">
+                <b style={{ color: UP, fontSize: 13 }}>{t.tp_price}</b>
+                <span style={{ color: 'var(--ios-label4)', fontSize: 10 }}>　{t.tp_basis}</span>
+              </OrderRow>
+              <OrderRow label="風險">
+                最壞 −NT${nf(t.risk_amount)}（總資產 {t.risk_pct}%）· 風報比 <b style={{ color: t.rr_warn ? DOWN : UP }}>{t.rr ?? '—'}</b>
+              </OrderRow>
+              <OrderRow label="期限">
+                最晚 {t.exit_by_est} 出場（持有 {t.max_hold_days} 個交易日）
+                <span style={{ color: 'var(--ios-label4)', fontSize: 10 }}>　估算,未扣國定假日</span>
+              </OrderRow>
+            </>
+          )}
+        </div>
+      ))}
+
+      <div style={{
+        marginTop: 10, padding: '8px 10px', borderRadius: 10,
+        background: 'rgba(255,159,10,0.10)', border: '0.5px solid rgba(255,159,10,0.28)',
+        fontSize: 10, color: 'var(--ios-label2)', lineHeight: 1.6,
+      }}>
+        ⚠️ 這份委託單用的是 ATR 動態停損停利（與「持倉」分頁同一套），
+        <b>不是</b>上方回放帳戶的固定 8%/12% —— 面板上的勝率、期望值、最大回撤
+        <b>不適用於這套規則</b>，它目前沒有回測實績。
+        本站不連接任何下單 API，價位僅供你自行在券商掛單參考，非投資建議。
+      </div>
+    </Card>
+  )
+}
+
 function Stat({ label, value, color, sub }) {
   return (
     <div style={{ flex: 1, minWidth: 84, background: 'var(--ios-bg3)', borderRadius: 12, padding: '9px 10px', textAlign: 'center' }}>
@@ -402,6 +499,8 @@ export default function AITrader({ data }) {
       <LiveTraderPanel ai={ai} scan={data?.scans?.[data?.dates?.[0]]} onQuotes={setLiveQuotes} />
 
       <ReportCard reports={data?.aiReports} />
+
+      {ai.plan && <OrderTicketCard plan={ai.plan} />}
 
       {ai.plan && (
         <Card title="📋 明日作戰計畫" hint={`依 ${ai.plan.as_of} 掃描推導`}>
