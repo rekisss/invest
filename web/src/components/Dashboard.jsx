@@ -3427,7 +3427,13 @@ export default function Dashboard({ data, error }) {
         stocks={selectedStockList}
         initialIndex={selectedStockIndex}
         notionInfo={selectedStock ? notionMap[selectedStock.stock_id] : null}
-        onClose={() => setSelectedStock(null)}
+        onClose={() => {
+          // 清單也要一起清:只清 selectedStock 的話,modal 會靠殘留的 stocks
+          // 繼續掛在畫面上(見 utils/stockModalNav.js),整個 App 被隱形 overlay 蓋住。
+          setSelectedStock(null)
+          setSelectedStockList([])
+          setSelectedStockIndex(0)
+        }}
         allScans={data?.scans}
         compareHistories={slimHistories}
         historyDates={historyDates}
