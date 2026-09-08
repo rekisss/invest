@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
 import { useLivePrices, isScanDataCurrent } from '../hooks/useLivePrices'
 import { getStockHistories } from '../utils/histCache'
+import { computeTargets } from '../utils/tradePlan'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 gsap.registerPlugin(useGSAP)
@@ -56,53 +57,6 @@ function getScanInfo(stockId, rows) {
   const matches = rows.filter(s => String(s.stock_id) === String(stockId))
   if (!matches.length) return null
   return matches.sort((a, b) => Object.keys(b).length - Object.keys(a).length)[0]
-}
-
-// Compute grounded stop-loss / take-profit from the scan row's technical data.
-// Falls back to fixed percentages when no rich data is available.
-function computeTargets(buyPrice, scan) {
-  const atr  = scan?.atr14
-  const h20  = scan?.close_20d_high
-  const l10  = scan?.close_10d_low
-
-  // ── Stop-loss ──
-  let stopLoss, stopBasis
-  if (atr != null && atr > 0) {
-    const atrStop = buyPrice - 2 * atr
-    if (l10 != null && l10 < buyPrice && l10 > atrStop) {
-      stopLoss = l10; stopBasis = `10日低點支撐 ${fmt(l10, 1)}`
-    } else {
-      stopLoss = atrStop; stopBasis = `買價 −2×ATR(${fmt(atr, 1)})`
-    }
-  } else {
-    stopLoss = buyPrice * 0.92; stopBasis = '買價 −8%（無技術資料，固定值）'
-  }
-
-  // ── Take-profit ──
-  let takePrft, tpBasis
-  if (h20 != null && l10 != null && h20 > l10) {
-    if (h20 > buyPrice * 1.02) {
-      takePrft = h20; tpBasis = `20日高點壓力 ${fmt(h20, 1)}`
-    } else {
-      // measured-move: break 20-day high, project +0.5× swing range
-      takePrft = h20 + 0.5 * (h20 - l10)
-      tpBasis = `量度目標（20日高 +½波段）`
-    }
-  } else if (atr != null && atr > 0) {
-    takePrft = buyPrice + 3 * atr; tpBasis = `買價 +3×ATR(${fmt(atr, 1)})`
-  } else {
-    takePrft = buyPrice * 1.15; tpBasis = '買價 +15%（無技術資料，固定值）'
-  }
-
-  const rr = (buyPrice - stopLoss > 0) ? (takePrft - buyPrice) / (buyPrice - stopLoss) : null
-  const grounded = atr != null && atr > 0
-  // Evidence-based "high win-rate" take-profit. Backtest (strategy_analysis.py)
-  // over the top-decile picks showed a flat +8% profit target lifts the trade
-  // win rate ~10-13pts vs holding to a far technical target — you lock in more
-  // green trades (at the cost of some upside on the rare big runners).
-  const quickTP = buyPrice * 1.08
-  const quickTPBasis = '買價 +8%（回測：高勝率停利點，較常收綠）'
-  return { stopLoss, stopBasis, takePrft, tpBasis, rr, grounded, quickTP, quickTPBasis }
 }
 
 function fmt(v, d = 2) { return v == null || isNaN(v) ? '—' : Number(v).toFixed(d) }

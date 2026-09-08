@@ -20,6 +20,9 @@ const TWSE_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
 const TPEX_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'
 const TWSE_IDX = 'https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX'
 
+// 收盤/盤前時段,單次「拿最終定價」失敗後最多再重試幾輪才放棄(見 useLivePrices)
+const CLOSED_MAX_ATTEMPTS = 5
+
 export function isOTCStock(stockId) {
   const n = parseInt(String(stockId), 10)
   return (n >= 4200 && n <= 4999) || (n >= 5000 && n <= 5999) ||
@@ -259,6 +262,7 @@ export function useLivePrices(stockIds, { pollInterval = 60000, refreshTrigger =
 
     let cancelled = false
     let closedFetchDone = false
+    let closedAttempts = 0
 
     const run = async () => {
       const open = isTWSEOpen()
@@ -268,11 +272,18 @@ export function useLivePrices(stockIds, { pollInterval = 60000, refreshTrigger =
       // 收盤後只再抓「一次」拿最終定價。flag 只在收盤狀態設立、開盤中一律重置：
       // 舊寫法在第一次執行就設 flag，導致 (a) 跨越 13:30 的分頁抓不到收盤定價、
       // (b) 盤前開著的分頁在 09:00 開盤後不會開始更新（配合下方 interval 常駐）。
+      //
+      // 但「抓過」不等於「抓到」：旗標原本在發出請求「之前」就設下，收盤那一輪
+      // 只要三個來源同時掛掉（離線、CDN 還沒更新、TWSE 502），分頁就永遠停在
+      // 「收盤報價暫時無法取得」，除非整頁重載。改成真的拿到報價才封鎖，
+      // 失敗最多再試 CLOSED_MAX_ATTEMPTS 輪就收手（見下方成功時設旗標處）。
       if (!open) {
         if (closedFetchDone) return
-        closedFetchDone = true
+        closedAttempts++
+        if (closedAttempts >= CLOSED_MAX_ATTEMPTS) closedFetchDone = true
       } else {
         closedFetchDone = false
+        closedAttempts = 0
       }
 
       if (!cancelled) setLoading(true)
@@ -295,6 +306,8 @@ export function useLivePrices(stockIds, { pollInterval = 60000, refreshTrigger =
         const cacheFresh  = Object.keys(cacheStocks).length > 0 && !cache.isStale
         const officialHas = Object.keys(official).length > 0
         const fugleHas    = Object.keys(fugle).length > 0
+        // 收盤後真的拿到報價了才封鎖後續輪詢(見上方 closedAttempts)
+        if (!open && (fugleHas || officialHas || Object.keys(cacheStocks).length > 0)) closedFetchDone = true
 
         if (fugleHas) {
           setPrices(prev => ({ ...prev, ...official, ...(cacheFresh ? cacheStocks : {}), ...fugle }))

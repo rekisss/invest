@@ -12,6 +12,8 @@ import { computeGradeDigest } from './grade-digest.mjs'
 import { recomputeRealHits, scoreHorizonHits, PRED_HORIZON } from './outcome-fix.mjs'
 import { computeModelHealth } from './model-health.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
+import { buildForwardReturn } from './forward-return.mjs'
+import { buildOrderTicket, summarizeTickets, addTradingDaysEst } from '../src/utils/tradePlan.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SCAN_DIR = resolve(__dirname, '../../output/full_scan')
@@ -622,9 +624,8 @@ function processScanData() {
       margin_shrinking: r2(row.margin_change_5d) < -1,
       volume_surge_3x: r2(row.volume_ratio) >= 3,
       // extra numeric fields not previously exported
+      // (sma5 / sma10 已在上方輸出過,重複的 key 只會被後者覆蓋 → 移除以免誤導)
       volume_ma20: r2(row.volume_ma20),
-      sma5: r2(row.sma5),
-      sma10: r2(row.sma10),
       // attach price history only for latest date (to keep JSON lean)
       price_history: isLatest ? (priceHistoryMap[row.stock_id] || []) : undefined,
       // 風險註記:進場候選同時帶出場/出貨/轉弱/過熱等矛盾訊號時的短標籤(清單列用)
@@ -748,7 +749,7 @@ function processScanData() {
 // Reads from historical scan data already loaded; zero network calls.
 // For each stock on date D with grade G, checks if close price 5 trading days
 // later was higher. Skips the 5 most recent dates (no outcome yet).
-function computeOutcomeStats(dates, dateMap, priceHistoryMap) {
+function computeOutcomeStats(dates, dateMap, forwardReturn) {
   const gradeKeys = ['A', 'B', 'C', 'D']
   const stats = {}
   for (const g of gradeKeys) stats[g] = { wins: 0, total: 0, sumReturn: 0 }
@@ -771,17 +772,10 @@ function computeOutcomeStats(dates, dateMap, priceHistoryMap) {
       const sid = row.stock_id
       if (seenIds.has(sid)) continue
       seenIds.add(sid)
-      const history = priceHistoryMap[sid]
-      if (!history || history.length < 6) continue
 
-      const entryIdx = history.findIndex(h => h.time === entryDate)
-      if (entryIdx < 0 || entryIdx + 5 >= history.length) continue
+      const ret = forwardReturn(sid, entryDate, 5)
+      if (ret == null) continue
 
-      const entryPrice = history[entryIdx].close
-      const exitPrice  = history[entryIdx + 5].close
-      if (entryPrice <= 0 || exitPrice <= 0) continue
-
-      const ret = (exitPrice - entryPrice) / entryPrice
       stats[grade].total++
       stats[grade].sumReturn += ret
       if (ret > 0) stats[grade].wins++
@@ -808,7 +802,7 @@ function computeOutcomeStats(dates, dateMap, priceHistoryMap) {
 // is far too rare to measure (≈2 in 7000). This instead ranks each day's scanned
 // universe by entry_score and asks: do top-decile / top-quartile picks beat the
 // whole-universe baseline on forward return? Validates the dashboard's ranking.
-function computeStrategyAccuracy(dates, dateMap, priceHistoryMap) {
+function computeStrategyAccuracy(dates, dateMap, forwardReturn) {
   const HORIZONS = [1, 5, 10]
   const mk = () => Object.fromEntries(HORIZONS.map(h => [h, { wins: 0, total: 0, sumRet: 0 }]))
   const groups = { top10: mk(), top25: mk(), baseline: mk() }
@@ -841,17 +835,9 @@ function computeStrategyAccuracy(dates, dateMap, priceHistoryMap) {
     const top25Cut = Math.ceil(n * 0.25)
 
     ranked.forEach((item, rank) => {
-      const history = priceHistoryMap[item.sid]
-      if (!history) return
-      const entryIdx = history.findIndex(h => h.time === entryDate)
-      if (entryIdx < 0) return
-      const entryPrice = history[entryIdx].close
-      if (entryPrice <= 0) return
       for (const h of HORIZONS) {
-        if (entryIdx + h >= history.length) continue
-        const exitPrice = history[entryIdx + h].close
-        if (exitPrice <= 0) continue
-        const ret = (exitPrice - entryPrice) / entryPrice
+        const ret = forwardReturn(item.sid, entryDate, h)
+        if (ret == null) continue
         const tally = g => { g[h].total++; g[h].sumRet += ret; if (ret > 0) g[h].wins++ }
         tally(groups.baseline)
         if (rank < top10Cut) tally(groups.top10)
@@ -1191,14 +1177,6 @@ function getLastScanExecDate() {
 const { dates, scans, priceHistoryMap, dateMap, execDates } = processScanData()
 console.log(`Scan data: ${dates.length} dates, latest=${dates[0]}, stocks=${scans[dates[0]]?.total_scanned ?? 0}`)
 
-console.log('Computing grade outcome stats...')
-const outcomeStats = computeOutcomeStats(dates, dateMap, priceHistoryMap)
-console.log(`Outcome stats: A=${outcomeStats.A?.total ?? 0} B=${outcomeStats.B?.total ?? 0} C=${outcomeStats.C?.total ?? 0} D=${outcomeStats.D?.total ?? 0} records`)
-
-console.log('Computing strategy accuracy (entry_signal vs baseline)...')
-const strategyAccuracy = computeStrategyAccuracy(dates, dateMap, priceHistoryMap)
-console.log(`Strategy accuracy: top10 5d win=${strategyAccuracy.top10?.d5?.win_rate ?? 'n/a'}% (${strategyAccuracy.top10?.d5?.total ?? 0}), baseline 5d win=${strategyAccuracy.baseline?.d5?.win_rate ?? 'n/a'}%`)
-
 // Merge aggregate_latest.json: if its date is newer or not in CSV dates, inject it
 console.log('Reading aggregate_latest.json...')
 const aggregateLatest = readAggregateLatest()
@@ -1376,6 +1354,19 @@ function getKlineBars(entry, interval) {
   return Array.isArray(bars) && bars.length >= 2 ? bars : undefined
 }
 
+// 勝率/均報統計搬到這裡:必須等 klineMap 載入後才能用真實交易日曆算前瞻報酬
+// (見 buildForwardReturn 的說明)。outcomeStats / strategyAccuracy 只在後面
+// 寫出 data.json 與 gradeDigest 時才用到,搬動不影響其他步驟。
+const forwardReturn = buildForwardReturn(dates, priceHistoryMap, klineMap, getKlineBars)
+
+console.log('Computing grade outcome stats...')
+const outcomeStats = computeOutcomeStats(dates, dateMap, forwardReturn)
+console.log(`Outcome stats: A=${outcomeStats.A?.total ?? 0} B=${outcomeStats.B?.total ?? 0} C=${outcomeStats.C?.total ?? 0} D=${outcomeStats.D?.total ?? 0} records`)
+
+console.log('Computing strategy accuracy (entry_signal vs baseline)...')
+const strategyAccuracy = computeStrategyAccuracy(dates, dateMap, forwardReturn)
+console.log(`Strategy accuracy: top10 5d win=${strategyAccuracy.top10?.d5?.win_rate ?? 'n/a'}% (${strategyAccuracy.top10?.d5?.total ?? 0}), baseline 5d win=${strategyAccuracy.baseline?.d5?.win_rate ?? 'n/a'}%`)
+
 // Inject daily price_history into the LATEST date's stocks and persistent items.
 // Weekly/monthly are NOT embedded: the cache's 1wk/1mo arrays cover the same
 // ~2-year range as the 1d array, so the frontend's resampleBars(daily) fallback
@@ -1495,6 +1486,7 @@ for (const [stockId, recent] of Object.entries(perStockRecent)) {
 // Uses all available scan dates (not just the display dates limit of MAX_DATES) so the
 // frontend has enough daily bars for MACD/RSI warmup on weekly/monthly indicator charts.
 // Format: compact [date, open, high, low, close, volume] tuples per stock.
+const SCAN_HIST_BARS = 250
 const scanStocksHistory = {}
 const allScanDatesAsc = Object.keys(dateMap).sort()  // ascending = oldest first
 for (const d of allScanDatesAsc) {
@@ -1503,20 +1495,25 @@ for (const d of allScanDatesAsc) {
     const sid = row.stock_id
     if (seen.has(sid)) continue
     seen.add(sid)
-    if (klineMap[sid]) continue  // klineMap has richer OHLCV data, skip
+    // 只有「這檔在 stock_histories 的 kline 區真的拿得到 K 棒」時才跳過。
+    // 舊寫法是 `if (klineMap[sid]) continue`——但 klineMap 裡可能有空的/只有
+    // 一根 bar 的殘缺項目,那種股票 getKlineBars 會回 undefined、進不了
+    // historiesStocks,又被這行擋在 scan_stocks 外,結果兩邊都沒有歷史可畫。
+    if (historiesStocks[sid]) continue
     const c = toNum(row.close)
     if (c <= 0 || c > 100000) continue
     if (!scanStocksHistory[sid]) scanStocksHistory[sid] = []
-    if (scanStocksHistory[sid].length < 250) {
-      scanStocksHistory[sid].push([
-        d,
-        Math.round((toNum(row.open) || c) * 100) / 100,
-        Math.round((toNum(row.high) || c) * 100) / 100,
-        Math.round((toNum(row.low) || c) * 100) / 100,
-        Math.round(c * 100) / 100,
-        Math.round(toNum(row.volume) || 0),
-      ])
-    }
+    scanStocksHistory[sid].push([
+      d,
+      Math.round((toNum(row.open) || c) * 100) / 100,
+      Math.round((toNum(row.high) || c) * 100) / 100,
+      Math.round((toNum(row.low) || c) * 100) / 100,
+      Math.round(c * 100) / 100,
+      Math.round(toNum(row.volume) || 0),
+    ])
+    // 上限要留「最新」的 N 根。舊寫法是 `if (length < 250) push`,日期由舊到新
+    // 掃,掃描日一旦超過 250 天就會停在最舊的 250 根 —— 圖表會顯示過期資料。
+    if (scanStocksHistory[sid].length > SCAN_HIST_BARS) scanStocksHistory[sid].shift()
   }
 }
 const scanStocksFiltered = Object.fromEntries(
@@ -2084,15 +2081,30 @@ if (aiTrader) {
     .filter(s => s.entry_signal && !heldBefore.has(String(s.stock_id)))
     .sort((a, b) => (b.entry_score || 0) - (a.entry_score || 0))
     .slice(0, freeSlots)
-    .map((s, i) => ({
-      stock_id: String(s.stock_id), name: s.name || '', rank: i + 1,
-      entry_score: Math.round(s.entry_score || 0), grade: s.grade || '', close: s.close ?? null,
-    }))
+    .map((s, i) => ({ ...s, rank: i + 1 }))
+  const budgetEach = planBuys.length ? Math.floor(cashBefore / Math.min(freeSlots, planBuys.length)) : null
+  // 預計進場日 = 最新掃描日的下一個交易日(掃描在收盤後才跑完,拿不到當日收盤價)
+  const entryDateEst = addTradingDaysEst(latestDate, 1)
+  // 完整委託票:晚上就能把限價買單 + 停損 + 停利掛完,盤中不必再判斷。
+  // 限價 = 跳空放棄門檻 → 跳空過頭自然不成交,等於自動放棄(見 tradePlan.js)。
+  const tickets = planBuys
+    .map(s => buildOrderTicket(s, { budget: budgetEach, entryDate: entryDateEst, equity: aiTrader.equity }))
+    .filter(Boolean)
+    .map((t, i) => ({ ...t, rank: i + 1 }))
   aiTrader.plan = {
     as_of: latestDate,
+    entry_date_est: entryDateEst,
     free_slots: freeSlots,
-    est_budget_each: planBuys.length ? Math.floor(cashBefore / Math.min(freeSlots, planBuys.length)) : null,
-    buys: planBuys,
+    est_budget_each: budgetEach,
+    buys: planBuys.map(s => ({
+      stock_id: String(s.stock_id), name: s.name || '', rank: s.rank,
+      entry_score: Math.round(s.entry_score || 0), grade: s.grade || '', close: s.close ?? null,
+    })),
+    // 出場規則用 ATR 動態(與「持倉」分頁的 computeTargets 同一套),不是回放帳戶
+    // 的固定 8%/12% → 面板/日報必須標示「這套規則沒有回測實績」。
+    exit_rule: 'atr',
+    tickets,
+    exposure: summarizeTickets(tickets, aiTrader.equity),
     exits: aiTrader.positions.map(p => ({
       stock_id: p.stock_id, name: p.name,
       tp_price: p.tp_price, sl_price: p.sl_price,

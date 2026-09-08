@@ -425,10 +425,12 @@ function PortfolioSummary({ items, mktOpen, dataCurrent = true }) {
     totalCost  += pos.buyPrice * pos.qty
     totalValue += price * pos.qty
     // Today's P&L: live intraday delta during open; scan day_return after close.
-    if (mktOpen && e.live?.pct != null && e.live?.price != null) {
+    // pct/day_return 是小數(0.02 = +2%)。壞資料若給到 -1(-100%),1+pct 會是 0,
+    // 反推的前收會變 Infinity,整條「今日損益」跟著爆成 NaN —— 先擋掉。
+    if (mktOpen && e.live?.pct != null && e.live?.price != null && e.live.pct > -1) {
       const prevPrice = e.live.price / (1 + e.live.pct)
       todayPnl += (e.live.price - prevPrice) * pos.qty
-    } else if (!mktOpen && e.scan?.day_return != null && eff != null) {
+    } else if (!mktOpen && e.scan?.day_return != null && eff != null && e.scan.day_return > -1) {
       const dr = e.scan.day_return
       const prevPrice = eff / (1 + dr)
       todayPnl += (eff - prevPrice) * pos.qty
