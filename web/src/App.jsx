@@ -17,6 +17,7 @@ const LiveMonitor = lazy(() => import('./components/LiveMonitor.jsx'))
 const ValidationPanel = lazy(() => import('./components/ValidationPanel.jsx'))
 const Performance = lazy(() => import('./components/Performance.jsx'))
 const AITrader = lazy(() => import('./components/AITrader.jsx'))
+const FuturesStrategyLab = lazy(() => import('./components/FuturesStrategyLab.jsx'))
 const StockDetailModal = lazy(() => import('./components/StockDetailModal.jsx'))
 
 const BASE = import.meta.env.BASE_URL || '/'
@@ -31,6 +32,7 @@ const TABS = [
   { key: 'monitor',    label: '盯盤', icon: '📈' },
   { key: 'news',       label: '新聞', icon: '📰' },
   { key: 'predict',    label: '預測', icon: '🔮' },
+  { key: 'fstrategy',  label: '期策', icon: '🧪' },
   { key: 'studio',     label: '圓桌', icon: '🎯' },
   { key: 'quota',      label: '配額', icon: '📡' },
   { key: 'ai',         label: 'AI',   icon: '🤖' },
@@ -46,6 +48,7 @@ const TAB_TITLES = {
   monitor:   '即時盯盤',
   news:      '市場新聞',
   predict:   '盤前預測',
+  fstrategy: '自訂策略期貨預測',
   studio:    'AI 圓桌研究室',
   quota:     '配額狀態',
   ai:        'AI 助手',
@@ -377,6 +380,7 @@ export default function App() {
       case 'monitor':    return <LiveMonitor data={data} />
       case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} data={data} />
       case 'predict':    return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} benchCurve={data?.aiTrader?.benchmark?.curve || []} realOutcomes={data?.realOutcomes || null} futuresChips={data?.futuresChips || null} modelHealth={data?.modelHealth || null} />
+      case 'fstrategy':  return <FuturesStrategyLab prediction={data?.prediction} history={data?.predictionHistory || []} realOutcomes={data?.realOutcomes || null} futuresChips={data?.futuresChips || null} />
       case 'studio':     return null
       case 'quota':      return <QuotaPanel quota={data?.quota} generatedAt={data?.generated_at} />
       case 'ai':         return <AgentPanel
