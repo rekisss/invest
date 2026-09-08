@@ -312,9 +312,14 @@ export function useLivePrices(stockIds, { pollInterval = 60000, refreshTrigger =
           setLastUpdate(new Date())
           setError(open ? null : '今日收盤')
         } else if (officialHas) {
+          // 走到這裡代表富果無金鑰(或當輪失敗)且快取不新鮮,唯一來源是 TWSE
+          // STOCK_DAY_ALL。它是「日收盤」資料集 —— 盤中打它拿到的是**前一交易日**
+          // 的價(同 fugleLive.js 開頭那段說明)。舊版這裡盤中送 setError(null),
+          // 畫面與真正的即時報價長得一模一樣,使用者會把昨收當現價看。
+          // 盤中改為明講資料性質;收盤後 STOCK_DAY_ALL 已結算,維持「今日收盤」。
           setPrices(prev => ({ ...prev, ...official }))
           setLastUpdate(new Date())
-          setError(open ? null : '今日收盤')
+          setError(open ? '前一交易日收盤（盤中無即時來源，請設定富果金鑰）' : '今日收盤')
         } else if (Object.keys(cacheStocks).length > 0) {
           // Last resort: stale cache.
           setPrices(prev => ({ ...prev, ...cacheStocks }))
