@@ -3,6 +3,7 @@ import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { safeUrl } from '../utils/safeUrl'
 import TradingViewChart from './TradingViewChart'
+import { resolveStockModalNav } from '../utils/stockModalNav'
 gsap.registerPlugin(useGSAP)
 
 const fmt = (v, dec = 2) => (v == null || isNaN(v) ? '—' : Number(v).toFixed(dec))
@@ -2254,11 +2255,12 @@ function Section({ title, children }) {
 
 export default function StockDetailModal({ stock, stocks, initialIndex = 0, notionInfo, onClose, allScans, compareHistories, historyDates }) {
   // Feature 4: multi-stock navigation
-  const stockList = stocks?.length ? stocks : (stock ? [stock] : [])
   const [idx, setIdx] = useState(initialIndex ?? 0)
   // Sync idx when parent changes initialIndex (new stock selected from outside)
   useEffect(() => { setIdx(initialIndex ?? 0) }, [initialIndex])
-  const s_nav = stockList[idx] ?? stockList[0] ?? stock
+  // `stock` 是唯一的「開著沒」訊號;殘留的 `stocks` 不得把 modal 撐開
+  // (見 utils/stockModalNav.js —— 這正是關閉後整個 App 被隱形 overlay 卡死的成因)
+  const { open: navOpen, list: stockList, current: s_nav } = resolveStockModalNav(stock, stocks, idx)
 
   // Compute technical indicators from price_history for non-top-50 stocks.
   // Top-50 stocks already have pre-computed values from Python scan; slim stocks don't.
@@ -2372,7 +2374,7 @@ export default function StockDetailModal({ stock, stocks, initialIndex = 0, noti
     return () => document.removeEventListener('keydown', handler)
   })
 
-  if (!s_nav && !stock) return null
+  if (!navOpen) return null
   const s = s_nav
   const n = notionInfo || null
   const scoreColor = s.entry_score >= 1000 ? 'var(--ios-yellow)' : s.entry_score >= 700 ? 'var(--ios-orange)' : 'var(--ios-label)'
