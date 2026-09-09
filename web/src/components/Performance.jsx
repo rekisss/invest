@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useLivePrices } from '../hooks/useLivePrices'
+import { useLivePricesPlus, STREAM_PRIORITY } from '../hooks/ShioajiStreamContext.jsx'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const POS_KEY = 'tw_portfolio_positions'
@@ -169,7 +169,7 @@ function suggest({ pnlPct, scan, chipBull }) {
 function HoldingsAdvice({ data }) {
   const positions = useMemo(loadPositions, [])
   const posIds = useMemo(() => Object.keys(positions), [positions])
-  const { prices } = useLivePrices(posIds)
+  const { prices } = useLivePricesPlus(posIds, {}, { priority: STREAM_PRIORITY.positions })
   const scanMap = useMemo(() => scanLookup(data), [data])
 
   const rows = useMemo(() => posIds.map(id => {

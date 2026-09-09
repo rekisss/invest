@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { animate } from 'animejs'
-import { useLivePrices, fetchIndices, fetchPriceCache, isScanDataCurrent } from '../hooks/useLivePrices'
-import { useShioajiStream, loadStreamCfg, saveStreamCfg } from '../hooks/useShioajiStream'
+import { fetchIndices, fetchPriceCache, isScanDataCurrent } from '../hooks/useLivePrices'
+import { loadStreamCfg } from '../hooks/useShioajiStream'
+import { useLivePricesPlus, useStreamStatus, STREAM_PRIORITY } from '../hooks/ShioajiStreamContext.jsx'
 import { flashPriceEl, animateListRows } from '../utils/animeUtils.js'
 import StockDetailModal from './StockDetailModal'
 import { getStockHistories } from '../utils/histCache'
@@ -609,20 +610,18 @@ export default function LiveMonitor({ data }) {
     ...scanStocks.map(s => String(s.stock_id)),
   ])], [monitorList, positions, scanStocks])
 
-  const { prices: liveDataBase, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: liveLoading, error: liveError }
-    = useLivePrices(allIds, { refreshTrigger: refreshKey })
+  // 報價來源。串流(零延遲 tick)的覆蓋已經在 useLivePricesPlus 內部做掉了 ——
+  // 這裡拿到的 liveData 連上串流時就是 tick 價，沒連上就是原本的輪詢價。
+  // 連線本身由 App 之上的 ShioajiStreamProvider 持有，全站共用一條，設定改一次
+  // 持倉 / AI操盤 / 績效 / 掃描 分頁同步生效。
+  const { prices: liveData, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: liveLoading, error: liveError,
+          streamConnected, streamError }
+    = useLivePricesPlus(allIds, { refreshTrigger: refreshKey }, { priority: STREAM_PRIORITY.monitor })
 
-  // Real-time Shioaji tick stream (optional). When configured + connected, its
-  // tick prices override the polled quotes (zero-delay); otherwise transparent.
-  const [streamCfg, setStreamCfg] = useState(loadStreamCfg)
-  const { prices: streamPrices, connected: streamConnected, error: streamError }
-    = useShioajiStream(allIds, { wsUrl: streamCfg.wsUrl, token: streamCfg.token })
-  const liveData = useMemo(
-    () => (streamConnected && Object.keys(streamPrices).length)
-      ? { ...liveDataBase, ...streamPrices }
-      : liveDataBase,
-    [liveDataBase, streamPrices, streamConnected]
-  )
+  // 設定面板讀寫的是 Provider 持有的共用設定
+  const stream = useStreamStatus()
+  const streamCfg = stream?.cfg || {}
+  const setStreamCfg = stream?.setCfg || (() => {})
 
   const countdown = useCountdown(liveTime, 15000) // 與 useLivePrices 盤中 15s 輪詢同步
 
@@ -854,7 +853,7 @@ export default function LiveMonitor({ data }) {
                     : '收盤報價'}
                 </span>
                 {/* 富果直連生效時亮標,方便判斷「價格跟不上」是哪一層的問題 */}
-                {mktOpen && Object.values(liveDataBase || {}).some(p => p?.source === 'fugle') && (
+                {mktOpen && Object.values(liveData || {}).some(p => p?.source === 'fugle') && (
                   <span style={{ color: '#66D4CF', fontWeight: 700 }}>⚡富果</span>
                 )}
               </>
@@ -909,11 +908,11 @@ export default function LiveMonitor({ data }) {
           )}
           <div style={{ display: 'flex', gap: 8 }}>
             <button
-              onClick={() => { saveStreamCfg(streamDraft); setStreamCfg(streamDraft); setShowStreamCfg(false) }}
+              onClick={() => { setStreamCfg(streamDraft); setShowStreamCfg(false) }}
               style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'var(--ios-blue)', color: '#fff', fontSize: 12, fontWeight: 700 }}
             >儲存並連線</button>
             <button
-              onClick={() => { const empty = {}; saveStreamCfg(empty); setStreamCfg(empty); setStreamDraft(empty) }}
+              onClick={() => { setStreamCfg({}); setStreamDraft({}) }}
               style={{ padding: '8px 14px', borderRadius: 8, border: '0.5px solid var(--ios-sep)', cursor: 'pointer', background: 'var(--ios-fill3)', color: 'var(--ios-label2)', fontSize: 12, fontWeight: 600 }}
             >清除</button>
           </div>
