@@ -2,6 +2,8 @@ import { useMemo, useState, useCallback } from 'react'
 import LiveTraderPanel from './LiveTraderPanel'
 import { isTWSEOpen, isScanDataCurrent } from '../hooks/useLivePrices'
 import { useLivePricesPlus, STREAM_PRIORITY } from '../hooks/ShioajiStreamContext.jsx'
+import { evaluateLiveOrders } from '../utils/liveOrders.js'
+import LiveOrderPanel from './LiveOrderPanel.jsx'
 
 const UP = 'var(--ios-red)'      // Taiwan: red = up/gain
 const DOWN = 'var(--ios-green)'  // green = down/loss
@@ -450,7 +452,14 @@ export default function AITrader({ data }) {
   // 收盤後~晚間資料建置前的空窗(isScanDataCurrent=false),p.price 還是前一
   // 交易日收盤 → 用快取的今日收盤。資料已是今日(晚間入帳後)就不用後備,
   // 避免舊快取蓋過已結算價(「慢一天」bug 的老路)。
-  const posIds = useMemo(() => (ai?.positions || []).map(p => String(p.stock_id)), [ai])
+  const watchFive = data?.watchFive || null
+  // 訂閱範圍 = 持倉 + 盯盤前五檔。候選股沒有現價就判斷不出突破,產不出進場指令;
+  // 但也僅止於這些,不再整個精選池都訂(使用者要求:即時報價只報前五檔)。
+  const posIds = useMemo(() => {
+    const ids = (ai?.positions || []).map(p => String(p.stock_id))
+    const five = (watchFive?.items || []).map(w => String(w.stock_id))
+    return [...new Set([...ids, ...five])]
+  }, [ai, watchFive])
   const { prices: hookPrices } = useLivePricesPlus(posIds, {}, { priority: STREAM_PRIORITY.positions })
   const useHookPx = isTWSEOpen() || !isScanDataCurrent(ai?.as_of)
   const pxOf = (id) => liveQuotes[id]?.price ?? (useHookPx ? hookPrices[id]?.price : undefined)
@@ -514,20 +523,42 @@ export default function AITrader({ data }) {
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-        <Stat label="勝率" value={s.win_rate == null ? '—' : `${s.win_rate}%`} color={colorOf(s.win_rate != null ? s.win_rate - 50 : null)}
+        {/* 主指標改成報酬導向:期望報酬是目標函數,賺賠比說明它從哪來。
+            勝率不刪除,但降到第二排 —— 它只回答「贏幾次」,不回答「賺多少」。 */}
+        <Stat label="每筆期望報酬" value={pctStr(s.avg_ret)} color={colorOf(s.avg_ret)}
           sub={s.num_trades < 30 ? `樣本累積中 ${s.num_trades}/30 筆` : `${s.num_trades} 筆已結`} />
-        <Stat label="平均報酬" value={pctStr(s.avg_ret)} color={colorOf(s.avg_ret)} />
+        <Stat label="賺賠比" value={s.payoff_ratio == null ? '—' : `${s.payoff_ratio}`}
+          color={s.payoff_ratio != null ? colorOf(s.payoff_ratio - 1) : undefined}
+          sub={c.risk_reward != null ? `設定 ${c.risk_reward}` : '實現值'} />
         <Stat label="最大回落" value={s.max_drawdown_pct == null ? '—' : `-${s.max_drawdown_pct}%`} color={DOWN} />
         <Stat label="操作天數" value={s.trading_days} sub={`自 ${c.start_date}`} />
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        <Stat label="勝率" value={s.win_rate == null ? '—' : `${s.win_rate}%`} color={colorOf(s.win_rate != null ? s.win_rate - 50 : null)}
+          sub="輔助指標" />
+        <Stat label="平均賺 / 賠" value={(s.avg_win == null && s.avg_loss == null) ? '—' : `${pctStr(s.avg_win, 1)} / ${pctStr(s.avg_loss, 1)}`}
+          sub="賺賠比的來源" />
         <Stat label="出場分佈" value={exits ? `${exits.take_profit}/${exits.stop}/${exits.time}` : '—'} sub="停利/停損/期滿" />
         <Stat label="平均持有" value={s.avg_hold_days == null ? '—' : `${s.avg_hold_days} 天`} />
         <Stat label="獲利因子" value={s.profit_factor == null ? '—' : s.profit_factor} color={s.profit_factor != null ? colorOf(s.profit_factor - 1) : undefined} sub="總益÷總損" />
         <Stat label="總交易成本" value={s.total_fees == null ? '—' : `$${nf(s.total_fees)}`} sub="手續費+稅" />
       </div>
 
-      <LiveTraderPanel ai={ai} scan={data?.scans?.[data?.dates?.[0]]} onQuotes={setLiveQuotes} />
+      {/* 以現價重跑進出場規則 → 紙上指令(建議,不下單) */}
+      <LiveOrderPanel
+        orders={evaluateLiveOrders({
+          positions: ai.positions || [],
+          watch: watchFive?.items || [],
+          priceOf: (id) => pxOf(String(id)),
+          config: c,
+          today: new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10),
+          maxPositions: c.max_positions,
+        })}
+        watchFive={watchFive}
+        priceOf={(id) => pxOf(String(id))}
+      />
+
+      <LiveTraderPanel ai={ai} scan={data?.scans?.[data?.dates?.[0]]} watchFive={watchFive} onQuotes={setLiveQuotes} />
 
       <ReportCard reports={data?.aiReports} />
 

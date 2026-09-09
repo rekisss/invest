@@ -66,7 +66,7 @@ function SettingsBox({ onClose }) {
   )
 }
 
-export default function LiveTraderPanel({ ai, scan, onQuotes }) {
+export default function LiveTraderPanel({ ai, scan, watchFive, onQuotes }) {
   const [quotes, setQuotes] = useState({})          // sym -> {price, changePct, time}
   const [wsStatus, setWsStatus] = useState(getFugleKey() ? 'connecting' : 'no_key')
   const [events, setEvents] = useState([])           // today's triggered alerts (this session)
@@ -76,19 +76,32 @@ export default function LiveTraderPanel({ ai, scan, onQuotes }) {
   const watchRef = useRef({ positions: [], candidates: [] })
 
   // Watchlist: AI open positions first (they carry TP/SL triggers), then top entry candidates.
+  //
+  // 候選來源改成 watchFive —— build 期依「期望報酬」(勝率×上檔 − 敗率×下檔)排序的
+  // 前 5 檔,不再是 entry_score 前 4。兩個理由:
+  //   1. 目標改成報酬率後,盯盤清單要跟同一個目標走,否則盯的是一批自己不想操作的股票
+  //   2. 舊來源要求 entry_signal,但多數交易日的訊號候選是 0~1 檔 → 大半天沒東西可盯
+  // watchFive 不存在(舊 data.json)時自動退回原本的 entry_score 邏輯。
   const { positions, candidates } = useMemo(() => {
     const positions = (ai?.positions || []).map(p => ({
       sym: String(p.stock_id), name: p.name, entry: p.entry,
       tp: p.tp_price, sl: p.sl_price, prevPrice: p.price,
     }))
     const held = new Set(positions.map(p => p.sym))
-    const candidates = (scan?.top_stocks || [])
-      .filter(s => s.entry_signal && !held.has(String(s.stock_id)))
-      .sort((a, b) => (b.entry_score || 0) - (a.entry_score || 0))
-      .slice(0, 4)
-      .map(s => ({ sym: String(s.stock_id), name: s.name, close: s.close, high20: high20Of(s) }))
+    const five = (watchFive?.items || []).filter(w => !held.has(String(w.stock_id)))
+    const candidates = five.length
+      ? five.map(w => ({
+          sym: String(w.stock_id), name: w.name, close: w.close,
+          high20: w.breakout_price ?? null,
+          expectancy: w.expectancy_pct, rewardRisk: w.reward_risk,
+        }))
+      : (scan?.top_stocks || [])
+          .filter(s => s.entry_signal && !held.has(String(s.stock_id)))
+          .sort((a, b) => (b.entry_score || 0) - (a.entry_score || 0))
+          .slice(0, 4)
+          .map(s => ({ sym: String(s.stock_id), name: s.name, close: s.close, high20: high20Of(s) }))
     return { positions, candidates }
-  }, [ai, scan])
+  }, [ai, scan, watchFive])
   watchRef.current = { positions, candidates }
 
   // Alert engine — deterministic rules mirroring the nightly replay, evaluated on live prices.

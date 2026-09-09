@@ -13,6 +13,7 @@ import { recomputeRealHits, scoreHorizonHits, PRED_HORIZON } from './outcome-fix
 import { computeModelHealth } from './model-health.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 import { buildForwardReturn } from './forward-return.mjs'
+import { makeExpectancyRank, rankPicksByExpectancy } from './expectancy.mjs'
 import { buildOrderTicket, summarizeTickets, addTradingDaysEst } from '../src/utils/tradePlan.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -1948,6 +1949,25 @@ if (aiTrader) {
     { id: 'tp12', label: '停利 12%', note: '拉高目標', config: { takeProfit: 0.12 } },
     { id: 'tp5', label: '停利 5%', note: '高勝率短打', config: { takeProfit: 0.05 } },
     { id: 'pos3', label: '集中 3 檔', note: '重押高分股', config: { maxPositions: 3 } },
+    // 🎯 賺賠比擂台(報酬導向的核心實驗)。主帳戶是 8% 停利 / 12% 停損 =
+    // 賺賠比 0.67:1 —— 冒 12% 的風險去賺 8%,是為「勝率」最佳化的設定,期望值
+    // 只有在勝率夠高時才為正。以下三個變體把停損收緊、讓賺賠比 ≥ 1,直接檢驗
+    // 「少贏幾次但每次賺多一點」在這份資料上是否真的比較賺。
+    // 注意這是實驗不是結論:收緊停損在既有回測中曾經傷害績效(見 DEFAULT_CONFIG
+    // 註解),所以交給平行帳戶用實績說話,而不是預設就換掉主帳戶。
+    // 選股層的報酬導向:不看 entry_score,改用期望報酬(勝率×上檔 − 敗率×下檔)排序。
+    // 把「賺賠比」的概念從出場規則延伸到選股 —— 同樣看好的兩檔,偏好離目標還有空間、
+    // 波動又不誇張的那檔。見 expectancy.mjs。
+    //
+    // ⚠️ 必須在**全池**上排序才有意義。進場訊號的候選數多數交易日是 0~1 檔(遠少於
+    //    6 個持股空位),排序函式在那種情況下完全不影響選誰 —— 實測把期望值排序加在
+    //    訊號閘門之後,結果與主帳戶一字不差。所以這裡走 filter 全池、不要求進場訊號,
+    //    與 rs_mom(最佳非對照組)、random(對照組)同條件,才是有效的對照實驗。
+    { id: 'exp_rank', label: '期望報酬排序', note: '全池,賺賠比划算的優先',
+      config: { pickPool: 'filter', requireEntrySignal: false, rankBy: makeExpectancyRank(outcomeStats) } },
+    { id: 'rr1', label: '賺賠比 1:1', note: '停損6% 停利6%', config: { stopLoss: 0.06, riskReward: 1 } },
+    { id: 'rr2', label: '賺賠比 2:1', note: '停損6% 停利12%', config: { stopLoss: 0.06, riskReward: 2 } },
+    { id: 'rr3', label: '賺賠比 3:1', note: '停損5% 停利15%', config: { stopLoss: 0.05, riskReward: 3 } },
     // 對照組:選股與任何策略訊號完全無關(股號固定雜湊排序 = 「亂選一籃股票」
     // 的確定性版本,每次 build 結果相同可重現),出場紀律與主帳戶一致。
     // 用途:量化「策略選股」相對「無訊號亂選」到底貢獻多少——這是可信度審計
@@ -1974,6 +1994,10 @@ if (aiTrader) {
     win_rate: r.stats.win_rate, num_trades: r.stats.num_trades,
     max_drawdown_pct: r.stats.max_drawdown_pct, profit_factor: r.stats.profit_factor,
     return_over_mdd: returnOverMdd(r.return_pct, r.stats.max_drawdown_pct),
+    // 報酬導向指標:每筆期望報酬與實現賺賠比。risk_reward 是規則「設定」的比例,
+    // payoff_ratio 是實際「打出來」的比例,兩者落差代表停利有沒有真的觸及得到。
+    avg_ret: r.stats.avg_ret, avg_win: r.stats.avg_win, avg_loss: r.stats.avg_loss,
+    payoff_ratio: r.stats.payoff_ratio, risk_reward: r.config.risk_reward,
     open_positions: r.positions.length,
     // ret_pct 序列與主帳戶共用同一交易日曆(同 scans/klines),供疊圖
     curve: r.equity_curve.map(p => p.ret_pct),
@@ -1989,6 +2013,16 @@ if (aiTrader) {
     })),
   }))
   console.log(`AI trader variants: ${aiTrader.variants.map(v => `${v.id}=${v.return_pct}%`).join(' ')}`)
+  // 報酬導向的對照表:每筆期望值與實現賺賠比。勝率單獨看不出策略賺不賺,
+  // 期望值(每筆平均報酬)才是目標函數,所以 build log 也一併印出來。
+  console.log('AI trader 期望值/賺賠比:')
+  for (const v of [{ id: 'main', label: '主帳戶', stats: aiTrader.stats, rr: aiTrader.config?.risk_reward },
+                   ...aiTrader.variants.map(v => ({ id: v.id, label: v.label, stats: v, rr: v.risk_reward }))]) {
+    const s = v.stats
+    const pad = (x, n) => String(x ?? '—').padStart(n)
+    console.log(`  ${v.id.padEnd(12)} 期望 ${pad(s.avg_ret, 6)}%  賺賠比 ${pad(s.payoff_ratio, 5)}` +
+                `  (設定 ${pad(v.rr, 4)})  勝率 ${pad(s.win_rate, 5)}%  ${pad(s.num_trades, 3)} 筆`)
+  }
 
   // 🎓 自適應帳戶(自我學習層):從主帳戶+變體的實績中學習該跟隨哪套規則。
   // 樣本不足(全體已結 < 10 筆)前固定跟隨主帳戶;之後每天評估近 10 個交易
@@ -2167,8 +2201,58 @@ try {
   if (gradeDigest) console.log(`Grade digest: A${gradeDigest.counts.A}/B${gradeDigest.counts.B}/C${gradeDigest.counts.C}/D${gradeDigest.counts.D}(可操作 ${gradeDigest.actionable}${gradeDigest.real ? ',含真實勝率' : ''})`)
 } catch (e) { console.warn('Grade digest skipped:', e.message) }
 
+// 🎯 盯盤前五檔:依「期望報酬」而非 entry_score 排序取前 5。目標改成報酬率之後,
+// 盯盤清單也要跟著同一個目標,否則整條線不一致 —— 用舊排序盯盤、用新目標決策,
+// 會盯到一批根本不是自己想操作的股票。
+//
+// 刻意不用 entry_signal 當篩選:多數交易日的訊號候選是 0~1 檔(見 exp_rank 變體的
+// 註解),拿它當盯盤來源會有大半天完全沒東西可盯。改用整個精選池排期望值前 5。
+//
+// 這份清單同時是即時串流的訂閱優先名單 —— 只訂這 5 檔,不是整個精選池。
+let watchFive = null
+try {
+  const latest = scans?.[dates?.[0]]
+  const ranked = rankPicksByExpectancy(latest?.top_stocks || [], { gradeStats: outcomeStats })
+  const five = ranked.slice(0, 5)
+  if (five.length) {
+    watchFive = {
+      as_of: dates?.[0] || null,
+      basis: five.some(s => s._expectancy != null) ? 'expectancy' : 'entry_score',
+      items: five.map((s, i) => ({
+        rank: i + 1,
+        stock_id: String(s.stock_id),
+        name: s.name || '',
+        close: s.close ?? null,
+        grade: s.grade || '',
+        entry_score: s.entry_score ?? null,
+        entry_signal: !!s.entry_signal,
+        // 報酬導向的三個數字:期望報酬、上檔空間、下檔風險,以及兩者的比值
+        expectancy_pct: s._expectancy,
+        upside_pct: s._upside,
+        downside_pct: s._downside,
+        reward_risk: s._reward_risk,
+        atr14: s.atr14 ?? null,
+        gap_to_20d_high_pct: s.gap_to_20d_high_pct ?? null,
+        // 突破目標價 = 20 日高。即時層拿它當進場觸發條件(見 utils/liveOrders.js)。
+        // 優先用掃描算好的 close_20d_high;沒有就用收盤 × (1+到高點距離%) 回推。
+        breakout_price: (() => {
+          const h = Number(s.close_20d_high)
+          if (Number.isFinite(h) && h > 0) return Math.round(h * 100) / 100
+          const c = Number(s.close), g = Number(s.gap_to_20d_high_pct)
+          if (Number.isFinite(c) && c > 0 && Number.isFinite(g) && g >= 0) {
+            return Math.round(c * (1 + g / 100) * 100) / 100
+          }
+          return null
+        })(),
+      })),
+    }
+    const head = watchFive.items.map(x => `${x.stock_id}${x.expectancy_pct != null ? `(${x.expectancy_pct > 0 ? '+' : ''}${x.expectancy_pct}%)` : ''}`).join(' ')
+    console.log(`盯盤前五檔[${watchFive.basis}]: ${head}`)
+  }
+} catch (e) { console.warn('Watch-five skipped:', e.message) }
+
 const dataGeneratedAt = new Date().toISOString()
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks, gradeDigest, modelHealth }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks, gradeDigest, modelHealth, watchFive }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
 
 // Small sidecar so the frontend can cheaply check "did anything change?" (a few
