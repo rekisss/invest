@@ -116,23 +116,38 @@ export function useLivePricesPlus(stockIds, opts = {}, { priority = STREAM_PRIOR
   const streamPrices = data?.prices
   const connected    = data?.connected
 
-  const prices = useMemo(() => {
-    if (!connected || !streamPrices) return base.prices
+  const { prices, covered, wanted } = useMemo(() => {
+    const want = [...new Set(idsKey.split(',').filter(Boolean))]
+    if (!connected || !streamPrices) return { prices: base.prices, covered: 0, wanted: want.length }
     // 只覆蓋這個呼叫端要的代號：串流清單是全站聯集，直接整包 spread 會把別的
     // 分頁的股票也塞進來，下游的 Object.keys(prices) 走訪就會多出不相干的列。
-    const want = new Set(idsKey.split(',').filter(Boolean))
     const overlay = {}
     for (const sid of want) {
       const p = streamPrices[sid]
       if (p) overlay[sid] = p
     }
-    return Object.keys(overlay).length ? { ...base.prices, ...overlay } : base.prices
+    const n = Object.keys(overlay).length
+    return {
+      prices: n ? { ...base.prices, ...overlay } : base.prices,
+      covered: n,
+      wanted: want.length,
+    }
   }, [base.prices, streamPrices, connected, idsKey])
+
+  // base.error 描述的是「輪詢層」拿到的資料品質（例如盤中只剩 TWSE
+  // STOCK_DAY_ALL 時的「前一交易日收盤」警告）。串流已經把這些代號的價格
+  // 全部換成即時 tick 時，那句警告就不再成立 —— 照傳會變成畫面跳著即時價、
+  // 底下卻掛一行紅字叫你去設富果金鑰。只有在串流「全覆蓋」時才清掉：
+  // 部分覆蓋（超過 MAX_SUBSCRIPTIONS 被截斷）時，沒被覆蓋的那些仍走輪詢層，
+  // 警告對它們依然是真的。
+  const error = (connected && wanted > 0 && covered === wanted) ? null : base.error
 
   return {
     ...base,
     prices,
+    error,
     streamConnected: !!connected,
+    streamCovered: covered,
     streamError: data?.error || null,
   }
 }

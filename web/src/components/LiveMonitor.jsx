@@ -853,7 +853,7 @@ export default function LiveMonitor({ data }) {
                     : '收盤報價'}
                 </span>
                 {/* 富果直連生效時亮標,方便判斷「價格跟不上」是哪一層的問題 */}
-                {mktOpen && Object.values(liveDataBase || {}).some(p => p?.source === 'fugle') && (
+                {mktOpen && Object.values(liveData || {}).some(p => p?.source === 'fugle') && (
                   <span style={{ color: '#66D4CF', fontWeight: 700 }}>⚡富果</span>
                 )}
               </>
