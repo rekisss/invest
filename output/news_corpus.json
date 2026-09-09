@@ -1,6 +1,76 @@
 {
-  "updated_at": "2026-09-09T01:01:34.062914+00:00",
+  "updated_at": "2026-09-09T02:01:34.012666+00:00",
   "articles": [
+    {
+      "title": "台積電推動「供應鏈在地化（台灣本土替代）」的進度與指標廠商 - 蕃新聞",
+      "url": "https://news.google.com/rss/articles/CBMiUkFVX3lxTFB1b1RaN1l5cXNjTlg1X05qdDlIT0R4SFhyLS1nQURsM2xOZGNWajZFWnlYa2pfc1piYlpaWVR3emFBNWlfX2Y3UjZEVjZfTFNDNVE?oc=5",
+      "source": "蕃新聞",
+      "published_at": "2026-09-09T01:36:00+00:00",
+      "summary": "台積電推動「供應鏈在地化（台灣本土替代）」的進度與指標廠商&nbsp;&nbsp;蕃新聞"
+    },
+    {
+      "title": "電動車跑15萬公里還剩多少電力？Mercedes-Benz CLA電池健康度勝過Tesla - autos.udn.com",
+      "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTFBGTGdPOHZzV0VRUjl3NmlRRFYzSUFoejRIZjlJOHNBSXJRVHlzMVRRcGs5NDhQaFp4cm9VMVVHN0JyaHVEWEppbmJ4SGxSeklkZzhMTjM1Qk9IRGxtdkM3dWVmcEtaYjRtTVVyTUdiRmRzSHhFMkZxbWhuaDM5dzA?oc=5",
+      "source": "autos.udn.com",
+      "published_at": "2026-09-09T01:32:11+00:00",
+      "summary": "電動車跑15萬公里還剩多少電力？Mercedes-Benz CLA電池健康度勝過Tesla&nbsp;&nbsp;autos.udn.com"
+    },
+    {
+      "title": "【09/09 產業即時新聞】ABF載板族群強勢表態，AI伺服器需求點燃多頭反攻 - CMoney投資網誌",
+      "url": "https://news.google.com/rss/articles/CBMijgFBVV95cUxPSFhhS3RMVjJOU1JjaHZ4ZjJjbjRKMHNPVmhrdXlrVUs1UHMyUEVNLXJKdTJPdXdpVDM3RUdyM2NQdEd0cTF6c28wUi1yTU5QTVF1ekNFR3JNbFJuLVdvT3l5U0dFLXNNaW5jWEZYaGJYQ21EVURQcUQ0aHZHNHFJc0ZQM3Z3dXMyNUFXY1lB?oc=5",
+      "source": "CMoney投資網誌",
+      "published_at": "2026-09-09T01:30:36+00:00",
+      "summary": "【09/09 產業即時新聞】ABF載板族群強勢表態，AI伺服器需求點燃多頭反攻&nbsp;&nbsp;CMoney投資網誌"
+    },
+    {
+      "title": "台股上漲286點！ 受惠台積攜手ASML 「這2檔」開盤秒漲停 - Yahoo股市",
+      "url": "https://news.google.com/rss/articles/CBMiwgJBVV95cUxQVmRkRUNWZWtsbF9iMU0wZ0drSTAwaUZtcjU3QXI2b0VLX0dTSlRfSXFyQUlMaTN3WVpzNVRsWkYza3lhbjdhRzFHanJWbmN3U3JwM2VreXRBRVdndUdVTmhVVF9hZDR3X1V5SXYtNE1FQ2diRC1XZWlyMl81bXNRS0M1d2wwYzJOeFZOaEkyeWxQRTVoSE9IWVR0Ukxzc3VEYkFBZExFcDFoQkljcXJTQVZjdWliQ1N1TTZBRlBZWFhYZ2dHck9jTGlHQXR3RGl1TTlUcUJfVWc5M2U1OC11S3B5V3M2cnM1MmRPQmVzdE5ReHB6dVVMYk1iTXV6Y21RN3VQdnZ3akRYVkpqMllfaWtyZFI2ZGk4SFZSVnFlSGc2bEdTelVMLTZJRHY4ejBDQm1RbXAxZ21BczJxVnpBZUtn?oc=5",
+      "source": "Yahoo股市",
+      "published_at": "2026-09-09T01:27:42+00:00",
+      "summary": "台股上漲286點！ 受惠台積攜手ASML 「這2檔」開盤秒漲停&nbsp;&nbsp;Yahoo股市"
+    },
+    {
+      "title": "新台幣開盤升2.5分 為31.51元 - UDN",
+      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTE5qSGQ2a3JYRFJuRGdnUkxkY09jdWtObm1SRGhnejFTSmx1VjlHUm9hMk1tdm1TVzRGbTFtZGVzUGxzUHcyZGVJM0J4X3lGdXNS?oc=5",
+      "source": "UDN",
+      "published_at": "2026-09-09T01:18:50+00:00",
+      "summary": "新台幣開盤升2.5分 為31.51元&nbsp;&nbsp;UDN"
+    },
+    {
+      "title": "台股開盤／台積電漲10元！台股漲逾200點 這4大族群成多頭先鋒 - 三立新聞",
+      "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTE55WDFEeEJhRmdTZFp2OFk4Wm9UUTkwaE1mOERzeXFaYU5pZUNNOUlRUkhfR1d6WWpZMjZTdElHUDIyc21OWUpIMmphVQ?oc=5",
+      "source": "三立新聞",
+      "published_at": "2026-09-09T01:13:52+00:00",
+      "summary": "台股開盤／台積電漲10元！台股漲逾200點 這4大族群成多頭先鋒&nbsp;&nbsp;三立新聞"
+    },
+    {
+      "title": "新台幣開盤升2.5分　為31.51元 - 經濟日報",
+      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE82QnQxTTBKZWkwcGllZ2p2UUZJNDItQ2xFM1lrVG5ZTWRWaGxDX3FpbVlXRy1lT2luR0hQVXlFbzRBZ201LVhBNF9EUDFRWnJ4R0hDN2ZoQ19Nd9IBX0FVX3lxTE9kS2dHUFJSYVFYcUNfNVRxWWpVdE52NmJ6S3VCcjdmeFRHT1h0QlU1eXVHVFQ5SExMdU1HRnIzdnVRU2F4T0E2QkhGTDNhN00ySmpxbnZEaVlGT1UwRXk4?oc=5",
+      "source": "經濟日報",
+      "published_at": "2026-09-09T01:12:53+00:00",
+      "summary": "新台幣開盤升2.5分　為31.51元&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "國內匯市：新台幣匯率今晨以31.510元開盤，升值2.5分 - 富聯網",
+      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxQTzM1ZDdwNmlHTXYxLXRGQnl0UkdWTkVjM1FJc2xJRnJmUks4b3FGc0c2NnFXSnNBbjR1UTRtSkg3OVpKVnlhYTFZZGRpQi1tYndRa3VOWk5rTTg3bkY5TXlyNXNfckI2S2k1OTZ6Q0Y4ZVdXczhMLVBQRWlPMTUyS2stcDV1Y21u?oc=5",
+      "source": "富聯網",
+      "published_at": "2026-09-09T01:01:00+00:00",
+      "summary": "國內匯市：新台幣匯率今晨以31.510元開盤，升值2.5分&nbsp;&nbsp;富聯網"
+    },
+    {
+      "title": "盤前看盤重點： - hao.cnyes.com",
+      "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE5BbHdrN0N2Q1Rxb1FuQ2p5blc5YWdCVUhwS2dBdktkUVNUNHpScV9ZaFEyekR3Y2RjLWF6UnZBQmdGRzdfTUZhYg?oc=5",
+      "source": "hao.cnyes.com",
+      "published_at": "2026-09-09T00:59:30+00:00",
+      "summary": "盤前看盤重點：&nbsp;&nbsp;hao.cnyes.com"
+    },
+    {
+      "title": "《期貨》多方續拚 9月台指期開漲121點 - 富聯網",
+      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxPOVQ1TEhWS1JLcDNkRU90SlRYakpLYzBiWERFeWx5cnY2Rm9TWjVaZnVLR0tHOGZDS2hZRXd5aVJDMmRoLTk1Sm5nWUlrV0RrSXlrUFQ0ODAxOU52VW9JcFl5UENYTjlYRnIwRkhBTjBlYVlEeUlFWW5lSmRjbGRvNjVIc3BlWVl4?oc=5",
+      "source": "富聯網",
+      "published_at": "2026-09-09T00:59:00+00:00",
+      "summary": "《期貨》多方續拚 9月台指期開漲121點&nbsp;&nbsp;富聯網"
+    },
     {
       "title": "法人觀點：升降息關鍵門檻！富國銀行研究，市場機率逾69%成Fed決策信號 - 富聯網",
       "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOWkxQdjR3eExmbVdRTUt0WDludUpzd0hndGx3eXN2Nko2WjVJemZPVXotb01zWi1pQUl6dUhDOHh0U0NfMnRBV25PbmkxXzk4UjJVakhpd2lNWGVPUnhCS05oUWRRUVlyZUc0MWgyMGhCWlc4V09FTFRjYTZ1bkduQVZFdFJXdVMy?oc=5",
@@ -9,11 +79,46 @@
       "summary": "法人觀點：升降息關鍵門檻！富國銀行研究，市場機率逾69%成Fed決策信號&nbsp;&nbsp;富聯網"
     },
     {
+      "title": "閎康營收連六月創高/前8月增18%；日美實驗室擴張- 新聞 - MoneyDJ",
+      "url": "https://news.google.com/rss/articles/CBMieEFVX3lxTE1GeXdjNEl6T2ljWHZTVHdGZ01zOTdlQWpSckg5TXNianpzV3czc2hNWG13WFE1LU1QSUJzM0hJV3Q0OVpQajlyeGx4djc1SmpnX05rZ3RhUkxBLVFibFRPZlNYNThsNURDc1g2cC1wRWlvdWRIVTJDSw?oc=5",
+      "source": "MoneyDJ",
+      "published_at": "2026-09-09T00:42:00+00:00",
+      "summary": "閎康營收連六月創高/前8月增18%；日美實驗室擴張- 新聞&nbsp;&nbsp;MoneyDJ"
+    },
+    {
+      "title": "【新新聞】美國借錢買AI、台灣借錢做AI 逾7000億元募資潮背後 AI榮景為何讓台廠愈賺愈缺錢？ - new7.storm.mg",
+      "url": "https://news.google.com/rss/articles/CBMiTkFVX3lxTE9QUlA4bkJWM1pCckxSeDYwLXExU3lMbzM3WktCQkZnSU1nczBKZ0pmWEpkSERGNGN1cVdIUF9CdXVqVkVEOVV5a2ViY2U3QQ?oc=5",
+      "source": "new7.storm.mg",
+      "published_at": "2026-09-09T00:40:01+00:00",
+      "summary": "【新新聞】美國借錢買AI、台灣借錢做AI 逾7000億元募資潮背後 AI榮景為何讓台廠愈賺愈缺錢？&nbsp;&nbsp;new7.storm.mg"
+    },
+    {
+      "title": "美伊越打越兇油價為何未破百？三因素抑制漲幅-台股 - MoneyDJ",
+      "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxPZDdJRnlDOEk1NWk5Si1jWjZCZExIT1lGaTlTSnV1bTM5RzIwTU4xbkNSM2ZrS2RfdXJEMV8xakV2OEU5d0ZJMk5jcUttTlpZYjJCQ21PWDlTbnU1M1RlUGwxU05GM2FFTUYwSGdFTmlwVGZJZW0xclNTZEl1NFRrSVJVNE52cU1lbXc?oc=5",
+      "source": "MoneyDJ",
+      "published_at": "2026-09-09T00:18:55+00:00",
+      "summary": "美伊越打越兇油價為何未破百？三因素抑制漲幅-台股&nbsp;&nbsp;MoneyDJ"
+    },
+    {
+      "title": "台積電毛利率飆新高助攻股價 亞利桑那州成台廠投資熱點 - 財經新聞 - PChome Online 新聞 - PChome Online 新聞",
+      "url": "https://news.google.com/rss/articles/CBMijAFBVV95cUxPcFppNzFWVXlXbS1sWm1ESTJuNG5DM25obXN4WG8wOHJfSGJYZ2Z0V1UyeFNuSkVfcUotVjZZWVlQVzBDbjk1enN0Q3ZYdHdHbXRHNzFYWlQ3N3F4SzVrVkZBQVpSM1JwdnNVZXdaZGYzRDNsRWJYamx2VzVOb0dsZ0JvMElrR1F6WlNuNQ?oc=5",
+      "source": "PChome Online 新聞",
+      "published_at": "2026-09-09T00:14:16+00:00",
+      "summary": "台積電毛利率飆新高助攻股價 亞利桑那州成台廠投資熱點 - 財經新聞 - PChome Online 新聞&nbsp;&nbsp;PChome Online 新聞"
+    },
+    {
       "title": "台積電毛利率飆新高助攻股價 亞利桑那州成台廠投資熱點 - 商傳媒",
       "url": "https://news.google.com/rss/articles/CBMihwNBVV95cUxQNjF2ZW5MTERYSHJGSXViV0dqbWR1QXFpVlZNVlF2OUdLLVUxdHJ1SHh6YnJTWmxqMzhQcGRfcTdZR1dvaE1jRElzR2VCRzBXTDFQYnNvRXZ6S1RtbXgzY25xZ2NBbGlNNHNSNlFQRmVQN0pkRDBKY0RXUDhIdUNlV2dVcE1CbXFkdTRleGptQ3kybUpUMVN1SU52N1VHODF6ME11b1JjWDZiRGtGZUtYR1ZoTkxrbjBGeWJGbkhJSTFhdmg0RUdMYmN5MExuZ1Q0OW5DQ1prZWRvWUN0X3hTdGZmTFZtd0VFMV9PTFg4NG9CV0puRnAwZERDSllCVnYxSWdfUE5SVDlhWndrVmtwZWVENlEzOXRzZlZBbDNmUWMzV192LUJxQ01iT2VjMmdoYWZCOUtuS0EyakFSNm9aSVpPRHp4bjc4TGRLS2hzbUlLaHFtOV9vbk9fQUMzeTJwMGRkcUpTbEhyc0Q1SXZsVF9GREExQmh2Ql9FWElTUWJ4TDMzNzlZ?oc=5",
       "source": "商傳媒",
       "published_at": "2026-09-09T00:14:16+00:00",
       "summary": "台積電毛利率飆新高助攻股價 亞利桑那州成台廠投資熱點&nbsp;&nbsp;商傳媒"
+    },
+    {
+      "title": "009826 貝萊德 iShares 安碩世界股票 ETF｜成分股？配息？優缺點？ - StockFeel 股感",
+      "url": "https://news.google.com/rss/articles/CBMiywFBVV95cUxNZmlrckhPZ1Q4c3NlczVRaXh1cTBMUkktbWdtLUNudzlPUFlReGFuYksxMjBBWkVIOFRvWk5vSkdmaFJPcy1UcDJicDQweVl1RWhhd2p5YVBTRHFJVVJCanQ4WFJSR3V0bWVVbVhlUXFuRlBvUmlNdmdvWGJBWDFEVHlUckdoUGplaThJWXl6X3pRWVdUd2E4Ry00RmtUMmNrNGdiWVpLaERXTGZqeVZMeDE2aHBkeGpGa1VHaDloSnh3UFpzc2VIVU9mRQ?oc=5",
+      "source": "StockFeel 股感",
+      "published_at": "2026-09-09T00:10:39+00:00",
+      "summary": "009826 貝萊德 iShares 安碩世界股票 ETF｜成分股？配息？優缺點？&nbsp;&nbsp;StockFeel 股感"
     },
     {
       "title": "攻ESR1突變患者需求！AZ乳癌新藥Etcamah組合療法獲FDA加速核准 - 環球生技月刊",
@@ -45,7 +150,7 @@
     },
     {
       "title": "期貨：8日期貨交易三大法人淨空44,155口，選擇權交易三大法人淨空7,520口 - 富聯網",
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxNaVhTbTZ6cEFrNVRvNm1CemNNaHdmSE9SaC10VUZGUFpiV0UyZ2NwTHNCT2dMblRBQ1hDTlhadmxyVU9IZ1lMQXB4Q3hvdVNQTjl3THJfX3duTlYxXzNLVkEtVm5reG9ackgtZndWbjk3QVlPZE1pN2sybFp5R05naGVxcEZFS2Vs?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxQTURuYlNlcVM0bkZfT19xc2c5bkR4SW0yc19Bbk95eV9hamdYU2Fic09qZ0NKeW0xU3FCUjF1MFd2UWN3TFYzNXNlcFVxLUlOTkpTd25mR1BwNW1tRjU4OXBkRDhXQ2IzeEhYOE9VelI5dkhqV1g4WVVkUUc2S0tTai15UDhvZ0F4?oc=5",
       "source": "富聯網",
       "published_at": "2026-09-08T23:52:00+00:00",
       "summary": "期貨：8日期貨交易三大法人淨空44,155口，選擇權交易三大法人淨空7,520口&nbsp;&nbsp;富聯網"
@@ -86,6 +191,20 @@
       "summary": "《期貨》賣壓擴散？AI伺服器先亮警訊&nbsp;&nbsp;富聯網"
     },
     {
+      "title": "告別貨架缺貨痛點：美英零售巨頭導入 AI，Homebase 盤點時間砍掉逾 2 天 - LINE TODAY",
+      "url": "https://news.google.com/rss/articles/CBMidEFVX3lxTE1GQjZTbVVmWU90QnItSHh1d1RjTUJTODFfend0ZlRwZ3FWYkxhS3R5TWtnQUNhTTBfLTdjNGRYaldFaDJNdmJYWWk3aUNBUDZjVEtLOTk2SnMzNmNvRWRZbjF1VzV6bGtQWDFkZG9RX3VfXzBC?oc=5",
+      "source": "LINE TODAY",
+      "published_at": "2026-09-08T23:24:41+00:00",
+      "summary": "告別貨架缺貨痛點：美英零售巨頭導入 AI，Homebase 盤點時間砍掉逾 2 天&nbsp;&nbsp;LINE TODAY"
+    },
+    {
+      "title": "《美股》軟體摔+憂升息標普軟太空/CPO/費半漲- 新聞 - MoneyDJ",
+      "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxPVUFYNGNEajF5VnA3QU1LRzh4UXBNNVRQcTdsTGhwYjdqV2dQbURZTEwycF9uV2MtQzN1ZEpyRG8wSUxXTG5lajZGcGhkZUVzZkloOWludzhGYUE5MXRKTTAxejBVZXlsYzN2N3BCMXBuYmtDUGljX0g1R1dsSUxVakdZZkNtZjJKZGJGMWNKSWtqUQ?oc=5",
+      "source": "MoneyDJ",
+      "published_at": "2026-09-08T23:14:00+00:00",
+      "summary": "《美股》軟體摔+憂升息標普軟太空/CPO/費半漲- 新聞&nbsp;&nbsp;MoneyDJ"
+    },
+    {
       "title": "《美股》軟體摔+憂升息標普軟太空/CPO/費半漲- 新聞 - moneydj.com",
       "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxPVUFYNGNEajF5VnA3QU1LRzh4UXBNNVRQcTdsTGhwYjdqV2dQbURZTEwycF9uV2MtQzN1ZEpyRG8wSUxXTG5lajZGcGhkZUVzZkloOWludzhGYUE5MXRKTTAxejBVZXlsYzN2N3BCMXBuYmtDUGljX0g1R1dsSUxVakdZZkNtZjJKZGJGMWNKSWtqUQ?oc=5",
       "source": "moneydj.com",
@@ -98,6 +217,13 @@
       "source": "CMoney",
       "published_at": "2026-09-08T23:13:43+00:00",
       "summary": "2330 台積電 - 🥰星期二美股下跌沒關係，費半漲台指期台積電夜盤就會漲，台股- 股市爆料同學會&nbsp;&nbsp;CMoney"
+    },
+    {
+      "title": "【盤前】油價逼近100美元費半逆勢漲！台指夜盤漲100點 台股今拚止跌 - 三立新聞",
+      "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTFAwMlN2NHZ3amZfQ1VBRW95MDZLeUpCM19TQ1k0azRmLTJjUnBnYTZBNGQxYTRsVzdjcjhsYWgtT0dJaUJuanVBYXhmaw?oc=5",
+      "source": "三立新聞",
+      "published_at": "2026-09-08T23:03:34+00:00",
+      "summary": "【盤前】油價逼近100美元費半逆勢漲！台指夜盤漲100點 台股今拚止跌&nbsp;&nbsp;三立新聞"
     },
     {
       "title": "【美股盤勢】道瓊重挫628點，費半逆勢獨紅？（2026.09.09） - CMoney投資網誌",
@@ -115,17 +241,10 @@
     },
     {
       "title": "國內匯市：日圓走強助攻，新台幣早盤突破31.5元！終場升1.7分，居亞洲前段班 - 富聯網",
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxQYTd0ZE1YXzktUlVDc2Fwb3h2b2dHTnlDN0lkWldab0xvblBlZF9Ja2QwWGl0cnR3WkI0dTM3T0lVQ1lEQTFNdWdkOTROeEhmNjFtRXlRQk96TG42eF91UmhZVVFYNVVLUFZQM3g5MmlxSnhWaHU0ajBtQ055cVRETmJmMDN3RFp3?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxQUTdyQjJwYWJsZ2NpdjlRMDdxUks1OUpnbVdQQm5ieUNIaGJSa0V5dHd1eEtwajFzQTBNeDRudzRmN3gxMmRnT2hnTThTbWFPNzA4TVk3aW5ZSThFdWdyaTR1RkdJX0pfbGl0WlJrUUw5MlQyRk81di1vR3pqNWVsb2FXc1NzN2NG?oc=5",
       "source": "富聯網",
       "published_at": "2026-09-08T23:00:00+00:00",
       "summary": "國內匯市：日圓走強助攻，新台幣早盤突破31.5元！終場升1.7分，居亞洲前段班&nbsp;&nbsp;富聯網"
-    },
-    {
-      "title": "基金-FundDJ基智網 - moneydj.com",
-      "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxPOGxVOFpVYm1fLXJLTy0wWW41MWxJTjF0a2tnT0xxUm5kSXlnRWR4NVZZTEJhS0kxSjQ0bjNRcDZRS3dFbTRMYms4bm82cXlxWkNTa19ta3hQam5ndmVGZWF5MmVmMDdZWHJXWFpqUmRnUXJXTXVEb3kxdzRUQWFwajFLbHRqNzhmd0tSc1FqNHo?oc=5",
-      "source": "moneydj.com",
-      "published_at": "2026-09-08T22:44:26+00:00",
-      "summary": "基金-FundDJ基智網&nbsp;&nbsp;moneydj.com"
     },
     {
       "title": "基金-FundDJ基智網 - MoneyDJ",
@@ -135,6 +254,13 @@
       "summary": "基金-FundDJ基智網&nbsp;&nbsp;MoneyDJ"
     },
     {
+      "title": "基金-FundDJ基智網 - moneydj.com",
+      "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxPOGxVOFpVYm1fLXJLTy0wWW41MWxJTjF0a2tnT0xxUm5kSXlnRWR4NVZZTEJhS0kxSjQ0bjNRcDZRS3dFbTRMYms4bm82cXlxWkNTa19ta3hQam5ndmVGZWF5MmVmMDdZWHJXWFpqUmRnUXJXTXVEb3kxdzRUQWFwajFLbHRqNzhmd0tSc1FqNHo?oc=5",
+      "source": "moneydj.com",
+      "published_at": "2026-09-08T22:44:26+00:00",
+      "summary": "基金-FundDJ基智網&nbsp;&nbsp;moneydj.com"
+    },
+    {
       "title": "國巨H1財報亮麗 Q3營收毛利率持續向上 - 自由時報",
       "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE0tRk04VjVvZjN5RVQybW5hNEhqLXhLcVlqd1BvT0dOa0JXbGJIRzRXQ3pfdzRBMzdWSXQ2Mi1YanllSjcwZ01HSWJYNmtlWS1oVHB0emdOb0M?oc=5",
       "source": "自由時報",
@@ -142,11 +268,46 @@
       "summary": "國巨H1財報亮麗 Q3營收毛利率持續向上&nbsp;&nbsp;自由時報"
     },
     {
+      "title": "聯準會28日會議 市場料利率連5凍 - 自由時報",
+      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTFBRa2V0ZElid1dxRi1zU1Z1V0lxXzh0eEYtQzB3eE9xM0lxSmhSU3d5S2g4MVhEbU9QdmtjSFdMV1dGRVNhY1pQX2QwejNtSVg3NmNmWnV2cGs?oc=5",
+      "source": "自由時報",
+      "published_at": "2026-09-08T22:36:56+00:00",
+      "summary": "聯準會28日會議 市場料利率連5凍&nbsp;&nbsp;自由時報"
+    },
+    {
       "title": "【盤前】油價逼近100美元費半逆勢漲！台指夜盤漲100點　台股今拚止跌 - 三立新聞",
       "url": "https://news.google.com/rss/articles/CBMiTEFVX3lxTE5ZZWxqbDF4c1FzUUo3VWZmYkgtU2kwZHNnVGhMM0JIMEIxNWZlbGxWUG5sbk5YYk5xOFVFcHd5dFZaV1pWcURQS1lJVTbSAUxBVV95cUxOWWVsamwxeHNRc1FKN1VmZmJILVNpMGRzZ1RoTDNCSDBCMTVmZWxsVlBubG5OWGJOcThVRXB3eXRWWldaVnFEUEtZSVU2?oc=5",
       "source": "三立新聞",
       "published_at": "2026-09-08T22:20:00+00:00",
       "summary": "【盤前】油價逼近100美元費半逆勢漲！台指夜盤漲100點　台股今拚止跌&nbsp;&nbsp;三立新聞"
+    },
+    {
+      "title": "《農產品》俄烏戰事持續 CBOT小麥上漲1.8%-台股 - MoneyDJ",
+      "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxNTVk5YUVLVU9oeDdMRUhXV0ZFcTJWX014TGhJbm1Rc2xpVmtxdUxFZGFOM3cyanVhRXc4WDQwYlpMTF91OUhuZmt2ejNEaTJIMlZhNEt4cWtCQVJKX2hhWFZzSFpycUtwSmszSG9LaDA4cms2ZThVZXYzYmdfT1ZTMnViczJwRndJSEE?oc=5",
+      "source": "MoneyDJ",
+      "published_at": "2026-09-08T22:16:50+00:00",
+      "summary": "《農產品》俄烏戰事持續 CBOT小麥上漲1.8%-台股&nbsp;&nbsp;MoneyDJ"
+    },
+    {
+      "title": "《貴金屬》升息預期加溫 COMEX黃金下跌1%-台股 - MoneyDJ",
+      "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxOdFNYazAtNF9BTEl0RHlYeUxFSFFvbGl2eEJDUGRQVXZtQ0ZTaDhPSWFfd0NJVEVZRDVWdmViLVZoTm5fNHdxemlQVWtKQUZGb3ZuczIxQ2VNYXY3Q1E0bVJHUmtnWXJDeEpYNGl5b1R3YVJkRzhFeGNaVkRfNjFYbFotMjIwcmZQZ0E?oc=5",
+      "source": "MoneyDJ",
+      "published_at": "2026-09-08T22:16:42+00:00",
+      "summary": "《貴金屬》升息預期加溫 COMEX黃金下跌1%-台股&nbsp;&nbsp;MoneyDJ"
+    },
+    {
+      "title": "《金屬》LME期銅上漲1.5% 續創歷史新高-台股 - MoneyDJ",
+      "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxPbWpOc0VJZkpLdFp4b0pEZHZMRWlRdzgxX2VBOXZZNEE5MzVxU3E0MlNMRUVOdUl5ZUhqZXBla2l6REQ4NXlZWjZ0MnQzZ2hydndfZzZGd2ZGRENjY2VUUzF1VlRtYldyNVcxMHNLWlhURFRvUl9jTmsxRTBLVUNuZXYzdVpTUGEtZXc?oc=5",
+      "source": "MoneyDJ",
+      "published_at": "2026-09-08T22:16:34+00:00",
+      "summary": "《金屬》LME期銅上漲1.5% 續創歷史新高-台股&nbsp;&nbsp;MoneyDJ"
+    },
+    {
+      "title": "《油價》供應中斷擔憂 NYMEX原油上漲1.7%-台股 - MoneyDJ",
+      "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxPcE5DX0xTdDFuaDV3WlVSMVVEMGVXUk84SDVmdE9TRi1VWGd5aUpRdUZyTWRHaGVBY1lCRUFRTzcwQmdUUGJuODRCWXFVVjBTYUZfVFlBM2gtVkY0QnB0eWxpcDFDNnFmUFVVd3I3dTlzQjN0STlEZUtPZ0FnRjNSLTJqc1pPcURkR3c?oc=5",
+      "source": "MoneyDJ",
+      "published_at": "2026-09-08T22:16:26+00:00",
+      "summary": "《油價》供應中斷擔憂 NYMEX原油上漲1.7%-台股&nbsp;&nbsp;MoneyDJ"
     },
     {
       "title": "台積電(2330) 個股概覽 | 個股 - 股市 - CMoney",
@@ -184,18 +345,18 @@
       "summary": "財經青紅燈》外資銀彈續留台灣&nbsp;&nbsp;自由財經"
     },
     {
-      "title": "盤勢分析》攻破前高 須補量至1.2兆 - 自由財經",
-      "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTFA1WWdIMFdyOXlFSFNvUmktZlVwOW1HSFlpRGZnWF9wQXZ5SFZzMExDbm82TlVmREtLeWR2OUs3SnJCMnhfa3ZjSFhBV1hmOW5fVHdyY1VIaHJVSnPSAVtBVV95cUxQNVlnSDBXcjl5RUhTb1JpLWZVcDltR0hZaURmZ1hfcEF2eUhWczBMQ25vNk5VZkRLS3lkdjlLN0pyQjJ4X2t2Y0hYQVdYZjluX1R3cmNVSGhyVUpz?oc=5",
-      "source": "自由財經",
-      "published_at": "2026-09-08T21:30:00+00:00",
-      "summary": "盤勢分析》攻破前高 須補量至1.2兆&nbsp;&nbsp;自由財經"
-    },
-    {
       "title": "預期升息 日圓急升7個月高點 - 自由財經",
       "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTE9rU2R5cXdmQl9SYjRYQXdqa0xjQmk0QXdaYUFPY1k4LXFwdXA5QmxsalRXTHZxQWdfX2F0WW8yWkQyanBTSjc3TFotOHFLUzh5Ul9sUWVR0gFbQVVfeXFMTmRIcnIwLXUyOVl4Ul90cUpTT216NzVJNGxGOVBrczVCT09EdVp0bHlta0twdWVvVW11VURIWjhhc0cwdzl5d2hmYUJUUGFNNm52Tzhua1liVnB3QQ?oc=5",
       "source": "自由財經",
       "published_at": "2026-09-08T21:30:00+00:00",
       "summary": "預期升息 日圓急升7個月高點&nbsp;&nbsp;自由財經"
+    },
+    {
+      "title": "盤勢分析》攻破前高 須補量至1.2兆 - 自由財經",
+      "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTFA1WWdIMFdyOXlFSFNvUmktZlVwOW1HSFlpRGZnWF9wQXZ5SFZzMExDbm82TlVmREtLeWR2OUs3SnJCMnhfa3ZjSFhBV1hmOW5fVHdyY1VIaHJVSnPSAVtBVV95cUxQNVlnSDBXcjl5RUhTb1JpLWZVcDltR0hZaURmZ1hfcEF2eUhWczBMQ25vNk5VZkRLS3lkdjlLN0pyQjJ4X2t2Y0hYQVdYZjluX1R3cmNVSGhyVUpz?oc=5",
+      "source": "自由財經",
+      "published_at": "2026-09-08T21:30:00+00:00",
+      "summary": "盤勢分析》攻破前高 須補量至1.2兆&nbsp;&nbsp;自由財經"
     },
     {
       "title": "預期升息 日圓急升7個月高點 - stock.ltn.com.tw",
@@ -240,18 +401,18 @@
       "summary": "跟進日圓 新台幣匯率挑戰31.2元&nbsp;&nbsp;中時新聞網"
     },
     {
-      "title": "台指期跌破47K關卡 - 工商時報",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTFBTa0xiNkZyeWo3WkhxSUxaNVNaWDVQOTZPLXRrVE5XVEtOeVhRVkVobUE4ZlM0S2dFWTRjdFR2SHFYcm05Zk9EU29GU19sMXUxM3BCZVRaQi1uSnNsR2Zn?oc=5",
-      "source": "工商時報",
-      "published_at": "2026-09-08T19:00:00+00:00",
-      "summary": "台指期跌破47K關卡&nbsp;&nbsp;工商時報"
-    },
-    {
       "title": "跟進日圓 新台幣匯率挑戰31.2元 - 工商時報",
       "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE8yWm1DUnJRQ2xCWlNWQmQzdnRGT3NnbFdzelFqNzlXZEl2NUV0dVFULUxjcTVtNFlKZnRhSjdwSGtUQm8yeWtGUk5acW15R1BXRE04bkZxd244dkw3LVNN?oc=5",
       "source": "工商時報",
       "published_at": "2026-09-08T19:00:00+00:00",
       "summary": "跟進日圓 新台幣匯率挑戰31.2元&nbsp;&nbsp;工商時報"
+    },
+    {
+      "title": "台指期跌破47K關卡 - 工商時報",
+      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTFBTa0xiNkZyeWo3WkhxSUxaNVNaWDVQOTZPLXRrVE5XVEtOeVhRVkVobUE4ZlM0S2dFWTRjdFR2SHFYcm05Zk9EU29GU19sMXUxM3BCZVRaQi1uSnNsR2Zn?oc=5",
+      "source": "工商時報",
+      "published_at": "2026-09-08T19:00:00+00:00",
+      "summary": "台指期跌破47K關卡&nbsp;&nbsp;工商時報"
     },
     {
       "title": "新台幣8月強升NEER、REER反降- 日報 - ctee.com.tw",
@@ -331,18 +492,18 @@
       "summary": "鼎晉公布OBI-858新藥一年期重複施打臨床結果 取得高標成績&nbsp;&nbsp;n.yam.com"
     },
     {
-      "title": "法人看台股多頭格局不變 三大底氣支撐 下一波主升段悄然浮現 - money.udn.com",
-      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE9VYmZHUXFJUl9MOHRtd2hLWEJKLUtHU1N6SGc0VVZ3UVpYTFpka3JLWUN3YlU5eHhjeFBKU1NtOEpFalBDakppbENqUXpMdklnMDJwaklURHE3UdIBX0FVX3lxTE9jWnBUa1dFR1NuQVVadmVQLWZNT1BSVkRXa2pIN2plYVRQMUVtdTRYNlpObVRIaFNHR3dWejZKWGlnaVp3dndnbEJ4dV94TlhUWnptSXZWQmhqNTF6RzRR?oc=5",
-      "source": "money.udn.com",
-      "published_at": "2026-09-08T17:47:48+00:00",
-      "summary": "法人看台股多頭格局不變 三大底氣支撐 下一波主升段悄然浮現&nbsp;&nbsp;money.udn.com"
-    },
-    {
       "title": "法人看台股多頭格局不變 三大底氣支撐 下一波主升段悄然浮現 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE9VYmZHUXFJUl9MOHRtd2hLWEJKLUtHU1N6SGc0VVZ3UVpYTFpka3JLWUN3YlU5eHhjeFBKU1NtOEpFalBDakppbENqUXpMdklnMDJwaklURHE3UdIBX0FVX3lxTE9jWnBUa1dFR1NuQVVadmVQLWZNT1BSVkRXa2pIN2plYVRQMUVtdTRYNlpObVRIaFNHR3dWejZKWGlnaVp3dndnbEJ4dV94TlhUWnptSXZWQmhqNTF6RzRR?oc=5",
       "source": "經濟日報",
       "published_at": "2026-09-08T17:47:48+00:00",
       "summary": "法人看台股多頭格局不變 三大底氣支撐 下一波主升段悄然浮現&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "法人看台股多頭格局不變 三大底氣支撐 下一波主升段悄然浮現 - money.udn.com",
+      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE9VYmZHUXFJUl9MOHRtd2hLWEJKLUtHU1N6SGc0VVZ3UVpYTFpka3JLWUN3YlU5eHhjeFBKU1NtOEpFalBDakppbENqUXpMdklnMDJwaklURHE3UdIBX0FVX3lxTE9jWnBUa1dFR1NuQVVadmVQLWZNT1BSVkRXa2pIN2plYVRQMUVtdTRYNlpObVRIaFNHR3dWejZKWGlnaVp3dndnbEJ4dV94TlhUWnptSXZWQmhqNTF6RzRR?oc=5",
+      "source": "money.udn.com",
+      "published_at": "2026-09-08T17:47:48+00:00",
+      "summary": "法人看台股多頭格局不變 三大底氣支撐 下一波主升段悄然浮現&nbsp;&nbsp;money.udn.com"
     },
     {
       "title": "法人看台股多頭格局不變 三大底氣支撐 下一波主升段悄然浮現 | 市場焦點 | 證券 - 經濟日報",
@@ -352,13 +513,6 @@
       "summary": "法人看台股多頭格局不變 三大底氣支撐 下一波主升段悄然浮現 | 市場焦點 | 證券&nbsp;&nbsp;經濟日報"
     },
     {
-      "title": "台幣穩中緩動 以31.535元作收 連升三天 - money.udn.com",
-      "url": "https://news.google.com/rss/articles/CBMidEFVX3lxTE1GS3RxOEpCTXd1U0t4Tk5TeHAyd254ZGhkd01oemFfNlRsRE1RZkl4RkFtUE5nUEhtX1ptRlVoZWYwc25aNXRDQVJHNXBPOFdEckl2MHpDNVFFSDZ0VVlnRlhBT3YzQm5ILXJJdEZqZ2lMQ3V60gFfQVVfeXFMUFlPcl9vdmM2MUJ6REJxV3hxWWs1Vi1DT1gzVmdHbEFPSUtIdGhNRU94WUI2XzRfcnlNYWljR3RzMnNQODd2SmpXUWk5N0hnMk1XSzJrZUJ0Mm9ENmpRclE?oc=5",
-      "source": "money.udn.com",
-      "published_at": "2026-09-08T17:45:23+00:00",
-      "summary": "台幣穩中緩動 以31.535元作收 連升三天&nbsp;&nbsp;money.udn.com"
-    },
-    {
       "title": "台幣穩中緩動 以31.535元作收 連升三天 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMidEFVX3lxTE1GS3RxOEpCTXd1U0t4Tk5TeHAyd254ZGhkd01oemFfNlRsRE1RZkl4RkFtUE5nUEhtX1ptRlVoZWYwc25aNXRDQVJHNXBPOFdEckl2MHpDNVFFSDZ0VVlnRlhBT3YzQm5ILXJJdEZqZ2lMQ3V60gFfQVVfeXFMUFlPcl9vdmM2MUJ6REJxV3hxWWs1Vi1DT1gzVmdHbEFPSUtIdGhNRU94WUI2XzRfcnlNYWljR3RzMnNQODd2SmpXUWk5N0hnMk1XSzJrZUJ0Mm9ENmpRclE?oc=5",
       "source": "經濟日報",
@@ -366,11 +520,11 @@
       "summary": "台幣穩中緩動 以31.535元作收 連升三天&nbsp;&nbsp;經濟日報"
     },
     {
-      "title": "台股走勢 緊盯三大指標 - money.udn.com",
-      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTFBEWjhjcGtOQlkxNFoxb2lLMmIxRl9OTGNkU01iR0RzRHdsSDRwTHlIRDZNbEdoZmNUUXM1TjdTTi14OFRrTDhXVWNtNHRORHhRWnFvbG10NWozd9IBX0FVX3lxTE1qM1BUcTdtQWQtS2FfQXVCem1XOEFvaHBhbjJTcFU5OWd6S2FKalowTVgwVHBFLTd3eUZ2UjVMYS1CQWJ5TmRUaEZIWTQtcFpmUFBxUG9mczRDUkVXLTNB?oc=5",
+      "title": "台幣穩中緩動 以31.535元作收 連升三天 - money.udn.com",
+      "url": "https://news.google.com/rss/articles/CBMidEFVX3lxTE1GS3RxOEpCTXd1U0t4Tk5TeHAyd254ZGhkd01oemFfNlRsRE1RZkl4RkFtUE5nUEhtX1ptRlVoZWYwc25aNXRDQVJHNXBPOFdEckl2MHpDNVFFSDZ0VVlnRlhBT3YzQm5ILXJJdEZqZ2lMQ3V60gFfQVVfeXFMUFlPcl9vdmM2MUJ6REJxV3hxWWs1Vi1DT1gzVmdHbEFPSUtIdGhNRU94WUI2XzRfcnlNYWljR3RzMnNQODd2SmpXUWk5N0hnMk1XSzJrZUJ0Mm9ENmpRclE?oc=5",
       "source": "money.udn.com",
-      "published_at": "2026-09-08T17:36:21+00:00",
-      "summary": "台股走勢 緊盯三大指標&nbsp;&nbsp;money.udn.com"
+      "published_at": "2026-09-08T17:45:23+00:00",
+      "summary": "台幣穩中緩動 以31.535元作收 連升三天&nbsp;&nbsp;money.udn.com"
     },
     {
       "title": "台股走勢 緊盯三大指標 - 經濟日報",
@@ -378,6 +532,13 @@
       "source": "經濟日報",
       "published_at": "2026-09-08T17:36:21+00:00",
       "summary": "台股走勢 緊盯三大指標&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "台股走勢 緊盯三大指標 - money.udn.com",
+      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTFBEWjhjcGtOQlkxNFoxb2lLMmIxRl9OTGNkU01iR0RzRHdsSDRwTHlIRDZNbEdoZmNUUXM1TjdTTi14OFRrTDhXVWNtNHRORHhRWnFvbG10NWozd9IBX0FVX3lxTE1qM1BUcTdtQWQtS2FfQXVCem1XOEFvaHBhbjJTcFU5OWd6S2FKalowTVgwVHBFLTd3eUZ2UjVMYS1CQWJ5TmRUaEZIWTQtcFpmUFBxUG9mczRDUkVXLTNB?oc=5",
+      "source": "money.udn.com",
+      "published_at": "2026-09-08T17:36:21+00:00",
+      "summary": "台股走勢 緊盯三大指標&nbsp;&nbsp;money.udn.com"
     },
     {
       "title": "美債長端警報升級！20年、30年殖利率雙站5.2% 市場開始向華府收取「財政風險溢價」 - 蕃新聞",
@@ -415,18 +576,18 @@
       "summary": "先找規則，再判斷哪個選擇更有利- 股市爆料同學會&nbsp;&nbsp;CMoney"
     },
     {
-      "title": "台指期 外資加碼空單 - money.udn.com",
-      "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTFB1QzdoZGIxRTFUV1RjVHlURUFOMDZqbUdFM01yRFlXbjZNR3pGXzYxcnI0QkZFVG1FQVZkNGN5MnNIUkp2cUQzdlMtRGQ0SjFLSDUxbTNNQTg2bW_SAWBBVV95cUxNZmNzNVlLaGNlZzR1b0VGVl9CMDFVNjZmV0JqRlEwYllfeENwX0ZOMVhoVnVKRXhTYm0xQWgtNGd4OVFxR2FMZXNBOHVOTHNDYUFxcUJUUDQ3cExUWHVieWY?oc=5",
-      "source": "money.udn.com",
-      "published_at": "2026-09-08T15:51:56+00:00",
-      "summary": "台指期 外資加碼空單&nbsp;&nbsp;money.udn.com"
-    },
-    {
       "title": "台指期 外資加碼空單 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTFB1QzdoZGIxRTFUV1RjVHlURUFOMDZqbUdFM01yRFlXbjZNR3pGXzYxcnI0QkZFVG1FQVZkNGN5MnNIUkp2cUQzdlMtRGQ0SjFLSDUxbTNNQTg2bW_SAWBBVV95cUxNZmNzNVlLaGNlZzR1b0VGVl9CMDFVNjZmV0JqRlEwYllfeENwX0ZOMVhoVnVKRXhTYm0xQWgtNGd4OVFxR2FMZXNBOHVOTHNDYUFxcUJUUDQ3cExUWHVieWY?oc=5",
       "source": "經濟日報",
       "published_at": "2026-09-08T15:51:56+00:00",
       "summary": "台指期 外資加碼空單&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "台指期 外資加碼空單 - money.udn.com",
+      "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTFB1QzdoZGIxRTFUV1RjVHlURUFOMDZqbUdFM01yRFlXbjZNR3pGXzYxcnI0QkZFVG1FQVZkNGN5MnNIUkp2cUQzdlMtRGQ0SjFLSDUxbTNNQTg2bW_SAWBBVV95cUxNZmNzNVlLaGNlZzR1b0VGVl9CMDFVNjZmV0JqRlEwYllfeENwX0ZOMVhoVnVKRXhTYm0xQWgtNGd4OVFxR2FMZXNBOHVOTHNDYUFxcUJUUDQ3cExUWHVieWY?oc=5",
+      "source": "money.udn.com",
+      "published_at": "2026-09-08T15:51:56+00:00",
+      "summary": "台指期 外資加碼空單&nbsp;&nbsp;money.udn.com"
     },
     {
       "title": "台指期 外資加碼空單 | 期貨市場 | 期貨 - 經濟日報",
@@ -499,6 +660,13 @@
       "summary": "台積電為何漲不動？陳重銘一句話點破關鍵&nbsp;&nbsp;mirrormedia.mg"
     },
     {
+      "title": "川普關稅加上AI需求銅價飆1.45萬美元創高| 科技 - news.ustv.com.tw",
+      "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1ZRGtNc0VvTHMxSGdERkJZbm11TEZ4UUpsR1YtWXdrS0FlQ00xSU5VZzFUT2N6RzFSWXYtNEJQbGI4czAtVXo5RTZ5WjRVcUs5NEhrcHp4eEVhbnc?oc=5",
+      "source": "news.ustv.com.tw",
+      "published_at": "2026-09-08T14:53:15+00:00",
+      "summary": "川普關稅加上AI需求銅價飆1.45萬美元創高| 科技&nbsp;&nbsp;news.ustv.com.tw"
+    },
+    {
       "title": "川普關稅加上AI需求銅價飆1.45萬美元創高| 科技 - 非凡新聞台",
       "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1ZRGtNc0VvTHMxSGdERkJZbm11TEZ4UUpsR1YtWXdrS0FlQ00xSU5VZzFUT2N6RzFSWXYtNEJQbGI4czAtVXo5RTZ5WjRVcUs5NEhrcHp4eEVhbnc?oc=5",
       "source": "非凡新聞台",
@@ -555,11 +723,11 @@
       "summary": "美股早盤／三大指數跌 高通飆7.5%帶動費半上漲&nbsp;&nbsp;worldjournal.com"
     },
     {
-      "title": "美股早盤／三大指數跌 高通飆7.5%帶動費半上漲 台積電 ADR 漲2.5% - money.udn.com",
+      "title": "美股早盤／三大指數跌 高通飆7.5%帶動費半上漲 台積電 ADR 漲2.5% - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE5aX2w2aktjQjZIdFdwRkEtVWtFQVZjWm1SeDFLekZHUnZqSHRQQlloWVAwcHU0cUtTWmRkTVVuU0IzSm9TSDk3TlRmTUJWeGRxNlVSYUZnekxZY0hQ0gFiQVVfeXFMTlFZQ1ZRTG1CT2pURjgzYW9JYmczMlNTbjg5MGp4TjNOY1NFU3ZTa3FyTk1FTW91bnlpOFZ0Y1JxWkVfdU5SeHdMTVdoQ0FnZGRpYTBEOVM5YTdRRmZlTTVjcVE?oc=5",
-      "source": "money.udn.com",
+      "source": "經濟日報",
       "published_at": "2026-09-08T13:46:27+00:00",
-      "summary": "美股早盤／三大指數跌 高通飆7.5%帶動費半上漲 台積電 ADR 漲2.5%&nbsp;&nbsp;money.udn.com"
+      "summary": "美股早盤／三大指數跌 高通飆7.5%帶動費半上漲 台積電 ADR 漲2.5%&nbsp;&nbsp;經濟日報"
     },
     {
       "title": "美股早盤／三大指數跌 高通飆7.5%帶動費半上漲 台積電 ADR 漲2.5% | 美股動態 | 國際 - 經濟日報",
@@ -583,18 +751,18 @@
       "summary": "美股早盤／三大指數跌 高通飆7.5%帶動費半上漲 台積電ADR漲2.5%&nbsp;&nbsp;UDN"
     },
     {
-      "title": "聯準會會升息嗎？日圓和新台幣匯率走勢怎麼看？ | 外匯市場 | 金融 - money.udn.com",
-      "url": "https://news.google.com/rss/articles/CBMieEFVX3lxTE5pWVhXd2dmWFdSN3pYQXc0WnU3NlA4WElEeWRPaGFGWlI2cl9qYk82amYyVHBaZjlCclhKM3M4ZHRYTk1Zek5IQ0MxZmU1WWFEeDdRRzZsMmNsZk02SGo2MHloeWNaMl9ISU1nV21fX2x2QXZ1WlZ3SA?oc=5",
-      "source": "money.udn.com",
-      "published_at": "2026-09-08T13:14:49+00:00",
-      "summary": "聯準會會升息嗎？日圓和新台幣匯率走勢怎麼看？ | 外匯市場 | 金融&nbsp;&nbsp;money.udn.com"
-    },
-    {
       "title": "聯準會會升息嗎？日圓和新台幣匯率走勢怎麼看？ | 外匯市場 | 金融 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMieEFVX3lxTE5pWVhXd2dmWFdSN3pYQXc0WnU3NlA4WElEeWRPaGFGWlI2cl9qYk82amYyVHBaZjlCclhKM3M4ZHRYTk1Zek5IQ0MxZmU1WWFEeDdRRzZsMmNsZk02SGo2MHloeWNaMl9ISU1nV21fX2x2QXZ1WlZ3SA?oc=5",
       "source": "經濟日報",
       "published_at": "2026-09-08T13:14:49+00:00",
       "summary": "聯準會會升息嗎？日圓和新台幣匯率走勢怎麼看？ | 外匯市場 | 金融&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "聯準會會升息嗎？日圓和新台幣匯率走勢怎麼看？ | 外匯市場 | 金融 - money.udn.com",
+      "url": "https://news.google.com/rss/articles/CBMieEFVX3lxTE5pWVhXd2dmWFdSN3pYQXc0WnU3NlA4WElEeWRPaGFGWlI2cl9qYk82amYyVHBaZjlCclhKM3M4ZHRYTk1Zek5IQ0MxZmU1WWFEeDdRRzZsMmNsZk02SGo2MHloeWNaMl9ISU1nV21fX2x2QXZ1WlZ3SA?oc=5",
+      "source": "money.udn.com",
+      "published_at": "2026-09-08T13:14:49+00:00",
+      "summary": "聯準會會升息嗎？日圓和新台幣匯率走勢怎麼看？ | 外匯市場 | 金融&nbsp;&nbsp;money.udn.com"
     },
     {
       "title": "聯準會會升息嗎？日圓和新台幣匯率走勢怎麼看？ | 金融脈動 | 金融 - 經濟日報",
@@ -604,13 +772,6 @@
       "summary": "聯準會會升息嗎？日圓和新台幣匯率走勢怎麼看？ | 金融脈動 | 金融&nbsp;&nbsp;經濟日報"
     },
     {
-      "title": "6天狂漲30%！「生技飆股」明起抓去關 2檔處置股一次看 - news.tvbs.com.tw",
-      "url": "https://news.google.com/rss/articles/CBMiTkFVX3lxTFBiZldTRkxoOU9YS20tTUZkQjl1ZzY5RDliT2FsLTJyNUh2QTgybVJVcENBRDVVc0RjYVVpYlp2cXBaNDlGV0k5aWF5QVhYQQ?oc=5",
-      "source": "news.tvbs.com.tw",
-      "published_at": "2026-09-08T13:13:00+00:00",
-      "summary": "6天狂漲30%！「生技飆股」明起抓去關 2檔處置股一次看&nbsp;&nbsp;news.tvbs.com.tw"
-    },
-    {
       "title": "6天狂漲30%！「生技飆股」明起抓去關 2檔處置股一次看 - TVBS新聞網",
       "url": "https://news.google.com/rss/articles/CBMiTkFVX3lxTFBiZldTRkxoOU9YS20tTUZkQjl1ZzY5RDliT2FsLTJyNUh2QTgybVJVcENBRDVVc0RjYVVpYlp2cXBaNDlGV0k5aWF5QVhYQQ?oc=5",
       "source": "TVBS新聞網",
@@ -618,11 +779,18 @@
       "summary": "6天狂漲30%！「生技飆股」明起抓去關 2檔處置股一次看&nbsp;&nbsp;TVBS新聞網"
     },
     {
-      "title": "禮邦醫藥 AP308 治療 IgA 腎病的新藥臨床試驗申請獲美國 FDA 批准 - money.udn.com",
+      "title": "6天狂漲30%！「生技飆股」明起抓去關 2檔處置股一次看 - news.tvbs.com.tw",
+      "url": "https://news.google.com/rss/articles/CBMiTkFVX3lxTFBiZldTRkxoOU9YS20tTUZkQjl1ZzY5RDliT2FsLTJyNUh2QTgybVJVcENBRDVVc0RjYVVpYlp2cXBaNDlGV0k5aWF5QVhYQQ?oc=5",
+      "source": "news.tvbs.com.tw",
+      "published_at": "2026-09-08T13:13:00+00:00",
+      "summary": "6天狂漲30%！「生技飆股」明起抓去關 2檔處置股一次看&nbsp;&nbsp;news.tvbs.com.tw"
+    },
+    {
+      "title": "禮邦醫藥 AP308 治療 IgA 腎病的新藥臨床試驗申請獲美國 FDA 批准 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE15OVFlWUd4S0VGTk5hblBybG9US3g3QVNGQXpGeEkzaGRsUHBaTWp6TWdDVDhTc0dwWjdBUWp2SndBRWJjdGFfVVVnSmtEcGoyQWJBNWhmQ3MyMVcy0gFiQVVfeXFMT21YN085ZDFuRXJwX0J0dVh1aTk3emxUZGlmNkVJWTdnWmJMNlFrVkdUcDNfQ0lhaEdrdFlveVlmVFNoRC03LXFaenZ0RGVIQ0F2Q0IzU1lxTDNoUW53UWstd1E?oc=5",
-      "source": "money.udn.com",
+      "source": "經濟日報",
       "published_at": "2026-09-08T13:01:51+00:00",
-      "summary": "禮邦醫藥 AP308 治療 IgA 腎病的新藥臨床試驗申請獲美國 FDA 批准&nbsp;&nbsp;money.udn.com"
+      "summary": "禮邦醫藥 AP308 治療 IgA 腎病的新藥臨床試驗申請獲美國 FDA 批准&nbsp;&nbsp;經濟日報"
     },
     {
       "title": "貼文 | Erik KAO的貼文 | 鉅亨號 | Anue鉅亨 - 鉅亨號",
@@ -702,11 +870,11 @@
       "summary": "主動式ETF正夯，該賣掉0050跳槽嗎？清流君回測打臉：抱超過15年，有8成落後大盤！&nbsp;&nbsp;優分析UAnalyze"
     },
     {
-      "title": "【新新聞】緯創465億元還不夠花？AI訂單塞爆，廣達、鴻海為何也被拖下水 | 張瀞文 | 新聞 - storm.mg",
+      "title": "【新新聞】緯創465億元還不夠花？AI訂單塞爆，廣達、鴻海為何也被拖下水 | 張瀞文 | 新聞 - Storm.mg",
       "url": "https://news.google.com/rss/articles/CBMiTEFVX3lxTE1JQlV3U2NmR29OM25ORDIzWl9mNXI5M1BsSXJBQ1RmZmllUUpIZDQ2WWRRTzRkbDhDb3dfT0dBejZKbWRFd244bG94bng?oc=5",
-      "source": "storm.mg",
+      "source": "Storm.mg",
       "published_at": "2026-09-08T12:30:01+00:00",
-      "summary": "【新新聞】緯創465億元還不夠花？AI訂單塞爆，廣達、鴻海為何也被拖下水 | 張瀞文 | 新聞&nbsp;&nbsp;storm.mg"
+      "summary": "【新新聞】緯創465億元還不夠花？AI訂單塞爆，廣達、鴻海為何也被拖下水 | 張瀞文 | 新聞&nbsp;&nbsp;Storm.mg"
     },
     {
       "title": "外資回流 新台幣由貶翻升 - 自由時報",
@@ -737,18 +905,18 @@
       "summary": "2887 台新新光金- 股價超越玉山及華南，再來自嗨！ - 股市爆料同學會&nbsp;&nbsp;CMoney"
     },
     {
-      "title": "台灣大林之晨：若成功完成精誠公開收購 明年營收挑戰電信一哥 - hk.finance.yahoo.com",
-      "url": "https://news.google.com/rss/articles/CBMimgNBVV95cUxQdkEzVDJjOWMtQm1sMXVUX2tsYzhSVllVLWx2YlFiakQ3OTBoVkZkajhpZEVxcm0zcndYR3RwRlF4NlQ4cVNWS1RmUExVNmdDd09OXzZwVUgta1hJZHRFQTdRdU91bVFscXBIOWNULWwzdVpOQWNyOExld1doMk56UldoUGJyU1k1OWJ4MDliRHVZQVFsQ1pzeG56b0VlUEZSTmxiYnZkQ21jRkVtLWxIZ3ZkSE5WWGtiUTNkWkNIVnhKLVFFdENIVmdzY250TDFncjV3NGJIYlF1T2tEdWdCMzBOWi01NG5XUm8tWUdWeVFYMWtoWGR2T0hKTFBQaVZ0a1c4RE9JbjdMaHZQMUlTRk91Tnk4MlctTUNZcy1JWkJ2N3pxbTlGQVRvR0c1cnpnTExLNXh1UlVWaWZFTW5YSkNkTWxOdXdRTnZkN2UtTDBpOXRMS1RLMElYV1BTcjZhc2liU3VkUDFpR3AyRm8wWTVjaC1rSF85blVVMFdLRFBSTDFLYzRBdzFZOGhKdHlGS1hLeHZicWdEZw?oc=5",
-      "source": "hk.finance.yahoo.com",
-      "published_at": "2026-09-08T12:00:49+00:00",
-      "summary": "台灣大林之晨：若成功完成精誠公開收購 明年營收挑戰電信一哥&nbsp;&nbsp;hk.finance.yahoo.com"
-    },
-    {
       "title": "台灣大林之晨：若成功完成精誠公開收購 明年營收挑戰電信一哥 - Yahoo 財經",
       "url": "https://news.google.com/rss/articles/CBMimgNBVV95cUxQdkEzVDJjOWMtQm1sMXVUX2tsYzhSVllVLWx2YlFiakQ3OTBoVkZkajhpZEVxcm0zcndYR3RwRlF4NlQ4cVNWS1RmUExVNmdDd09OXzZwVUgta1hJZHRFQTdRdU91bVFscXBIOWNULWwzdVpOQWNyOExld1doMk56UldoUGJyU1k1OWJ4MDliRHVZQVFsQ1pzeG56b0VlUEZSTmxiYnZkQ21jRkVtLWxIZ3ZkSE5WWGtiUTNkWkNIVnhKLVFFdENIVmdzY250TDFncjV3NGJIYlF1T2tEdWdCMzBOWi01NG5XUm8tWUdWeVFYMWtoWGR2T0hKTFBQaVZ0a1c4RE9JbjdMaHZQMUlTRk91Tnk4MlctTUNZcy1JWkJ2N3pxbTlGQVRvR0c1cnpnTExLNXh1UlVWaWZFTW5YSkNkTWxOdXdRTnZkN2UtTDBpOXRMS1RLMElYV1BTcjZhc2liU3VkUDFpR3AyRm8wWTVjaC1rSF85blVVMFdLRFBSTDFLYzRBdzFZOGhKdHlGS1hLeHZicWdEZw?oc=5",
       "source": "Yahoo 財經",
       "published_at": "2026-09-08T12:00:49+00:00",
       "summary": "台灣大林之晨：若成功完成精誠公開收購 明年營收挑戰電信一哥&nbsp;&nbsp;Yahoo 財經"
+    },
+    {
+      "title": "台灣大林之晨：若成功完成精誠公開收購 明年營收挑戰電信一哥 - hk.finance.yahoo.com",
+      "url": "https://news.google.com/rss/articles/CBMimgNBVV95cUxQdkEzVDJjOWMtQm1sMXVUX2tsYzhSVllVLWx2YlFiakQ3OTBoVkZkajhpZEVxcm0zcndYR3RwRlF4NlQ4cVNWS1RmUExVNmdDd09OXzZwVUgta1hJZHRFQTdRdU91bVFscXBIOWNULWwzdVpOQWNyOExld1doMk56UldoUGJyU1k1OWJ4MDliRHVZQVFsQ1pzeG56b0VlUEZSTmxiYnZkQ21jRkVtLWxIZ3ZkSE5WWGtiUTNkWkNIVnhKLVFFdENIVmdzY250TDFncjV3NGJIYlF1T2tEdWdCMzBOWi01NG5XUm8tWUdWeVFYMWtoWGR2T0hKTFBQaVZ0a1c4RE9JbjdMaHZQMUlTRk91Tnk4MlctTUNZcy1JWkJ2N3pxbTlGQVRvR0c1cnpnTExLNXh1UlVWaWZFTW5YSkNkTWxOdXdRTnZkN2UtTDBpOXRMS1RLMElYV1BTcjZhc2liU3VkUDFpR3AyRm8wWTVjaC1rSF85blVVMFdLRFBSTDFLYzRBdzFZOGhKdHlGS1hLeHZicWdEZw?oc=5",
+      "source": "hk.finance.yahoo.com",
+      "published_at": "2026-09-08T12:00:49+00:00",
+      "summary": "台灣大林之晨：若成功完成精誠公開收購 明年營收挑戰電信一哥&nbsp;&nbsp;hk.finance.yahoo.com"
     },
     {
       "title": "「無腦存股」7年！她429萬滾出1338萬 不選股不看盤一招大勝 - 知新聞",
@@ -777,6 +945,13 @@
       "source": "EBC Financial Group",
       "published_at": "2026-09-08T11:29:00+00:00",
       "summary": "貨幣升值的原因是什麼?貨幣升值會造成哪些影響?&nbsp;&nbsp;EBC Financial Group"
+    },
+    {
+      "title": "記憶體還是缺! 三星.SK海力士庫存不足10天 - news.ustv.com.tw",
+      "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE53OXJfSEQyN1ZGS3doWTFGWFlxRFEyTDB3dkRIWUhLdVVKNFMyREJ5MURqWlVoQzFQcHRCVGI3dDZaaVhmRkhhU05YbmdxUHBtRUlYNHc5TExiUHc?oc=5",
+      "source": "news.ustv.com.tw",
+      "published_at": "2026-09-08T11:20:43+00:00",
+      "summary": "記憶體還是缺! 三星.SK海力士庫存不足10天&nbsp;&nbsp;news.ustv.com.tw"
     },
     {
       "title": "記憶體還是缺! 三星.SK海力士庫存不足10天 - 非凡新聞台",
@@ -828,6 +1003,13 @@
       "summary": "【岱宇FY2026 Q2 法說會】處分大甲二廠進補1.8億轉盈商用營收年增21% 岱宇跨足無人載具首度亮相&nbsp;&nbsp;BigGo 財經"
     },
     {
+      "title": "大盤有望挑戰前高 主動ETF靈活卡位行情 - 財經新聞 - PChome Online 新聞 - PChome Online 新聞",
+      "url": "https://news.google.com/rss/articles/CBMihgFBVV95cUxPTzJyXzJEUDd1UUI2STBZM0twbXVRN0NiNnIxT0U1a0gxNW9XTURLNmlJcXlscEhkSkltV1VCOWlQaUJXS1dVenRWU0hWd0VPLWI1djhTeWJHUU9ON2FndEJJb2ZVdmdjUDlBczdja1BGSi00ZmEtZEwwc2VVY2xCeDhzaDFOZw?oc=5",
+      "source": "PChome Online 新聞",
+      "published_at": "2026-09-08T10:31:10+00:00",
+      "summary": "大盤有望挑戰前高 主動ETF靈活卡位行情 - 財經新聞 - PChome Online 新聞&nbsp;&nbsp;PChome Online 新聞"
+    },
+    {
       "title": "9月主動式ETF強勢吸金！00404A首配0.36元 報酬4%勝大盤奪「績效王」 - news.cnyes.com",
       "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTFA2SWd2VXptZk00YUZKSkZsN1pXMGU1RU5PTF9BNlNCYUNmTkNZcGJEcThwaGwzT3lIRGJkcFBudFZqY1hxMHNDRWxsR0RqdXM?oc=5",
       "source": "news.cnyes.com",
@@ -856,18 +1038,18 @@
       "summary": "三大法人買賣超 – 外資買超(2408)南亞科、(2344)華邦電，投信買超(2330)台積電、(6223)旺矽，法人合計賣超99.87億元&nbsp;&nbsp;sinotrade.com.tw"
     },
     {
-      "title": "外資買超132億元 買超華邦電9.2萬張最多 但聯電遭大賣終止連三買 - money.udn.com",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE15WW9xYXVFbGVzeGNvS3A0N2FpQzliVVZtczh0dWxQNnpyVWZhUFZPdGFhaTJINHIwWmNHZ092WEtuRW1PT291Qk5Dd3lDSUcyTW80UmtuMl95U0EzUFMw0gFfQVVfeXFMTXlZb3FhdUVsZXN4Y29LcDQ3YWlDOWJVVm1zOHR1bFA2enJVZmFQVk90YWFpMkg0cjBaY0dnT3ZYS25FbU9Pb3VCTkN3eUNJRzJNbzRSa24yX3lTQTNQUzA?oc=5",
-      "source": "money.udn.com",
-      "published_at": "2026-09-08T10:04:04+00:00",
-      "summary": "外資買超132億元 買超華邦電9.2萬張最多 但聯電遭大賣終止連三買&nbsp;&nbsp;money.udn.com"
-    },
-    {
       "title": "外資買超132億元 買超華邦電9.2萬張最多 但聯電遭大賣終止連三買 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE15WW9xYXVFbGVzeGNvS3A0N2FpQzliVVZtczh0dWxQNnpyVWZhUFZPdGFhaTJINHIwWmNHZ092WEtuRW1PT291Qk5Dd3lDSUcyTW80UmtuMl95U0EzUFMw0gFfQVVfeXFMTXlZb3FhdUVsZXN4Y29LcDQ3YWlDOWJVVm1zOHR1bFA2enJVZmFQVk90YWFpMkg0cjBaY0dnT3ZYS25FbU9Pb3VCTkN3eUNJRzJNbzRSa24yX3lTQTNQUzA?oc=5",
       "source": "經濟日報",
       "published_at": "2026-09-08T10:04:04+00:00",
       "summary": "外資買超132億元 買超華邦電9.2萬張最多 但聯電遭大賣終止連三買&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "外資買超132億元 買超華邦電9.2萬張最多 但聯電遭大賣終止連三買 - money.udn.com",
+      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE15WW9xYXVFbGVzeGNvS3A0N2FpQzliVVZtczh0dWxQNnpyVWZhUFZPdGFhaTJINHIwWmNHZ092WEtuRW1PT291Qk5Dd3lDSUcyTW80UmtuMl95U0EzUFMw0gFfQVVfeXFMTXlZb3FhdUVsZXN4Y29LcDQ3YWlDOWJVVm1zOHR1bFA2enJVZmFQVk90YWFpMkg0cjBaY0dnT3ZYS25FbU9Pb3VCTkN3eUNJRzJNbzRSa24yX3lTQTNQUzA?oc=5",
+      "source": "money.udn.com",
+      "published_at": "2026-09-08T10:04:04+00:00",
+      "summary": "外資買超132億元 買超華邦電9.2萬張最多 但聯電遭大賣終止連三買&nbsp;&nbsp;money.udn.com"
     },
     {
       "title": "【美股盤前】指數期貨分歧，那斯達克逆勢走強能否延續？（2026.09.08） - CMoney投資網誌",
@@ -877,25 +1059,25 @@
       "summary": "【美股盤前】指數期貨分歧，那斯達克逆勢走強能否延續？（2026.09.08）&nbsp;&nbsp;CMoney投資網誌"
     },
     {
-      "title": "Q4圓夢列車準備發動、被動元件、PCB、矽光子 | 陳學進的貼文 - 鉅亨號",
-      "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE5WMnNIenFaNGN0Vk9MaFdSWW12UEhyMlpIYnJpSDdvaGczUHdDRGdFQS0wQXhGVEs2MENLWUE4SHFkVER1d28zVg?oc=5",
-      "source": "鉅亨號",
-      "published_at": "2026-09-08T10:01:55+00:00",
-      "summary": "Q4圓夢列車準備發動、被動元件、PCB、矽光子 | 陳學進的貼文&nbsp;&nbsp;鉅亨號"
-    },
-    {
-      "title": "Q4圓夢列車準備發動、被動元件、PCB、矽光子 | 陳學進的貼文 | 鉅亨號 | Anue鉅亨 - 鉅亨號",
-      "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE5WMnNIenFaNGN0Vk9MaFdSWW12UEhyMlpIYnJpSDdvaGczUHdDRGdFQS0wQXhGVEs2MENLWUE4SHFkVER1d28zVg?oc=5",
-      "source": "鉅亨號",
-      "published_at": "2026-09-08T10:01:55+00:00",
-      "summary": "Q4圓夢列車準備發動、被動元件、PCB、矽光子 | 陳學進的貼文 | 鉅亨號 | Anue鉅亨&nbsp;&nbsp;鉅亨號"
-    },
-    {
       "title": "Q4圓夢列車準備發動、被動元件、PCB、矽光子 | 陳學進的貼文 - hao.cnyes.com",
       "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE5WMnNIenFaNGN0Vk9MaFdSWW12UEhyMlpIYnJpSDdvaGczUHdDRGdFQS0wQXhGVEs2MENLWUE4SHFkVER1d28zVg?oc=5",
       "source": "hao.cnyes.com",
       "published_at": "2026-09-08T10:01:55+00:00",
       "summary": "Q4圓夢列車準備發動、被動元件、PCB、矽光子 | 陳學進的貼文&nbsp;&nbsp;hao.cnyes.com"
+    },
+    {
+      "title": "Q4圓夢列車準備發動、被動元件、PCB、矽光子 | 陳學進的貼文 | 鉅亨號 | Anue鉅亨 - hao.cnyes.com",
+      "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE5WMnNIenFaNGN0Vk9MaFdSWW12UEhyMlpIYnJpSDdvaGczUHdDRGdFQS0wQXhGVEs2MENLWUE4SHFkVER1d28zVg?oc=5",
+      "source": "hao.cnyes.com",
+      "published_at": "2026-09-08T10:01:55+00:00",
+      "summary": "Q4圓夢列車準備發動、被動元件、PCB、矽光子 | 陳學進的貼文 | 鉅亨號 | Anue鉅亨&nbsp;&nbsp;hao.cnyes.com"
+    },
+    {
+      "title": "Q4圓夢列車準備發動、被動元件、PCB、矽光子 | 陳學進的貼文 - 鉅亨號",
+      "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE5WMnNIenFaNGN0Vk9MaFdSWW12UEhyMlpIYnJpSDdvaGczUHdDRGdFQS0wQXhGVEs2MENLWUE4SHFkVER1d28zVg?oc=5",
+      "source": "鉅亨號",
+      "published_at": "2026-09-08T10:01:55+00:00",
+      "summary": "Q4圓夢列車準備發動、被動元件、PCB、矽光子 | 陳學進的貼文&nbsp;&nbsp;鉅亨號"
     },
     {
       "title": "日圓升破153！9月漲4% 10萬台幣少買2.4張迪士尼門票 - 壹蘋新聞網",
@@ -982,18 +1164,18 @@
       "summary": "Q4圓夢列車準備發動、被動元件、PCB、矽光子&nbsp;&nbsp;鉅亨網"
     },
     {
-      "title": "🎯台指夜盤再殺！反轉開始了？這事快做！ - 鉅亨號",
-      "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTFBqVl84LXUya2pCajh1OFU1UlBjcWc0c3plZm5EZzYzU0poMjJaWGl4bmlqUzZRZnNUblkyM25PeUlDZUVCRm1TTw?oc=5",
-      "source": "鉅亨號",
-      "published_at": "2026-09-08T09:34:32+00:00",
-      "summary": "🎯台指夜盤再殺！反轉開始了？這事快做！&nbsp;&nbsp;鉅亨號"
-    },
-    {
       "title": "🎯台指夜盤再殺！反轉開始了？這事快做！ - hao.cnyes.com",
       "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTFBqVl84LXUya2pCajh1OFU1UlBjcWc0c3plZm5EZzYzU0poMjJaWGl4bmlqUzZRZnNUblkyM25PeUlDZUVCRm1TTw?oc=5",
       "source": "hao.cnyes.com",
       "published_at": "2026-09-08T09:34:32+00:00",
       "summary": "🎯台指夜盤再殺！反轉開始了？這事快做！&nbsp;&nbsp;hao.cnyes.com"
+    },
+    {
+      "title": "🎯台指夜盤再殺！反轉開始了？這事快做！ - 鉅亨號",
+      "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTFBqVl84LXUya2pCajh1OFU1UlBjcWc0c3plZm5EZzYzU0poMjJaWGl4bmlqUzZRZnNUblkyM25PeUlDZUVCRm1TTw?oc=5",
+      "source": "鉅亨號",
+      "published_at": "2026-09-08T09:34:32+00:00",
+      "summary": "🎯台指夜盤再殺！反轉開始了？這事快做！&nbsp;&nbsp;鉅亨號"
     },
     {
       "title": "台股多方再衝高又上演個股大震盪 ! 族群資金輪動部位做好調整 ! - 華冠投顧",
@@ -1164,18 +1346,18 @@
       "summary": "外資砸百億擋不住...三大法人出清99億！台股紅翻黑守住4萬7防線 股民淚：外資我大哥&nbsp;&nbsp;FTNN 新聞"
     },
     {
-      "title": "這家記憶體廠Rubin市佔飆5成 法人喊目標價最高220元 - news.tvbs.com.tw",
-      "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE1uOU9WWXFueWh1T1lDcUVCZ2xHNUZaLWhuV0xLZjN3R3lHZDFNS2hadC1wQWw2WlY1amJUOHI3cjgwYU44NTJ6M05CRDFkWTA?oc=5",
-      "source": "news.tvbs.com.tw",
-      "published_at": "2026-09-08T08:29:00+00:00",
-      "summary": "這家記憶體廠Rubin市佔飆5成 法人喊目標價最高220元&nbsp;&nbsp;news.tvbs.com.tw"
-    },
-    {
       "title": "這家記憶體廠Rubin市佔飆5成 法人喊目標價最高220元 - TVBS新聞網",
       "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE1uOU9WWXFueWh1T1lDcUVCZ2xHNUZaLWhuV0xLZjN3R3lHZDFNS2hadC1wQWw2WlY1amJUOHI3cjgwYU44NTJ6M05CRDFkWTA?oc=5",
       "source": "TVBS新聞網",
       "published_at": "2026-09-08T08:29:00+00:00",
       "summary": "這家記憶體廠Rubin市佔飆5成 法人喊目標價最高220元&nbsp;&nbsp;TVBS新聞網"
+    },
+    {
+      "title": "這家記憶體廠Rubin市佔飆5成 法人喊目標價最高220元 - news.tvbs.com.tw",
+      "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE1uOU9WWXFueWh1T1lDcUVCZ2xHNUZaLWhuV0xLZjN3R3lHZDFNS2hadC1wQWw2WlY1amJUOHI3cjgwYU44NTJ6M05CRDFkWTA?oc=5",
+      "source": "news.tvbs.com.tw",
+      "published_at": "2026-09-08T08:29:00+00:00",
+      "summary": "這家記憶體廠Rubin市佔飆5成 法人喊目標價最高220元&nbsp;&nbsp;news.tvbs.com.tw"
     },
     {
       "title": "統一台指期貨評論：台指期高檔盤整，關注後續蘋果新品與CPI通膨數據 - 富聯網",
@@ -1234,18 +1416,18 @@
       "summary": "廣達8月營收締新猷！網喊「老AI委屈了」 分析師揭明日股價走勢&nbsp;&nbsp;Yahoo股市"
     },
     {
-      "title": "新台幣升1.7分 收31.535元 | 外匯市場 | 金融 - money.udn.com",
-      "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxNX2FxN3dqTk1Vck5nLTkwbGV5Z0hMdldIbHNaS19IYjJWR05KWHhEWlY5ZVZLaGQ3ZzBfbzJWbmk2RWpMYjdDZHdVdERpNHJSdE1hWjhmY0FtRGtBb050Si1GQ2tuM0RMQ25VZTVMYlotUkoyT1E0Z0ZuRUw2dGFkag?oc=5",
-      "source": "money.udn.com",
-      "published_at": "2026-09-08T08:13:07+00:00",
-      "summary": "新台幣升1.7分 收31.535元 | 外匯市場 | 金融&nbsp;&nbsp;money.udn.com"
-    },
-    {
       "title": "新台幣升1.7分 收31.535元 | 外匯市場 | 金融 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxNX2FxN3dqTk1Vck5nLTkwbGV5Z0hMdldIbHNaS19IYjJWR05KWHhEWlY5ZVZLaGQ3ZzBfbzJWbmk2RWpMYjdDZHdVdERpNHJSdE1hWjhmY0FtRGtBb050Si1GQ2tuM0RMQ25VZTVMYlotUkoyT1E0Z0ZuRUw2dGFkag?oc=5",
       "source": "經濟日報",
       "published_at": "2026-09-08T08:13:07+00:00",
       "summary": "新台幣升1.7分 收31.535元 | 外匯市場 | 金融&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "新台幣升1.7分 收31.535元 | 外匯市場 | 金融 - money.udn.com",
+      "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxNX2FxN3dqTk1Vck5nLTkwbGV5Z0hMdldIbHNaS19IYjJWR05KWHhEWlY5ZVZLaGQ3ZzBfbzJWbmk2RWpMYjdDZHdVdERpNHJSdE1hWjhmY0FtRGtBb050Si1GQ2tuM0RMQ25VZTVMYlotUkoyT1E0Z0ZuRUw2dGFkag?oc=5",
+      "source": "money.udn.com",
+      "published_at": "2026-09-08T08:13:07+00:00",
+      "summary": "新台幣升1.7分 收31.535元 | 外匯市場 | 金融&nbsp;&nbsp;money.udn.com"
     },
     {
       "title": "最新消息 - cathaysec.com.tw",
@@ -1381,13 +1563,6 @@
       "summary": "台股一震嚇跑內資！外資3天敲進千億 三大法人動向曝光&nbsp;&nbsp;chinatimes.com"
     },
     {
-      "title": "ASML、台積攜手升級大尺寸High NA EUV光罩- 新聞 - moneydj.com",
-      "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxPREV2OFE1b0dPZXRJb1FVb2g3SjkxU1ZuVnVNLVlKdnR4Mmw1dnZqMDJVTlJURHV1a05GVmJDZU03bzNKLWlUU09yUWdYLUZBNTFFS3NoblM2V04xTmMwQV9hbV8tVXdqV0ZveV9sTHpQTXpnMnRBM3lFRFpWM3p1S0FydnVyczFEUXh2aUhIZzl2UQ?oc=5",
-      "source": "moneydj.com",
-      "published_at": "2026-09-08T07:48:00+00:00",
-      "summary": "ASML、台積攜手升級大尺寸High NA EUV光罩- 新聞&nbsp;&nbsp;moneydj.com"
-    },
-    {
       "title": "ASML、台積攜手升級大尺寸High NA EUV光罩- 新聞 - MoneyDJ",
       "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxPREV2OFE1b0dPZXRJb1FVb2g3SjkxU1ZuVnVNLVlKdnR4Mmw1dnZqMDJVTlJURHV1a05GVmJDZU03bzNKLWlUU09yUWdYLUZBNTFFS3NoblM2V04xTmMwQV9hbV8tVXdqV0ZveV9sTHpQTXpnMnRBM3lFRFpWM3p1S0FydnVyczFEUXh2aUhIZzl2UQ?oc=5",
       "source": "MoneyDJ",
@@ -1395,11 +1570,25 @@
       "summary": "ASML、台積攜手升級大尺寸High NA EUV光罩- 新聞&nbsp;&nbsp;MoneyDJ"
     },
     {
+      "title": "ASML、台積攜手升級大尺寸High NA EUV光罩- 新聞 - moneydj.com",
+      "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxPREV2OFE1b0dPZXRJb1FVb2g3SjkxU1ZuVnVNLVlKdnR4Mmw1dnZqMDJVTlJURHV1a05GVmJDZU03bzNKLWlUU09yUWdYLUZBNTFFS3NoblM2V04xTmMwQV9hbV8tVXdqV0ZveV9sTHpQTXpnMnRBM3lFRFpWM3p1S0FydnVyczFEUXh2aUhIZzl2UQ?oc=5",
+      "source": "moneydj.com",
+      "published_at": "2026-09-08T07:48:00+00:00",
+      "summary": "ASML、台積攜手升級大尺寸High NA EUV光罩- 新聞&nbsp;&nbsp;moneydj.com"
+    },
+    {
       "title": "ASML、台積攜手 升級大尺寸High NA EUV光罩 - Yahoo股市",
       "url": "https://news.google.com/rss/articles/CBMi9gFBVV95cUxORmdVbnZjNnEyQkUzSnk2QTI1V0xxbjVNRXc2V3hsWXZEaXM1Y0RXQWFFdE9qNzNtMUpSSVg2UmNTWDdRWnlENlRxQWdsMEJHYWpYcmR4ZU5EZUY4Z2VvU21UeURzalpKZm9YRzNPY2dWNXdZMnNsOW9oS2NlUHFDZTZiVFU4MDE0YWo3QkFMTkp1clNieXR1dzhubWh6Z3dmaElHTnpJQjliN1huZ0JkbUM3RjFRSkpOd2ZWTVQxRDQyM3BUVmVDRWM4OVhDb1JWQnlORTVrY1FQU2ZVTEFfWU1saFhwTjZJV2J5cEJTMzV4Z2t5LUE?oc=5",
       "source": "Yahoo股市",
       "published_at": "2026-09-08T07:48:00+00:00",
       "summary": "ASML、台積攜手 升級大尺寸High NA EUV光罩&nbsp;&nbsp;Yahoo股市"
+    },
+    {
+      "title": "潤泰小金雞鼎晉攻醫美市場 肉毒桿菌素11月三期解盲 拚台灣率先上市 - 經濟日報",
+      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE1ER0pXUm9BZ0VTMWtyelpCWEtGWllTYThXMjBUa1NqeHRfWDRDWmd5ZDFvSWhGU0MtOWlUOEdyUFRNVVI4R1lCQ3UzanVOWnhUa2tjYW8tLXZYQdIBX0FVX3lxTE1Za3U4U2hza2NtMGNzbnN1dHFLY3U1ZnRxNm1Od0Q5a2FpQkdYT3dJbzN4RGZwdnMxWlBBREM2NmhmQ2QwLVR5ZUNOY0NjY1RuSmxLeWFwemxYQlIxTVBz?oc=5",
+      "source": "經濟日報",
+      "published_at": "2026-09-08T07:47:30+00:00",
+      "summary": "潤泰小金雞鼎晉攻醫美市場 肉毒桿菌素11月三期解盲 拚台灣率先上市&nbsp;&nbsp;經濟日報"
     },
     {
       "title": "TWA00 加權指數- 今日大盤籌碼- 股市爆料同學會 - CMoney",
@@ -1507,11 +1696,11 @@
       "summary": "三大法人轉賣超近百億元！僅外資連3買 台股震盪554點、資金轉進3族群&nbsp;&nbsp;UDN"
     },
     {
-      "title": "影音／日圓升值ing！ 9月漲4% 每換10萬、迪士尼門票「少買2.5張」 - news.tvbs.com.tw",
+      "title": "影音／日圓升值ing！ 9月漲4% 每換10萬、迪士尼門票「少買2.5張」 - TVBS新聞網",
       "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE1oNjRoLWFTZERzRjFwZ2dEYV9ScHJPU3FPNVFGY0p6aGd2WlU1aGNlWk5vcjVmdzVwZEFnZ3lJYWI1dlBPRVVjblktb2J2MDQ?oc=5",
-      "source": "news.tvbs.com.tw",
+      "source": "TVBS新聞網",
       "published_at": "2026-09-08T07:25:00+00:00",
-      "summary": "影音／日圓升值ing！ 9月漲4% 每換10萬、迪士尼門票「少買2.5張」&nbsp;&nbsp;news.tvbs.com.tw"
+      "summary": "影音／日圓升值ing！ 9月漲4% 每換10萬、迪士尼門票「少買2.5張」&nbsp;&nbsp;TVBS新聞網"
     },
     {
       "title": "日圓升值ing！ 9月漲4% 每換10萬、迪士尼門票「少買2.5張」 - TVBS新聞網",
@@ -1640,6 +1829,13 @@
       "summary": "盤後／台股忽軟腳跌220.49點　戰犯是它&nbsp;&nbsp;三立新聞"
     },
     {
+      "title": "【台股盤後】金融股抗跌 台股下跌220點 收在47105點 - news.ustv.com.tw",
+      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE5tVmtLU1FyeEdBa1hKelJ4MUJXR1d2bzc5XzhKMDNwcmVmQlZKcS1PYS1xalZRODd2VG1MaDNMXy1Nekx1bUNocTBfT2pKOGk3WkNPNVJ5M2JoYnpuRlB3?oc=5",
+      "source": "news.ustv.com.tw",
+      "published_at": "2026-09-08T06:47:10+00:00",
+      "summary": "【台股盤後】金融股抗跌 台股下跌220點 收在47105點&nbsp;&nbsp;news.ustv.com.tw"
+    },
+    {
       "title": "【台股盤後】金融股抗跌 台股下跌220點 收在47105點 - 非凡新聞台",
       "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE5tVmtLU1FyeEdBa1hKelJ4MUJXR1d2bzc5XzhKMDNwcmVmQlZKcS1PYS1xalZRODd2VG1MaDNMXy1Nekx1bUNocTBfT2pKOGk3WkNPNVJ5M2JoYnpuRlB3?oc=5",
       "source": "非凡新聞台",
@@ -1682,18 +1878,18 @@
       "summary": "台股創歷史次高！外資狂掃883億現貨、減空期貨 台積發哥扛大旗 | Newtalk&nbsp;&nbsp;LINE TODAY"
     },
     {
-      "title": "台股高低震盪逾550點收47105點　台積電收紅聯發科翻黑 - money.udn.com",
-      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE5nNkVfdkR1VVNmc1ZFZFJCazZpTjhWdU9aOExMeW1wcmQ4LXo4NUo0MUxHN2ZMYjhJbXpUeTNEZG01LWNZcnpVTVBTQXVSYWlfSzlKUjVxSDE0Z9IBX0FVX3lxTFBBWW1aeVY4Z1lOa0JTVDBIN2EzRnMxQzQxY1FuSHN4LVdhVlllRW0wSkxkUWM4UTZLMFJzaHlUc1RNZ2V1OVVQVVJpLTAxMmU4ZVNyanVCSVVoUGotZUpN?oc=5",
-      "source": "money.udn.com",
-      "published_at": "2026-09-08T06:36:52+00:00",
-      "summary": "台股高低震盪逾550點收47105點　台積電收紅聯發科翻黑&nbsp;&nbsp;money.udn.com"
-    },
-    {
       "title": "台股高低震盪逾550點收47105點　台積電收紅聯發科翻黑 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE5nNkVfdkR1VVNmc1ZFZFJCazZpTjhWdU9aOExMeW1wcmQ4LXo4NUo0MUxHN2ZMYjhJbXpUeTNEZG01LWNZcnpVTVBTQXVSYWlfSzlKUjVxSDE0Z9IBX0FVX3lxTFBBWW1aeVY4Z1lOa0JTVDBIN2EzRnMxQzQxY1FuSHN4LVdhVlllRW0wSkxkUWM4UTZLMFJzaHlUc1RNZ2V1OVVQVVJpLTAxMmU4ZVNyanVCSVVoUGotZUpN?oc=5",
       "source": "經濟日報",
       "published_at": "2026-09-08T06:36:52+00:00",
       "summary": "台股高低震盪逾550點收47105點　台積電收紅聯發科翻黑&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "台股高低震盪逾550點收47105點　台積電收紅聯發科翻黑 - money.udn.com",
+      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE5nNkVfdkR1VVNmc1ZFZFJCazZpTjhWdU9aOExMeW1wcmQ4LXo4NUo0MUxHN2ZMYjhJbXpUeTNEZG01LWNZcnpVTVBTQXVSYWlfSzlKUjVxSDE0Z9IBX0FVX3lxTFBBWW1aeVY4Z1lOa0JTVDBIN2EzRnMxQzQxY1FuSHN4LVdhVlllRW0wSkxkUWM4UTZLMFJzaHlUc1RNZ2V1OVVQVVJpLTAxMmU4ZVNyanVCSVVoUGotZUpN?oc=5",
+      "source": "money.udn.com",
+      "published_at": "2026-09-08T06:36:52+00:00",
+      "summary": "台股高低震盪逾550點收47105點　台積電收紅聯發科翻黑&nbsp;&nbsp;money.udn.com"
     },
     {
       "title": "AI代工族群技術性拉回，台股量縮下挫220點，僅台積電逆勢獨撐大局-財經焦點情報站 - CMoney投資網誌",
@@ -1773,18 +1969,18 @@
       "summary": "今日台股》電子股尾盤遇壓！台積電逆勢上漲10元收2470元 台股終場下跌220點&nbsp;&nbsp;PChome Online 新聞"
     },
     {
-      "title": "台股收盤／翻黑跌220點！台積電尾單爆6163張、壓抑漲幅收2470元 - news.tvbs.com.tw",
-      "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE1XeVcxZHppanJqeUU0MDZBWGg0WUhGRTZ5TXZSSDhxd0lLRmJxNlJIT0VaaVZjVFRjeWVpSWc1QTBucFc4Y0IzYUlaUG1vWUE?oc=5",
-      "source": "news.tvbs.com.tw",
-      "published_at": "2026-09-08T06:03:00+00:00",
-      "summary": "台股收盤／翻黑跌220點！台積電尾單爆6163張、壓抑漲幅收2470元&nbsp;&nbsp;news.tvbs.com.tw"
-    },
-    {
       "title": "台股收盤／翻黑跌220點！台積電尾單爆6163張、壓抑漲幅收2470元 - TVBS新聞網",
       "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE1XeVcxZHppanJqeUU0MDZBWGg0WUhGRTZ5TXZSSDhxd0lLRmJxNlJIT0VaaVZjVFRjeWVpSWc1QTBucFc4Y0IzYUlaUG1vWUE?oc=5",
       "source": "TVBS新聞網",
       "published_at": "2026-09-08T06:03:00+00:00",
       "summary": "台股收盤／翻黑跌220點！台積電尾單爆6163張、壓抑漲幅收2470元&nbsp;&nbsp;TVBS新聞網"
+    },
+    {
+      "title": "台股收盤／翻黑跌220點！台積電尾單爆6163張、壓抑漲幅收2470元 - news.tvbs.com.tw",
+      "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE1XeVcxZHppanJqeUU0MDZBWGg0WUhGRTZ5TXZSSDhxd0lLRmJxNlJIT0VaaVZjVFRjeWVpSWc1QTBucFc4Y0IzYUlaUG1vWUE?oc=5",
+      "source": "news.tvbs.com.tw",
+      "published_at": "2026-09-08T06:03:00+00:00",
+      "summary": "台股收盤／翻黑跌220點！台積電尾單爆6163張、壓抑漲幅收2470元&nbsp;&nbsp;news.tvbs.com.tw"
     },
     {
       "title": "【零股排行榜】 盤中零股成交量TOP 20｜0050 元大台灣50、2344 華邦電、2303 聯電、00919 群益台灣精選高息、2408 南亞科(0908)｜豐雲學堂2026 年 09 月 - sinotrade.com.tw",
@@ -1801,18 +1997,18 @@
       "summary": "聯電8月營收創四年新高！外資喊買120元，後市觀察重點？｜股市話題｜豐雲學堂2026 年 09 月&nbsp;&nbsp;sinotrade.com.tw"
     },
     {
-      "title": "台股終場跌220點收47105點 台積電收2470元 - money.udn.com",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE9xR2pvTU1KZ3ljeW9INTJpOVB0aU0wdXgtTHJHY1BPSFlDaWdmNm8xbDNKR3hUdjRzM0t6UUQ3cmM1dVlzeDcwei1pSDBsVXJEY0JZSHpsWEFtbXFYdzFj0gFfQVVfeXFMT3FHam9NTUpneWN5b0g1Mmk5UHRpTTB1eC1MckdjUE9IWUNpZ2Y2bzFsM0pHeFR2NHMzS3pRRDdyYzV1WXN4NzB6LWlIMGxVckRjQllIemxYQW1tcVh3MWM?oc=5",
-      "source": "money.udn.com",
-      "published_at": "2026-09-08T05:55:01+00:00",
-      "summary": "台股終場跌220點收47105點 台積電收2470元&nbsp;&nbsp;money.udn.com"
-    },
-    {
       "title": "台股終場跌220點收47105點 台積電收2470元 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE9xR2pvTU1KZ3ljeW9INTJpOVB0aU0wdXgtTHJHY1BPSFlDaWdmNm8xbDNKR3hUdjRzM0t6UUQ3cmM1dVlzeDcwei1pSDBsVXJEY0JZSHpsWEFtbXFYdzFj0gFfQVVfeXFMT3FHam9NTUpneWN5b0g1Mmk5UHRpTTB1eC1MckdjUE9IWUNpZ2Y2bzFsM0pHeFR2NHMzS3pRRDdyYzV1WXN4NzB6LWlIMGxVckRjQllIemxYQW1tcVh3MWM?oc=5",
       "source": "經濟日報",
       "published_at": "2026-09-08T05:55:01+00:00",
       "summary": "台股終場跌220點收47105點 台積電收2470元&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "台股終場跌220點收47105點 台積電收2470元 - money.udn.com",
+      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE9xR2pvTU1KZ3ljeW9INTJpOVB0aU0wdXgtTHJHY1BPSFlDaWdmNm8xbDNKR3hUdjRzM0t6UUQ3cmM1dVlzeDcwei1pSDBsVXJEY0JZSHpsWEFtbXFYdzFj0gFfQVVfeXFMT3FHam9NTUpneWN5b0g1Mmk5UHRpTTB1eC1MckdjUE9IWUNpZ2Y2bzFsM0pHeFR2NHMzS3pRRDdyYzV1WXN4NzB6LWlIMGxVckRjQllIemxYQW1tcVh3MWM?oc=5",
+      "source": "money.udn.com",
+      "published_at": "2026-09-08T05:55:01+00:00",
+      "summary": "台股終場跌220點收47105點 台積電收2470元&nbsp;&nbsp;money.udn.com"
     },
     {
       "title": "台股跌220點收47105點 台積電漲10元 - Yahoo股市",
@@ -1864,13 +2060,6 @@
       "summary": "台股收盤／ 台股跌220點！中小型股殺聲隆隆 台積電漲10元撐盤&nbsp;&nbsp;三立新聞"
     },
     {
-      "title": "【台股盤後】金融股抗跌 台股下跌220點 收在47105點 - news.ustv.com.tw",
-      "url": "https://news.google.com/rss/articles/CBMiYEFVX3lxTE80d2ZEVkN2Tm9qWEtxUEVQc3poZ3ZzNVVHYURfZGg1NENsdTBWNUx1Wk50dXVVLWtGQU1oTGZ2b25ZQzJNdHJOeXhIQm9xQU5jcDVhaGFCcFBqYUFGV25MaQ?oc=5",
-      "source": "news.ustv.com.tw",
-      "published_at": "2026-09-08T05:49:31+00:00",
-      "summary": "【台股盤後】金融股抗跌 台股下跌220點 收在47105點&nbsp;&nbsp;news.ustv.com.tw"
-    },
-    {
       "title": "台股收盤／ 台股跌220點！中小型股殺聲隆隆　台積電漲10元撐盤 - 三立新聞",
       "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE9ocFplcktxd0xkaUZtai1xcm40WGltODNITWFpelMySURrQkFRaEVnLURVMFVOeXJuZXlrSWQ4YkpZS1ljOEs0YtIBTEFVX3lxTE9jMEFZYlp6RDRiV1lTd2NkQTRUX3MxcnR4Sm1Fa3pfTjc4UGJ4NjhVZnBjR1pkRld6TUhNVjVSRlYxQWtOdGpReTZZb1c?oc=5",
       "source": "三立新聞",
@@ -1906,18 +2095,18 @@
       "summary": "台積電閃見2505元救援失敗！台股大怒神翻黑 收盤下跌220點&nbsp;&nbsp;chinatimes.com"
     },
     {
-      "title": "盤中看盤重點： - 鉅亨號",
-      "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE9XQy1aUkg3MXlXNTE4dzdfS1BZQUQ2SVdLWWpySVM1VXRiREhzWG1jNl96ZjhMS2RPVFRLZUY2WVhSczFpMnowWA?oc=5",
-      "source": "鉅亨號",
-      "published_at": "2026-09-08T05:37:30+00:00",
-      "summary": "盤中看盤重點：&nbsp;&nbsp;鉅亨號"
-    },
-    {
       "title": "盤中看盤重點： - hao.cnyes.com",
       "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE9XQy1aUkg3MXlXNTE4dzdfS1BZQUQ2SVdLWWpySVM1VXRiREhzWG1jNl96ZjhMS2RPVFRLZUY2WVhSczFpMnowWA?oc=5",
       "source": "hao.cnyes.com",
       "published_at": "2026-09-08T05:37:30+00:00",
       "summary": "盤中看盤重點：&nbsp;&nbsp;hao.cnyes.com"
+    },
+    {
+      "title": "盤中看盤重點： - 鉅亨號",
+      "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE9XQy1aUkg3MXlXNTE4dzdfS1BZQUQ2SVdLWWpySVM1VXRiREhzWG1jNl96ZjhMS2RPVFRLZUY2WVhSczFpMnowWA?oc=5",
+      "source": "鉅亨號",
+      "published_at": "2026-09-08T05:37:30+00:00",
+      "summary": "盤中看盤重點：&nbsp;&nbsp;鉅亨號"
     },
     {
       "title": "盤中看盤重點| 陳學進的貼文 - 鉅亨號",
@@ -1962,6 +2151,13 @@
       "summary": "緯創 | 3231.TW 股價走勢與即時報價&nbsp;&nbsp;finance.biggo.com.tw"
     },
     {
+      "title": "產業趨勢向上、能見度逾三年 法人喊買這檔廠務工程股 - UDN",
+      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTE9TOGlQSnZoVlFvem5TSjBtYmd2aE92aUFfc0RsdGNQdEx2QndCdTJVZklzVkFlZFQtMWd3ajhHZFNqaFZHT1k4cEFORHVPOFRF0gFWQVVfeXFMT1ZRaE9WUDBYWUhYSnVuNFYyQjd4Ynk0U1M0VXZDMFpfbzd3ZW5Ia0Qxd0tLQi15RUZ4Mnh0NGNnUERMaGVRejJRVldmZTZoT2hmaU5IX0E?oc=5",
+      "source": "UDN",
+      "published_at": "2026-09-08T05:22:17+00:00",
+      "summary": "產業趨勢向上、能見度逾三年 法人喊買這檔廠務工程股&nbsp;&nbsp;UDN"
+    },
+    {
       "title": "川普要求「全球最低利率」與 Fed 鷹派立場對立 - TechNews 科技新報",
       "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxPUHBVZ3RNdDl5eG5lb1RLbVF2QmZwb1VURy13ZFUyQVFYdUhxS3ByY2ozQVc1ZEpVRVN6d2lMYWVpY2s4SnVHN05qci1SVlVDRGRGSnhjSmpIUm1Nc3FEV1VKTjVyM1FxZzNQWHViWjNMdjlucFVjblJpM0VjOG5memR4UVdWVUdjYjZYWThKU1hOSmpBa1NSQUptZWdTYUtPYjVxMmstN3NDRTB0RzJB?oc=5",
       "source": "TechNews 科技新報",
@@ -1976,18 +2172,18 @@
       "summary": "川普要求「全球最低利率」與 Fed 鷹派立場對立&nbsp;&nbsp;finance.technews.tw"
     },
     {
+      "title": "資金與基本面共振 農產品投機部位全面轉多-台股 - MoneyDJ",
+      "url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxQSHNVbFBnbUNWc0J5ZG16MTB0bzlLVEFQQWJ5aUNPTXprQU53TEJrVHdCbFdSaVFhN1NBbTJFT1JNdlk4Y3BOODFHeG1DYjNjZWRNbUtFQ1dxOVFRRzlGd0IyRThDdzJteHpVTi1CMUNwRXo2WDRURkNJWjN0cEM1NHBmUWMwTzJIRG9MeWRKci1ZZXB2M2c?oc=5",
+      "source": "MoneyDJ",
+      "published_at": "2026-09-08T05:00:55+00:00",
+      "summary": "資金與基本面共振 農產品投機部位全面轉多-台股&nbsp;&nbsp;MoneyDJ"
+    },
+    {
       "title": "資金與基本面共振 農產品投機部位全面轉多-台股 - moneydj.com",
       "url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxQSHNVbFBnbUNWc0J5ZG16MTB0bzlLVEFQQWJ5aUNPTXprQU53TEJrVHdCbFdSaVFhN1NBbTJFT1JNdlk4Y3BOODFHeG1DYjNjZWRNbUtFQ1dxOVFRRzlGd0IyRThDdzJteHpVTi1CMUNwRXo2WDRURkNJWjN0cEM1NHBmUWMwTzJIRG9MeWRKci1ZZXB2M2c?oc=5",
       "source": "moneydj.com",
       "published_at": "2026-09-08T05:00:55+00:00",
       "summary": "資金與基本面共振 農產品投機部位全面轉多-台股&nbsp;&nbsp;moneydj.com"
-    },
-    {
-      "title": "資金與基本面共振 農產品投機部位全面轉多-台股 - MoneyDJ",
-      "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxObjRqekJjUTRta0VOV1M2dTFaT1p2LTVLcTFuUWxNd1VFSE5pNmk4RGNNbWlBTjQxN09ZakIwQjE0aHE3dVNucmxKQm5NSXdDTjZxQXZEUG1VdENKTlVwMTZ2djZjVG1DeHFGVVpveDAxYThFUHNJX1RFYW8yX25kbE9tZmJPS3p1Z2c?oc=5",
-      "source": "MoneyDJ",
-      "published_at": "2026-09-08T05:00:55+00:00",
-      "summary": "資金與基本面共振 農產品投機部位全面轉多-台股&nbsp;&nbsp;MoneyDJ"
     },
     {
       "title": "美伊波灣衝突推升油價 亞洲科技股強勁反彈 - 四季線上4gTV",
@@ -2137,18 +2333,18 @@
       "summary": "台股盤中劇震逾450點 台積電獨撐盤堅守2500元關卡&nbsp;&nbsp;finance.biggo.com.tw"
     },
     {
+      "title": "中美稀土博弈升溫 供應鏈成為地緣政治武器-台股 - MoneyDJ",
+      "url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxNZXpSQzhmQVljQ3lMcno1LVZ0ekJ5N1NvRkpRN1Q5bDVuWmg4OVBvS0NHTzB1c2l4Y3VjbFVWQjAzNjY0dFVYLWJQZUk5S2hxR1hvWXIwS3FEY21xWTdxRWxKdWQtV1pxR2tpdFl0U2lyU1hleWVmZWhRNkFRNHZlcmZocFoyZ3dLTWdDYjVTY2I4MXNOWVE?oc=5",
+      "source": "MoneyDJ",
+      "published_at": "2026-09-08T03:54:11+00:00",
+      "summary": "中美稀土博弈升溫 供應鏈成為地緣政治武器-台股&nbsp;&nbsp;MoneyDJ"
+    },
+    {
       "title": "中美稀土博弈升溫 供應鏈成為地緣政治武器-台股 - moneydj.com",
       "url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxNZXpSQzhmQVljQ3lMcno1LVZ0ekJ5N1NvRkpRN1Q5bDVuWmg4OVBvS0NHTzB1c2l4Y3VjbFVWQjAzNjY0dFVYLWJQZUk5S2hxR1hvWXIwS3FEY21xWTdxRWxKdWQtV1pxR2tpdFl0U2lyU1hleWVmZWhRNkFRNHZlcmZocFoyZ3dLTWdDYjVTY2I4MXNOWVE?oc=5",
       "source": "moneydj.com",
       "published_at": "2026-09-08T03:54:11+00:00",
       "summary": "中美稀土博弈升溫 供應鏈成為地緣政治武器-台股&nbsp;&nbsp;moneydj.com"
-    },
-    {
-      "title": "中美稀土博弈升溫 供應鏈成為地緣政治武器-台股 - MoneyDJ",
-      "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxNaHkwM2FYMDE4c0thdmRWNUp4TG9VR3BkZHhzUVBwN1FacTFaOExMVy1SeUdzRmxHblpGTWlIbGNkWUJtX0FtbVliOVAzOTltTURiU2gxOGx1NXl2UWUtV3VydnI3WWtmTlJqbTBvMVExaVRWaEktTzF5b2RDMUZWaFRmRlVMM0VBS3c?oc=5",
-      "source": "MoneyDJ",
-      "published_at": "2026-09-08T03:54:11+00:00",
-      "summary": "中美稀土博弈升溫 供應鏈成為地緣政治武器-台股&nbsp;&nbsp;MoneyDJ"
     },
     {
       "title": "CoWoS供給吃緊催生第二條先進封裝路線 EMIB-T崛起！台積電設備鏈成潛在壓力區 - 理財周刊",
@@ -2186,18 +2382,18 @@
       "summary": "韓元兌美元匯率跌破1,340韓元，韓國五大銀行美元存款創五年新高，日圓需求同步激增&nbsp;&nbsp;BigGo 財經"
     },
     {
-      "title": "光股利就能買瑪莎拉蒂！專家「點名這2檔」爆買千張爽賺 - news.tvbs.com.tw",
-      "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTFBXbm8xNDNZTTVRTmZXemVadC1EQXZMZmQyVkdabmVWZlBPOGROc1BJT1E1am1NVnhTbFMwRGFpRUczTk1UTXFpclF6WE01M00?oc=5",
-      "source": "news.tvbs.com.tw",
-      "published_at": "2026-09-08T03:40:00+00:00",
-      "summary": "光股利就能買瑪莎拉蒂！專家「點名這2檔」爆買千張爽賺&nbsp;&nbsp;news.tvbs.com.tw"
-    },
-    {
       "title": "光股利就能買瑪莎拉蒂！專家「點名這2檔」爆買千張爽賺 - TVBS新聞網",
       "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTFBXbm8xNDNZTTVRTmZXemVadC1EQXZMZmQyVkdabmVWZlBPOGROc1BJT1E1am1NVnhTbFMwRGFpRUczTk1UTXFpclF6WE01M00?oc=5",
       "source": "TVBS新聞網",
       "published_at": "2026-09-08T03:40:00+00:00",
       "summary": "光股利就能買瑪莎拉蒂！專家「點名這2檔」爆買千張爽賺&nbsp;&nbsp;TVBS新聞網"
+    },
+    {
+      "title": "光股利就能買瑪莎拉蒂！專家「點名這2檔」爆買千張爽賺 - news.tvbs.com.tw",
+      "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTFBXbm8xNDNZTTVRTmZXemVadC1EQXZMZmQyVkdabmVWZlBPOGROc1BJT1E1am1NVnhTbFMwRGFpRUczTk1UTXFpclF6WE01M00?oc=5",
+      "source": "news.tvbs.com.tw",
+      "published_at": "2026-09-08T03:40:00+00:00",
+      "summary": "光股利就能買瑪莎拉蒂！專家「點名這2檔」爆買千張爽賺&nbsp;&nbsp;news.tvbs.com.tw"
     },
     {
       "title": "台積電撐盤 台股狹幅震盪 法人：台股蓄勢待量挑戰歷史新高 - UDN",
@@ -2207,18 +2403,18 @@
       "summary": "台積電撐盤 台股狹幅震盪 法人：台股蓄勢待量挑戰歷史新高&nbsp;&nbsp;UDN"
     },
     {
-      "title": "Arm兩大AI運算平台登場，製程推進台積2奈米- 新聞 - moneydj.com",
-      "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxOMWF5ekQwbGNlZ3hIbkZwR3l6TXF0cU9mOFJrT0JYcGpTSEZEWDNTTUxRU2FKLXlHMWhoRllvc3I5UkxWWDNva05pWTlxTzJHOHJqRTBwTW5hYjNIZ3llU0pJQW5jLWFPVklwbVR5M2ZxM212YV9YOVZKaUpmYXFPTG84TjVHS0NSNUdYbFdNNElOQQ?oc=5",
-      "source": "moneydj.com",
-      "published_at": "2026-09-08T03:25:00+00:00",
-      "summary": "Arm兩大AI運算平台登場，製程推進台積2奈米- 新聞&nbsp;&nbsp;moneydj.com"
-    },
-    {
       "title": "Arm兩大AI運算平台登場，製程推進台積2奈米- 新聞 - MoneyDJ",
       "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxOMWF5ekQwbGNlZ3hIbkZwR3l6TXF0cU9mOFJrT0JYcGpTSEZEWDNTTUxRU2FKLXlHMWhoRllvc3I5UkxWWDNva05pWTlxTzJHOHJqRTBwTW5hYjNIZ3llU0pJQW5jLWFPVklwbVR5M2ZxM212YV9YOVZKaUpmYXFPTG84TjVHS0NSNUdYbFdNNElOQQ?oc=5",
       "source": "MoneyDJ",
       "published_at": "2026-09-08T03:25:00+00:00",
       "summary": "Arm兩大AI運算平台登場，製程推進台積2奈米- 新聞&nbsp;&nbsp;MoneyDJ"
+    },
+    {
+      "title": "Arm兩大AI運算平台登場，製程推進台積2奈米- 新聞 - moneydj.com",
+      "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxOMWF5ekQwbGNlZ3hIbkZwR3l6TXF0cU9mOFJrT0JYcGpTSEZEWDNTTUxRU2FKLXlHMWhoRllvc3I5UkxWWDNva05pWTlxTzJHOHJqRTBwTW5hYjNIZ3llU0pJQW5jLWFPVklwbVR5M2ZxM212YV9YOVZKaUpmYXFPTG84TjVHS0NSNUdYbFdNNElOQQ?oc=5",
+      "source": "moneydj.com",
+      "published_at": "2026-09-08T03:25:00+00:00",
+      "summary": "Arm兩大AI運算平台登場，製程推進台積2奈米- 新聞&nbsp;&nbsp;moneydj.com"
     },
     {
       "title": "亞幣大升值！游庭皓揭原因 - 鏡週刊Mirror Media",
@@ -2298,18 +2494,18 @@
       "summary": "群創光電 | 3481.TW 股價走勢與即時報價&nbsp;&nbsp;finance.biggo.com.tw"
     },
     {
-      "title": "供應緊張改變市場流向 中國鋅出口重新加速-台股 - moneydj.com",
-      "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxQQ0F4Wmp0aUR1UzJ4SEtYN2p2YWpHc0ZLOHpwNFFaUWJXWTVNWmVQZFJ6R0ZwbVNBeG0wQXhfWFg5bkJqd0Z0M3c5VlBoSnJwWHkzeTVMd3lkOXNjcWtCNk43NkFncUtLbnpicmdvR0s1NXE2a1hvLTZ2azhXSlZ2cVlvWlI4R00xSkE?oc=5",
-      "source": "moneydj.com",
-      "published_at": "2026-09-08T02:51:56+00:00",
-      "summary": "供應緊張改變市場流向 中國鋅出口重新加速-台股&nbsp;&nbsp;moneydj.com"
-    },
-    {
       "title": "供應緊張改變市場流向 中國鋅出口重新加速-台股 - MoneyDJ",
       "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxQQ0F4Wmp0aUR1UzJ4SEtYN2p2YWpHc0ZLOHpwNFFaUWJXWTVNWmVQZFJ6R0ZwbVNBeG0wQXhfWFg5bkJqd0Z0M3c5VlBoSnJwWHkzeTVMd3lkOXNjcWtCNk43NkFncUtLbnpicmdvR0s1NXE2a1hvLTZ2azhXSlZ2cVlvWlI4R00xSkE?oc=5",
       "source": "MoneyDJ",
       "published_at": "2026-09-08T02:51:56+00:00",
       "summary": "供應緊張改變市場流向 中國鋅出口重新加速-台股&nbsp;&nbsp;MoneyDJ"
+    },
+    {
+      "title": "供應緊張改變市場流向 中國鋅出口重新加速-台股 - moneydj.com",
+      "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxQQ0F4Wmp0aUR1UzJ4SEtYN2p2YWpHc0ZLOHpwNFFaUWJXWTVNWmVQZFJ6R0ZwbVNBeG0wQXhfWFg5bkJqd0Z0M3c5VlBoSnJwWHkzeTVMd3lkOXNjcWtCNk43NkFncUtLbnpicmdvR0s1NXE2a1hvLTZ2azhXSlZ2cVlvWlI4R00xSkE?oc=5",
+      "source": "moneydj.com",
+      "published_at": "2026-09-08T02:51:56+00:00",
+      "summary": "供應緊張改變市場流向 中國鋅出口重新加速-台股&nbsp;&nbsp;moneydj.com"
     },
     {
       "title": "【10:51 即時新聞】豪勉(6218)股價勁揚至47.3元，營收爆發與多頭籌碼加持＋技術面均線多頭排列支撐續攻 - CMoney投資網誌",
@@ -2331,6 +2527,13 @@
       "source": "today.line.me",
       "published_at": "2026-09-08T02:49:45+00:00",
       "summary": "台股8月狂飆 散戶重返5成、定期定額創新高 | NOWNEWS今日新聞&nbsp;&nbsp;today.line.me"
+    },
+    {
+      "title": "Fed 9月利率政策添變數 高利率環境下 - turnnewsapp.com",
+      "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1PcFJOQjFWRm1hN2RQRlYwQ2xhMjFrR3h4YXpuQTlFNThHWFNVREtKU0ZUT0RyZ3Y4WEtxdHJrbG9qdUpMR2tocUloeEdYejNRSG8tTHlKZFNJWHM?oc=5",
+      "source": "turnnewsapp.com",
+      "published_at": "2026-09-08T02:49:26+00:00",
+      "summary": "Fed 9月利率政策添變數 高利率環境下&nbsp;&nbsp;turnnewsapp.com"
     },
     {
       "title": "三雄領軍猛攻　記憶體族群火力全開！「這4檔」卻掉隊沒吃到紅利 - 三立新聞",
@@ -2375,18 +2578,18 @@
       "summary": "【即時新聞】近日國慶科技更名行情發酵，營收月增近七成引外資卡位！&nbsp;&nbsp;CMoney投資網誌"
     },
     {
-      "title": "韓銀：美元穩定幣需求恐衝擊匯市！台韓監管警戒「本國幣貶值」風險 - 加密城市CryptoCity",
-      "url": "https://news.google.com/rss/articles/CBMihAFBVV95cUxOY1dnbzJ1U2wwem1oZHNBeWVXN1JNdHFNTlBIblNLeV9HMEJwdlUyTEg0VFk3R0htRUE3SlptQmxqYl9OdFE1cTBncl9DWnkyVUJLUGl1Vm9HNUYza1NsazdNYTlnTkwxcWl1R1B1QkJwaWkyS0wxaVFuX3ctdUprMHc5TDY?oc=5",
-      "source": "加密城市CryptoCity",
-      "published_at": "2026-09-08T02:38:13+00:00",
-      "summary": "韓銀：美元穩定幣需求恐衝擊匯市！台韓監管警戒「本國幣貶值」風險&nbsp;&nbsp;加密城市CryptoCity"
-    },
-    {
       "title": "韓銀：美元穩定幣需求恐衝擊匯市！台韓監管警戒「本國幣貶值」風險 - cryptocity.tw",
       "url": "https://news.google.com/rss/articles/CBMihAFBVV95cUxOY1dnbzJ1U2wwem1oZHNBeWVXN1JNdHFNTlBIblNLeV9HMEJwdlUyTEg0VFk3R0htRUE3SlptQmxqYl9OdFE1cTBncl9DWnkyVUJLUGl1Vm9HNUYza1NsazdNYTlnTkwxcWl1R1B1QkJwaWkyS0wxaVFuX3ctdUprMHc5TDY?oc=5",
       "source": "cryptocity.tw",
       "published_at": "2026-09-08T02:38:13+00:00",
       "summary": "韓銀：美元穩定幣需求恐衝擊匯市！台韓監管警戒「本國幣貶值」風險&nbsp;&nbsp;cryptocity.tw"
+    },
+    {
+      "title": "韓銀：美元穩定幣需求恐衝擊匯市！台韓監管警戒「本國幣貶值」風險 - 加密城市CryptoCity",
+      "url": "https://news.google.com/rss/articles/CBMihAFBVV95cUxOY1dnbzJ1U2wwem1oZHNBeWVXN1JNdHFNTlBIblNLeV9HMEJwdlUyTEg0VFk3R0htRUE3SlptQmxqYl9OdFE1cTBncl9DWnkyVUJLUGl1Vm9HNUYza1NsazdNYTlnTkwxcWl1R1B1QkJwaWkyS0wxaVFuX3ctdUprMHc5TDY?oc=5",
+      "source": "加密城市CryptoCity",
+      "published_at": "2026-09-08T02:38:13+00:00",
+      "summary": "韓銀：美元穩定幣需求恐衝擊匯市！台韓監管警戒「本國幣貶值」風險&nbsp;&nbsp;加密城市CryptoCity"
     },
     {
       "title": "台股8月狂飆 散戶重返5成、定期定額創新高 - 財經新聞 - PChome Online 新聞 - PChome Online 新聞",
@@ -2424,11 +2627,11 @@
       "summary": "Essential Utilities (WTRG)最新EPS與法說財報公布 | 基本分析 - CMoney 美股股市&nbsp;&nbsp;CMoney"
     },
     {
-      "title": "早盤快訊》權值股震盪互見！大盤微幅回檔仍守4萬7，中小型股點火上攻 | 下班經濟學 | 財經 - storm.mg",
+      "title": "早盤快訊》權值股震盪互見！大盤微幅回檔仍守4萬7，中小型股點火上攻 | 下班經濟學 | 財經 - Storm.mg",
       "url": "https://news.google.com/rss/articles/CBMiTkFVX3lxTE9GMzN1OGxFRTBYNVI2M3pfYUp4MWhrMElpVDRVejZtaXVuX0FTMDhCaTlhaXJKN3ZoczIzdlBYX045al95M1JjY1JaekVTQQ?oc=5",
-      "source": "storm.mg",
+      "source": "Storm.mg",
       "published_at": "2026-09-08T02:26:45+00:00",
-      "summary": "早盤快訊》權值股震盪互見！大盤微幅回檔仍守4萬7，中小型股點火上攻 | 下班經濟學 | 財經&nbsp;&nbsp;storm.mg"
+      "summary": "早盤快訊》權值股震盪互見！大盤微幅回檔仍守4萬7，中小型股點火上攻 | 下班經濟學 | 財經&nbsp;&nbsp;Storm.mg"
     },
     {
       "title": "〈台股開盤〉權值股疲弱、題材股各自表現 黑翻紅衝高漲逾200點 - news.cnyes.com",
@@ -2459,6 +2662,13 @@
       "summary": "專家看盤》台股4.7萬量縮！3大關鍵 個股鎖定名單來了&nbsp;&nbsp;tw.stock.yahoo.com"
     },
     {
+      "title": "【優分析即時新聞】威剛(3260)8月營收飆279%再創新高！AI記憶體超級循環啟動，庫存戰略成獲利關鍵 - LINE TODAY",
+      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTE1TUE5SZ2Myc2pZc0VyZU1DMmhjdWc3RC1tSmVwYkNOdEtSdExFSGtGX1l0aEh0YkdFYThTZWhNYVZ4WUVDVnFRem9yYVNVOUw4dF9OSXh3?oc=5",
+      "source": "LINE TODAY",
+      "published_at": "2026-09-08T02:11:48+00:00",
+      "summary": "【優分析即時新聞】威剛(3260)8月營收飆279%再創新高！AI記憶體超級循環啟動，庫存戰略成獲利關鍵&nbsp;&nbsp;LINE TODAY"
+    },
+    {
       "title": "AI代工一片綠！緯創跳空崩跌7% 廣達英業達挫逾4% 分析師揭「兩大利空」 - Yahoo股市",
       "url": "https://news.google.com/rss/articles/CBMivwNBVV95cUxNVWFkSjg2dGNRaW9VQnNJRmF3VDh4bi1RTUFhejhwSVBpU2pVQjBtUU1OQnMzQ1c0WmxrQy1kcXZpWG1ibzRVZExCaEstYjROa0ZPRnNmdEREQ3ZDS251X0gzbTBzTHhjX0ZBRDBlZngxYjJtdnJoTXVxV0NralRkUmh2a2ZjMlVtdDlMTmNrbnVxRTFXS2d2NkFENGpjZHBTUUFrMkJZRkpWbDQzX25HVG1fSHJmS3cxb0ZTb0lEaXVYM2tia0gzQThKaktUQUFXSmUzMm90SjlJbGJxQTZkSVJuRHllY1lYMTBYZmNsZzNLMG9qUHBaT2tVVWp2bGFMRHNKbFk5ZE82aDA2Y09FNm1oSDNraXZZVmlGRFJpeVdmN3JHXzZxY2FqeFZHYjF1RzZiOXY1cTJieXNrcHZhMWs0bW1CZXA1SW1HZ0JJUTV6YWUzd0NlOUNhSzZuT2plNnQzNG1Fc3R3SERuZjY3OE9qemlScFRLa0Q5MEpXaXdHU3AzX2dOQzB0eDJrVVhOWnpvNy1CMkxTZVktZWQyN3RFdWYxVEUtVmNCQ1JoTzI0QmlJd2FEU0FsMXE1SnM?oc=5",
       "source": "Yahoo股市",
@@ -2473,18 +2683,18 @@
       "summary": "00919變飆股？近半年暴漲50%還能追？專家拆解創高真相：根本半檔都在買金融股| 張庭維 | 新聞&nbsp;&nbsp;Storm.mg"
     },
     {
+      "title": "今年1-7月香港從俄羅斯進口近100公噸黃金-台股 - MoneyDJ",
+      "url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxNS216OEJHZ1dGR2VHRzU1Z2tXUHBRT1NjbHdLNkxQSDBxMzdxR2d1bVRHQnNDYUJQMDdhVzRIRjZSVWpkMzRONXN1T1JRTGZzOW45NHVRLVFZb2pvTEV2N1U4NGFpMk96VjJIYkhkdlA2UFR1bktSMWJ4UEY4T1VLckwyRzVZM19hTG1mQnJLRzRLMlN3VVE?oc=5",
+      "source": "MoneyDJ",
+      "published_at": "2026-09-08T02:02:44+00:00",
+      "summary": "今年1-7月香港從俄羅斯進口近100公噸黃金-台股&nbsp;&nbsp;MoneyDJ"
+    },
+    {
       "title": "今年1-7月香港從俄羅斯進口近100公噸黃金-台股 - moneydj.com",
       "url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxNS216OEJHZ1dGR2VHRzU1Z2tXUHBRT1NjbHdLNkxQSDBxMzdxR2d1bVRHQnNDYUJQMDdhVzRIRjZSVWpkMzRONXN1T1JRTGZzOW45NHVRLVFZb2pvTEV2N1U4NGFpMk96VjJIYkhkdlA2UFR1bktSMWJ4UEY4T1VLckwyRzVZM19hTG1mQnJLRzRLMlN3VVE?oc=5",
       "source": "moneydj.com",
       "published_at": "2026-09-08T02:02:44+00:00",
       "summary": "今年1-7月香港從俄羅斯進口近100公噸黃金-台股&nbsp;&nbsp;moneydj.com"
-    },
-    {
-      "title": "今年1-7月香港從俄羅斯進口近100公噸黃金-台股 - MoneyDJ",
-      "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxOajh1YUNNbWt5Mjd3eUtkUTNHanoxdjk3aV9teWFqWU9KZ1p6d21KQVFndkY5cHFsX1ZXOU5vOTBCejVGbkpHZ2U4SFRPNGJ2YUsxSFBlSjBCRHFSbG1KSGZlbGROSVVJUlVhaGQySWpOX0RldmxsQ19YTGY1dUc1MjJqemtpc3dQMFE?oc=5",
-      "source": "MoneyDJ",
-      "published_at": "2026-09-08T02:02:44+00:00",
-      "summary": "今年1-7月香港從俄羅斯進口近100公噸黃金-台股&nbsp;&nbsp;MoneyDJ"
     },
     {
       "title": "黃仁勳拋40萬顆GPU震撼彈！10萬顆設備價值就破1260億 台廠「4大供應鏈」全面吃補 - FTNN 新聞",
@@ -2548,13 +2758,6 @@
       "source": "CMoney投資網誌",
       "published_at": "2026-09-08T01:44:25+00:00",
       "summary": "【09:42 即時新聞】玉晶光(3406)股價勁揚6.38%、報價1050元，受手機鏡頭營收創35月新高激勵＋中長期多頭均線結構與主力買盤延續支撐&nbsp;&nbsp;CMoney投資網誌"
-    },
-    {
-      "title": "【優分析即時新聞】威剛(3260)8月營收飆279%再創新高！AI記憶體超級循環啟動，庫存戰略成獲利關鍵 - 優分析UAnalyze",
-      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTE40clcxNnM2b1VRcWxPTU92WDhGamdMUEg3TXBieHczZVZWUHR3bDVnOG5hYUpldjc4RnVtZEczQVJ0ZHdFQ25HYUhoSjI2RUZtWnlGNDRR?oc=5",
-      "source": "優分析UAnalyze",
-      "published_at": "2026-09-08T01:41:48+00:00",
-      "summary": "【優分析即時新聞】威剛(3260)8月營收飆279%再創新高！AI記憶體超級循環啟動，庫存戰略成獲利關鍵&nbsp;&nbsp;優分析UAnalyze"
     },
     {
       "title": "3DIC封裝是什麼？核心技術（TSV、混合鍵合）與供應鏈完整解析 - pocket.tw",
@@ -2716,13 +2919,6 @@
       "source": "鉅亨號",
       "published_at": "2026-09-08T01:07:30+00:00",
       "summary": "盤前看盤重點：&nbsp;&nbsp;鉅亨號"
-    },
-    {
-      "title": "盤前看盤重點： - hao.cnyes.com",
-      "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTE9OcHNuYTVNVHJwYnlzeFdYSXpmdS0wS19jVVhIOVNVWkNvTVRfMV9fdXZVUlNfbk9sSXE0bGQ3Z0VDV3NQMkNFaQ?oc=5",
-      "source": "hao.cnyes.com",
-      "published_at": "2026-09-08T01:07:30+00:00",
-      "summary": "盤前看盤重點：&nbsp;&nbsp;hao.cnyes.com"
     },
     {
       "title": "【09:03 即時新聞】統新(6426)攻上漲停325.5元，自結獲利與光通訊濾光片需求推升股價，技術面多頭排列且主力、外資買盤同步偏多 - CMoney投資網誌",
@@ -3304,202 +3500,6 @@
       "source": "LINE TODAY",
       "published_at": "2026-09-07T20:07:15+00:00",
       "summary": "金融存股進入淘汰賽五家題材撐腰守住高峰| 經濟日報&nbsp;&nbsp;LINE TODAY"
-    },
-    {
-      "title": "台幣以31.552元作收 攀三個月新高 - UDN",
-      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTFBoREJTWHdQLXJYWnBUaDFvczhrMDNPd29aOVVFQTZOeVFrQTZ0M0RQY09aelp2bFZ3RnA3OHRkb19JWmZValJVTENxWlZPMHV00gFWQVVfeXFMT2RtUmpCdG1GTFh1UV9jTmNmS2xXYTc0MEJHUjRwNG1zdDNISHk4OVBwbEFMM3ZIVWxuWWJjSTI5YWxhTF9DSm82Qk9zX3Z3aW9ZM0hwU3c?oc=5",
-      "source": "UDN",
-      "published_at": "2026-09-07T19:20:17+00:00",
-      "summary": "台幣以31.552元作收 攀三個月新高&nbsp;&nbsp;UDN"
-    },
-    {
-      "title": "台幣以31.552元作收 攀三個月新高 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxNc19SUjB2b2U1SlY1Znp4NGg4MG1lQ0Y1VV96S1ZoNVNRR0ZZWllrd0lmSTdXWG9RX2prQUs1RmtZOUhWVTVXYWVHanBRTjl2bDZnZ1FYRXNjNk5UblotemJpbmJJRTZZRlBfNjFVLWJnNC1OcnJFRmtxeHE4dnZ5bdIBX0FVX3lxTFA3RG42eVZYYnB0dldoN0tmcGVZWWt0ODlDc0xTa1p2R0dyaUM4d3JMTTVCS3ZZRVRIa0RNMnJjNDBJTDNrOEs1Z3F5MWY1RGRPMV9pWW16RVBGM2l6SW1F?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-09-07T19:20:17+00:00",
-      "summary": "台幣以31.552元作收 攀三個月新高&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "金控股東大減 存股生態改變 ETF 承接籌碼、科技股吸金等因素 形成「價漲人減」 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMid0FVX3lxTE9yWFZnUG9IcGhVMVg0bUZfWDJOQnl1VF9HZ0FaaXMyUUQxdE9NMzdkbERzRjVlUHE2b1N1anN0Q3d0RUFiWWVvNzlBZ0d1OElwMWNHT1k4cjkzdkp3Mkx0WVg3bmxYM0RoNEdFQmpHWUlwREkyQ25N0gFfQVVfeXFMTjd1NkVpNlZVZmFWaXlGTUZXb1BMWTMxVVNHa0ZwNlNtY3JvNWlXeDFZTlhkLWJXUVMwem5nNVJqbUh2T2RUbjE1VDRyX3haX2FtNFNBd1ZSTVhNcGZrd2c?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-09-07T19:10:06+00:00",
-      "summary": "金控股東大減 存股生態改變 ETF 承接籌碼、科技股吸金等因素 形成「價漲人減」&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "台股兆元俱樂部AI鏈成主流台積領銜22檔入列這4檔金融股也有資格- 日報 - 工商時報",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE1ZN3RlUUlWcUlrY0RMbHl4Yy1UM202M2ZSZng2eDFJVXd1RlZKZWdtcWQ2MDhvTXNYZnNRZXpVX21fMDkzMjJOZHJrdTZaai1PZThhNW4zMU1ubzRSdThR?oc=5",
-      "source": "工商時報",
-      "published_at": "2026-09-07T19:00:00+00:00",
-      "summary": "台股兆元俱樂部AI鏈成主流台積領銜22檔入列這4檔金融股也有資格- 日報&nbsp;&nbsp;工商時報"
-    },
-    {
-      "title": "外資回補 台指期站47K - 工商時報",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE5qRUtxLUdzMDFIMkpHY2VSalRDcmtWV0dBOWxmcEZZUW40T3Z1aGt5NUdQSXFONEp5TTNXUHJQUkVxZXNQWWFINVlfNVFValNiaTktSjVCTHFPdG5qcnR3?oc=5",
-      "source": "工商時報",
-      "published_at": "2026-09-07T19:00:00+00:00",
-      "summary": "外資回補 台指期站47K&nbsp;&nbsp;工商時報"
-    },
-    {
-      "title": "新台幣再現大升值？外資熱錢瘋狂匯入央行踩剎車31.5元關卡後面還有戲- 日報 - 工商時報",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE81N2RiWVlMcU5BNzFyWE8ydUFOZ2lTQVRqNGFYVmxkclRkQTVIX1VaU0F3ck9scXZPd0ctajhVY3g0V2JDNXdObE5vUlJTNlp1Zjc2VjdKN25XS2xwTWRz?oc=5",
-      "source": "工商時報",
-      "published_at": "2026-09-07T19:00:00+00:00",
-      "summary": "新台幣再現大升值？外資熱錢瘋狂匯入央行踩剎車31.5元關卡後面還有戲- 日報&nbsp;&nbsp;工商時報"
-    },
-    {
-      "title": "漢測天價IPO登場抽中一張有望笑納254萬！千金股掀比價大戰- 日報 - 工商時報",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTFBXQTBNTWxWb3RNeHB0UUw1R1oxZS1PV2lwREtDVXRBbWhoZWwzeWdwUUxGWWZpdnV6eXVzd1J4RVctV2F1QkJBeGlWUFFpMFdXN3FVSm9kS2xCSmtjcDQw?oc=5",
-      "source": "工商時報",
-      "published_at": "2026-09-07T19:00:00+00:00",
-      "summary": "漢測天價IPO登場抽中一張有望笑納254萬！千金股掀比價大戰- 日報&nbsp;&nbsp;工商時報"
-    },
-    {
-      "title": "台股兆元俱樂部AI鏈成主流台積領銜22檔入列這4檔金融股也有資格- 日報 - ctee.com.tw",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE1ZN3RlUUlWcUlrY0RMbHl4Yy1UM202M2ZSZng2eDFJVXd1RlZKZWdtcWQ2MDhvTXNYZnNRZXpVX21fMDkzMjJOZHJrdTZaai1PZThhNW4zMU1ubzRSdThR?oc=5",
-      "source": "ctee.com.tw",
-      "published_at": "2026-09-07T19:00:00+00:00",
-      "summary": "台股兆元俱樂部AI鏈成主流台積領銜22檔入列這4檔金融股也有資格- 日報&nbsp;&nbsp;ctee.com.tw"
-    },
-    {
-      "title": "外資回補 台指期站47K - ctee.com.tw",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE5qRUtxLUdzMDFIMkpHY2VSalRDcmtWV0dBOWxmcEZZUW40T3Z1aGt5NUdQSXFONEp5TTNXUHJQUkVxZXNQWWFINVlfNVFValNiaTktSjVCTHFPdG5qcnR3?oc=5",
-      "source": "ctee.com.tw",
-      "published_at": "2026-09-07T19:00:00+00:00",
-      "summary": "外資回補 台指期站47K&nbsp;&nbsp;ctee.com.tw"
-    },
-    {
-      "title": "漢測天價IPO登場抽中一張有望笑納254萬！千金股掀比價大戰- 日報 - ctee.com.tw",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTFBXQTBNTWxWb3RNeHB0UUw1R1oxZS1PV2lwREtDVXRBbWhoZWwzeWdwUUxGWWZpdnV6eXVzd1J4RVctV2F1QkJBeGlWUFFpMFdXN3FVSm9kS2xCSmtjcDQw?oc=5",
-      "source": "ctee.com.tw",
-      "published_at": "2026-09-07T19:00:00+00:00",
-      "summary": "漢測天價IPO登場抽中一張有望笑納254萬！千金股掀比價大戰- 日報&nbsp;&nbsp;ctee.com.tw"
-    },
-    {
-      "title": "外資買超132億元 買超華邦電9.2萬張最多 但聯電遭大賣終止連三買 | 市場焦點 | 證券 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxNSm1mXzBPZnFncXYxRmR3ZnhOSFFMNHZLVWhWcGVFbUg2MHNPa3psVWRsaTZYX1N1SWl1UHA1UXQ5Q2xBendBTmc0X21YLW1zRDVhSGtYOVh3ZG94aXNzUFNlS2xtRFYzUC1yQVlKa213Skl5SngwNG9jNTVoaEJDSk8wTjBBakttMHZGTEFYTWs?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-09-07T19:00:00+00:00",
-      "summary": "外資買超132億元 買超華邦電9.2萬張最多 但聯電遭大賣終止連三買 | 市場焦點 | 證券&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "迎接AGI時代黃仁勳喊40萬顆GPU備戰受惠不只台積電、廣達散熱、電源商機大- 日報 - 工商時報",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTFBhWHBLYXU4LTFHYUIyU2NhSEpVVHROUUVUQk52Mm5uOXBzcDU2SkFPVy1iNDRKRUR0N3Y0LUh5c3lrMXFNZFZDYU4tMWh1UUJ5bTRkQ0F5RlpQendkdnZJ?oc=5",
-      "source": "工商時報",
-      "published_at": "2026-09-07T19:00:00+00:00",
-      "summary": "迎接AGI時代黃仁勳喊40萬顆GPU備戰受惠不只台積電、廣達散熱、電源商機大- 日報&nbsp;&nbsp;工商時報"
-    },
-    {
-      "title": "台股市值兆元大軍22檔入列- 日報 - 工商時報",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE1ZN3RlUUlWcUlrY0RMbHl4Yy1UM202M2ZSZng2eDFJVXd1RlZKZWdtcWQ2MDhvTXNYZnNRZXpVX21fMDkzMjJOZHJrdTZaai1PZThhNW4zMU1ubzRSdThR?oc=5",
-      "source": "工商時報",
-      "published_at": "2026-09-07T19:00:00+00:00",
-      "summary": "台股市值兆元大軍22檔入列- 日報&nbsp;&nbsp;工商時報"
-    },
-    {
-      "title": "挪威主權基金加碼11金控 | 金融脈動 | 金融 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTFAzbXIxQXlqQmozc1pLd3dlNmI4WTktLVJlcnVoTlRCUUFvVktMTkxzWUVfVV9Gdk9pSEFvLVN3UXJIM245TmhVUHo5bzJ3RWVxYTc4ZWxUbkJ5Zw?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-09-07T18:06:50+00:00",
-      "summary": "挪威主權基金加碼11金控 | 金融脈動 | 金融&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "挪威主權基金加碼11金控 | 金融脈動 | 金融 - money.udn.com",
-      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTFAzbXIxQXlqQmozc1pLd3dlNmI4WTktLVJlcnVoTlRCUUFvVktMTkxzWUVfVV9Gdk9pSEFvLVN3UXJIM245TmhVUHo5bzJ3RWVxYTc4ZWxUbkJ5Zw?oc=5",
-      "source": "money.udn.com",
-      "published_at": "2026-09-07T18:06:50+00:00",
-      "summary": "挪威主權基金加碼11金控 | 金融脈動 | 金融&nbsp;&nbsp;money.udn.com"
-    },
-    {
-      "title": "壽險想拿風電100%治理權 碰壁 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE5Obk5EN3NXSHFGLUZ4aWtkWlctenNhOVhUb21zeklxbFpGdG9LNFppdDFGUHQwQlFsMHVJQk0wZnA1UjBQV0hJNFJvc3A0N01sVHpxT2NyZGRZVWNB0gFiQVVfeXFMTlhPX2ctbXZUTWRnbF9ub1JhMWpyZE1BX2hDcUx6ZzFxTlJ0a2VLU0lCaW5uTnp2LWVyaDQxdTJNelUxZGdCUnVJck9jT3M2Rm0zMjFReG1yRGVDa2QyQmRqZnc?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-09-07T18:01:49+00:00",
-      "summary": "壽險想拿風電100%治理權 碰壁&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "壽險想拿風電100%治理權 碰壁 - money.udn.com",
-      "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE5Obk5EN3NXSHFGLUZ4aWtkWlctenNhOVhUb21zeklxbFpGdG9LNFppdDFGUHQwQlFsMHVJQk0wZnA1UjBQV0hJNFJvc3A0N01sVHpxT2NyZGRZVWNB0gFiQVVfeXFMTlhPX2ctbXZUTWRnbF9ub1JhMWpyZE1BX2hDcUx6ZzFxTlJ0a2VLU0lCaW5uTnp2LWVyaDQxdTJNelUxZGdCUnVJck9jT3M2Rm0zMjFReG1yRGVDa2QyQmRqZnc?oc=5",
-      "source": "money.udn.com",
-      "published_at": "2026-09-07T18:01:49+00:00",
-      "summary": "壽險想拿風電100%治理權 碰壁&nbsp;&nbsp;money.udn.com"
-    },
-    {
-      "title": "保險業發展 AI 卡在「資料孤島」 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE5HLUJqcVNtSTduQ0dKTXlSQ0VjbmRJdGZGZW1KaVF0NnJvVTl0d3YyLTQxU1dEMGxzUFliVWpfSlB0TDhid1kyQkJCSm9Tbl80R1RMOFUtdUxxVWJP0gFiQVVfeXFMUFpjSDU2TUxnZUl1Q2Q2REdEYi1Ed1lkZTZQZkV0bHBMc1VCQkdBdmQ3UWlSNGVEeHRUd2hUY1p5ZG1MYUZwTUJLLWV3VGRXT0NaaDRfNThqS1J6anN4SU9DWlE?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-09-07T18:01:22+00:00",
-      "summary": "保險業發展 AI 卡在「資料孤島」&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "台指期 短線偏多操作 - UDN",
-      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTFAycHZPbkg2VUhUUDZBTWRnVXFyUWFFenRGQVpCcXp1YVR0R0lJLTByS1dSTGdqYXVYYmJsS0d1bXFhZVVRR2ZKR0ZyNmhMeWp3NTQ4RjBB0gFWQVVfeXFMUDJwdk9uSDZVSFRQNkFNZGdVcXJRYUV6dEZBWkJxenVhVHRHSUktMHJLV1JMZ2phdVhiYmxLR3VtcWFlVVFHZkpHRnI2aEx5anc1NDhGMEE?oc=5",
-      "source": "UDN",
-      "published_at": "2026-09-07T17:44:01+00:00",
-      "summary": "台指期 短線偏多操作&nbsp;&nbsp;UDN"
-    },
-    {
-      "title": "大盤站穩4萬7！台股終場上漲775點 台積電漲50元、收2460元 | 民視新聞網 - LINE TODAY",
-      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTE1uQ2YtYlhGWFZXcWNMOHRDNHNDTEFLS0x5UWxNMVAxZDY4a1F6ZlQzbXJaTjc3N3UyMG5EOHNNVFlqNEIyWVZCbWM4M2duZzdHTG1yN3RR?oc=5",
-      "source": "LINE TODAY",
-      "published_at": "2026-09-07T17:42:38+00:00",
-      "summary": "大盤站穩4萬7！台股終場上漲775點 台積電漲50元、收2460元 | 民視新聞網&nbsp;&nbsp;LINE TODAY"
-    },
-    {
-      "title": "北美CSP自研AI晶片加速 閎康8月營收連續6個月創新高 - 自由時報",
-      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE1iZVFBXzVvVjJyazAyMTVYVXdYaUMzbGdyUUltbWUyeTgwNlBWTy1QNVBhN0ViV3JhZk1WM0VxSmFlejE0bmI5UUcwMy0wVlZ6TGNTUjh4UDE?oc=5",
-      "source": "自由時報",
-      "published_at": "2026-09-07T17:14:00+00:00",
-      "summary": "北美CSP自研AI晶片加速 閎康8月營收連續6個月創新高&nbsp;&nbsp;自由時報"
-    },
-    {
-      "title": "台股重返四萬七收史上次高 台股今年反超韓股登亞股強漲王| 太報 - LINE TODAY",
-      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTFB5ZUdXNnFHQjJ4azdQNnMyaE5GdERwUDVuWnVnMWtOUy1kaW9HUndCY1pKTHdtWkRCSXN1dUtiaWVEd3BOYW5oWUNSS2dyTEZ4SkVVTkFR?oc=5",
-      "source": "LINE TODAY",
-      "published_at": "2026-09-07T17:10:12+00:00",
-      "summary": "台股重返四萬七收史上次高 台股今年反超韓股登亞股強漲王| 太報&nbsp;&nbsp;LINE TODAY"
-    },
-    {
-      "title": "外資加持穎崴亮燈漲停 猛踩油門甩開鴻勁追逐力道 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE1fcUNld085bEVfd3VXd2ljVE5jcmd4dnlGenRuQUYwbHc2T3loTkp2OUh3YVo2cmtPN19YTEZOejI0anVkbldNNzZzX2hWa1N5VGZXQzMzRnhpZ9IBX0FVX3lxTE53eElmUTQzMGRyLXozYVlBeEdiT2J6RjNyZXROa0JEcGtfYWJscG5KWDRoNWV1QnF5ei1wVUl4SkQwdjlnZ0xqZEpiVFF5VUxJekFMYjVyQlZoMU1MUHUw?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-09-07T17:00:00+00:00",
-      "summary": "外資加持穎崴亮燈漲停 猛踩油門甩開鴻勁追逐力道&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "台股5萬點快到了？專家曝「本周2大事件」：大型權值股有變動，大盤順勢高升 - Yahoo新聞",
-      "url": "https://news.google.com/rss/articles/CBMitwNBVV95cUxQQVFLRlpZT3pTRXhtcGZzSmhVQjFBTnhPNGFpSTZjN2dmcV9SUDQ2bDl4aFNVWlo0TkJQU2MtQVZ0SVZtVFladzZaTXdWVXh5dGt5QXlNUTR6MFJYLWFYeXRmdkJYM3hVWklJR0xvMGd6YUpxS1FpWThldmJNalNCVUJaZk53eTQ4Z2FsV2dZUTZwS0pWX2pGMkhJY2VQbTExUU1wWjYxYVM2dlVCeFBZcElZZDJGZzZMQ2ZfanJPWXFJVzRkSzZIMnpyRXlLR19QMGRJRkpWWHhGZ1JjMFdNWnp2MEVxczBVekI2cXNORG4zUTV0TmFSanozNXhIRjZpT3J3akZVdmVyMDhTVHZ4Rk9MX3hoU2J1MW9JYnJEeUE1OTV3bC1CSldRNGRzWWY5ZW1rbjNNZUt6QXl1TVFCWUg5MWtkUm5UdXF3NGxrVHowYUtoNWpSNGd2OGZ6OGpEZzVWUWVpajR3Sjd2aFJsclhDd2RaMTVWNU5iQUcxSHIzX2Z4SXVIc1lKckhTTS11R0k0MDNJMDRkYkMwM1hMcnpRaDBJaWVWUWZsU3FxdGpacjdnNzh3?oc=5",
-      "source": "Yahoo新聞",
-      "published_at": "2026-09-07T16:52:57+00:00",
-      "summary": "台股5萬點快到了？專家曝「本周2大事件」：大型權值股有變動，大盤順勢高升&nbsp;&nbsp;Yahoo新聞"
-    },
-    {
-      "title": "AI先進封裝需求升溫 長電科技擬募資65億人民幣擴產、2026年資本支出上看100億人民幣 - news.cnyes.com",
-      "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE9YczcwR20tV21sVU9CZmN2bWZONWZNdWpVLXRyUUJtNnEyS1RtODc5ZW5sdWEzcEVLMVRXMWRuUjV0RHp0bnkyQnViRjM5WWc?oc=5",
-      "source": "news.cnyes.com",
-      "published_at": "2026-09-07T16:33:36+00:00",
-      "summary": "AI先進封裝需求升溫 長電科技擬募資65億人民幣擴產、2026年資本支出上看100億人民幣&nbsp;&nbsp;news.cnyes.com"
-    },
-    {
-      "title": "台股9月高位盤整 秋節變盤？量能擴增是好「兆」頭 | 市場焦點 | 證券 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTFBjWDFRVDJ5YXNKR3BwaHBVazNFdThFYU9TMWtEVE0xbWQ1Nk9VTWVHNy1TZ0piZXpZalF1emhITTExc2RBNXR5RTNTZy01c0c3REJxSG5xTkQxdw?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-09-07T16:02:13+00:00",
-      "summary": "台股9月高位盤整 秋節變盤？量能擴增是好「兆」頭 | 市場焦點 | 證券&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "TWA00 加權指數- 貓砂盆D+股溝裁員新聞- 股市爆料同學會 - cmoney.tw",
-      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE93OUVXaVVQT095UGFRWEpLSTIzS2xuMkh6T0JHZUpvRTRDenUzQW1Kb0JRTGxmYkRkQ0RtcGxzNGRBSTJoTWFIV3kxMVdEX2RMODBDNF9ZMGU?oc=5",
-      "source": "cmoney.tw",
-      "published_at": "2026-09-07T16:01:16+00:00",
-      "summary": "TWA00 加權指數- 貓砂盆D+股溝裁員新聞- 股市爆料同學會&nbsp;&nbsp;cmoney.tw"
-    },
-    {
-      "title": "TWA00 加權指數- 貓砂盆D+股溝裁員新聞- 股市爆料同學會 - CMoney",
-      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE93OUVXaVVQT095UGFRWEpLSTIzS2xuMkh6T0JHZUpvRTRDenUzQW1Kb0JRTGxmYkRkQ0RtcGxzNGRBSTJoTWFIV3kxMVdEX2RMODBDNF9ZMGU?oc=5",
-      "source": "CMoney",
-      "published_at": "2026-09-07T16:01:16+00:00",
-      "summary": "TWA00 加權指數- 貓砂盆D+股溝裁員新聞- 股市爆料同學會&nbsp;&nbsp;CMoney"
     }
   ]
 }
