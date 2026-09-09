@@ -333,3 +333,74 @@ test('returnOverMdd 與 computeCurveRisk 定義一致', () => {
   const r = computeCurveRisk(curve)
   assert.equal(r.return_over_mdd, returnOverMdd(10, r.max_drawdown_pct))
 })
+
+// ── 報酬導向:賺賠比與期望值 ──────────────────────────────────────────────────
+// 目標從「勝率」改成「報酬率」後,這幾個指標才是決策依據。勝率高但賺賠比低的
+// 策略(冒 12% 賺 8% 的預設值就是)期望值可能為負,以下用合成資料把算法釘死。
+
+test('riskReward 由停損推導停利,賺賠比成為可調參數', () => {
+  const r = run({
+    scans: { [D[0]]: mkScan([{ id: 'A' }]) },
+    bars: { A: mkBars([{ c: 100 }, { c: 100 }]) },
+    config: { stopLoss: 0.05, riskReward: 2 },
+  })
+  assert.equal(r.config.take_profit_pct, 10, '停利 = 停損 5% × 2')
+  assert.equal(r.config.stop_loss_pct, 5)
+  assert.equal(r.config.risk_reward, 2, '設定的賺賠比要如實回報')
+})
+
+test('明確給 takeProfit 時顯式優先,不被 riskReward 覆蓋', () => {
+  const r = run({
+    scans: { [D[0]]: mkScan([{ id: 'A' }]) },
+    bars: { A: mkBars([{ c: 100 }, { c: 100 }]) },
+    config: { stopLoss: 0.05, riskReward: 2, takeProfit: 0.03 },
+  })
+  assert.equal(r.config.take_profit_pct, 3, '顯式 takeProfit 要贏過推導值')
+})
+
+test('停用停利(搭配移動停損)時 riskReward 不會把它救回來', () => {
+  const r = run({
+    scans: { [D[0]]: mkScan([{ id: 'A' }]) },
+    bars: { A: mkBars([{ c: 100 }, { c: 100 }]) },
+    config: { stopLoss: 0.05, riskReward: 2, takeProfit: null, trailingStop: 0.08 },
+  })
+  assert.equal(r.config.take_profit_pct, null, 'takeProfit:null 是刻意停用,不該被推導覆蓋')
+  assert.equal(r.config.risk_reward, null, '沒有停利就沒有設定賺賠比可言')
+})
+
+test('賺賠比與期望值:一勝一敗時 payoff = 平均賺 ÷ 平均賠', () => {
+  // A 停利 +8% 出場、B 停損 -12% 出場,兩檔各買一次(maxPositions 1 依序進場)
+  const r = run({
+    scans: { [D[0]]: mkScan([{ id: 'A' }]), [D[2]]: mkScan([{ id: 'B' }]) },
+    bars: {
+      A: mkBars([{ c: 100 }, { o: 100, h: 109, l: 99, c: 105 }, { c: 105 }, { c: 105 }]),
+      B: mkBars([{ c: 50 }, { c: 50 }, { c: 50 }, { o: 50, h: 50, l: 43, c: 44 }]),
+    },
+  })
+  const s = r.stats
+  assert.equal(s.num_trades, 2)
+  assert.equal(s.win_rate, 50, '勝率 50% —— 單看這個數字什麼都看不出來')
+  assert.ok(s.avg_win > 0, `avg_win 應為正,實得 ${s.avg_win}`)
+  assert.ok(s.avg_loss < 0, `avg_loss 應為負,實得 ${s.avg_loss}`)
+  // 賺賠比 = |avg_win / avg_loss|;預設 8% 停利 / 12% 停損 → 明顯小於 1
+  assert.ok(s.payoff_ratio < 1,
+    `預設值的賺賠比必須 < 1(冒 12% 賺 8%),實得 ${s.payoff_ratio}`)
+  const expected = Math.round(s.avg_win / Math.abs(s.avg_loss) * 100) / 100
+  assert.equal(s.payoff_ratio, expected)
+  // 期望報酬 = 勝率×avg_win + 敗率×avg_loss,等同 avg_ret
+  const expectancy = (s.win_rate / 100) * s.avg_win + (1 - s.win_rate / 100) * s.avg_loss
+  assert.ok(Math.abs(s.avg_ret - expectancy) < 0.02,
+    `avg_ret(${s.avg_ret}) 應等於期望值分解(${expectancy.toFixed(2)})`)
+  assert.ok(s.avg_ret < 0, '勝率 50% 但賺賠比 < 1 → 期望值為負,這正是要修的問題')
+})
+
+test('全勝或全敗時賺賠比回 null,不回 Infinity', () => {
+  const allWin = run({
+    scans: { [D[0]]: mkScan([{ id: 'A' }]) },
+    bars: { A: mkBars([{ c: 100 }, { o: 100, h: 109, l: 99, c: 105 }]) },
+  })
+  assert.equal(allWin.stats.num_trades, 1)
+  assert.equal(allWin.stats.payoff_ratio, null, '沒有敗筆就沒有分母')
+  assert.equal(allWin.stats.avg_loss, null)
+  assert.ok(allWin.stats.avg_win > 0)
+})

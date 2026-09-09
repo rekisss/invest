@@ -14,8 +14,15 @@ export const DEFAULT_CONFIG = {
   startCapital: 1_000_000, // NT$ virtual capital
   startDate: '2026-06-23', // inception (scoring stable since)
   maxPositions: 6,         // diversification cap
+  // ⚠️ 這組預設值的賺賠比只有 0.67:1(冒 12% 風險賺 8%)——它是為「勝率」最佳化
+  //    出來的,只有在勝率夠高時期望值才為正。改用報酬率當目標後,這組值是待挑戰的
+  //    基準線而不是答案;賺賠比的實驗交給 riskReward 變體(見 build-data.mjs)決定。
   takeProfit: 0.08,        // +8% profit target (backtested high win-rate exit)
   stopLoss: 0.12,          // wide disaster stop (tight stops hurt in backtest)
+  // 賺賠比(止盈:止損)。設了就用 stopLoss × riskReward 推導 takeProfit,讓「賺賠比」
+  // 本身成為可調參數,而不是停利停損各調各的。例 2 = 冒 1 塊風險賺 2 塊。
+  // 明確傳入 takeProfit 時以 takeProfit 為準(顯式優先於推導),兩者不會互相打架。
+  riskReward: null,
   maxHold: 15,             // trading days before a time exit
   feeBuy: 0.001425,        // broker fee
   feeSell: 0.004425,       // broker fee + 0.3% securities tax
@@ -36,6 +43,12 @@ export const DEFAULT_CONFIG = {
 // klineFor(sid) -> ascending [{time, open, high, low, close}] or null/undefined
 export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
   const cfg = { ...DEFAULT_CONFIG, ...cfgIn }
+  // 賺賠比 → 停利。顯式 takeProfit 優先(含刻意設 null 停用停利搭配移動停損的變體),
+  // 所以只有「沒給 takeProfit」時才由 riskReward 推導。浮點乘法會產生 0.060000000000000005
+  // 這種尾數,四捨五入到小數 6 位讓 config 輸出與測試斷言都乾淨。
+  if (cfg.riskReward != null && cfg.riskReward > 0 && cfg.stopLoss > 0 && !('takeProfit' in cfgIn)) {
+    cfg.takeProfit = Math.round(cfg.stopLoss * cfg.riskReward * 1e6) / 1e6
+  }
   const scanDates = new Set(Object.keys(scans || {}))
 
   // Per-stock date -> bar index, plus cache the bars. All keying is normalized
@@ -290,10 +303,24 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
   // Open positions' buy fees were already paid out of cash, so 總交易成本 must
   // include them too — otherwise costs are underreported while a book is open.
   const openBuyFees = Object.values(positions).reduce((a, p) => a + p.shares * p.entry * cfg.feeBuy, 0)
+  // 報酬導向的三個指標。勝率只回答「贏幾次」,這三個才回答「賺多少」:
+  //   avg_win / avg_loss  贏的時候平均賺多少、輸的時候平均賠多少
+  //   payoff_ratio        實現賺賠比 = avg_win ÷ |avg_loss|
+  //   avg_ret             每筆期望報酬(= 勝率×avg_win + 敗率×avg_loss),真正的目標函數
+  // 期望值為正的兩條路:勝率高,或賺賠比高。只盯勝率會系統性錯過後者。
+  const winTrades = closed.filter(t => t.ret_pct > 0)
+  const lossTrades = closed.filter(t => t.ret_pct <= 0)
+  const avgWin = winTrades.length ? winTrades.reduce((a, t) => a + t.ret_pct, 0) / winTrades.length : null
+  const avgLoss = lossTrades.length ? lossTrades.reduce((a, t) => a + t.ret_pct, 0) / lossTrades.length : null
   const stats = {
     num_trades: closed.length,
     win_rate: closed.length ? round2(wins / closed.length * 100) : null,
     avg_ret: closed.length ? round2(closed.reduce((a, t) => a + t.ret_pct, 0) / closed.length) : null,
+    avg_win: avgWin != null ? round2(avgWin) : null,
+    avg_loss: avgLoss != null ? round2(avgLoss) : null,
+    // avgLoss 為 0(平盤出場全記在敗方)時分母是 0 → 回 null 而不是 Infinity
+    payoff_ratio: (avgWin != null && avgLoss != null && avgLoss < 0)
+      ? round2(avgWin / Math.abs(avgLoss)) : null,
     best: closed.length ? Math.max(...closed.map(t => t.ret_pct)) : null,
     worst: closed.length ? Math.min(...closed.map(t => t.ret_pct)) : null,
     max_drawdown_pct: round2(maxDD * 100),
@@ -315,6 +342,11 @@ export function simulatePaperTrader({ scans, klineFor, config: cfgIn = {} }) {
     config: { start_capital: cfg.startCapital, start_date: cfg.startDate, max_positions: cfg.maxPositions,
               take_profit_pct: cfg.takeProfit != null ? cfg.takeProfit * 100 : null,
               stop_loss_pct: cfg.stopLoss * 100, max_hold: cfg.maxHold,
+              // 設定的賺賠比(規則打算冒多少風險賺多少)。與 stats.payoff_ratio(實際
+              // 打出來的賺賠比)並列,兩者的落差本身就是資訊:設 2:1 但實現只有 0.8:1,
+              // 代表停利很少觸及、多數部位是被停損或時間出場帶走的。
+              risk_reward: (cfg.takeProfit != null && cfg.stopLoss > 0)
+                ? Math.round(cfg.takeProfit / cfg.stopLoss * 100) / 100 : null,
               execution: cfg.execution,
               trailing_stop_pct: cfg.trailingStop != null ? cfg.trailingStop * 100 : null },
     as_of: asOf,
