@@ -17,6 +17,7 @@
 | 💼 **持倉** | 追蹤自選持倉，計算損益、持倉天數、目前訊號狀態 |
 | 📰 **新聞** | 台股即時新聞語料，依股票代號篩選，含情緒分析 |
 | 🤖 **預測** | 盤前 AI 預測（ML 模型），給出多空傾向與信心度 |
+| 🧪 **期策** | 自訂策略期貨預測：自己調因子權重／方向／門檻／持有期距，即時算台指期多空傾向並回測 |
 | ⚡ **圓桌** | 跨股票橫截面信號、F-Score 財務評分、強弱排名 |
 | 📈 **配額** | FinMind API 配額使用狀況監控 |
 | 💬 **AI** | Claude AI 即時問答，可查詢個股、分析盤面 |
@@ -220,7 +221,10 @@ invest/
 │   │   │   ├── StockDetailModal.jsx # 個股詳細圖表
 │   │   │   ├── Overview.jsx        # 總覽頁
 │   │   │   ├── NewsFeed.jsx        # 新聞頁
-│   │   │   └── PredictionPanel.jsx # 預測頁
+│   │   │   ├── PredictionPanel.jsx # 預測頁
+│   │   │   └── FuturesStrategyLab.jsx # 期策頁（自訂策略期貨預測）
+│   │   ├── utils/
+│   │   │   └── futuresStrategy.js  # 期貨策略引擎（純函式：打分／回測／最佳化）
 │   │   ├── App.jsx                 # 路由 + 主題切換
 │   │   └── styles/global.css       # CSS 變數（深色/淺色主題）
 │   ├── scripts/
