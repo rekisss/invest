@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
 import DailyActionBrief from './DailyActionBrief'
-import { useLivePrices, isTWSEOpen } from '../hooks/useLivePrices'
+import { isTWSEOpen } from '../hooks/useLivePrices'
+import { useLivePricesPlus, STREAM_PRIORITY } from '../hooks/ShioajiStreamContext.jsx'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { animate, stagger, spring } from 'animejs'
@@ -2339,7 +2340,7 @@ export default function Dashboard({ data, error }) {
     return [...ids]
   }, [data, customTrack, watchlist])
   const marketOpen = isTWSEOpen()
-  const { prices: liveData } = useLivePrices(liveStockIds)
+  const { prices: liveData } = useLivePricesPlus(liveStockIds, {}, { priority: STREAM_PRIORITY.scan })
 
   const scan = data?.scans?.[selectedDate] || {}
   const stocks = scan.top_stocks || []

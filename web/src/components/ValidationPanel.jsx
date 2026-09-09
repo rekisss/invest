@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react'
 import { animate, stagger, spring } from 'animejs'
-import { useLivePrices, isTWSEOpen } from '../hooks/useLivePrices'
+import { isTWSEOpen } from '../hooks/useLivePrices'
+import { useLivePricesPlus, STREAM_PRIORITY } from '../hooks/ShioajiStreamContext.jsx'
 import { useDataValidation } from '../hooks/useDataValidation'
 import StockDetailModal from './StockDetailModal'
 import { getStockHistories } from '../utils/histCache'
@@ -641,7 +642,7 @@ export default function ValidationPanel({ data, onRefresh }) {
   // Live prices (current scan only)
   const marketOpen = isTWSEOpen()
   const liveIds    = histDate == null ? top20.map(s => String(s.stock_id)) : []
-  const { prices: livePrices } = useLivePrices(liveIds)
+  const { prices: livePrices } = useLivePricesPlus(liveIds, {}, { priority: STREAM_PRIORITY.other })
   const showLive = histDate == null && marketOpen
 
   // Animate cards on list change

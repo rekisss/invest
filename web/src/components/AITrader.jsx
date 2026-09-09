@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback } from 'react'
 import LiveTraderPanel from './LiveTraderPanel'
-import { useLivePrices, isTWSEOpen, isScanDataCurrent } from '../hooks/useLivePrices'
+import { isTWSEOpen, isScanDataCurrent } from '../hooks/useLivePrices'
+import { useLivePricesPlus, STREAM_PRIORITY } from '../hooks/ShioajiStreamContext.jsx'
 
 const UP = 'var(--ios-red)'      // Taiwan: red = up/gain
 const DOWN = 'var(--ios-green)'  // green = down/loss
@@ -450,7 +451,7 @@ export default function AITrader({ data }) {
   // 交易日收盤 → 用快取的今日收盤。資料已是今日(晚間入帳後)就不用後備,
   // 避免舊快取蓋過已結算價(「慢一天」bug 的老路)。
   const posIds = useMemo(() => (ai?.positions || []).map(p => String(p.stock_id)), [ai])
-  const { prices: hookPrices } = useLivePrices(posIds)
+  const { prices: hookPrices } = useLivePricesPlus(posIds, {}, { priority: STREAM_PRIORITY.positions })
   const useHookPx = isTWSEOpen() || !isScanDataCurrent(ai?.as_of)
   const pxOf = (id) => liveQuotes[id]?.price ?? (useHookPx ? hookPrices[id]?.price : undefined)
 

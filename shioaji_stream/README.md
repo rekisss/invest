@@ -11,8 +11,19 @@ WebSocket 即時推送給前端盯盤頁。
 ```
 [Railway 24h 服務]  server.py
    └─ Shioaji streaming（訂閱你觀察清單的 ticks）
-   └─ WebSocket  /ws  ──即時推送──▶  [盯盤頁面]  毫秒級跳動
+   └─ WebSocket  /ws  ──即時推送──▶  [ShioajiStreamProvider]  全站共用一條連線
+                                          ├─▶ 持倉 / AI操盤 / 績效
+                                          ├─▶ 掃描 / 驗證
+                                          └─▶ 盯盤
 ```
+
+前端這一條連線由 `web/src/hooks/ShioajiStreamContext.jsx` 持有（掛在 App 之上），
+所有分頁共用，不會各開各的燒訂閱額度。各分頁登記自己要的代號，Provider 取聯集後
+統一訂閱；**持倉的優先序最高**，代號總數超過 `MAX_SUBSCRIPTIONS` 時先被截掉的是
+掃描結果（合併規則見 `web/src/utils/streamIds.js`，有單元測試）。被截掉的代號不會
+沒有價格，只是退回原本的輪詢報價（延遲較高）。
+
+沒設定 WebSocket 網址時，整層自動停用，全站行為與設定前完全相同。
 
 ## 部署到 Railway
 
@@ -45,6 +56,16 @@ curl https://你的網址.up.railway.app/healthz
 - **Token**：跟 `STREAM_TOKEN` 一樣那組
 
 存好之後盤中就會即時跳動（資料只在開盤/收盤時段有；非交易日無 tick）。
+設定只要填這一次，**持倉 / AI操盤 / 績效 / 掃描 / 驗證 分頁會同步生效**，
+不需要每個分頁各設一次。
+
+### 延遲差多少
+
+| 報價層 | 典型延遲 | 需要什麼 |
+|---|---|---|
+| Shioaji WebSocket 串流 | **< 1 秒** | 部署這個服務 |
+| 富果 Fugle（瀏覽器直連） | ~15 秒 | 瀏覽器填富果金鑰 |
+| GitHub Actions 快取 | 60–90 秒（最差 ~3 分） | 不用設定，預設 |
 
 ## 本機測試
 

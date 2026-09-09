@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import StockDetailModal from './StockDetailModal'
-import { useLivePrices, isScanDataCurrent } from '../hooks/useLivePrices'
+import { isScanDataCurrent } from '../hooks/useLivePrices'
+import { useLivePricesPlus, STREAM_PRIORITY } from '../hooks/ShioajiStreamContext.jsx'
 import { getStockHistories } from '../utils/histCache'
 import { computeTargets } from '../utils/tradePlan'
 import gsap from 'gsap'
@@ -228,7 +229,7 @@ export default function Portfolio({ data }) {
   // ── Live prices via TWSE 即時行情 (replaces Yahoo Finance one-shot fetch) ──
   const posKey = Object.keys(positions).sort().join(',')
   const posIds = useMemo(() => Object.keys(positions), [posKey])
-  const { prices: livePriceData, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: livePriceLoading } = useLivePrices(posIds)
+  const { prices: livePriceData, isOpen: mktOpen, session: mktSession, lastUpdate: liveTime, loading: livePriceLoading } = useLivePricesPlus(posIds, {}, { priority: STREAM_PRIORITY.positions })
   // Note: not gated by mktOpen — useLivePrices already fetches the final settled
   // close once after market close (see its `closedFetchDone` logic), and that
   // covers far more stocks than the day's scan top_stocks/filter_stocks list.
