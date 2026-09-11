@@ -3,6 +3,7 @@ import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { animateListRows } from '../utils/animeUtils'
 import { scoreProxyPredictions, summarizeProxy, horizonOutcomeMap, PROXY_HORIZON } from '../utils/proxyScore.js'
+import { buildReviewRows } from '../utils/reviewRows.js'
 gsap.registerPlugin(useGSAP)
 
 const HIST_PAGE_SIZE = 20
@@ -486,10 +487,18 @@ function Tag({ text, color }) {
 // 理由見 utils/proxyScore.js——模型只預測「會不會漲逾 0.3%」,不預測「會跌」。
 function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
   const listRef = useRef(null)
-  const rows = useMemo(() => {
-    // 模型預測的是 PROXY_HORIZON(5)個交易日後,故以同期距的累積報酬打分
-    return scoreProxyPredictions(history, benchCurve, { limit: 14 })
-  }, [history, benchCurve])
+  // 逐日清單:真實收盤優先,沒有真實紀錄的日期才退回掃描池代理。
+  // 代理要等基準曲線累積滿 5 根前瞻 K 棒,最新幾天一律算不出來——只用代理的話
+  // 那幾列會整列消失(即使真實大盤收盤早就出來了)。見 utils/reviewRows.js。
+  const rows = useMemo(
+    () => buildReviewRows({ history, benchCurve, realOutcomes, limit: 14 }),
+    [history, benchCurve, realOutcomes]
+  )
+  // 頂端那行「掃描池代理估算」維持只用代理算,才和 Discord 日報是同一個數字
+  const proxyRows = useMemo(
+    () => scoreProxyPredictions(history, benchCurve, { limit: 14 }),
+    [history, benchCurve]
+  )
 
   useLayoutEffect(() => {
     const el = listRef.current
@@ -500,12 +509,10 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
 
   // 中性預測 hit=null(不計分),不能進分母——否則命中率被不存在的「未命中」稀釋。
   // 用 summarizeProxy 保證和 Discord 日報用同一條算式。
-  const proxy = summarizeProxy(rows)
-  if (!proxy || proxy.total < 3) return null
-
-  const hits = proxy.hits
-  const hitPct = proxy.pct
-  const skipped = rows.length - proxy.total
+  const proxy = summarizeProxy(proxyRows)
+  const hits = proxy?.hits ?? 0
+  const hitPct = proxy?.pct ?? 0
+  const skipped = proxyRows.length - (proxy?.total ?? 0)
   const rateColor = hitPct >= 60 ? 'var(--ios-green)' : hitPct >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)'
   const labelColor = (label) => label.includes('多') ? 'var(--ios-red)' : label.includes('空') ? 'var(--ios-green)' : 'var(--ios-yellow)'
 
@@ -522,6 +529,10 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
     : null
   const realColor = realHit && (realHit.pct >= 60 ? 'var(--ios-green)' : realHit.pct >= 45 ? 'var(--ios-yellow)' : 'var(--ios-red)')
 
+  // 真的一筆都沒有才整張收起來。舊寫法是「代理不足 3 筆就 return null」,
+  // 會連帶把已經算好的真實收盤結果一起藏掉(真實資料與代理完全獨立)。
+  if (!rows.length && !realHit) return null
+
   return (
     <Card title="🔮 預測回顧" accent={realHit?.ready ? realColor : rateColor}>
       {realHit?.ready && (
@@ -530,12 +541,14 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
           <span style={{ fontSize: 12, color: 'var(--ios-label2)' }}>真實收盤打分{rhHorizon ? `(${rhHorizon}日期距)` : ''} · {realHit.total} 筆命中 {realHit.hits} 次</span>
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: realHit?.ready ? 4 : 10 }}>
-        <span style={{ fontSize: realHit?.ready ? 15 : 24, fontWeight: 700, color: rateColor, fontFamily: 'var(--font-mono)', letterSpacing: '-0.5px' }}>{hitPct}%</span>
-        <span style={{ fontSize: realHit?.ready ? 10.5 : 12, color: 'var(--ios-label3)' }}>
-          {realHit?.ready ? '掃描池代理估算 · ' : ''}{PROXY_HORIZON} 日期距 · 近 {proxy.total} 筆命中 {hits} 次{skipped > 0 ? `(另 ${skipped} 筆中性不計分)` : ''}
-        </span>
-      </div>
+      {proxy && proxy.total >= 3 && (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: realHit?.ready ? 4 : 10 }}>
+          <span style={{ fontSize: realHit?.ready ? 15 : 24, fontWeight: 700, color: rateColor, fontFamily: 'var(--font-mono)', letterSpacing: '-0.5px' }}>{hitPct}%</span>
+          <span style={{ fontSize: realHit?.ready ? 10.5 : 12, color: 'var(--ios-label3)' }}>
+            {realHit?.ready ? '掃描池代理估算 · ' : ''}{PROXY_HORIZON} 日期距 · 近 {proxy.total} 筆命中 {hits} 次{skipped > 0 ? `(另 ${skipped} 筆中性不計分)` : ''}
+          </span>
+        </div>
+      )}
       {realHit && !realHit.ready && (
         <div style={{ fontSize: 10.5, color: 'var(--ios-label3)', marginBottom: 8, background: 'var(--ios-fill4)', borderRadius: 6, padding: '4px 8px' }}>
           🎯 真實收盤打分累積中({realHit.total}/{REAL_MIN} 筆{rhHorizon ? `,${rhHorizon} 日期距` : ''})— 模型預測的是 {rhHorizon || 5} 個交易日後,需等期距到期才能打分
@@ -549,18 +562,26 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
             {r.prob != null && (
               <span style={{ fontSize: 10, color: 'var(--ios-label4)', fontFamily: 'var(--font-mono)', minWidth: 32 }}>{Math.round(r.prob * 100)}%</span>
             )}
+            <span style={{ fontSize: 9, color: 'var(--ios-label4)', minWidth: 46 }}
+                  title={r.source === 'real'
+                    ? `真實大盤收盤 · ${r.horizon} 個交易日期距`
+                    : `掃描池等權代理 · ${r.horizon} 個交易日期距(該日無真實紀錄)`}>
+              {r.source === 'real' ? `真實${r.horizon}日` : `代理${r.horizon}日`}
+            </span>
             <span style={{ flex: 1, textAlign: 'right', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-mono)', color: r.ret > 0 ? 'var(--ios-red)' : r.ret < 0 ? 'var(--ios-green)' : 'var(--ios-label2)' }}>
-              {r.ret > 0 ? '+' : ''}{r.ret.toFixed(2)}%
+              {r.ret == null ? '—' : `${r.ret > 0 ? '+' : ''}${r.ret.toFixed(2)}%`}
             </span>
             <span style={{ fontSize: 13, minWidth: 20, textAlign: 'right' }}
-                  title={r.hit == null ? '中性預測:模型未表態,不計分' : r.hit ? '命中' : '未命中'}>
-              {r.hit == null ? '—' : r.hit ? '✅' : '❌'}
+                  title={r.pending ? `已有方向,但 ${r.horizon} 個交易日期距尚未到期,還不能打分`
+                    : r.hit == null ? '中性預測:模型未表態,不計分'
+                    : r.hit ? '命中' : '未命中'}>
+              {r.pending ? '⏳' : r.hit == null ? '—' : r.hit ? '✅' : '❌'}
             </span>
           </div>
         ))}
       </div>
       <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 8, lineHeight: 1.5 }}>
-        實際 = 掃描池等權「5 個交易日」累積報酬(與 AI操盤基準、Discord 日報同一基準)。命中定義同模型訓練目標:看多/偏多需漲逾 +0.3%;偏空/看空只要「沒漲逾 +0.3%」即命中(模型預測的是漲跌機率,不是跌幅);中性不計分
+        逐日以<b>真實大盤收盤</b>為準(標「真實」),5 日期距到期前先用隔日方向;該日若無真實紀錄才退回掃描池等權代理(標「代理」,與 AI操盤基準、Discord 日報同一基準)。⏳ = 已有方向但期距未到期。命中定義同模型訓練目標:看多/偏多需漲逾 +0.3%;偏空/看空只要「沒漲逾 +0.3%」即命中(模型預測的是漲跌機率,不是跌幅);中性不計分
       </div>
     </Card>
   )
