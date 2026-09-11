@@ -45,8 +45,14 @@ test('上檔受 20 日高空間限制,也被停利截頂', () => {
   const near = expectedReturnPct(stock({ gap_to_20d_high_pct: 1 }), { gradeStats: GRADES })
   assert.equal(near.upside, 1, '貼著 20 日高 → 上檔空間就只有 1%')
 
+  // atr 2 / close 100 → ATR% 2,15 天可達約 7.75%,比 tpCap 12 更緊 → 由它決定。
+  // (舊版只截 tpCap,導致全池多數股票上檔都是 12%、排序退化,見下方「可達幅度」測試)
   const far = expectedReturnPct(stock({ gap_to_20d_high_pct: 40 }), { gradeStats: GRADES, tpCap: 12 })
-  assert.equal(far.upside, 12, '空間再大也拿不到超過停利的部分')
+  assert.ok(far.upside < 12, `空間再大也受停利與可達幅度雙重上限,實得 ${far.upside}`)
+  assert.ok(Math.abs(far.upside - 2 * Math.sqrt(15)) < 0.01, '此例由可達幅度綁住')
+
+  const farWild = expectedReturnPct(stock({ atr14: 5, gap_to_20d_high_pct: 40 }), { gradeStats: GRADES, tpCap: 12 })
+  assert.equal(farWild.upside, 12, '可達幅度夠大時才由停利上限綁住')
 
   const broken = expectedReturnPct(stock({ gap_to_20d_high_pct: -3 }), { gradeStats: GRADES })
   assert.equal(broken.upside, 0, '已突破 20 日高 → 上檔以 0 計,不給負空間')
@@ -103,4 +109,37 @@ test('D 級勝率高於 C,但期望值排序可能相反(目標不同結論就�
 
 test('MIN_GRADE_SAMPLE 是有意義的門檻,不是 0', () => {
   assert.ok(MIN_GRADE_SAMPLE >= 30, '樣本門檻太低等於在雜訊上排序')
+})
+
+// ── 上檔的「可達幅度」上限 ────────────────────────────────────────────────────
+// 全市場掃描裡多數股票距 20 日高超過 25%,若只用 tpCap 截頂,每檔上檔都會是 12%,
+// 排序退化成「買波動最小的」。加上 ATR%×√天數 的可達上限後才不會退化。
+
+test('上檔受持有期內可達幅度限制,不是無腦給 tpCap', () => {
+  // 低波動:ATR 1% → 15 天可達約 3.87%,遠小於 tpCap 12
+  const calm = expectedReturnPct(
+    stock({ close: 100, atr14: 1, gap_to_20d_high_pct: 40 }), { gradeStats: GRADES })
+  assert.ok(calm.upside < 5, `低波動股的上檔不該拿滿 tpCap,實得 ${calm.upside}`)
+  assert.ok(Math.abs(calm.upside - calm.reachable) < 0.01, '此時上檔應由可達幅度決定')
+
+  // 高波動:ATR 5% → 15 天可達約 19.4%,這時才由 tpCap 綁住
+  const wild = expectedReturnPct(
+    stock({ close: 100, atr14: 5, gap_to_20d_high_pct: 40 }), { gradeStats: GRADES })
+  assert.equal(wild.upside, 12, '可達幅度夠大時才吃到停利上限')
+})
+
+test('距高點近時仍由實際空間決定上檔', () => {
+  const near = expectedReturnPct(
+    stock({ close: 100, atr14: 5, gap_to_20d_high_pct: 2 }), { gradeStats: GRADES })
+  assert.equal(near.upside, 2, '空間只有 2% 時,再高的波動也拿不到更多')
+})
+
+test('修正後不會所有股票的上檔都相同 —— 排序才不會退化', () => {
+  const picks = [
+    { stock_id: 'CALM', close: 100, atr14: 1.2, gap_to_20d_high_pct: 30, grade: 'C', entry_score: 50 },
+    { stock_id: 'MID', close: 100, atr14: 2.5, gap_to_20d_high_pct: 30, grade: 'C', entry_score: 50 },
+    { stock_id: 'WILD', close: 100, atr14: 5, gap_to_20d_high_pct: 30, grade: 'C', entry_score: 50 },
+  ]
+  const ups = picks.map(p => expectedReturnPct(p, { gradeStats: GRADES }).upside)
+  assert.equal(new Set(ups).size, 3, `三檔的上檔應各不相同,實得 ${JSON.stringify(ups)}`)
 })
