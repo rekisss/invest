@@ -14,6 +14,9 @@ import { computeModelHealth } from './model-health.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 import { buildForwardReturn } from './forward-return.mjs'
 import { makeExpectancyRank, rankPicksByExpectancy } from './expectancy.mjs'
+import { enrichFromBars, isTradable, MIN_TURNOVER } from './pool-metrics.mjs'
+import { seededRank, summarizeControl, scoreAgainstControl, DEFAULT_SEEDS } from './random-control.mjs'
+import { makeKlineQualityGate } from './kline-quality.mjs'
 import { buildOrderTicket, summarizeTickets, addTradingDaysEst } from '../src/utils/tradePlan.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -1908,6 +1911,39 @@ for (const d of dates) {
   }
 }
 
+// ── 全池指標(ATR / 20 日高 / 20 日均成交金額)────────────────────────────
+// filter_stocks(~1500 檔)不帶 atr14、成交量、20 日高,導致:
+//   (a) 期望報酬模型在全池上 100% 退回 entry_score(實測 0/1503 檔算得出模型值)
+//   (b) 無法判斷可不可成交 —— 全池有 19% 的股票日均成交低於 200 萬,而單筆投入
+//       約 16.7 萬,等於一口氣吃掉當日成交量的 8%,回測成交價在真實下單時不存在
+// K 線快取有全池 1503/1503 檔的 OHLCV,在這裡一次算好、之後查表。
+const poolMetricsCache = new Map()
+const withMetrics = (s) => {
+  const sid = String(s?.stock_id ?? '')
+  if (!sid) return s
+  let m = poolMetricsCache.get(sid)
+  if (m === undefined) {
+    m = enrichFromBars({ stock_id: sid }, getKlineBars(klineMap[sid], '1d')) || {}
+    poolMetricsCache.set(sid, m)
+  }
+  // 掃描列自帶的值優先(top_stocks 由完整 pipeline 算出,比回推精確)
+  return {
+    ...s,
+    atr14: s.atr14 ?? m.atr14 ?? null,
+    close_20d_high: s.close_20d_high ?? m.close_20d_high ?? null,
+    gap_to_20d_high_pct: s.gap_to_20d_high_pct ?? m.gap_to_20d_high_pct ?? null,
+    turnover_20d: m.turnover_20d ?? null,
+  }
+}
+// 資料品質閘門:擋掉價格序列不可信的股票。實測全池 1554 檔只有 74.5% 乾淨,
+// 其餘有超過台股 ±10% 漲跌幅上限的跳動(缺交易日或未還原權值)或零振幅 bar。
+// 這些缺陷有方向性 —— 任何以報酬率為目標的排序都會被吸引到假跳動最大的股票,
+// 實測「買波動最大」的變體因此拿到 98.31% 勝率、58 天 +137%。先過閘門再談報酬。
+const klineGate = makeKlineQualityGate((sid) => getKlineBars(klineMap[sid], '1d'))
+// 全池變體共用的候選濾網:要可成交,而且價格序列要可信
+const tradable = (s) => klineGate.isClean(s) && isTradable(withMetrics(s))
+const expRank = makeExpectancyRank(outcomeStats)
+
 // ── AI paper-trader — deterministic replay of the strategy as a virtual trader ──
 // (歷史 filter_stocks 的體積修剪移到 AI trader 之後執行:「強勢股輪動」變體
 //  的選股池要吃到每個歷史日期的全池)
@@ -1934,6 +1970,8 @@ if (aiTrader) {
     if (p?.date && p?.xgb_label) predLabelByDate[p.date] = p.xgb_label
   }
   const isBearish = (label) => label === '偏空' || label === '看空'
+
+
   const VARIANTS = [
     { id: 'next_open', label: '次日開盤買進', note: '貼近實單可執行價', config: { execution: 'next_open' } },
     // 訊號擂台:完全不用 entry_score/進場訊號,直接買全掃描池「市場 RS 最強」
@@ -1963,8 +2001,58 @@ if (aiTrader) {
     //    6 個持股空位),排序函式在那種情況下完全不影響選誰 —— 實測把期望值排序加在
     //    訊號閘門之後,結果與主帳戶一字不差。所以這裡走 filter 全池、不要求進場訊號,
     //    與 rs_mom(最佳非對照組)、random(對照組)同條件,才是有效的對照實驗。
-    { id: 'exp_rank', label: '期望報酬排序', note: '全池,賺賠比划算的優先',
-      config: { pickPool: 'filter', requireEntrySignal: false, rankBy: makeExpectancyRank(outcomeStats) } },
+    { id: 'exp_rank', label: '期望報酬排序', note: '可成交全池,賺賠比划算的優先',
+      config: { pickPool: 'filter', requireEntrySignal: false, pickFilter: tradable,
+                rankBy: (s) => expRank(withMetrics(s)) } },
+    // 對照:同樣的 RS 動能排序,但加上流動性濾網。與 rs_mom 的差額就是「買到
+    // 不可成交的股票」對回測結果的汙染程度。
+    { id: 'rs_liq', label: '強勢股輪動+流動性', note: 'RS最強,排除不可成交',
+      config: { pickPool: 'filter', requireEntrySignal: false, pickFilter: tradable,
+                rankBy: (s) => s.market_rs_rank || 0 } },
+    // 對照組的流動性版本:亂選但只在可成交的股票裡亂選。(單一種子 = 一次抽樣,
+    // 真正的基準是 aiTrader.random_control 的 20 種子分布。)
+    { id: 'rand_liq', label: '亂數對照+流動性', note: '可成交池內亂選', control: true,
+      config: { pickPool: 'filter', requireEntrySignal: false, pickFilter: tradable,
+                rankBy: hashRank } },
+
+    // ── 全池排序擂台 ────────────────────────────────────────────────────────
+    // 目的:在「可成交全池 + 相同出場規則」的條件下,只換選股排序,看有沒有任何
+    // 排序法能贏過亂數對照分布的高百分位。全部都用同一個 tradable 濾網,所以彼此
+    // 之間、以及與對照分布之間,都是乾淨的對照實驗。
+    //
+    // 排序依據全取自 filter_stocks 已有的欄位(不需改 Python):籌碼、動能、
+    // 型態旗標、波動度。
+    { id: 'liq_rank', label: '純流動性排序', note: '成交金額最大優先',
+      config: { pickPool: 'filter', requireEntrySignal: false, pickFilter: tradable,
+                rankBy: (s) => withMetrics(s).turnover_20d || 0 } },
+    { id: 'chip_flow', label: '籌碼流入', note: '外資+投信連買與淨額',
+      config: { pickPool: 'filter', requireEntrySignal: false, pickFilter: tradable,
+                rankBy: (s) => (Number(s.foreign_buy_streak) || 0) * 10
+                             + (Number(s.invest_trust_streak) || 0) * 10
+                             + (s.foreign_buy_accel ? 5 : 0)
+                             + (s.invest_trust_accel ? 5 : 0) } },
+    { id: 'low_vol', label: '低波動優先', note: 'ATR% 最小',
+      config: { pickPool: 'filter', requireEntrySignal: false, pickFilter: tradable,
+                rankBy: (s) => {
+                  const m = withMetrics(s)
+                  const c = Number(m.close), a = Number(m.atr14)
+                  if (!(c > 0) || !(a >= 0)) return -1e6
+                  return -(a / c) * 10000   // 波動越小排越前
+                } } },
+    { id: 'high_vol', label: '高波動優先', note: 'ATR% 最大(賣波動率的對立面)',
+      config: { pickPool: 'filter', requireEntrySignal: false, pickFilter: tradable,
+                rankBy: (s) => {
+                  const m = withMetrics(s)
+                  const c = Number(m.close), a = Number(m.atr14)
+                  if (!(c > 0) || !(a >= 0)) return -1e6
+                  return (a / c) * 10000
+                } } },
+    { id: 'trend_flags', label: '多頭型態計數', note: '均線/突破/量能旗標加總',
+      config: { pickPool: 'filter', requireEntrySignal: false, pickFilter: tradable,
+                rankBy: (s) => ['above_ema60', 'ema60_gt_ema120', 'ma5_above_ma10', 'rsi_strong',
+                                'adx_trending', 'breakout_20d', 'volume_break',
+                                'breakout_volume_confirm', 'above_ichimoku_cloud']
+                                .reduce((a, k) => a + (s[k] ? 1 : 0), 0) } },
     { id: 'rr1', label: '賺賠比 1:1', note: '停損6% 停利6%', config: { stopLoss: 0.06, riskReward: 1 } },
     { id: 'rr2', label: '賺賠比 2:1', note: '停損6% 停利12%', config: { stopLoss: 0.06, riskReward: 2 } },
     { id: 'rr3', label: '賺賠比 3:1', note: '停損5% 停利15%', config: { stopLoss: 0.05, riskReward: 3 } },
@@ -2015,6 +2103,45 @@ if (aiTrader) {
   console.log(`AI trader variants: ${aiTrader.variants.map(v => `${v.id}=${v.return_pct}%`).join(' ')}`)
   // 報酬導向的對照表:每筆期望值與實現賺賠比。勝率單獨看不出策略賺不賺,
   // 期望值(每筆平均報酬)才是目標函數,所以 build log 也一併印出來。
+  // ── 亂數對照分布(多種子)────────────────────────────────────────────────
+  // 單一固定雜湊只是「一個寫死的投資組合」,它的報酬是一次抽樣。跑 N 個種子取
+  // 分布,才能回答「策略選股有沒有比亂選好」——策略要贏的是分布的高百分位,
+  // 不是贏過某一次幸運的抽樣。
+  try {
+    const controlRuns = []
+    for (let seed = 1; seed <= DEFAULT_SEEDS; seed++) {
+      try {
+        const r = simulatePaperTrader({
+          scans, klineFor: (sid) => getKlineBars(klineMap[sid], '1d'),
+          config: { pickPool: 'filter', requireEntrySignal: false, pickFilter: tradable,
+                    rankBy: seededRank(seed) },
+        })
+        if (r) controlRuns.push(r)
+      } catch { /* 單一種子失敗不影響整體分布 */ }
+    }
+    const control = summarizeControl(controlRuns)
+    if (control) {
+      aiTrader.random_control = {
+        seeds: control.seeds,
+        return_pct: control.return_pct,
+        avg_ret: control.avg_ret,
+        win_rate: control.win_rate,
+        num_trades: control.num_trades,
+        note: '可成交全池內隨機選股的報酬分布。策略要有加值,必須落在高百分位,而不是贏過單一次抽樣。',
+      }
+      aiTrader.vs_control = scoreAgainstControl(aiTrader, control)
+      for (const v of aiTrader.variants) {
+        v.vs_control = scoreAgainstControl({ return_pct: v.return_pct, stats: { avg_ret: v.avg_ret } }, control)
+      }
+      const rp = control.return_pct
+      console.log(`亂數對照分布(${control.seeds} 個種子,可成交全池):`)
+      console.log(`  總報酬  平均 ${rp.mean}%  中位 ${rp.median}%  p10 ${rp.p10}%  p90 ${rp.p90}%  (${rp.min}% ~ ${rp.max}%)`)
+      console.log(`  每筆期望 平均 ${control.avg_ret.mean}%  中位 ${control.avg_ret.median}%`)
+      const vc = aiTrader.vs_control
+      console.log(`  主帳戶 vs 對照:總報酬 ${vc.return_pct_rank} 百分位、每筆期望 ${vc.avg_ret_rank} 百分位 → ${vc.verdict}`)
+    }
+  } catch (e) { console.warn('Random control skipped:', e.message) }
+
   console.log('AI trader 期望值/賺賠比:')
   for (const v of [{ id: 'main', label: '主帳戶', stats: aiTrader.stats, rr: aiTrader.config?.risk_reward },
                    ...aiTrader.variants.map(v => ({ id: v.id, label: v.label, stats: v, rr: v.risk_reward }))]) {
@@ -2201,6 +2328,11 @@ try {
   if (gradeDigest) console.log(`Grade digest: A${gradeDigest.counts.A}/B${gradeDigest.counts.B}/C${gradeDigest.counts.C}/D${gradeDigest.counts.D}(可操作 ${gradeDigest.actionable}${gradeDigest.real ? ',含真實勝率' : ''})`)
 } catch (e) { console.warn('Grade digest skipped:', e.message) }
 
+// K 線資料品質總覽(寫進 data.json,讓前端看得到回測與盯盤的樣本涵蓋率)
+const klineQuality = klineGate.stats()
+console.log(`K 線品質: ${klineQuality.ok}/${klineQuality.total} 乾淨 (${klineQuality.clean_pct}%)` +
+            ` — 超漲跌幅上限 ${klineQuality.limit_break}、零振幅 ${klineQuality.zero_range}、根數不足 ${klineQuality.too_few}`)
+
 // 🎯 盯盤前五檔:依「期望報酬」而非 entry_score 排序取前 5。目標改成報酬率之後,
 // 盯盤清單也要跟著同一個目標,否則整條線不一致 —— 用舊排序盯盤、用新目標決策,
 // 會盯到一批根本不是自己想操作的股票。
@@ -2212,7 +2344,14 @@ try {
 let watchFive = null
 try {
   const latest = scans?.[dates?.[0]]
-  const ranked = rankPicksByExpectancy(latest?.top_stocks || [], { gradeStats: outcomeStats })
+  // 候選池 = 全市場掃描(~1500 檔),不是精選 50 檔 —— 使用者要的是「千五檔」的
+  // 最佳標的。但先過兩道閘門再排序:
+  //   可成交    日均成交金額達門檻(全池 19% 低於 200 萬,單筆 16.7 萬會推動價格)
+  //   資料可信  價格序列沒有超過 ±10% 漲跌幅上限的跳動、沒有零振幅 bar
+  // 兩道閘門合計濾掉約三成,剩下的才有資格進盯盤清單與紙上指令。
+  const poolRaw = (latest?.filter_stocks?.length ? latest.filter_stocks : latest?.top_stocks) || []
+  const eligible = poolRaw.filter(s => tradable(s)).map(s => withMetrics(s))
+  const ranked = rankPicksByExpectancy(eligible, { gradeStats: outcomeStats })
   const five = ranked.slice(0, 5)
   if (five.length) {
     watchFive = {
@@ -2246,13 +2385,14 @@ try {
         })(),
       })),
     }
+    watchFive.pool = { scanned: poolRaw.length, eligible: eligible.length }
     const head = watchFive.items.map(x => `${x.stock_id}${x.expectancy_pct != null ? `(${x.expectancy_pct > 0 ? '+' : ''}${x.expectancy_pct}%)` : ''}`).join(' ')
-    console.log(`盯盤前五檔[${watchFive.basis}]: ${head}`)
+    console.log(`盯盤前五檔[${watchFive.basis}] 自 ${poolRaw.length} 檔篩到 ${eligible.length} 檔可用: ${head}`)
   }
 } catch (e) { console.warn('Watch-five skipped:', e.message) }
 
 const dataGeneratedAt = new Date().toISOString()
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks, gradeDigest, modelHealth, watchFive }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks, gradeDigest, modelHealth, watchFive, klineQuality }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
 
 // Small sidecar so the frontend can cheaply check "did anything change?" (a few

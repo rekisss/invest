@@ -19,6 +19,8 @@
 
 /** 停損放在幾倍 ATR — 1.5 是常見的波動停損設定。 */
 export const DEFAULT_ATR_MULT = 1.5
+/** 預設持有天數,用來估算「這段期間走得到多大幅度」。對齊 paper-trader 的 maxHold。 */
+export const DEFAULT_HOLD_DAYS = 15
 /** 上檔空間的截頂(%),對齊停利:再大的空間也不會賺超過停利。 */
 export const DEFAULT_TP_CAP = 12
 /** 評級歷史統計至少要幾筆才採用,否則視為沒有資訊。 */
@@ -61,6 +63,7 @@ export function expectedReturnPct(stock, opts = {}) {
     atrMult = DEFAULT_ATR_MULT,
     tpCap = DEFAULT_TP_CAP,
     minSample = MIN_GRADE_SAMPLE,
+    holdDays = DEFAULT_HOLD_DAYS,
   } = opts
 
   const close = num(stock.close)
@@ -73,9 +76,20 @@ export function expectedReturnPct(stock, opts = {}) {
     return { value: null, upside: null, downside: null, winRate: p, basis: 'fallback' }
   }
 
-  // 上檔:到 20 日高還有多少 %,負值(已突破)視為 0 空間再由停利接手。
-  // 截頂到 tpCap —— 停利會先出場,超過的部分拿不到。
-  const upside = Math.min(Math.max(gap, 0), tpCap)
+  // 上檔:三個上限取最小 ——
+  //   1. 到 20 日高的距離(負值=已突破,視為 0 再由停利接手)
+  //   2. tpCap:停利會先出場,超過的部分拿不到
+  //   3. 持有期內「走得到」的幅度 ≈ ATR% × √持有天數
+  //
+  // 第 3 條是必要的。只用前兩條時,全市場掃描裡多數股票距 20 日高都超過 25%,
+  // 上限一律被 tpCap 綁住 → 每檔上檔都是 12%,排序完全由下檔決定,整個模型退化
+  // 成「買波動最小的」。而且「距高點遠」本身不是利多,那代表股票已經跌了一大段;
+  // 把跌深當成潛力是方向性的錯誤。
+  // 綁上可達幅度後,低波動股的上檔會跟著縮小,高波動股才拿得到大的上檔 —— 但它的
+  // 下檔也同步放大,兩邊都由同一個 ATR 驅動,不會偏袒任何一端。
+  const atrPct = (atr / close) * 100
+  const reachable = atrPct * Math.sqrt(Math.max(1, holdDays))
+  const upside = Math.min(Math.max(gap, 0), tpCap, reachable)
   // 下檔:一個 ATR 佔股價的百分比 × 停損倍數
   const downside = (atr / close) * 100 * atrMult
 
@@ -83,6 +97,7 @@ export function expectedReturnPct(stock, opts = {}) {
   return {
     value: Math.round(value * 1000) / 1000,
     upside: Math.round(upside * 100) / 100,
+    reachable: Math.round(reachable * 100) / 100,
     downside: Math.round(downside * 100) / 100,
     winRate: p,
     basis: 'model',
