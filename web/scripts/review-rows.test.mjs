@@ -95,3 +95,66 @@ test('清單統計只算真的打過分的列(中性/等待中不進分母)', ()
   assert.equal(summarizeReviewRows([]), null)
   assert.equal(summarizeReviewRows(null), null)
 })
+
+// ── buildActualDirectionMap ─────────────────────────────────────────────────
+// 守的是另一個現場:「機率走勢 vs 實際方向」的圓點顏色原本一律取自掃描池等權代理,
+// 但卡片寫的是「實際方向 / 實際上漲 / 實際下跌」。實測代理與真實加權指數經常相反
+// (2026-09-01 代理 −1 跌 vs 真實 5 日 +2.60%),而且最近幾天代理算不出來 → 灰點。
+import { buildActualDirectionMap } from '../src/utils/reviewRows.js'
+
+const curve2 = ['2026-09-01','2026-09-02','2026-09-03','2026-09-04','2026-09-07','2026-09-08','2026-09-09','2026-09-10']
+  .map((date, i) => ({ date, ret_pct: i * 2 }))   // 一路上漲 → 代理全都是 +1
+const hist2 = ['2026-09-01','2026-09-02','2026-09-08','2026-09-10']
+  .map(date => ({ date, xgb_prob_up: 0.5, xgb_label: '中性' }))
+
+test('關鍵回歸:真實大盤方向要蓋過代理(兩者相反時以真實為準)', () => {
+  const m = buildActualDirectionMap({
+    history: hist2, benchCurve: curve2,
+    realOutcomes: { prediction: [{ date: '2026-09-01', ret_h5: -2.6, taiex_pct: 0.01 }] },
+  })
+  const o = m.get('2026-09-01')
+  assert.equal(o.dir, -1, '真實 5 日 −2.6% → 下跌,不能用代理的上漲')
+  assert.equal(o.source, 'real')
+  assert.equal(o.horizon, 5)
+})
+
+test('5 日期距未到期時,用當日真實漲跌先上色(標成 1 日)', () => {
+  const m = buildActualDirectionMap({
+    history: hist2, benchCurve: curve2,
+    realOutcomes: { prediction: [{ date: '2026-09-10', ret_h5: null, taiex_pct: 0.0167 }] },
+  })
+  const o = m.get('2026-09-10')
+  assert.equal(o.dir, 1)
+  assert.equal(o.ret, 1.67)
+  assert.equal(o.source, 'real')
+  assert.equal(o.horizon, 1)
+})
+
+test('±0.3% 內算走平(0),與模型訓練門檻一致 —— 走平不等於沒資料', () => {
+  const m = buildActualDirectionMap({
+    history: hist2, benchCurve: [],
+    realOutcomes: { prediction: [{ date: '2026-09-08', ret_h5: 0.05, taiex_pct: 0.001 }] },
+  })
+  assert.equal(m.get('2026-09-08').dir, 0)
+  assert.ok(m.has('2026-09-08'), '走平仍要出現在 Map 裡(有結果,只是持平)')
+})
+
+test('中性預測那天一樣要上色 —— 問的是大盤走勢,不是預測有沒有表態', () => {
+  const m = buildActualDirectionMap({
+    history: hist2, benchCurve: [],
+    realOutcomes: { prediction: [{ date: '2026-09-09', taiex_pct: -0.0047, directional: false, hit: null }] },
+  })
+  assert.equal(m.get('2026-09-09').dir, -1)
+})
+
+test('沒有真實紀錄的日期退回代理', () => {
+  const m = buildActualDirectionMap({ history: hist2, benchCurve: curve2, realOutcomes: { prediction: [] } })
+  const o = m.get('2026-09-01')
+  assert.equal(o.source, 'proxy')
+  assert.equal(o.dir, 1)
+})
+
+test('空輸入回空 Map,不炸', () => {
+  assert.equal(buildActualDirectionMap().size, 0)
+  assert.equal(buildActualDirectionMap({ history: null, benchCurve: null, realOutcomes: null }).size, 0)
+})
