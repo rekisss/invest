@@ -2,8 +2,8 @@ import { useState, useMemo, useRef, useLayoutEffect } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { animateListRows } from '../utils/animeUtils'
-import { scoreProxyPredictions, summarizeProxy, horizonOutcomeMap, PROXY_HORIZON } from '../utils/proxyScore.js'
-import { buildReviewRows } from '../utils/reviewRows.js'
+import { scoreProxyPredictions, summarizeProxy, PROXY_HORIZON } from '../utils/proxyScore.js'
+import { buildReviewRows, buildActualDirectionMap } from '../utils/reviewRows.js'
 gsap.registerPlugin(useGSAP)
 
 const HIST_PAGE_SIZE = 20
@@ -306,19 +306,25 @@ function FuturesChipsPanel({ futuresChips, market_data, history = [] }) {
 }
 
 // Probability trend chart — redesigned with gradient area + animated line drawing.
-function ProbTrend({ history, benchCurve }) {
+function ProbTrend({ history, benchCurve, realOutcomes }) {
   const lineRef = useRef(null)
 
   const pts = useMemo(() => {
     const sorted = [...(history || [])]
       .filter(h => h.xgb_prob_up != null && h.date)
       .sort((a, b) => a.date.localeCompare(b.date))
-    // 實際方向要用模型的預測期距(5 個交易日),不是隔天夜盤
-    const outcomes = horizonOutcomeMap(sorted, benchCurve)
-    return sorted.slice(-20).map(h => ({
-      date: h.date, p: h.xgb_prob_up, actual: outcomes.get(h.date)?.dir ?? null,
-    }))
-  }, [history, benchCurve])
+    // 「實際方向」要用真實大盤收盤,不是掃描池等權代理——代理與加權指數經常相反
+    // (見 utils/reviewRows.js),而且最近幾天代理根本算不出來。真實沒紀錄才退回代理。
+    const outcomes = buildActualDirectionMap({ history: sorted, benchCurve, realOutcomes })
+    return sorted.slice(-20).map(h => {
+      const o = outcomes.get(h.date)
+      return {
+        date: h.date, p: h.xgb_prob_up,
+        actual: o?.dir ?? null, ret: o?.ret ?? null,
+        source: o?.source ?? null, horizon: o?.horizon ?? null,
+      }
+    })
+  }, [history, benchCurve, realOutcomes])
 
   useGSAP(() => {
     const el = lineRef.current
@@ -365,6 +371,7 @@ function ProbTrend({ history, benchCurve }) {
   const lastColor = lastPct >= 60 ? '#FF3340' : lastPct <= 40 ? '#16D67E' : '#FF9F0A'
   const y50 = (lo <= 0.5 && hi >= 0.5) ? ys(0.5) : null
   const hasActual = pts.some(d => d.actual !== null)
+  const realDots = pts.filter(d => d.source === 'real').length
   const gradId = 'ptGrad'
 
   return (
@@ -403,16 +410,22 @@ function ProbTrend({ history, benchCurve }) {
         {pts.map((d, i) => {
           const isLast = i === pts.length - 1
           const cx = xs(i).toFixed(1), cy = ys(d.p).toFixed(1)
+          // 走平(0)要跟「還沒有資料」(null)分開:前者是已知結果,後者只是空的
           const dotColor = d.actual === 1 ? '#FF3340'
             : d.actual === -1 ? '#16D67E'
+            : d.actual === 0 ? 'var(--ios-yellow)'
             : isLast ? lastColor : 'var(--ios-label4)'
           const r = isLast ? 4 : d.actual !== null ? 3.5 : 2
+          const retStr = d.ret != null ? `${d.ret > 0 ? '+' : ''}${d.ret}%` : '—'
+          const dirStr = d.actual === 1 ? '實際上漲' : d.actual === -1 ? '實際下跌' : d.actual === 0 ? '實際走平' : '尚無實際結果'
           return (
             <g key={d.date}>
               {isLast && <circle cx={cx} cy={cy} r="7" fill={lastColor} opacity="0.15" />}
               <circle cx={cx} cy={cy} r={r} fill={dotColor}
                 stroke={d.actual !== null && !isLast ? 'rgba(0,0,0,0.5)' : 'none'}
-                strokeWidth="1" />
+                strokeWidth="1">
+                <title>{`${d.date} · 機率 ${Math.round(d.p * 100)}%\n${dirStr}${d.actual != null ? ` ${retStr}` : ''}${d.source ? `(${d.source === 'real' ? '真實大盤' : '掃描池代理'} ${d.horizon} 日期距)` : ''}`}</title>
+              </circle>
             </g>
           )
         })}
@@ -440,7 +453,12 @@ function ProbTrend({ history, benchCurve }) {
           <span style={{ color: '#16D67E', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
             <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#16D67E"/></svg>實際下跌
           </span>
-          <span style={{ color: 'var(--ios-label4)', fontSize: 10, marginLeft: 'auto' }}>5日期距估算</span>
+          <span style={{ color: 'var(--ios-yellow)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="var(--ios-yellow)"/></svg>走平
+          </span>
+          <span style={{ color: 'var(--ios-label4)', fontSize: 10, marginLeft: 'auto' }}>
+            {realDots > 0 ? `真實大盤收盤 ${realDots}/${pts.length} 點` : '掃描池代理'} · 漲跌門檻 ±0.3%
+          </span>
         </div>
       )}
     </Card>
@@ -587,7 +605,7 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
   )
 }
 
-function CalibrationPanel({ history, benchCurve }) {
+function CalibrationPanel({ history, benchCurve, realOutcomes }) {
   const containerRef = useRef(null)
   const bands = useMemo(() => {
     const sorted = [...(history || [])]
@@ -602,8 +620,9 @@ function CalibrationPanel({ history, benchCurve }) {
       { label: '強多', lo: 0.65, hi: 1.01, center: 0.70 },
     ].map(d => ({ ...d, total: 0, actualUp: 0 }))
 
-    // 校準要看「模型說的期距」內是否真的上漲,而不是隔天夜盤
-    const outcomes = horizonOutcomeMap(sorted, benchCurve)
+    // 校準要看「大盤真的漲了沒」——真實收盤優先,沒紀錄才退回掃描池代理
+    // (代理與加權指數經常相反,見 utils/reviewRows.js)
+    const outcomes = buildActualDirectionMap({ history: sorted, benchCurve, realOutcomes })
     for (const h of sorted) {
       const o = outcomes.get(h.date)
       if (!o) continue
@@ -613,7 +632,7 @@ function CalibrationPanel({ history, benchCurve }) {
     }
 
     return defs.filter(b => b.total >= 3)
-  }, [history, benchCurve])
+  }, [history, benchCurve, realOutcomes])
 
   useGSAP(() => {
     const el = containerRef.current
@@ -680,7 +699,7 @@ function CalibrationPanel({ history, benchCurve }) {
 }
 
 // Error pattern analysis: identify what conditions lead to wrong predictions
-function ErrorPatternPanel({ history, benchCurve }) {
+function ErrorPatternPanel({ history, benchCurve, realOutcomes }) {
   const data = useMemo(() => {
     const sorted = [...(history || [])]
       .filter(h => h.xgb_prob_up != null && h.date)
@@ -689,8 +708,8 @@ function ErrorPatternPanel({ history, benchCurve }) {
     if (sorted.length < 8) return null
 
     const errors = [], corrects = []
-    // 對錯要用模型的預測期距判定,不是隔天夜盤
-    const outcomes = horizonOutcomeMap(sorted, benchCurve)
+    // 對錯要拿真實大盤方向判定;真實沒紀錄的日期才退回掃描池代理
+    const outcomes = buildActualDirectionMap({ history: sorted, benchCurve, realOutcomes })
     for (const h of sorted) {
       const o = outcomes.get(h.date)
       if (!o || Math.abs(h.xgb_prob_up - 0.5) <= 0.05) continue
@@ -726,7 +745,7 @@ function ErrorPatternPanel({ history, benchCurve }) {
     const recentErrors = errors.slice(-3)
 
     return { total, errRate, highVixErrRate, heavyShortErrRate, bullTrap: bullTrap.length, bearTrap: bearTrap.length, recentErrors }
-  }, [history, benchCurve])
+  }, [history, benchCurve, realOutcomes])
 
   if (!data) return null
 
@@ -1017,14 +1036,14 @@ export default function PredictionPanel({ prediction, history = [], benchCurve =
         <BearishCrossCheck market_data={market_data} prob={xgb_prob_up} />
 
         {/* Probability trend across recent days */}
-        <ProbTrend history={history} benchCurve={benchCurve} />
+        <ProbTrend history={history} benchCurve={benchCurve} realOutcomes={realOutcomes} />
 
         {/* Daily prediction vs actual scoreboard */}
         <PredictionReviewPanel history={history} benchCurve={benchCurve} realOutcomes={realOutcomes} />
 
         {/* Calibration & error analysis */}
-        <CalibrationPanel history={history} benchCurve={benchCurve} />
-        <ErrorPatternPanel history={history} benchCurve={benchCurve} />
+        <CalibrationPanel history={history} benchCurve={benchCurve} realOutcomes={realOutcomes} />
+        <ErrorPatternPanel history={history} benchCurve={benchCurve} realOutcomes={realOutcomes} />
 
         {/* AI Insight */}
         {ai_insight && (

@@ -67,3 +67,52 @@ export function summarizeReviewRows(rows) {
   const hits = scored.filter(r => r.hit).length
   return { hits, total: scored.length, pct: Math.round(hits / scored.length * 100) }
 }
+
+// ── 實際方向表(給「機率走勢 vs 實際方向」用)────────────────────────────────
+// 2026-09-13 修正:那張圖的圓點顏色原本一律取自 horizonOutcomeMap(掃描池等權代理),
+// 但卡片標題寫「實際方向」、圖例寫「實際上漲/實際下跌」——畫的其實不是大盤。
+// 實測代理與真實加權指數經常相反:
+//   2026-09-01 代理 −1(跌) vs 真實 5 日 +2.60%
+//   2026-08-19 代理 +1(漲) vs 真實 5 日 −0.31%
+// 而且最近幾天代理算不出來(要等 5 根前瞻 K 棒),直接變成無色灰點。
+//
+// 這裡以真實大盤收盤為主、代理為輔,並回報每一天的方向是哪個來源算出來的。
+// 方向門檻沿用 proxyScore 的 FLAT_BAND(±0.3%),與模型訓練目標一致。
+import { horizonOutcomeMap, FLAT_BAND } from './proxyScore.js'
+
+function dirOf(retPct) {
+  if (retPct == null || !Number.isFinite(retPct)) return null
+  return retPct > FLAT_BAND ? 1 : retPct < -FLAT_BAND ? -1 : 0
+}
+
+// 回傳 Map<date, { dir, ret, source: 'real'|'proxy', horizon }>
+// dir:1 漲 / -1 跌 / 0 走平(±FLAT_BAND 內);資料不足的日期不會出現在 Map 裡。
+//
+// 注意:這裡問的是「大盤實際往哪走」,與當天的預測是不是中性無關 ——
+// 中性預測那天市場一樣有漲跌,圓點該照實上色。
+export function buildActualDirectionMap({ history, benchCurve, realOutcomes } = {}) {
+  const map = new Map()
+
+  // 先鋪代理(涵蓋沒有真實紀錄的舊日期)
+  const sorted = [...(history || [])]
+    .filter(h => h?.xgb_prob_up != null && h.date)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+  for (const [date, o] of horizonOutcomeMap(sorted, benchCurve)) {
+    map.set(date, { dir: o.dir, ret: o.ret, source: 'proxy', horizon: 5 })
+  }
+
+  // 真實收盤覆蓋上去(權威來源)
+  for (const e of (realOutcomes?.prediction || [])) {
+    if (!e?.date) continue
+    if (typeof e.ret_h5 === 'number') {
+      const dir = dirOf(e.ret_h5)
+      if (dir != null) { map.set(e.date, { dir, ret: e.ret_h5, source: 'real', horizon: 5 }); continue }
+    }
+    if (typeof e.taiex_pct === 'number') {
+      const pct = Math.round(e.taiex_pct * 10000) / 100
+      const dir = dirOf(pct)
+      if (dir != null) map.set(e.date, { dir, ret: pct, source: 'real', horizon: 1 })
+    }
+  }
+  return map
+}
