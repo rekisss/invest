@@ -3,10 +3,12 @@ import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { animateListRows } from '../utils/animeUtils'
 import { scoreProxyPredictions, summarizeProxy, PROXY_HORIZON } from '../utils/proxyScore.js'
-import { buildReviewRows, buildActualDirectionMap } from '../utils/reviewRows.js'
+import { buildReviewRows, buildActualDirectionMap, summarizeReviewRows } from '../utils/reviewRows.js'
 gsap.registerPlugin(useGSAP)
 
 const HIST_PAGE_SIZE = 20
+// 「預測回顧」逐日清單預設收合到幾列(資料本身完整保留,只是畫面收合)
+const REVIEW_COLLAPSED = 14
 
 const RISK_COLOR = { LOW: 'var(--ios-green)', MEDIUM: 'var(--ios-yellow)', HIGH: 'var(--ios-orange)', EXTREME: 'var(--ios-red)' }
 const RISK_LABEL = { LOW: '低風險', MEDIUM: '中風險', HIGH: '高風險', EXTREME: '極高風險' }
@@ -508,10 +510,19 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
   // 逐日清單:真實收盤優先,沒有真實紀錄的日期才退回掃描池代理。
   // 代理要等基準曲線累積滿 5 根前瞻 K 棒,最新幾天一律算不出來——只用代理的話
   // 那幾列會整列消失(即使真實大盤收盤早就出來了)。見 utils/reviewRows.js。
-  const rows = useMemo(
-    () => buildReviewRows({ history, benchCurve, realOutcomes, limit: 14 }),
+  // 2026-09-14:改成保留全部歷史。原本 limit: 14 是在這裡就把資料丟掉,
+  // 舊的驗證紀錄看不到也統計不到;現在全部留著,畫面預設只「收合」成 14 列。
+  const [showAllRows, setShowAllRows] = useState(false)
+  const allRows = useMemo(
+    () => buildReviewRows({ history, benchCurve, realOutcomes }),
     [history, benchCurve, realOutcomes]
   )
+  const rows = useMemo(
+    () => (showAllRows ? allRows : allRows.slice(0, REVIEW_COLLAPSED)),
+    [allRows, showAllRows]
+  )
+  // 全歷史的逐日命中統計(真實優先、代理補洞),與上面只看 14 筆的代理估算不同
+  const allTime = useMemo(() => summarizeReviewRows(allRows), [allRows])
   // 頂端那行「掃描池代理估算」維持只用代理算,才和 Discord 日報是同一個數字
   const proxyRows = useMemo(
     () => scoreProxyPredictions(history, benchCurve, { limit: 14 }),
@@ -549,7 +560,7 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
 
   // 真的一筆都沒有才整張收起來。舊寫法是「代理不足 3 筆就 return null」,
   // 會連帶把已經算好的真實收盤結果一起藏掉(真實資料與代理完全獨立)。
-  if (!rows.length && !realHit) return null
+  if (!allRows.length && !realHit) return null
 
   return (
     <Card title="🔮 預測回顧" accent={realHit?.ready ? realColor : rateColor}>
@@ -564,6 +575,14 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
           <span style={{ fontSize: realHit?.ready ? 15 : 24, fontWeight: 700, color: rateColor, fontFamily: 'var(--font-mono)', letterSpacing: '-0.5px' }}>{hitPct}%</span>
           <span style={{ fontSize: realHit?.ready ? 10.5 : 12, color: 'var(--ios-label3)' }}>
             {realHit?.ready ? '掃描池代理估算 · ' : ''}{PROXY_HORIZON} 日期距 · 近 {proxy.total} 筆命中 {hits} 次{skipped > 0 ? `(另 ${skipped} 筆中性不計分)` : ''}
+          </span>
+        </div>
+      )}
+      {allTime && allTime.total > 0 && (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--ios-label2)' }}>{allTime.pct}%</span>
+          <span style={{ fontSize: 10.5, color: 'var(--ios-label3)' }}>
+            全歷史逐日 · {allTime.total} 筆命中 {allTime.hits} 次(真實優先,缺的用代理補)
           </span>
         </div>
       )}
@@ -598,6 +617,17 @@ function PredictionReviewPanel({ history, benchCurve, realOutcomes }) {
           </div>
         ))}
       </div>
+      {allRows.length > REVIEW_COLLAPSED && (
+        <button
+          onClick={() => setShowAllRows(v => !v)}
+          style={{
+            width: '100%', marginTop: 8, padding: '6px 0', border: 'none', borderRadius: 8,
+            background: 'var(--ios-fill4)', color: 'var(--ios-label2)', fontSize: 11,
+            fontWeight: 600, cursor: 'pointer',
+          }}>
+          {showAllRows ? `收合(只看最近 ${REVIEW_COLLAPSED} 筆)` : `顯示全部 ${allRows.length} 筆歷史 ▾`}
+        </button>
+      )}
       <div style={{ fontSize: 10, color: 'var(--ios-label3)', marginTop: 8, lineHeight: 1.5 }}>
         逐日以<b>真實大盤收盤</b>為準(標「真實」),5 日期距到期前先用隔日方向;該日若無真實紀錄才退回掃描池等權代理(標「代理」,與 AI操盤基準、Discord 日報同一基準)。⏳ = 已有方向但期距未到期。命中定義同模型訓練目標:看多/偏多需漲逾 +0.3%;偏空/看空只要「沒漲逾 +0.3%」即命中(模型預測的是漲跌機率,不是跌幅);中性不計分
       </div>
