@@ -80,6 +80,26 @@ test('新→舊排序並受 limit 約束', () => {
   assert.deepEqual(rows.map(r => r.date), ['2026-09-07','2026-09-04','2026-09-03'])
 })
 
+// 2026-09-14 回歸:預設不截斷。原本 limit 預設 14,超過 14 個預測日之後
+// 較舊的驗證紀錄就被丟掉——畫面看不到,summarizeReviewRows 也統計不到。
+test('預設保留全部歷史,不截斷', () => {
+  const dates = Array.from({ length: 40 }, (_, i) => {
+    const d = new Date(Date.UTC(2026, 6, 1 + i))
+    return d.toISOString().slice(0, 10)
+  })
+  const realOutcomes = { prediction: dates.map(date => ({ date, pred_label:'看空', xgb_prob_up:0.2, taiex_pct:0.01, hit:true, hit_h5:null, directional:true })) }
+  const rows = buildReviewRows({ history: [], benchCurve: [], realOutcomes })
+  assert.equal(rows.length, 40)
+  assert.equal(rows[0].date, dates[dates.length - 1])   // 仍是新→舊
+  assert.equal(summarizeReviewRows(rows).total, 40)
+})
+
+test('明確給 limit 時仍然截斷(呼叫端自己決定顯示幾列)', () => {
+  const dates = ['2026-09-01','2026-09-02','2026-09-03','2026-09-04','2026-09-07']
+  const realOutcomes = { prediction: dates.map(date => ({ date, pred_label:'看空', xgb_prob_up:0.2, taiex_pct:0.01, hit:true, hit_h5:null, directional:true })) }
+  assert.equal(buildReviewRows({ history: [], benchCurve: [], realOutcomes, limit: 2 }).length, 2)
+})
+
 test('空輸入不炸,回空陣列', () => {
   assert.deepEqual(buildReviewRows({}), [])
   assert.deepEqual(buildReviewRows({ history: null, benchCurve: null, realOutcomes: null }), [])
