@@ -50,6 +50,19 @@ BATCH_SIZE  = 200  # stocks per yfinance download call
 # Lookback calendar days for daily bars (weekly/monthly are resampled from daily)
 DAILY_LOOKBACK = 730   # ~500 trading bars / ~2 years
 
+# 寫回快取時，日 K 只保留最近幾根（從最舊的那端裁）。
+# 原因：GitHub 對單一檔案有 100MiB 硬上限，output/kline_cache.json 在 2026-09 撞到
+# 上限，kline-fetch workflow 的 push 被 pre-receive hook 擋掉（GH001），快取自
+# 2026-09-03 之後就沒再更新，連帶讓前端的 AI 模擬交易凍結在舊價格上。
+# 日 K 佔檔案約 79%，平均 524 根裁到 300 根約可從 105MB 降到 69MB。
+# 下限別低於 260：build-data.mjs 的 OHLC_BARS = 260（K 線圖）與
+# SCAN_HIST_BARS = 250（掃描歷史）是目前吃日 K 最長的兩個消費端。
+# 設成 0 或 None 代表不裁。
+# 註：compute_stats 的 return_90d 是拿 bars[0] 當基準（本來就不是真的 90 天），
+#     裁短之後這個數字會從「約兩年」變成「約 14 個月」的漲幅，仍舊名不符實，
+#     但比原本更接近標籤。這裡不動它的行為。
+DAILY_KEEP_BARS = 300
+
 NOTION_API = "https://api.notion.com/v1"
 NOTION_VER = "2022-06-28"
 
@@ -472,6 +485,42 @@ def sync_to_notion(kline_map: dict[str, list], token: str, db_id: str) -> None:
     )
 
 
+# ── Cache size control ────────────────────────────────────────────────────────
+def trim_daily_bars(bars: list[dict], keep: int | None = DAILY_KEEP_BARS) -> list[dict]:
+    """只保留最近 `keep` 根日 K（假設 bars 已依 time 升冪排序）。
+
+    一定要從最舊的那端裁：最新一根是增量抓取的接續錨點
+    （main() 用 cached_daily[sid][-1]["time"] 決定下次要從哪天開始抓），
+    裁掉尾端會讓增量邏輯重抓或漏抓。
+    """
+    if not keep or keep <= 0 or len(bars) <= keep:
+        return bars
+    return bars[-keep:]
+
+
+def merge_period_bars(old_bars: list[dict], new_bars: list[dict]) -> list[dict]:
+    """合併既有的週/月 K 與剛從日 K resample 出來的結果。
+
+    週/月 K 是由日 K 推導的，日 K 一旦被裁，單靠 resample 會把較舊的週/月區間
+    默默丟掉。這裡以既有快取為底，再讓新算出來的區間覆蓋上去
+    （新的來自較新的日 K，數值比較可靠）。
+
+    例外：new_bars 第一筆可能因為日 K 被裁而只涵蓋半個週/月，
+    若快取已有同一個 key，保留舊的那筆（它是在日 K 還完整時算出來的）。
+    """
+    by_time: dict[str, dict] = {
+        b["time"]: b for b in old_bars if isinstance(b, dict) and b.get("time")
+    }
+    for idx, bar in enumerate(new_bars):
+        key = bar.get("time")
+        if not key:
+            continue
+        if idx == 0 and key in by_time:
+            continue
+        by_time[key] = bar
+    return sorted(by_time.values(), key=lambda b: b["time"])
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main() -> None:
     logger.info("=== K-line incremental fetch (yfinance) ===")
@@ -559,17 +608,25 @@ def main() -> None:
     all_sids = set(list(existing_cache.keys()) + stock_ids)
     total_new_bars = 0
 
+    trimmed_bars = 0
+
     for sid in all_sids:
-        old_daily = existing_cache.get(sid, {}).get("1d", [])
+        old_entry = existing_cache.get(sid, {})
+        old_daily = old_entry.get("1d", [])
         fetched   = new_daily.get(sid, [])
         existing_times = {b["time"] for b in old_daily}
         to_add = [b for b in fetched if b["time"] not in existing_times]
         merged_daily = sorted(old_daily + to_add, key=lambda b: b.get("time", ""))
         total_new_bars += len(to_add)
+        # 週/月 K 先用「完整的」日 K 算，再與既有快取合併 → 裁日 K 不會連累週/月 K
+        weekly  = merge_period_bars(old_entry.get("1wk", []), _resample(merged_daily, "W"))
+        monthly = merge_period_bars(old_entry.get("1mo", []), _resample(merged_daily, "M"))
+        kept_daily = trim_daily_bars(merged_daily)
+        trimmed_bars += len(merged_daily) - len(kept_daily)
         kline_map[sid] = {
-            "1d":  merged_daily,
-            "1wk": _resample(merged_daily, "W"),
-            "1mo": _resample(merged_daily, "M"),
+            "1d":  kept_daily,
+            "1wk": weekly,
+            "1mo": monthly,
         }
 
     covered = sum(1 for sid in stock_ids if kline_map.get(sid, {}).get("1d"))
@@ -577,10 +634,24 @@ def main() -> None:
         f"Merge complete: +{total_new_bars} new daily bars, "
         f"{covered}/{len(stock_ids)} scanned stocks have daily data"
     )
+    if trimmed_bars:
+        logger.info(
+            f"Trimmed {trimmed_bars} old daily bars "
+            f"(keeping last {DAILY_KEEP_BARS} per stock; weekly/monthly preserved)"
+        )
 
     # ── 6. Save updated cache ─────────────────────────────────────────────────
     CACHE_FILE.write_text(json.dumps(kline_map, ensure_ascii=False), "utf-8")
-    logger.info(f"Cache saved: {CACHE_FILE.name} ({len(kline_map)} stocks, 3 intervals)")
+    size_mib = CACHE_FILE.stat().st_size / 1024 / 1024
+    logger.info(
+        f"Cache saved: {CACHE_FILE.name} ({len(kline_map)} stocks, 3 intervals, {size_mib:.1f} MiB)"
+    )
+    # GitHub 單檔上限 100MiB，超過的話 push 會被 pre-receive hook 直接擋掉
+    if size_mib > 90:
+        logger.warning(
+            f"{CACHE_FILE.name} is {size_mib:.1f} MiB — approaching GitHub's 100 MiB "
+            f"file limit; consider lowering DAILY_KEEP_BARS (currently {DAILY_KEEP_BARS})"
+        )
 
     # Flatten to daily bars for Excel + Notion (they don't need weekly/monthly)
     kline_map_1d = {sid: data.get("1d", []) for sid, data in kline_map.items()}
