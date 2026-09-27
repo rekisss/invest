@@ -47,7 +47,9 @@ test('百分位排名:50 代表與亂選無法區分', () => {
   assert.equal(percentileRankOf(null, xs), null)
 })
 
-const mkRun = (ret, exp, win = 50, n = 10) => ({
+// n 預設給到 MIN_VERDICT_TRADES 之上,否則測 verdict 邏輯的案例會全部落入
+// 'insufficient' 而測不到它們要測的東西。要測樣本門檻的案例自己傳小的 n。
+const mkRun = (ret, exp, win = 50, n = 50) => ({
   return_pct: ret, stats: { avg_ret: exp, win_rate: win, num_trades: n },
 })
 
@@ -91,4 +93,39 @@ test('對照分布本身落在自己的中間', () => {
   const control = summarizeControl(runs)
   const self = scoreAgainstControl(runs[2], control)
   assert.equal(self.verdict, 'within', '對照組的中位樣本必須判為 within,否則尺是歪的')
+})
+
+// ── 樣本不足時不給方向性結論 ─────────────────────────────────────────────────
+// 實測主帳戶以 5 筆交易拿到「每筆期望 100 百分位」,系統於是宣告它贏過全部 20 個
+// 亂數組合。而 10 個交易日之前同一套系統才判定 below(0 百分位),期間對照分布的
+// 平均從 +9.99% 掉到 -0.42%。樣本不足就說樣本不足。
+
+test('交易筆數不足時 verdict 為 insufficient', () => {
+  const control = summarizeControl([mkRun(-4, -1), mkRun(-2, -0.5), mkRun(0, 0), mkRun(2, 0.5), mkRun(4, 1)])
+  const few = scoreAgainstControl(mkRun(99, 99, 50, 5), control)
+  assert.equal(few.verdict, 'insufficient', '5 筆交易不足以宣告贏過亂選')
+  assert.equal(few.trades, 5)
+  assert.equal(few.avg_ret_rank, 100, '百分位仍要回報,只是不當結論')
+})
+
+test('樣本足夠才給 above/below', () => {
+  const control = summarizeControl([mkRun(-4, -1), mkRun(-2, -0.5), mkRun(0, 0), mkRun(2, 0.5), mkRun(4, 1)])
+  const many = scoreAgainstControl(mkRun(99, 99, 50, 200), control)
+  assert.equal(many.verdict, 'above')
+  const bad = scoreAgainstControl(mkRun(-99, -99, 50, 200), control)
+  assert.equal(bad.verdict, 'below')
+})
+
+test('沒有交易筆數資訊時視為不足,不樂觀推定', () => {
+  const control = summarizeControl([mkRun(-4, -1), mkRun(0, 0), mkRun(4, 1)])
+  const noTrades = scoreAgainstControl({ return_pct: 99, stats: { avg_ret: 99 } }, control)
+  assert.equal(noTrades.verdict, 'insufficient')
+})
+
+test('門檻可調,且預設是有意義的數字', async () => {
+  const { MIN_VERDICT_TRADES } = await import('./random-control.mjs')
+  assert.ok(MIN_VERDICT_TRADES >= 30, '低於 30 筆的統計宣告沒有意義')
+  const control = summarizeControl([mkRun(-4, -1), mkRun(0, 0), mkRun(4, 1)])
+  const loose = scoreAgainstControl(mkRun(99, 99, 50, 5), control, { minTrades: 3 })
+  assert.equal(loose.verdict, 'above', '門檻放寬後同一筆資料才給方向')
 })

@@ -13,7 +13,7 @@ import { recomputeRealHits, scoreHorizonHits, PRED_HORIZON } from './outcome-fix
 import { computeModelHealth } from './model-health.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 import { buildForwardReturn } from './forward-return.mjs'
-import { makeExpectancyRank, rankPicksByExpectancy } from './expectancy.mjs'
+import { makeExpectancyRank, rankPicksByExpectancy, nearTrigger, MAX_TRIGGER_DISTANCE_ATR } from './expectancy.mjs'
 import { enrichFromBars, isTradable, MIN_TURNOVER } from './pool-metrics.mjs'
 import { seededRank, summarizeControl, scoreAgainstControl, DEFAULT_SEEDS } from './random-control.mjs'
 import { makeKlineQualityGate } from './kline-quality.mjs'
@@ -2350,8 +2350,16 @@ try {
   //   資料可信  價格序列沒有超過 ±10% 漲跌幅上限的跳動、沒有零振幅 bar
   // 兩道閘門合計濾掉約三成,剩下的才有資格進盯盤清單與紙上指令。
   const poolRaw = (latest?.filter_stocks?.length ? latest.filter_stocks : latest?.top_stocks) || []
-  const eligible = poolRaw.filter(s => tradable(s)).map(s => withMetrics(s))
-  const ranked = rankPicksByExpectancy(eligible, { gradeStats: outcomeStats })
+  const withMet = poolRaw.filter(s => tradable(s)).map(s => withMetrics(s))
+  // 第三道閘門:距進場觸發價(20 日高)在 MAX_TRIGGER_DISTANCE_ATR 個 ATR 以內。
+  // 紙上指令的進場規則是「突破 20 日高」,但期望報酬排序完全不看「離買點多近」——
+  // 沒有這道濾網時實測選出的五檔距買點 14%~62%,其中兩檔根本不可能觸發,
+  // 盯著永遠不發訊號的股票等於清單沒有作用。
+  const eligible = withMet.filter(s => nearTrigger(s))
+  // upsideFrom:'trigger' —— 盯盤清單服務的是「突破 20 日高才買進」的紙上指令,
+  // 所以上檔要從突破價之後算起(停利幅度),不是「到 20 日高的距離」。用錯模型會讓
+  // 最可能觸發的股票排最後。
+  const ranked = rankPicksByExpectancy(eligible, { gradeStats: outcomeStats, upsideFrom: 'trigger' })
   const five = ranked.slice(0, 5)
   if (five.length) {
     watchFive = {
@@ -2372,6 +2380,8 @@ try {
         reward_risk: s._reward_risk,
         atr14: s.atr14 ?? null,
         gap_to_20d_high_pct: s.gap_to_20d_high_pct ?? null,
+        // 距進場觸發價幾個 ATR(負值=已站上 20 日高)
+        trigger_atr: s._trigger_atr ?? null,
         // 突破目標價 = 20 日高。即時層拿它當進場觸發條件(見 utils/liveOrders.js)。
         // 優先用掃描算好的 close_20d_high;沒有就用收盤 × (1+到高點距離%) 回推。
         breakout_price: (() => {
@@ -2385,9 +2395,14 @@ try {
         })(),
       })),
     }
-    watchFive.pool = { scanned: poolRaw.length, eligible: eligible.length }
+    watchFive.pool = {
+      scanned: poolRaw.length,
+      tradable: withMet.length,
+      eligible: eligible.length,
+      max_trigger_atr: MAX_TRIGGER_DISTANCE_ATR,
+    }
     const head = watchFive.items.map(x => `${x.stock_id}${x.expectancy_pct != null ? `(${x.expectancy_pct > 0 ? '+' : ''}${x.expectancy_pct}%)` : ''}`).join(' ')
-    console.log(`盯盤前五檔[${watchFive.basis}] 自 ${poolRaw.length} 檔篩到 ${eligible.length} 檔可用: ${head}`)
+    console.log(`盯盤前五檔[${watchFive.basis}] ${poolRaw.length} 檔 → 可成交且資料可信 ${withMet.length} → 距買點 ≤${MAX_TRIGGER_DISTANCE_ATR} ATR ${eligible.length}: ${head}`)
   }
 } catch (e) { console.warn('Watch-five skipped:', e.message) }
 

@@ -25,6 +25,18 @@ export const DEFAULT_HOLD_DAYS = 15
 export const DEFAULT_TP_CAP = 12
 /** 評級歷史統計至少要幾筆才採用,否則視為沒有資訊。 */
 export const MIN_GRADE_SAMPLE = 100
+/**
+ * 候選股距進場觸發價(20 日高)的上限,單位是 ATR。
+ *
+ * 為什麼需要:紙上指令的進場規則是「現價突破 20 日高」。但期望報酬排序完全不看
+ * 「離買點多近」—— 實測選出的前五檔距買點 14%~62%,其中兩檔在可預見的未來根本
+ * 不可能觸發。盯著永遠不會發出訊號的股票,清單等於沒有作用。
+ *
+ * 以 ATR 為單位而不是百分比:一檔日波動 5% 的股票距高點 8% 是兩天的事,
+ * 一檔日波動 1% 的股票距高點 8% 要走一個月。同樣的百分比對兩者意義完全不同。
+ * 1.5 ATR 下全池仍有 749 檔候選(1 ATR 有 501 檔),不會把樣本砍到不夠選。
+ */
+export const MAX_TRIGGER_DISTANCE_ATR = 1.5
 
 // null / undefined / '' 都要當成「沒有這個值」。不能只靠 Number.isFinite:
 // Number(null) 是 0、Number('') 也是 0,漏擋會把「缺欄位」誤讀成「上檔空間 0%」,
@@ -64,6 +76,9 @@ export function expectedReturnPct(stock, opts = {}) {
     tpCap = DEFAULT_TP_CAP,
     minSample = MIN_GRADE_SAMPLE,
     holdDays = DEFAULT_HOLD_DAYS,
+    // 'current' 從現價算上檔(到 20 日高的空間) —— 適合「今天就買進」的模型
+    // 'trigger' 從突破價算上檔(停利幅度)   —— 適合「突破才買進」的模型
+    upsideFrom = 'current',
   } = opts
 
   const close = num(stock.close)
@@ -89,7 +104,22 @@ export function expectedReturnPct(stock, opts = {}) {
   // 下檔也同步放大,兩邊都由同一個 ATR 驅動,不會偏袒任何一端。
   const atrPct = (atr / close) * 100
   const reachable = atrPct * Math.sqrt(Math.max(1, holdDays))
-  const upside = Math.min(Math.max(gap, 0), tpCap, reachable)
+  //
+  // upsideFrom 決定上檔從哪裡起算,這是兩種完全不同的進場模型:
+  //
+  //   'current'  今天就用現價買進 → 上檔是「到 20 日高還有多少空間」。
+  //              gap 進入算式,貼著高點的股票上檔就小。
+  //
+  //   'trigger'  等突破 20 日高才買進 → **20 日高是進場點,不是獲利目標**。
+  //              突破之後的上檔是停利幅度,與「距高點多遠」無關。gap 在這個模型
+  //              裡只用來判斷「摸不摸得到買點」(見 nearTrigger),不進期望值。
+  //
+  // 把兩者混在一起是方向性錯誤:用 'current' 的算式去挑突破候選,會讓「離買點
+  // 越近」的股票期望值越低 —— 但那正是最可能觸發的股票。實測加上距離濾網後
+  // 前五檔期望值全變負,就是這個錯誤浮出來的樣子。
+  const upside = upsideFrom === 'trigger'
+    ? Math.min(tpCap, reachable)
+    : Math.min(Math.max(gap, 0), tpCap, reachable)
   // 下檔:一個 ATR 佔股價的百分比 × 停損倍數
   const downside = (atr / close) * 100 * atrMult
 
@@ -102,6 +132,30 @@ export function expectedReturnPct(stock, opts = {}) {
     winRate: p,
     basis: 'model',
   }
+}
+
+/**
+ * triggerDistanceAtr(stock) → 距 20 日高還有幾個 ATR,或 null
+ * 負值代表已經站上 20 日高(隨時可能觸發)。
+ */
+export function triggerDistanceAtr(stock) {
+  const close = num(stock?.close)
+  const atr = num(stock?.atr14)
+  const gap = num(stock?.gap_to_20d_high_pct)
+  if (close == null || close <= 0 || atr == null || atr <= 0 || gap == null) return null
+  const atrPct = (atr / close) * 100
+  return Math.round(gap / atrPct * 100) / 100
+}
+
+/**
+ * nearTrigger(stock, maxAtr) → bool
+ * 距進場觸發價在 maxAtr 個 ATR 以內才算「盯得有意義」。
+ * 算不出距離時回 true —— 不因為缺資料就排除(那是與可觸發性無關的偏誤)。
+ */
+export function nearTrigger(stock, maxAtr = MAX_TRIGGER_DISTANCE_ATR) {
+  const d = triggerDistanceAtr(stock)
+  if (d == null) return true
+  return d <= maxAtr
 }
 
 /**
@@ -137,6 +191,8 @@ export function rankPicksByExpectancy(stocks, opts = {}) {
       // 選股層的賺賠比:上檔空間 ÷ 下檔風險。>1 才是划算的一注。
       _reward_risk: (e && e.upside != null && e.downside > 0)
         ? Math.round(e.upside / e.downside * 100) / 100 : null,
+      // 距進場觸發價幾個 ATR —— 期望值再高,碰不到買點就發不出訊號
+      _trigger_atr: triggerDistanceAtr(s),
     }
   })
   const rank = makeExpectancyRank(opts.gradeStats, opts)

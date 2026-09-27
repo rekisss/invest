@@ -143,3 +143,75 @@ test('修正後不會所有股票的上檔都相同 —— 排序才不會退化
   const ups = picks.map(p => expectedReturnPct(p, { gradeStats: GRADES }).upside)
   assert.equal(new Set(ups).size, 3, `三檔的上檔應各不相同,實得 ${JSON.stringify(ups)}`)
 })
+
+// ── 距進場觸發價的過濾 ────────────────────────────────────────────────────────
+// 紙上指令的進場規則是「突破 20 日高」。期望報酬排序完全不看「離買點多近」,
+// 實測選出的前五檔距買點 14%~62%,其中兩檔根本不可能觸發 —— 盯著永遠不發訊號
+// 的股票,清單等於沒有作用。
+
+test('距觸發價以 ATR 為單位計算,不是百分比', async () => {
+  const { triggerDistanceAtr } = await import('./expectancy.mjs')
+  // ATR 5% 的股票距高點 10% = 2 個 ATR
+  assert.equal(triggerDistanceAtr({ close: 100, atr14: 5, gap_to_20d_high_pct: 10 }), 2)
+  // ATR 1% 的股票距高點同樣 10% = 10 個 ATR,難度天差地別
+  assert.equal(triggerDistanceAtr({ close: 100, atr14: 1, gap_to_20d_high_pct: 10 }), 10)
+})
+
+test('已站上 20 日高回負值(隨時可能觸發)', async () => {
+  const { triggerDistanceAtr } = await import('./expectancy.mjs')
+  assert.ok(triggerDistanceAtr({ close: 100, atr14: 2, gap_to_20d_high_pct: -4 }) < 0)
+})
+
+test('缺資料時算不出距離,回 null', async () => {
+  const { triggerDistanceAtr } = await import('./expectancy.mjs')
+  for (const bad of [{ close: 0 }, { atr14: null }, { gap_to_20d_high_pct: null }]) {
+    assert.equal(triggerDistanceAtr({ close: 100, atr14: 2, gap_to_20d_high_pct: 5, ...bad }), null)
+  }
+})
+
+test('nearTrigger 濾掉碰不到買點的股票,缺資料不排除', async () => {
+  const { nearTrigger, MAX_TRIGGER_DISTANCE_ATR } = await import('./expectancy.mjs')
+  const near = { close: 100, atr14: 5, gap_to_20d_high_pct: 5 }    // 1 ATR
+  const far = { close: 100, atr14: 1, gap_to_20d_high_pct: 60 }    // 60 ATR — 實測真的出現過
+  assert.equal(nearTrigger(near), true)
+  assert.equal(nearTrigger(far), false, '距買點 60 個 ATR 的股票不該進盯盤清單')
+  assert.equal(nearTrigger({}), true, '算不出距離時不可因此排除')
+  assert.ok(MAX_TRIGGER_DISTANCE_ATR > 0 && MAX_TRIGGER_DISTANCE_ATR <= 3,
+    '門檻要夠緊才有意義,又不能緊到沒候選')
+})
+
+test('排序結果附上距觸發距離,供 UI 與後續過濾使用', () => {
+  const picks = [{ stock_id: 'A', close: 100, atr14: 2, gap_to_20d_high_pct: 3, grade: 'C', entry_score: 50 }]
+  const out = rankPicksByExpectancy(picks, { gradeStats: GRADES })
+  assert.equal(out[0]._trigger_atr, 1.5)
+})
+
+// ── 兩種進場模型的上檔起算點 ─────────────────────────────────────────────────
+// 20 日高對突破策略而言是**進場點**不是獲利目標。用「到 20 日高的距離」當上檔
+// 去挑突破候選,會讓最可能觸發的股票(離買點最近)期望值最低 —— 方向完全相反。
+
+test("upsideFrom:'trigger' 時上檔與距高點多遠無關", () => {
+  const near = expectedReturnPct(
+    stock({ close: 100, atr14: 3, gap_to_20d_high_pct: 1 }), { gradeStats: GRADES, upsideFrom: 'trigger' })
+  const far = expectedReturnPct(
+    stock({ close: 100, atr14: 3, gap_to_20d_high_pct: 20 }), { gradeStats: GRADES, upsideFrom: 'trigger' })
+  assert.equal(near.upside, far.upside, '突破後的上檔是停利幅度,不該因為距高點遠近而不同')
+  assert.ok(near.value > 0, `貼著買點的股票期望值不該是負的,實得 ${near.value}`)
+})
+
+test("upsideFrom:'current' 維持原行為(距高點近則上檔小)", () => {
+  const near = expectedReturnPct(
+    stock({ close: 100, atr14: 3, gap_to_20d_high_pct: 1 }), { gradeStats: GRADES })
+  const far = expectedReturnPct(
+    stock({ close: 100, atr14: 3, gap_to_20d_high_pct: 20 }), { gradeStats: GRADES })
+  assert.ok(near.upside < far.upside, '現價買進模型下,貼著高點就是沒空間了')
+  assert.equal(near.upside, 1)
+})
+
+test('兩種模型在距高點很遠時會收斂到同一個上限', () => {
+  const opts = { gradeStats: GRADES }
+  const s = stock({ close: 100, atr14: 3, gap_to_20d_high_pct: 999 })
+  const cur = expectedReturnPct(s, opts)
+  const trg = expectedReturnPct(s, { ...opts, upsideFrom: 'trigger' })
+  assert.equal(cur.upside, trg.upside, 'gap 大到不綁住時,兩者都由停利/可達幅度決定')
+})

@@ -16,6 +16,15 @@
 
 /** 預設種子數。多一點分布較穩,但每個種子都要跑一次完整模擬。 */
 export const DEFAULT_SEEDS = 20
+/**
+ * 給出 above/below 判定所需的最低已結交易筆數。
+ *
+ * 為什麼要有:實測主帳戶以 5 筆交易拿到「每筆期望 100 百分位」,系統於是宣告它
+ * 贏過全部 20 個亂數組合 —— 那是雜訊不是結論。同一份系統在 10 個交易日之前
+ * 才剛判定 below(0 百分位),期間對照分布的平均從 +9.99% 掉到 -0.42%。
+ * 樣本不足時就說樣本不足,不要給一個會被當真的方向性結論。
+ */
+export const MIN_VERDICT_TRADES = 30
 
 /**
  * seededRank(seed) → (stock) => number
@@ -96,21 +105,30 @@ export function summarizeControl(runs) {
 }
 
 /**
- * scoreAgainstControl(entry, control) → { return_pct_rank, avg_ret_rank, verdict }
+ * scoreAgainstControl(entry, control, opts) → { return_pct_rank, avg_ret_rank, verdict, trades }
  *
- * verdict 只分三檔,刻意不給更細的結論 —— 樣本這麼小,細分是假精確:
- *   'above'   兩個指標都在對照分布的 80 百分位以上
- *   'within'  落在分布中間,與亂選無法區分
- *   'below'   兩個指標都在 20 百分位以下
+ * verdict 刻意只分四檔 —— 樣本這麼小,細分是假精確:
+ *   'insufficient'  已結交易數不足 minTrades,不給方向性結論(百分位仍回報供參考)
+ *   'above'         兩個指標都在對照分布的 80 百分位以上
+ *   'within'        落在分布中間,與亂選無法區分
+ *   'below'         兩個指標都在 20 百分位以下
  */
-export function scoreAgainstControl(entry, control) {
+export function scoreAgainstControl(entry, control, opts = {}) {
   if (!entry || !control) return null
+  const { minTrades = MIN_VERDICT_TRADES } = opts
   const rRank = percentileRankOf(entry.return_pct, control._returns)
   const eRank = percentileRankOf(entry?.stats?.avg_ret ?? entry?.avg_ret, control._expectancies)
+  const trades = entry?.stats?.num_trades ?? entry?.num_trades ?? null
+
+  // 樣本不足時直接短路。百分位照回報(看得到但別當結論),verdict 不給方向。
+  if (trades == null || trades < minTrades) {
+    return { return_pct_rank: rRank, avg_ret_rank: eRank, verdict: 'insufficient', trades, min_trades: minTrades }
+  }
+
   let verdict = 'within'
   if (rRank != null && eRank != null) {
     if (rRank >= 80 && eRank >= 80) verdict = 'above'
     else if (rRank <= 20 && eRank <= 20) verdict = 'below'
   }
-  return { return_pct_rank: rRank, avg_ret_rank: eRank, verdict }
+  return { return_pct_rank: rRank, avg_ret_rank: eRank, verdict, trades, min_trades: minTrades }
 }
