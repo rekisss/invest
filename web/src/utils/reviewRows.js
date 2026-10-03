@@ -37,7 +37,10 @@ export function realRowFor(entry) {
   return { ...base, ret: pct, hit: null, horizon: 5, pending: entry.directional === true }
 }
 
-export function buildReviewRows({ history, benchCurve, realOutcomes, limit = 14 } = {}) {
+// limit 預設不截斷:驗證清單要保留全部歷史(2026-09-14)。
+// 呼叫端若只想顯示最近幾筆,自己決定要顯示幾列,不要在這裡丟資料——
+// 逐日命中統計(summarizeReviewRows)必須看得到完整樣本。
+export function buildReviewRows({ history, benchCurve, realOutcomes, limit = Infinity } = {}) {
   // 代理先不截斷:要拿它補真實紀錄沒涵蓋到的舊日期
   const proxyRows = scoreProxyPredictions(history, benchCurve, { limit: Number.MAX_SAFE_INTEGER })
   const proxyByDate = new Map(proxyRows.map(r => [r.date, r]))
@@ -57,7 +60,7 @@ export function buildReviewRows({ history, benchCurve, realOutcomes, limit = 14 
     const p = proxyByDate.get(date)
     if (p) out.push({ ...p, source: 'proxy', horizon: PROXY_HORIZON, pending: false })
   }
-  return out.slice(0, limit)
+  return Number.isFinite(limit) ? out.slice(0, limit) : out
 }
 
 // 逐日清單自己的命中統計(只算真的打過分的列)。中性/等待中不進分母。

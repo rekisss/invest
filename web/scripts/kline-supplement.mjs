@@ -248,6 +248,31 @@ function mergeBars(existing, newBars) {
   return Object.values(byDate).sort((a, b) => a.time.localeCompare(b.time))
 }
 
+// 日 K 只保留最近幾根,和 kline_fetch.py 的 DAILY_KEEP_BARS 一致。
+// 原因:kline_cache.json 在 2026-09 撞到 GitHub 單檔 100MiB 上限,push 被擋掉,
+// 快取就停在 2026-09-03 不動了。這支補抓工具對「missing」股票預設抓 730 天,
+// 不裁的話跑幾輪就會把檔案推回上限。最舊那端才裁,最新一根是增量抓取的錨點。
+// 下限參考:build-data.mjs 的 OHLC_BARS = 260 / SCAN_HIST_BARS = 250。
+const DAILY_KEEP_BARS = 300
+function trimDaily(bars) {
+  if (!DAILY_KEEP_BARS || bars.length <= DAILY_KEEP_BARS) return bars
+  return bars.slice(-DAILY_KEEP_BARS)
+}
+
+// 週/月 K 是由日 K 推導的,日 K 被裁之後單靠 resample 會把較舊的區間默默丟掉,
+// 所以以既有快取為底、讓新算出來的區間覆蓋上去。新算的第一筆可能只涵蓋半個
+// 週/月(日 K 被裁),若快取已有同一個 key 就保留舊的那筆。
+function mergePeriods(oldBars, newBars) {
+  const byTime = {}
+  for (const b of oldBars || []) if (b && b.time) byTime[b.time] = b
+  newBars.forEach((b, idx) => {
+    if (!b || !b.time) return
+    if (idx === 0 && byTime[b.time]) return
+    byTime[b.time] = b
+  })
+  return Object.values(byTime).sort((a, b) => a.time.localeCompare(b.time))
+}
+
 // ── Step 6: Fetch loop ────────────────────────────────────────────────────────
 let fetched = 0, failed = 0
 const DELAY_MS = 300  // polite delay between requests
@@ -269,10 +294,13 @@ for (let i = 0; i < toFetch.length; i++) {
   } else {
     const existing1d = getBars(klineMap[stockId], '1d')
     const merged1d   = mergeBars(existing1d, bars)
-    const merged1wk  = resampleBars(merged1d, '1wk')
-    const merged1mo  = resampleBars(merged1d, '1mo')
-    klineMap[stockId] = { '1d': merged1d, '1wk': merged1wk, '1mo': merged1mo }
-    console.log(`✓ ${suffix} ${bars.length} bars → total ${merged1d.length}d`)
+    // 週/月 K 先用「完整的」日 K 算,再與既有快取合併 → 裁日 K 不會連累週/月 K
+    const merged1wk  = mergePeriods(getBars(klineMap[stockId], '1wk'), resampleBars(merged1d, '1wk'))
+    const merged1mo  = mergePeriods(getBars(klineMap[stockId], '1mo'), resampleBars(merged1d, '1mo'))
+    const kept1d     = trimDaily(merged1d)
+    klineMap[stockId] = { '1d': kept1d, '1wk': merged1wk, '1mo': merged1mo }
+    console.log(`✓ ${suffix} ${bars.length} bars → total ${merged1d.length}d`
+      + (kept1d.length < merged1d.length ? ` (kept last ${kept1d.length})` : ''))
     fetched++
 
     // Save after every 10 stocks to preserve progress on quota interruption
