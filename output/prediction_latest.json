@@ -1,31 +1,31 @@
 {
-  "date": "2026-10-06",
+  "date": "2026-10-07",
   "generated_at": "08:02",
-  "xgb_prob_up": 0.343,
+  "xgb_prob_up": 0.222,
   "xgb_label": "看空",
   "market_data": {
-    "vix": 15.52,
-    "sp500_ret": 0.0073,
-    "nasdaq_ret": 0.0119,
-    "sox_ret": 0.024,
+    "vix": 15.01,
+    "sp500_ret": 0.0058,
+    "nasdaq_ret": 0.0045,
+    "sox_ret": 0.0034,
     "tsm_adr_ret": 0.0296,
-    "futures_net": -77004.0,
-    "night_change": 158.0,
+    "futures_net": -79517.0,
+    "night_change": -58.0,
     "pcr": null,
-    "taiex_rsi": 72.10590113580453,
-    "macd_hist": 394.4004353434784,
-    "dist_ma20": 5.180603029888142,
-    "dist_ma60": 9.482843521338346,
-    "taiex_ret_5d": 3.5143490037403913,
-    "taiex_ret_20d": 8.56367540946108,
+    "taiex_rsi": 72.60964712850974,
+    "macd_hist": 478.13521897114697,
+    "dist_ma20": 5.04341212184094,
+    "dist_ma60": 9.535637629235062,
+    "taiex_ret_5d": 4.599642007752713,
+    "taiex_ret_20d": 7.184258505587371,
     "buyback_count": 0,
-    "disposition_count": 27,
-    "jpy_ret": 0.0023,
+    "disposition_count": 31,
+    "jpy_ret": 0.0015,
     "arkk_ret": 0.0141,
     "hyg_ret": 0.0001,
     "night_trend": "↓ 走弱",
     "market_revenue_yoy": 0.1512,
-    "market_foreign_holding_chg": 1.2802
+    "market_foreign_holding_chg": 2.4478
   },
   "regime": {
     "label": "double_whipsaw",
@@ -33,10 +33,10 @@
     "win_rate": 45.0
   },
   "scenario": {
-    "main_scenario": "VIX=15.5 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+    "main_scenario": "VIX=15.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
     "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
     "danger_signals": [
-      "外資空單極重（-77,004口），軋空風險高"
+      "外資空單極重（-79,517口），軋空風險高"
     ],
     "forbidden_actions": [
       "禁止反彈高點追多（軋空陷阱）"
@@ -48,13 +48,13 @@
     "factors": [
       {
         "name": "外資空單極重",
-        "description": "-77,004口，軋空/崩潰雙向風險",
+        "description": "-79,517口，軋空/崩潰雙向風險",
         "action": "避免重押方向"
       }
     ]
   },
   "news_sentiment": {
-    "market_impact": 0.3,
+    "market_impact": 0.4,
     "key_events": [],
     "bullish_count": 0,
     "bearish_count": 0
