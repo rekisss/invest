@@ -19,6 +19,11 @@ web/dist/
 # build 產物,每次部署都由 web/scripts/build-data.mjs 重新產生。
 # 曾經被誤 commit 進 repo(24.7 MB、且很快就過期),本機開發請跑 `npm run data`。
 web/public/data.json
+# 同上:build-data.mjs 每次部署重新產生(downloads 還會自動輪替舊日期)。
+# 註:downloads/ 下已有 32 個檔案在更早之前被 news 自動 commit 誤收進 repo,
+# 這裡不動它們(不刪資料),只讓新產生的 build 產物不再弄髒工作目錄。
+web/public/downloads/
+web/public/meta.json
 *.db
 logs/
 .claude/worktrees/

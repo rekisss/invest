@@ -204,7 +204,10 @@ function readPredictionHistory() {
   if (!existsSync(histFile)) return []
   try {
     const hist = JSON.parse(readFileSync(histFile, 'utf-8'))
-    return Array.isArray(hist) ? hist.slice(0, 90) : []
+    // 2026-09-14:不再截斷。預測驗證(校準分析/命中率追蹤/回測)要吃完整歷史,
+    // 舊的 slice(0, 90) 會在累積滿 90 個預測日後開始默默丟掉最舊的樣本。
+    // 每筆約 1.2KB,一年約 245 個交易日 ≈ 300KB,相對 data.json 現況可忽略。
+    return Array.isArray(hist) ? hist : []
   } catch { return [] }
 }
 
@@ -1560,7 +1563,9 @@ try {
     }
   }
   realOutcomes = {
-    prediction: po.slice(-60),   // 最近 60 筆逐日紀錄（含 taiex 收盤、hit）
+    // 2026-09-14:不再截斷(原本只留最近 60 筆)。逐日驗證清單與策略回測都以
+    // 這份真實收盤紀錄為權威來源,截斷等於把較舊的驗證結果永久丟掉。
+    prediction: po,              // 全部逐日紀錄（含 taiex 收盤、hit）
     prediction_hit: scored.length ? { hits: scored.filter(e => e.hit).length, total: scored.length } : null,
     // 期距正確的命中率(模型預測的是 5 個交易日後)。前端應以此為準,隔日僅供參考。
     prediction_hit_h5: hScored.length ? { hits: hScored.filter(e => e[hKey]).length, total: hScored.length, horizon: PRED_HORIZON } : null,
