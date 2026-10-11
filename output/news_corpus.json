@@ -1,12 +1,54 @@
 {
-  "updated_at": "2026-10-11T17:01:41.072711+00:00",
+  "updated_at": "2026-10-11T18:01:38.070742+00:00",
   "articles": [
+    {
+      "title": "格羅方德宣佈攜手台積電於紐約州建置「矽中介層」本土供應基地 - 鏈新聞 ABMedia",
+      "url": "https://news.google.com/rss/articles/CBMiqwFBVV95cUxNbkVlUTNPTVp0cDl3X2ZDUGNtWmJhdnhIZ01MdzRmYjJ6SF9RM1VKbWJvREVhQmMySGhrU2JVVmI5LUs5bTBnbDd5UnBLbGJDbFFiZzRDZmdLaF8zUWdOWDQyS0RzUW1XR3JqendIcXd6U3hyQ1VDdkdidFZOUEZLS01JMnlCMFRncDc1QW9XRnQyMnVab2ZneXRqc2ctWnBCUUkwbzJ0NlM2ckE?oc=5",
+      "source": "鏈新聞 ABMedia",
+      "published_at": "2026-10-11T17:41:43+00:00",
+      "summary": "格羅方德宣佈攜手台積電於紐約州建置「矽中介層」本土供應基地&nbsp;&nbsp;鏈新聞 ABMedia"
+    },
+    {
+      "title": "10檔目標價調升股多頭先鋒 台積、日月光等逢低布局 | 市場焦點 | 證券 - 經濟日報",
+      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE1FV1RpN3cyZlc5RGtpM25heHdtdm5FNjViS19BQUhjV3lfSm5QN1VET1I1QTkxMlpjMlJRY2NYQmRaVVRhRTJ3U2tiT0l6eE56Y3FVX1ZtRTY3dw?oc=5",
+      "source": "經濟日報",
+      "published_at": "2026-10-11T17:18:14+00:00",
+      "summary": "10檔目標價調升股多頭先鋒 台積、日月光等逢低布局 | 市場焦點 | 證券&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "台積電ADR連4跌台指期失守四萬九 台股五萬點靜待台積電法說 | 太報 - LINE TODAY",
+      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTE1KbXI5eHZlWEhLZ3RIbG5fcTU4bE1iMy1ORlRlY1RWeEdCamdhcmZxOFJlVFQzb1VQeS1LYkVqYVowdnJHbkliLXFiNVAzVFpubndqdzh3?oc=5",
+      "source": "LINE TODAY",
+      "published_at": "2026-10-11T16:59:05+00:00",
+      "summary": "台積電ADR連4跌台指期失守四萬九 台股五萬點靜待台積電法說 | 太報&nbsp;&nbsp;LINE TODAY"
+    },
+    {
+      "title": "OCP 峰會來了 台廠迎商機 - 經濟日報",
+      "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTE9PVXZvOS1fOGpmVEZRSTBoYk1hU1VxZ0gzZThUTHFQZnU3WFJxU05vNWkxSWFPd1BFcXFLUGpjeTdtZlhvUFlnSGVmOU4zNTBvVERGVHB1Z2s1THowY0dISHkzcjU3V1BGYmV5YXF3N0xnbklqcXpaYU5MX1VzZ9IBX0FVX3lxTE1fSm43dUJiaGtSX05qa2FabDFVUEUtRFVqYmtqMmV2MHQ3LWNqM0hMUlZUeUhhWUlhMGc4V2RQeEJBWFlQdEx3SmFCU2h4M2xuLXdoQXVXaV9mTzVrQUZB?oc=5",
+      "source": "經濟日報",
+      "published_at": "2026-10-11T16:56:25+00:00",
+      "summary": "OCP 峰會來了 台廠迎商機&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "台指期 短線震盪再攻 - UDN",
+      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTFBTT2YzV09jNTFxX0VUajQybDFxd05uWEhGaGN1Y1haMWRBUlNDVXFBU0Ewc3pmRnhKbEF0TUZtN0tDWnUwNnNLSE4zYjBCc0tf0gFWQVVfeXFMT3lQRDA3aUtHSVJvN3JIMGI3eEZ5UDJRbWU1a1Blb05FWFlmcE1DZWxjc3NPaDhQdkdwQ3hZb1czaHhLM2stQzlEQnVxR2lzRThCdU5oMlE?oc=5",
+      "source": "UDN",
+      "published_at": "2026-10-11T16:47:44+00:00",
+      "summary": "台指期 短線震盪再攻&nbsp;&nbsp;UDN"
+    },
     {
       "title": "台指期 短線震盪再攻 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTFBldEd0azFyMUVVY0pZcVU2Mk9Pcms3WWEtOTJBNU5HUVpFYUg1dkpqOVFpMmtaZGFfdVFYWGk0anVmVURRTTNJYnRKTzI0US1BMFM1VlBMTzVNRlXSAWBBVV95cUxOaFhhbUNqem1PRkxFUFdxTDAwNmZ3TjdyekNXczlaaV9QZ19PeFVWakxuUHk2VWN0YmdweUNhalMwS2VIdXNWQWVZZ18zVkhhX19aSDBwcHFaNm1wYmtLRmM?oc=5",
       "source": "經濟日報",
       "published_at": "2026-10-11T16:47:44+00:00",
       "summary": "台指期 短線震盪再攻&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "台積期 動能強勁 - UDN",
+      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTE5vUjJ5SnN6Smcyc2JLTnVUQlBEOU9QZ2JyeWNjclg3djFrUDhwaHU4R3ZGWTV3bVl4Qi1tMnJGSEJYUlVKSmdHV0tfS21YVDN60gFWQVVfeXFMTkJwWG5lOWJwb01OZ3hGYVRqalRBam5JTjBtaTN4M0V4WWlrNHhudmtwWkdSN1NoY3lGZFFGbmhSYXM3Q09BYmpUQ09tUnZPT2ozSk0zWnc?oc=5",
+      "source": "UDN",
+      "published_at": "2026-10-11T16:47:15+00:00",
+      "summary": "台積期 動能強勁&nbsp;&nbsp;UDN"
     },
     {
       "title": "台積期 動能強勁 - 經濟日報",
@@ -96,7 +138,7 @@
       "title": "【全球】行情回顧與本週重點 | 財經Ｍ平方短評 - LINE TODAY",
       "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTE92bUtzcTladUZ4ZThGTDVTeEpWZ0NlOW9XRzR0V0NmNlNreGQ0bGFxMjNoeEx6eGhtekdUaV9HWWNxd0F5elU2SzlnZC1xOWpmTXFWb2Zn?oc=5",
       "source": "LINE TODAY",
-      "published_at": "2026-10-11T11:16:01+00:00",
+      "published_at": "2026-10-11T11:29:01+00:00",
       "summary": "【全球】行情回顧與本週重點 | 財經Ｍ平方短評&nbsp;&nbsp;LINE TODAY"
     },
     {
@@ -233,18 +275,18 @@
       "summary": "美科技股壓回 投顧：台股本週聚焦台積電法說會&nbsp;&nbsp;三立新聞網SETN.com"
     },
     {
-      "title": "AI伺服器催油門！電子五哥Q3營收齊增 緯創、廣達雙創單季新高 - Yahoo新聞",
-      "url": "https://news.google.com/rss/articles/CBMi_AJBVV95cUxOTzBDYnNZeDdYNUxNS0VlYW5IeVdtR09kWXBkSlc1Y0hITGl5bzc4NERyVC0tTlpwVU9JdGhYR2xOeXhFdUFsVVQ5UV9QckVQYlhvcEVHQ3B2cjRYaHE4bnV1WEpGalhmZWxLREl5eGRhSzNySC1od3FPQWRvV3BVUWdJTXFGWl93a0EyQUFCU3BBMUVSQm1XdzBCd011aERCRTVTQ2l1aHV4Wkc3NUFHQ1BUTk5CX19KM25LUlhPU01uSkk5UFZ2MmRQeHIyVWZyQ3Z2Z1RjNHhYNTdhbVFsTmxEdjkzbmRrcHAtMlJ6MmR1SkhOblhLR3ZVOHhMWWh3MWJYdzlSYTVnVDBnWG5md09XSVZQSmdVWmlVLXdZa1EzRElpMm5LNTE3TkFuQzJjeG9ad3lJdDNpSmF6WjlzMlVOdXBfUkU0eXQwU2h5LXF6dng3LXRmNGdCb2hfQjRiYXp6dUJ5VVpJbW04U0lpVzhrRTVqMzRiTElxYQ?oc=5",
-      "source": "Yahoo新聞",
-      "published_at": "2026-10-11T08:51:00+00:00",
-      "summary": "AI伺服器催油門！電子五哥Q3營收齊增 緯創、廣達雙創單季新高&nbsp;&nbsp;Yahoo新聞"
-    },
-    {
       "title": "美啟動337調查，鴻海、台達電、廣達遭點名，最新回應了！337調查是什麼？最慘恐被封殺？流程、處置方式一表看 - 今周刊",
       "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxOMloxTThvaTItc0hrRVpiYkhFazFMVGdEWnNFS2JrVlJhbXdFQk9VSzR5bk96SjdRb3lzZ1AwUGVkcmtpS3B5SGZkMzNFbFB0SWlwVU9RcmxRZkVSY2tQTF9DUDlYNVl2MzVYbGRQOHZnNW1oUHozNk1ST1FIRUVmNQ?oc=5",
       "source": "今周刊",
       "published_at": "2026-10-11T08:51:00+00:00",
       "summary": "美啟動337調查，鴻海、台達電、廣達遭點名，最新回應了！337調查是什麼？最慘恐被封殺？流程、處置方式一表看&nbsp;&nbsp;今周刊"
+    },
+    {
+      "title": "AI伺服器催油門！電子五哥Q3營收齊增 緯創、廣達雙創單季新高 - Yahoo新聞",
+      "url": "https://news.google.com/rss/articles/CBMi_AJBVV95cUxOTzBDYnNZeDdYNUxNS0VlYW5IeVdtR09kWXBkSlc1Y0hITGl5bzc4NERyVC0tTlpwVU9JdGhYR2xOeXhFdUFsVVQ5UV9QckVQYlhvcEVHQ3B2cjRYaHE4bnV1WEpGalhmZWxLREl5eGRhSzNySC1od3FPQWRvV3BVUWdJTXFGWl93a0EyQUFCU3BBMUVSQm1XdzBCd011aERCRTVTQ2l1aHV4Wkc3NUFHQ1BUTk5CX19KM25LUlhPU01uSkk5UFZ2MmRQeHIyVWZyQ3Z2Z1RjNHhYNTdhbVFsTmxEdjkzbmRrcHAtMlJ6MmR1SkhOblhLR3ZVOHhMWWh3MWJYdzlSYTVnVDBnWG5md09XSVZQSmdVWmlVLXdZa1EzRElpMm5LNTE3TkFuQzJjeG9ad3lJdDNpSmF6WjlzMlVOdXBfUkU0eXQwU2h5LXF6dng3LXRmNGdCb2hfQjRiYXp6dUJ5VVpJbW04U0lpVzhrRTVqMzRiTElxYQ?oc=5",
+      "source": "Yahoo新聞",
+      "published_at": "2026-10-11T08:51:00+00:00",
+      "summary": "AI伺服器催油門！電子五哥Q3營收齊增 緯創、廣達雙創單季新高&nbsp;&nbsp;Yahoo新聞"
     },
     {
       "title": "主動式台股ETF下半年績效揭曉！00400A漲逾11%奪冠 5檔打敗大盤 - 壹蘋新聞網",
@@ -324,6 +366,13 @@
       "summary": "台股週一恐迎千點震盪？台積電ADR連假回檔4% 中東戰火升溫、3台廠遭「337調查」&nbsp;&nbsp;Newtalk新聞"
     },
     {
+      "title": "2330 台積電 - 台積電法說四大關鍵議題及台股展望- 股市爆料同學會 - CMoney",
+      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE5PV3BhTy1SSXdiVTFuRGw1eXFpWTg3UExfTWlDZHZ6eWlTY1JyZE9BNUFUSGF4WkxBZjhKejlqYUtYSTNfZ3ZWR0RxZmhxR3IyZ2ZYX0p0d3o?oc=5",
+      "source": "CMoney",
+      "published_at": "2026-10-11T05:40:00+00:00",
+      "summary": "2330 台積電 - 台積電法說四大關鍵議題及台股展望- 股市爆料同學會&nbsp;&nbsp;CMoney"
+    },
+    {
       "title": "台股高檔震盪「高息型」最吃香！盤點 12 檔 ETF 規模逆勢創新高 - TechNews 科技新報",
       "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTFBzNzVVWTFESDNOTWJBNXFkU1FJdk0zSGZJQS14U2dnZThRb2NqckdXcTNpME1UeHFFVnVrWm5ObWVoMFpnVGtQUkpZTEFudi1NVmk2UVA0YjE2bnk5eVQ0LXU1Z2FIcUpydGc?oc=5",
       "source": "TechNews 科技新報",
@@ -380,6 +429,13 @@
       "summary": "大盤創高後拉回 這12檔台股ETF規模仍創高 00927今年來漲幅翻倍居冠&nbsp;&nbsp;鉅亨網"
     },
     {
+      "title": "整理包／台積電供應鏈全解析！護國神山法說會將至...先進製程 CoWoS、CoPoS 十大產業鏈、受惠台廠一次看 - 經濟日報",
+      "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTE9fOVpzOGpOM0JEUWpyZTNjZkU1TTktUS1FRHdWVDFmWnkxUnQ4NHVDSXlIanQ4dVRyMU1CSGVKbkVUTmFQYVYzMEZWWUlQMlp1UWlXcXdRSGd1WEhETzhTNF83bVpINkxVLXRpU1JMY1h6cE9wc3BpcEFoNVVxUVk?oc=5",
+      "source": "經濟日報",
+      "published_at": "2026-10-11T03:34:54+00:00",
+      "summary": "整理包／台積電供應鏈全解析！護國神山法說會將至...先進製程 CoWoS、CoPoS 十大產業鏈、受惠台廠一次看&nbsp;&nbsp;經濟日報"
+    },
+    {
       "title": "緊盯通膨 Fed、歐日央行暫按兵不動 - 自由時報",
       "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE1CTHgzc1prbjNWcFpWa3RMSlpxZzhHWEhNb183NWFFbVVSX0hBSmNGS1RseXpmZmYwRHBhanlZbGpmc1MyTy1FNWxCa29uRTdFdlQxTjFXanM?oc=5",
       "source": "自由時報",
@@ -402,7 +458,7 @@
     },
     {
       "title": "出國免換匯跨境零時差穩定幣走進實體世界新金流革命| 金融要聞| 產經 - UDN",
-      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTE52aFZXSEg2cnJXT2FOMzNNdXJvN0U5WFlKUXVaQWIxNU90SkYzYWlsSUhadjljOEhoajdTdm0xcS1UV3JMUlkyZ204UkhvTmNl?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTFBjOUowUzJZVWtSMXY1ZkhuWHdLUktaUzNzczdfdjNSLThrWG1Xb2lxRnJudDZ1aEJhN0ZrbENWTlpaaFllaFJ2QjhKUFdnRWxIenduSEJNS19OMjlnRHZjNE4tWWx3OFB0TXZFRWQwMEhXUHd1VHlWbDZXU0E?oc=5",
       "source": "UDN",
       "published_at": "2026-10-11T02:42:44+00:00",
       "summary": "出國免換匯跨境零時差穩定幣走進實體世界新金流革命| 金融要聞| 產經&nbsp;&nbsp;UDN"
@@ -499,13 +555,6 @@
       "summary": "TWA00 加權指數- 理察克萊德曼- 股市爆料同學會&nbsp;&nbsp;CMoney"
     },
     {
-      "title": "整理包／台積電供應鏈全解析！護國神山法說會將至...先進製程 CoWoS、CoPoS 十大產業鏈、受惠台廠一次看 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE9ZLVp5RjlPenFrcTRSSnFmem04R1h0SVZPSzhaVjdZVkJ1UG5WMWl5Tm5Gc2J6Wjlia0g0R3NQa2JkekdsUnRudWNwQWtHcGRpaDNleE5iNEJNc3o4?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-10-11T00:00:00+00:00",
-      "summary": "整理包／台積電供應鏈全解析！護國神山法說會將至...先進製程 CoWoS、CoPoS 十大產業鏈、受惠台廠一次看&nbsp;&nbsp;經濟日報"
-    },
-    {
       "title": "智慧城市概念股|推薦與股價行情 - 股市爆料同學會 - CMoney",
       "url": "https://news.google.com/rss/articles/CBMiVEFVX3lxTE16bEJiVmQySTRwMngtV2RKWXl1cjgwUGJqT21wa2h4b1pNNnE2ZXR3bjBxR0lZUEdVQVI0NnUyYlRDdmE1RXJ4bEJpOUFWa3VqQko3eg?oc=5",
       "source": "CMoney",
@@ -583,6 +632,13 @@
       "summary": "美FDA核准多款新藥 全球最新醫療公衛焦點一次看&nbsp;&nbsp;民視健康長照網"
     },
     {
+      "title": "美FDA核准多款新藥 全球最新醫療公衛焦點一次看 - 民視財經網",
+      "url": "https://news.google.com/rss/articles/CBMiZkFVX3lxTFBFT1lOYWR2TEIta0xOQnl4WlU2R2NkRTlIdmh5eXBMN092OEVOWjdmZnk5VjZqTjRFcm0tYWNZVDZTWlZNVnU0Mm9UakphTHFmaERHaHd2QVQzZlhsUkhXRm5yeEF2Zw?oc=5",
+      "source": "民視財經網",
+      "published_at": "2026-10-10T21:04:39+00:00",
+      "summary": "美FDA核准多款新藥 全球最新醫療公衛焦點一次看&nbsp;&nbsp;民視財經網"
+    },
+    {
       "title": "美FDA核准多款新藥 全球最新醫療公衛焦點一次看 - 民視運動網",
       "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTE4xbjZmeTdkQkV2Y1hPSUpxS2M1eURqWkZYVXBkZ3JqVVBNRjNpYlRhdVV0U3R4VzltQks0clppR2p4bHlaWTEyVDlYRkpqaDVVUDZlS1EwNkhMUGtxNWgxeGdsbw?oc=5",
       "source": "民視運動網",
@@ -602,6 +658,13 @@
       "source": "自由時報",
       "published_at": "2026-10-10T20:56:19+00:00",
       "summary": "越跌越買！ 0050、00631L申購創高&nbsp;&nbsp;自由時報"
+    },
+    {
+      "title": "TWA00 加權指數- 美官員：6度要求澤倫斯基停炸俄煉油廠遭無視- 股市爆料同學會 - CMoney",
+      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE8zd3czTzZDWWZFQ19tXzBkTFl5ZXh1UkwxS3R5V2xaSF90X2NteWpPaUNNVHNESlVFUkRXcUFQWXB2dHFDbGgycUdJMm1PR0JLeWQ3S3RWcnc?oc=5",
+      "source": "CMoney",
+      "published_at": "2026-10-10T20:45:12+00:00",
+      "summary": "TWA00 加權指數- 美官員：6度要求澤倫斯基停炸俄煉油廠遭無視- 股市爆料同學會&nbsp;&nbsp;CMoney"
     },
     {
       "title": "聖暉 三大法人買超 - 中時新聞網",
@@ -2940,48 +3003,6 @@
       "source": "UDN",
       "published_at": "2026-10-08T18:09:40+00:00",
       "summary": "中小型、槓桿型 績效佳&nbsp;&nbsp;UDN"
-    },
-    {
-      "title": "TWA00 加權指數- 雙十國慶救了台股- 股市爆料同學會 - CMoney",
-      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE1ycWhsbGJLQ2RVZjZ6TE1haUJNdHgyOGZpemwtMnhFdmhveUl1bXpXb1ZPamRTSXBaclhKQ09oVXpJamNWV2hDTE50MGlfblRwaUF1VEoxcmc?oc=5",
-      "source": "CMoney",
-      "published_at": "2026-10-08T17:58:19+00:00",
-      "summary": "TWA00 加權指數- 雙十國慶救了台股- 股市爆料同學會&nbsp;&nbsp;CMoney"
-    },
-    {
-      "title": "雙重壓力夾擊 台幣貶8分 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTE16R3hfYjNsNkV0eHNHWkI1ekJUOG0yUUtFOVNmamRaRk56U2lLNDkzTU5iQ0U0QWJ2SEhEM0xSZmJKQWppS180VHYxZU44anJXRWJqSjI0bFBQWnRpN1NYR05YelBTR295NGN4ajd0UVExeHI4NFBIalItb03SAV9BVV95cUxNV3IySFY4TE5CTzZMNXkwdUwyUUxfckpVTXlNTW1SSjgxc1JWUFNJcEljdnk0RGE5T2Z3eXd2LVFsSzdPV0VDXzd6c1NoeElMZ2dZZEVYWkhaS3o4alFBZw?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-10-08T17:31:47+00:00",
-      "summary": "雙重壓力夾擊 台幣貶8分&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "SpaceX（SPCX）大漲、Google追日衛星升空！台股低軌衛星族群跟漲｜股市話題｜豐雲學堂2026 年 10 月 - 永豐金證券",
-      "url": "https://news.google.com/rss/articles/CBMirARBVV95cUxPSGRzczNaSDlKU0pCaTNjLU1mZGZGOHc3MGUxV2lROGpXX20tYmNmS2RGdkdKLVFFM3lBbDRScEhaN3M0aU4tOGZ0ZFptRmFUdUZPdWJMUWVDeEVnRHA3V0dmV1psNnRka0hTajZ2LXJ2bnZlQTQ4Z2R6WWh0NDBLZWhDaHMxVTZwSXF5cmJ3c3JueXY0bGtZb1JRTDQ2b3lZMDBkMm9QdXktak5QVFJzb19JQ3dyYkxfSWVDZ1l2d3NJc3BOSi03cFl4NUNpZW9WLUJJYjRWT2dBbHlEbVNpWGprR0V3Z2hBeFZXTmhpUEIyZGlMcy15MG83a0txaU9DTHRlcGNyd1NfeThXSXdKcDJCbmpFOUZuMTdFZXNFT01ES3p0MWpFVjNUTEVqZTI4d0tycVV0dVZnZmtrWVBiQkVpSnRlR0hRWlVnQUNzeHEwNmUyTW9JNnR2M1dEQmMzSzFlRmdMcUNkQ0FkUmJyRmRZRWdEX3dSdVdhMk9JZ0N4d0VRc3Z4aGRacVo4Q2FnRDkwdjI0VWVxd0lwMFVUTVRtLVp4OGUwRUlLel9tUm1rbHlRSWsta0kzaGY0V2lzUmpDUHM1czJDeEI3N0FNZVp0LVUzRHhEY1hOTEMwSkVRSHFsNmVlNlE0WE80ZjE3MTEtVVY5WURrTVZqd1Z3dHhMWkNnWXpQNmdkWHl2VktERE1EbTRGOFJYODJTUDZDUHRmY1BFamZzYnNG?oc=5",
-      "source": "永豐金證券",
-      "published_at": "2026-10-08T17:13:17+00:00",
-      "summary": "SpaceX（SPCX）大漲、Google追日衛星升空！台股低軌衛星族群跟漲｜股市話題｜豐雲學堂2026 年 10 月&nbsp;&nbsp;永豐金證券"
-    },
-    {
-      "title": "【01:05 即時新聞】SiTime (SITM) 跌逾5%／高檔KD回落、MACD多頭動能降溫 - CMoney投資網誌",
-      "url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxQeXJBTE9veDg2T2QyT1JLdVluUzUtUHVjbkR3NW9nZ3hzLVZrc0loaUVOcURTY1VHN2pEQUZCa18wdHJTMDVMTmhJRnk5OF9GaE1mdEhScmZtUHBkTG5yTUh1aldkUWU4aHVmeldKQXAzYW00MUU2QWJJWE9pU2xsNldTb3owOUNfbW11dGZGcWt5YzBYcmpLeHJmcmZacy1HU05JUlJDOVlXT21Kd2VsVm1CNXV0RWZfMkVjVlNFbTAwczVYTHR0NHp2ZU1zSms?oc=5",
-      "source": "CMoney投資網誌",
-      "published_at": "2026-10-08T17:05:55+00:00",
-      "summary": "【01:05 即時新聞】SiTime (SITM) 跌逾5%／高檔KD回落、MACD多頭動能降溫&nbsp;&nbsp;CMoney投資網誌"
-    },
-    {
-      "title": "【01:04 即時新聞】Sterling Infrastructure(STRL) 重挫逾5%／動能指標降溫、短線多頭修正 - CMoney投資網誌",
-      "url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxQRjkwQlFqanBRMHQ0TWZEdmVvNjZIRHlVbEFpOXFIQlBzbmVaT1VnNi1XYjlmVlFNMDJoQlJRb3JIV1I5Y1VyMVFac3BGYTc5TVFJQ3hPOF93WU9uRDYtdVhQRk1mR2JORFNfTjRpWWFUcEtLdGM5XzhTcHFVUEZWUldJd0YzNVZoOXZ2cF9XcHVtMW5Mekhic052Mk1GSU1DaFR2TVdmZ0ZXcFdnenRGSXktTTFLakg4MWJKLVF6MHhZNnFJTnJSMWxpNlNXb1E?oc=5",
-      "source": "CMoney投資網誌",
-      "published_at": "2026-10-08T17:04:18+00:00",
-      "summary": "【01:04 即時新聞】Sterling Infrastructure(STRL) 重挫逾5%／動能指標降溫、短線多頭修正&nbsp;&nbsp;CMoney投資網誌"
-    },
-    {
-      "title": "【01:01 即時新聞】AXT(AXTI) 重挫逾10%／短線KD高檔反轉、MACD多頭動能明顯降溫 - CMoney投資網誌",
-      "url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxQY0hLckN1c2s5cGkxZ3QzU3M4NVdSaFFxVmtyMDdseTFaTWUzVDJVNkVaWFJablNxNmQ1LVZRbmFjeThJdWl6OUg0RzVrNm5BZklIRkowOVNJSG1COUlWTWhKN05pYmpEYUpzR2xpdnVDZWRBRUZ5c2pCUkR2UjFkRVN3aW1DS2pLNURBa0NIQ1h6TFJpblVTX3E2SWc1dF9Nc1BUVG5GZVN2MElaUUQtSVZwdVNJVDFPNnJPOVF6MFdLSnNHbHVEVEh6ZjFhZ2c?oc=5",
-      "source": "CMoney投資網誌",
-      "published_at": "2026-10-08T17:01:37+00:00",
-      "summary": "【01:01 即時新聞】AXT(AXTI) 重挫逾10%／短線KD高檔反轉、MACD多頭動能明顯降溫&nbsp;&nbsp;CMoney投資網誌"
     }
   ]
 }
