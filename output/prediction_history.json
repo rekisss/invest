@@ -1,5 +1,74 @@
 [
   {
+    "date": "2026-10-13",
+    "generated_at": "08:01",
+    "xgb_prob_up": 0.605,
+    "xgb_label": "偏多",
+    "market_data": {
+      "vix": 15.21,
+      "sp500_ret": -0.0006,
+      "nasdaq_ret": -0.0044,
+      "sox_ret": -0.0267,
+      "tsm_adr_ret": -0.0102,
+      "futures_net": -82806.0,
+      "night_change": -329.0,
+      "pcr": null,
+      "taiex_rsi": 66.09508439666702,
+      "macd_hist": 272.81177697547105,
+      "dist_ma20": 3.1842332117712813,
+      "dist_ma60": 7.861873876191838,
+      "taiex_ret_5d": 1.7046174823096782,
+      "taiex_ret_20d": 4.6298133533529295,
+      "buyback_count": 0,
+      "disposition_count": 33,
+      "jpy_ret": 0.0,
+      "arkk_ret": 0.0231,
+      "hyg_ret": 0.0012,
+      "night_trend": "↓ 走弱",
+      "market_revenue_yoy": 0.1458,
+      "market_foreign_holding_chg": -1.6161
+    },
+    "regime": {
+      "label": "double_whipsaw",
+      "label_zh": "🔄 多空雙巴日",
+      "win_rate": 45.0
+    },
+    "scenario": {
+      "main_scenario": "VIX=15.2 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+      "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
+      "danger_signals": [
+        "外資空單極重（-82,806口），軋空風險高",
+        "夜盤缺口 -329pt 過大，易反轉"
+      ],
+      "forbidden_actions": [
+        "禁止追空缺口超過200pt",
+        "禁止反彈高點追多（軋空陷阱）"
+      ]
+    },
+    "risk": {
+      "level": "medium",
+      "score": 0.4,
+      "factors": [
+        {
+          "name": "外資空單極重",
+          "description": "-82,806口，軋空/崩潰雙向風險",
+          "action": "避免重押方向"
+        },
+        {
+          "name": "夜盤大缺口",
+          "description": "夜盤 -329pt，開盤後可能快速反轉",
+          "action": "禁止追缺口超過200pt"
+        }
+      ]
+    },
+    "news_sentiment": {
+      "market_impact": 0.14,
+      "key_events": [],
+      "bullish_count": 0,
+      "bearish_count": 0
+    }
+  },
+  {
     "date": "2026-10-12",
     "generated_at": "08:01",
     "xgb_prob_up": 0.432,
@@ -5951,58 +6020,6 @@
         {
           "name": "外資空單極重",
           "description": "-69,476口，軋空/崩潰雙向風險",
-          "action": "避免重押方向"
-        }
-      ]
-    },
-    "news_sentiment": {
-      "market_impact": 0.0,
-      "key_events": [],
-      "bullish_count": 0,
-      "bearish_count": 0
-    }
-  },
-  {
-    "date": "2026-06-04",
-    "generated_at": "11:33",
-    "xgb_prob_up": 0.395,
-    "xgb_label": "偏空",
-    "market_data": {
-      "vix": null,
-      "nasdaq_ret": null,
-      "sox_ret": null,
-      "tsm_adr_ret": null,
-      "futures_net": -66772.0,
-      "night_change": null,
-      "pcr": null,
-      "taiex_rsi": 78.02095869001664,
-      "macd_hist": 546.8911334577683,
-      "dist_ma60": 22.673317772392053,
-      "night_trend": null
-    },
-    "ai_insight": "# 今日操盤要點\n\n・加權RSI達78已進入超買區域，需警惕短期獲利了結壓力，建議設定停利點並控制風險敞口。\n\n・外資期貨淨空單逾6.6萬口，與現貨淨買超形成背離，暗示機構可能分批獲利，應留意拉回時的支撐。\n\n・股價距MA60漲幅逾22%，MACD正動能仍強但需觀察是否出現鈍化，短線宜採高檔震盪策略，避免追高。",
-    "regime": {
-      "label": "double_whipsaw",
-      "label_zh": "🔄 多空雙巴日",
-      "win_rate": 45.0
-    },
-    "scenario": {
-      "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
-      "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
-      "danger_signals": [
-        "外資空單極重（-66,772口），軋空風險高"
-      ],
-      "forbidden_actions": [
-        "禁止反彈高點追多（軋空陷阱）"
-      ]
-    },
-    "risk": {
-      "level": "medium",
-      "score": 0.25,
-      "factors": [
-        {
-          "name": "外資空單極重",
-          "description": "-66,772口，軋空/崩潰雙向風險",
           "action": "避免重押方向"
         }
       ]
