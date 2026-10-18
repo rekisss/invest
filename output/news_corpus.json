@@ -1,12 +1,26 @@
 {
-  "updated_at": "2026-10-18T11:01:40.206564+00:00",
+  "updated_at": "2026-10-18T12:01:28.895622+00:00",
   "articles": [
+    {
+      "title": "【全球】行情回顧與本週重點| 財經Ｍ平方短評 - LINE TODAY",
+      "url": "https://news.google.com/rss/articles/CBMiigFBVV95cUxNSnFGekFtZWRkaF9xOGo3YzZaLW5yS1VjdWZ4TzkzRnRhdEJaQ1ByQUhPZ0NxcFdDVFppeUotamV1cUQ4RmdtWFQ2SWZFNFRkZ3Bhdk5QaThrYVliLXktSl9NeXlyYXI5a3NqcHM5TzNwSFRsT1VIX0tjcTZPUFFVdEx0WHdHSGIwTnc?oc=5",
+      "source": "LINE TODAY",
+      "published_at": "2026-10-18T10:57:33+00:00",
+      "summary": "【全球】行情回顧與本週重點| 財經Ｍ平方短評&nbsp;&nbsp;LINE TODAY"
+    },
     {
       "title": "美股財報週牽動AI供應鏈！台股週跌逾2千點，最新ETF資金轉向與台積電效應-財經焦點情報站 - CMoney投資網誌",
       "url": "https://news.google.com/rss/articles/CBMiggFBVV95cUxNNGpwenJyVDYxcjFZUDV5RVBNTnVvSlNNWF9iS3dtd0l0TGJ1R0JVUGtOeW5rVjdoZnNhVm1hWG9xa3pPNi1scC1JVU9yZUE3R1FLSXF1bTczVVIyc1ozY2ppeUs2TEJ4STRoNWxjOVA1TThGSEduQzh4anRmbnVIMGxB?oc=5",
       "source": "CMoney投資網誌",
       "published_at": "2026-10-18T10:34:49+00:00",
       "summary": "美股財報週牽動AI供應鏈！台股週跌逾2千點，最新ETF資金轉向與台積電效應-財經焦點情報站&nbsp;&nbsp;CMoney投資網誌"
+    },
+    {
+      "title": "AI趨勢對晶片、記憶體需求無限延伸，但為何說並非所有相關公司... - 股市爆料同學會 - CMoney",
+      "url": "https://news.google.com/rss/articles/CBMie0FVX3lxTFBCMUdnb3Qxa3dwZlpBZ1lJWFA4Z2NkWmhUM1EycGdnZm16SEFoRldDYkFTbE9MWnZLVy11OHVfTEdxcWVoQmxoaGZQQ3lQWEFzVGhlWUV4a2NhbXB5bDBYV2xhNVJ1SEFQdk1IelJsOVZXUy1zaW5BS25idw?oc=5",
+      "source": "CMoney",
+      "published_at": "2026-10-18T10:10:06+00:00",
+      "summary": "AI趨勢對晶片、記憶體需求無限延伸，但為何說並非所有相關公司... - 股市爆料同學會&nbsp;&nbsp;CMoney"
     },
     {
       "title": "台積：獲利能力沒上限 AI 供需缺口仍大 將全力擴產 - 經濟日報",
@@ -289,6 +303,13 @@
       "summary": "外資連八日賣超6817億元，台股季線能否止跌？-孔明投資長&nbsp;&nbsp;CMoney投資網誌"
     },
     {
+      "title": "TWA00 加權指數- 下週大盤預測- 股市爆料同學會 - CMoney",
+      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTFA3ZndKYmVQdHFremotNmFCeUlGYjUzS3pMZUx0OVlHSVFQWDJ2MkY3OVJUenhMMTF5NHoybWRQb2tYOGk1V3hWaGFDMzRTNG9yUU9mZUxUdV8?oc=5",
+      "source": "CMoney",
+      "published_at": "2026-10-18T03:34:51+00:00",
+      "summary": "TWA00 加權指數- 下週大盤預測- 股市爆料同學會&nbsp;&nbsp;CMoney"
+    },
+    {
       "title": "【中東局勢】沙烏地阿拉伯被炸，全球買單 - 鉅亨號",
       "url": "https://news.google.com/rss/articles/CBMiSEFVX3lxTFBYaElzNkFxYk1KNFpOdWpRWG55andWTEtjdkZuaFhuczNValcwdlJtY3VTTnA5bkFfLTFmR0VvaFUzckpZdFpXdg?oc=5",
       "source": "鉅亨號",
@@ -374,7 +395,7 @@
     },
     {
       "title": "本周台股／特斯拉飛天不夠看看AI基本面能否挺過空襲| 財經掃描 - 聯合報數位版",
-      "url": "https://news.google.com/rss/articles/CBMieEFVX3lxTFBiTFF2QmNBXy1sNzJlaTdiNEgtNVlwU192SjZyTmN1MDJjSHVsQ2p4VExIOEp3UGoxc3E0ZWhwT3V1b3FoX1RvUGpNYUdXbXU0WHctOXRSUmlCMHVGclBUc1FpN0FyWExNWHhwem5zYm45V0dlWmVEVQ?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMib0FVX3lxTE5HeUlBTUt4emhlOXVzRjNiQjlCOEVWNHZKb0ZHSHQ2dzEzdHlRaEtvSUdJblA2blRMbXpPNUZqU2ZKb0JiQlFDaUVJU3ZGeWlFcF9PbTlwLW5HMHVQNnZQdXJUOUh0NFZJeFF0eUxRZw?oc=5",
       "source": "聯合報數位版",
       "published_at": "2026-10-18T02:00:00+00:00",
       "summary": "本周台股／特斯拉飛天不夠看看AI基本面能否挺過空襲| 財經掃描&nbsp;&nbsp;聯合報數位版"
@@ -758,6 +779,13 @@
       "summary": "2330 台積電 - 短線交易到最後，拼的不是技術，而是控制力- 股市爆料同學會&nbsp;&nbsp;CMoney"
     },
     {
+      "title": "記憶體、ABF、CCL明年繼續缺？毛利率20%衝向50%！法人曝資金大搬風內幕：現在買「這族群」動能最強！ - LINE TODAY",
+      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTE01LXNkaVBpaThEdFJvZjc5QmxvZXg1R1NqeHRMSWlrQmVESHhWQXlfWnJ2bEdkbm5oUzJVOFBoRmpMZXJlcVotRW9NWFFKMHpvNE43eXRB?oc=5",
+      "source": "LINE TODAY",
+      "published_at": "2026-10-17T12:21:15+00:00",
+      "summary": "記憶體、ABF、CCL明年繼續缺？毛利率20%衝向50%！法人曝資金大搬風內幕：現在買「這族群」動能最強！&nbsp;&nbsp;LINE TODAY"
+    },
+    {
       "title": "TWA00 加權指數- 預估預算- 股市爆料同學會 - CMoney",
       "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE1ZV0c5MUpnV2pTZ2lNNUpKWE5KUkFQcjM0WHFDa3BwbFlrOU5yWFU2RHFPdThBSXBBUGwza01kV0RQOU1kZTJ1SGl5ems1V3RSRHdNWkNzYnU?oc=5",
       "source": "CMoney",
@@ -770,13 +798,6 @@
       "source": "世界新聞網",
       "published_at": "2026-10-17T12:10:00+00:00",
       "summary": "沙國遭飛彈攻擊、華許避談決策前景 下周開盤前值得回顧的5件大事&nbsp;&nbsp;世界新聞網"
-    },
-    {
-      "title": "記憶體、ABF、CCL明年繼續缺？毛利率20%衝向50%！法人曝資金大搬風內幕：現在買「這族群」動能最強！ - 優分析UAnalyze",
-      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTFBFdzd4Zk5OaGc2MnJtaHhINURSSjltSlkzbXJPaU9ES3pMWF8ybkdnQ0VOYWlrQTA2MkFEQk02Um81eXJzMnN3U3U5TmN2MjdxQlJ2cTN3?oc=5",
-      "source": "優分析UAnalyze",
-      "published_at": "2026-10-17T12:00:00+00:00",
-      "summary": "記憶體、ABF、CCL明年繼續缺？毛利率20%衝向50%！法人曝資金大搬風內幕：現在買「這族群」動能最強！&nbsp;&nbsp;優分析UAnalyze"
     },
     {
       "title": "台股狂跌 3,000 億 外資獨寵金融股 - 自由時報",
@@ -3479,27 +3500,6 @@
       "source": "CMoney",
       "published_at": "2026-10-16T04:04:21+00:00",
       "summary": "TWA00 加權指數- 外資賣超台股創新高，台幣爆量貶破32.5元 - 股市爆料同學會&nbsp;&nbsp;CMoney"
-    },
-    {
-      "title": "《類股》台股反彈誰最吸金？ 藥華藥帶頭衝、生醫大漲逾3% - 富聯網",
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOSHJKRzQ2eHVtUGtZeGhuMGdoLUtHanc4OTlCV0ZpMHhGVnBjd295Q25vbDBmcEhjcGdwcl96TjRuWlpEU0lDaF9HQXhQMkJ3OXNDNzRfeVlZMngzZXhMNjVzLTRDSF9EcjlIck1wQVFmMWZyN3M3TUJMcERlenVqeE5jRGo4UGZp?oc=5",
-      "source": "富聯網",
-      "published_at": "2026-10-16T04:01:00+00:00",
-      "summary": "《類股》台股反彈誰最吸金？ 藥華藥帶頭衝、生醫大漲逾3%&nbsp;&nbsp;富聯網"
-    },
-    {
-      "title": "台股反攻陷入掙扎？「強化版0050」卡在均線噴10.6萬 「瑤池金母師弟」與00406A持平合飆近72萬張 - FTNN 新聞網",
-      "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTE54WW1LZFl2c0I1eXZ1SjQ1YUVtbDhsQlBVUXV1SHpDbzZ0Q0hiSHAtY3FHdEFOd2RudVNkZGlKTk8xRE1XMndaTGV1TQ?oc=5",
-      "source": "FTNN 新聞網",
-      "published_at": "2026-10-16T04:00:00+00:00",
-      "summary": "台股反攻陷入掙扎？「強化版0050」卡在均線噴10.6萬 「瑤池金母師弟」與00406A持平合飆近72萬張&nbsp;&nbsp;FTNN 新聞網"
-    },
-    {
-      "title": "台股盤中漲逾500點台積電小跌PCB族群搶眼| 股市要聞| 股市 - UDN",
-      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTFA1UGQ5d2pQeXVNU3JRYUhnQ1lmekRHeUgyV1pHdVhacWprY3hLaW9NU3dwdFJ3all0X2hOUklmYVZpSTFFLUF3c2JvZWplNFZU?oc=5",
-      "source": "UDN",
-      "published_at": "2026-10-16T03:58:15+00:00",
-      "summary": "台股盤中漲逾500點台積電小跌PCB族群搶眼| 股市要聞| 股市&nbsp;&nbsp;UDN"
     }
   ]
 }
