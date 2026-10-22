@@ -1,12 +1,54 @@
 {
-  "updated_at": "2026-10-21T23:01:45.199034+00:00",
+  "updated_at": "2026-10-22T00:01:51.994829+00:00",
   "articles": [
+    {
+      "title": "台積擴廠加速 廠務15強訂單盤點 - Yahoo新聞",
+      "url": "https://news.google.com/rss/articles/CBMi8wFBVV95cUxPbXhVUUZGUmFneS1QWEtPMkJCeFNGTkN4S2RBalBOZ0dCaVUxQXRGNlVZWUdKSTA3WTlDSEtQYlEzMGlvSFVockRvZmZSM2JQSDh6NWJvUkw2NF9lWlVmdmVuNzRlWXMtb0lDZjBXcG9uWmZ2emw5VzNqX09CVl9hVUpkV0pfZWEyU3FsaDRCaVhBaWtXYmlYQzhUTkFtNmhEeEYwY3hFSFZCS3V3MlNLblFqX0dialJrMnpLQlpObTdIVUdHRFdldTExYkhza0JrY0xFYlBUaDlZTkpMaUV4OERYS0g5OHB2UnVhV3lUejQyWWs?oc=5",
+      "source": "Yahoo新聞",
+      "published_at": "2026-10-21T23:50:00+00:00",
+      "summary": "台積擴廠加速 廠務15強訂單盤點&nbsp;&nbsp;Yahoo新聞"
+    },
+    {
+      "title": "《期貨三大法人未平倉餘額多空淨額》 - 富聯網",
+      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxNYTMtTFc0TDFZQWktV0hhZldIWV9LZW1oNS1TYWI5S1U3d29rWmVTZzUtVHJSN1NGeVJBMXUwVUxyS0NMQ2NqaVdDaURGWnpWaHBjS3ZNSk1XeWltbzZ1RVp0Z2NFbGxlSXZQNkcweXd0NnlsYXEwOWtNRVFIRDlycDNXc2oybWtR?oc=5",
+      "source": "富聯網",
+      "published_at": "2026-10-21T23:31:00+00:00",
+      "summary": "《期貨三大法人未平倉餘額多空淨額》&nbsp;&nbsp;富聯網"
+    },
+    {
+      "title": "《期貨三大法人多空淨額》 - 富聯網",
+      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxNaDBOTW5QR3hsWXJkUkp3UVNnUFpwUkRNRkk3TWFfNnVTakFhSkJpRnRhQVhmMjVEUGptRXBqYW9VWl93ZXVNX3huRkgyMmxCY2pHdEM4anpUdnhTOFJsWF9hR0h6VWhTX1ZZWkhUaV9NTUlmOWJSUE9CN1N3cXRqZWhFVjVEeWxD?oc=5",
+      "source": "富聯網",
+      "published_at": "2026-10-21T23:31:00+00:00",
+      "summary": "《期貨三大法人多空淨額》&nbsp;&nbsp;富聯網"
+    },
+    {
+      "title": "台灣之光報喜！半導體反攻美股翻紅 台積電ADR漲1.6% - 壹蘋新聞網",
+      "url": "https://news.google.com/rss/articles/CBMiggFBVV95cUxPOVVPNGtfS2lMRWp2TFN6QVdfYkNUNnF1QjVXSnZBdXdMaW01bk9Lcy1RQW1GZEY3UnM3NUZrcnZLaXVNNk9penBrbGQ3V1V5bDFjUHlORzRsVG54d21QeWwtb3FxUjZvQ0tmcTdDbDc5bEJlbjVVTTJOcXpfeF9RN0JB?oc=5",
+      "source": "壹蘋新聞網",
+      "published_at": "2026-10-21T23:17:00+00:00",
+      "summary": "台灣之光報喜！半導體反攻美股翻紅 台積電ADR漲1.6%&nbsp;&nbsp;壹蘋新聞網"
+    },
+    {
+      "title": "【美股盤勢】SpaceX財報點火，費半飆升近2%領漲（2026.10.22） - CMoney投資網誌",
+      "url": "https://news.google.com/rss/articles/CBMijgFBVV95cUxNVVRVc1ZRMlJvdUhMNkJ6WmY2R2MxMW8weFRrbHNvLXlZTVlLbnFzNXIwTm1ydDhvc01MdkFBQzNpN0JWU2VwWFRHUlVGWWgwV3JfU1NmWnZmRjhqS2JpLWdrTFZVMmY4N3YtRjR2WGlJMnktaVRkMlRYOHlQbHZSYWt1UFJuNHVLX3ZXTzNR?oc=5",
+      "source": "CMoney投資網誌",
+      "published_at": "2026-10-21T23:04:20+00:00",
+      "summary": "【美股盤勢】SpaceX財報點火，費半飆升近2%領漲（2026.10.22）&nbsp;&nbsp;CMoney投資網誌"
+    },
     {
       "title": "台幣見32.672一年半新低，10天貶值快1元！美金匯率會到33元？大佛李其展：這區間可能被打開 - 今周刊",
       "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxNMmNQY3AtUHE1clI4Uml2QU9ZVUN2dDNWTHMwWVBFd1UtNERKNVlIRXhiSktscVp0SWxVWkJmcTZ1Ny0xTnVQM1Jvb0ZqcDVmRzhEUmVEY3NzN0VOald4LTZTOV9aZTFJa1l3eHN1RmZhU05wOGZ0VVRRRlhoem1qLQ?oc=5",
       "source": "今周刊",
       "published_at": "2026-10-21T22:31:30+00:00",
       "summary": "台幣見32.672一年半新低，10天貶值快1元！美金匯率會到33元？大佛李其展：這區間可能被打開&nbsp;&nbsp;今周刊"
+    },
+    {
+      "title": "台股何時大反攻…盯五訊號 - 經濟日報",
+      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE9LanZrejBkTnNEcWRDSFkzVEJFQ3lWTFZuQUJYdHhmRjU4emF1SmFzUnNqaUJUWFlUN2lDem1RbEE5al9OTUZLejF3R2I2WW9Ia0twNjRHWkJGQdIBX0FVX3lxTE5hNGpmaEJyMTMxNFNNY3VXT1Z4UGs2Q0ptWmRhM0tUOUp5b0VMakVKVEJZZ1VyU1RVTnByMl9QaFJROTM5QTg0NWI2bS1CNFRTa05ROU9HQW50anRIcGNr?oc=5",
+      "source": "經濟日報",
+      "published_at": "2026-10-21T22:23:32+00:00",
+      "summary": "台股何時大反攻…盯五訊號&nbsp;&nbsp;經濟日報"
     },
     {
       "title": "【盤前】SpaceX財報報喜　台指飆469點 - 鏡週刊Mirror Media",
@@ -42,6 +84,13 @@
       "source": "CMoney投資網誌",
       "published_at": "2026-10-21T21:39:15+00:00",
       "summary": "台股ETF資金流大轉向！12檔規模創新高，半導體與AI供應鏈成吸金主力-財經焦點情報站&nbsp;&nbsp;CMoney投資網誌"
+    },
+    {
+      "title": "外資終止連10賣 科技股回神 台股重回5日線 - 自由財經",
+      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTFB3SThwLVNWZ0FtRjd0SlhrSW1uRlBTZFhicVVCUEZNSzdySG96RE55N3hRZkZVd19oUnpYR3NaQ2xWLXVDdlluT3dxZEtCQVBtcENwY0RR0gFbQVVfeXFMTkJFbzA0OG1tQ0tYaFFSaUstX3dIS0ppaWx0NHg0ZVhiV2dzZzRuN2xTb2F4X1lhVGk2UzI4a3VMUW1pczZxbEZCaHdJQlA4Uk9MbGo4WVFlaTVtYw?oc=5",
+      "source": "自由財經",
+      "published_at": "2026-10-21T21:30:00+00:00",
+      "summary": "外資終止連10賣 科技股回神 台股重回5日線&nbsp;&nbsp;自由財經"
     },
     {
       "title": "〈台股盤前要聞〉輝達DSX POD AI工廠6台廠入列合作夥伴、外資終止連十賣 - Yahoo 財經",
@@ -107,11 +156,32 @@
       "summary": "市值ETF怎買最賺？這檔暴漲56% 專家：抱緊處理&nbsp;&nbsp;三立新聞"
     },
     {
+      "title": "市值ETF怎買最賺？這檔暴漲56%　專家：抱緊處理 - 三立新聞",
+      "url": "https://news.google.com/rss/articles/CBMiTEFVX3lxTE9mQUNiaXR5eEgtNmVrY1hId3NqdkFEbHdhQ0ZlenIzRlJ4Vm40cTFLUHdTZ1BldUpZeTFzRmhFT0hsOGM1a0lNdVViSmLSAUxBVV95cUxPZkFDYml0eXhILTZla2NYSHdzanZBRGx3YUNGZXpyM0ZSeFZuNHExS1B3U2dQZXVKWXkxc0ZoRU9IbDhjNWtJTXVVYkpi?oc=5",
+      "source": "三立新聞",
+      "published_at": "2026-10-21T19:32:00+00:00",
+      "summary": "市值ETF怎買最賺？這檔暴漲56%　專家：抱緊處理&nbsp;&nbsp;三立新聞"
+    },
+    {
+      "title": "台股呈現「底底高」格局！大盤強彈 外資終止連十賣 - UDN",
+      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTFBMcmR2czFDZEk2eDdhVzBqRFpjdDNCaDNNMkhWSExiYkp2T1UwUkhtRERUcGppQm4teldzb3R2M3FxMTUxTWxjMk0xbm1CYkpa0gFWQVVfeXFMUDF6Z01IcGVROFhMTzZHNU5QdkQzUzRtSFBYekhCMW1YcVB0TzhYRDVPWHpZT3pYaTFtb0ZLN2YxdFBLTmVhdVM1d2dfZTFFM25kZkplNkE?oc=5",
+      "source": "UDN",
+      "published_at": "2026-10-21T19:15:32+00:00",
+      "summary": "台股呈現「底底高」格局！大盤強彈 外資終止連十賣&nbsp;&nbsp;UDN"
+    },
+    {
       "title": "台股盤中狂飆962點！郭哲榮曝最後買點只剩兩天：點名這些潛力股 - 三立新聞",
       "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTE81aDN5dlJmQl9ibk5PLVQ3Qks5LWV6VjdaM0xqQ1h1T0hxQVNra21YVV9wbDJUVGRtVXR1dXlPN1h5dk5rMFNiSVdYSQ?oc=5",
       "source": "三立新聞",
       "published_at": "2026-10-21T19:03:29+00:00",
       "summary": "台股盤中狂飆962點！郭哲榮曝最後買點只剩兩天：點名這些潛力股&nbsp;&nbsp;三立新聞"
+    },
+    {
+      "title": "新台幣轉升了！三方力道逆轉重貶走勢專家估在這區間有支撐- 日報 - 工商時報",
+      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE1JZS1ybUY4VTdMaF81QmlKSEpJN0thRzRuRVk4SUhuQVJVZjFnMUZpR3JOdHlnOHVmT2VIYmJnMVhtbVR5eTZ5TlRhNm5NdDFhMnhoNnFsVmxnWFVKb0E4?oc=5",
+      "source": "工商時報",
+      "published_at": "2026-10-21T19:00:00+00:00",
+      "summary": "新台幣轉升了！三方力道逆轉重貶走勢專家估在這區間有支撐- 日報&nbsp;&nbsp;工商時報"
     },
     {
       "title": "震盪近3角新台幣轉升- 日報 - 工商時報",
@@ -198,13 +268,6 @@
       "summary": "52檔台股ETF 漲贏大盤&nbsp;&nbsp;UDN"
     },
     {
-      "title": "【台股盤後】電金齊反彈台股上漲594點收46887點、站回5日線| 金融 - 非凡新聞台",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE9sbXZYRUtiWUpFTXFLeHNhcE1SZlA4b2ZVWUdJakNjNmZob0U0UFV5WEdZVS1vd1dGam5Ud0ZJUDJxWk50ZzJWM3VacWo4NkdNVW9zeHhwZUhDbVlwWDNR?oc=5",
-      "source": "非凡新聞台",
-      "published_at": "2026-10-21T17:42:43+00:00",
-      "summary": "【台股盤後】電金齊反彈台股上漲594點收46887點、站回5日線| 金融&nbsp;&nbsp;非凡新聞台"
-    },
-    {
       "title": "半導體先進封裝最新擴產潮，輝達預付11億美元帶動載板與封測廠走強！-財經焦點情報站 - CMoney投資網誌",
       "url": "https://news.google.com/rss/articles/CBMiggFBVV95cUxQVXpmRkdkUWhsaF81TXctY21nZEFUYk9hOExWaDJJazB5MkNzaXhMVWd5NW9iajJkOW5Ud1h3NHlKN3Bfbk5PSlRxc09LeDRDTFBlazlYamN4Zm1fTEJ0R3B4X3dOWXVxQXk4YjF0c1VzSjVsYldGMFUxQWs5UElwYWtB?oc=5",
       "source": "CMoney投資網誌",
@@ -238,6 +301,13 @@
       "source": "永豐金證券",
       "published_at": "2026-10-21T16:20:56+00:00",
       "summary": "Meta Q3財報前瞻，資本支出、100億美元和解費與Muse變現成焦點，台廠供應鏈怎麼看？｜美股觀察&nbsp;&nbsp;永豐金證券"
+    },
+    {
+      "title": "【台股盤後】電金齊反彈台股上漲594點收46887點、站回5日線| 金融 - 非凡新聞台",
+      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE9sbXZYRUtiWUpFTXFLeHNhcE1SZlA4b2ZVWUdJakNjNmZob0U0UFV5WEdZVS1vd1dGam5Ud0ZJUDJxWk50ZzJWM3VacWo4NkdNVW9zeHhwZUhDbVlwWDNR?oc=5",
+      "source": "非凡新聞台",
+      "published_at": "2026-10-21T16:18:43+00:00",
+      "summary": "【台股盤後】電金齊反彈台股上漲594點收46887點、站回5日線| 金融&nbsp;&nbsp;非凡新聞台"
     },
     {
       "title": "大啖 2 奈米與 CoWoS 擴廠紅利！騏億鑫預計 11 月中掛牌上櫃交易 | 科技新報 - LINE TODAY",
@@ -338,6 +408,13 @@
       "summary": "台股大漲594點！郭哲榮預告「最後買點」&nbsp;&nbsp;鏡週刊Mirror Media"
     },
     {
+      "title": "SpaceX財報靚股價狂飆 美股早盤走揚、費半上漲近2% - 知新聞",
+      "url": "https://news.google.com/rss/articles/CBMib0FVX3lxTE5uZkRGWnFCbkQ3VjIzcWR6SjNLNjBtX09FaTExNU16SmF2eTUzYkNybmIyQVhLdGpEM1RYQTF1QkZsWURYbTc0QlM3b0hGWnNRTmVacjBia1hhUmtBZVY3OTB1bUZnUTdNSVEybi1yRQ?oc=5",
+      "source": "知新聞",
+      "published_at": "2026-10-21T13:45:00+00:00",
+      "summary": "SpaceX財報靚股價狂飆 美股早盤走揚、費半上漲近2%&nbsp;&nbsp;知新聞"
+    },
+    {
       "title": "【21:30 即時新聞】SpaceX（SPCX）盤中大漲逾8%：財報優於預期、AI與Tesla合併構想點火 - CMoney投資網誌",
       "url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxOUWs5MTlsWFRYRThNcUgyM2staW1TZE1pN3BUTHJkUm95OGNxbUNveFQtOXd4eEVBUVVRQlRRTjd3S0w4UGZWREhud0FUNlBPeHpyWXZ1eDNMOXpLOFdaY1VnaDlzMy1jeFBEVEZ4eVdReElqRGdxaERGRW5PWmdjUEFHV0pMNEVNVDRpMUFtOXI4Z0xnVVV0dG1RNnBvanhsS2h1eVpLV09zbkVqUHl3c2VIQm1neGM3RFlrTjZWU04xdjhpc0g2ckFSemVieWs?oc=5",
       "source": "CMoney投資網誌",
@@ -346,7 +423,7 @@
     },
     {
       "title": "美債殖利率回檔或衝高？摩根許長泰剖析4大推升主因 估Fed最快12月升息 - 鉅亨網",
-      "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE8xdHZ5TzVNVTFHZjJDZnZzbWx0c21LV2xBUHoyRlVGT0lBZGNacXdWMWNodGlLZGR3TUFLME00LVNzMFNpVDcwVGZhV3pLU0U?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTE50OWR6TFJXeGhUXzZVNWRCWmZycXA3VnpublNibHBJdG1tLUZZYlNUQUZGMnRmUTY4WXpFZXo0S1kzYzM5Y2ZWcXZBVQ?oc=5",
       "source": "鉅亨網",
       "published_at": "2026-10-21T13:24:40+00:00",
       "summary": "美債殖利率回檔或衝高？摩根許長泰剖析4大推升主因 估Fed最快12月升息&nbsp;&nbsp;鉅亨網"
@@ -471,13 +548,6 @@
       "summary": "TWA00 加權指數- 游庭皓直播2026/10/21(三) - 股市爆料同學會&nbsp;&nbsp;CMoney"
     },
     {
-      "title": "台股何時大反攻…盯五訊號 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE9LanZrejBkTnNEcWRDSFkzVEJFQ3lWTFZuQUJYdHhmRjU4emF1SmFzUnNqaUJUWFlUN2lDem1RbEE5al9OTUZLejF3R2I2WW9Ia0twNjRHWkJGQdIBX0FVX3lxTE5hNGpmaEJyMTMxNFNNY3VXT1Z4UGs2Q0ptWmRhM0tUOUp5b0VMakVKVEJZZ1VyU1RVTnByMl9QaFJROTM5QTg0NWI2bS1CNFRTa05ROU9HQW50anRIcGNr?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-10-21T10:23:43+00:00",
-      "summary": "台股何時大反攻…盯五訊號&nbsp;&nbsp;經濟日報"
-    },
-    {
       "title": "勝一財報／前三季 EPS 6.82元創同期新高 加碼28.24億布局半導體先進製程 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE9CVko4OVlleDlpOGVyeFhuODk3MktjWjRaMGdNbXFEeG56ZHowMXlMQTM2Zm56V3NUVkNScGVnNV9DZXpYd01hT2NCakEyZ0RQNW1ZRERIMVdfQdIBX0FVX3lxTFBJendhcnZXcV9oZzBwcWlaLWtHNDBsNWV2Y20tQlkyUVRBa2pWd2tqc1R3Y1A3NnZOZVJyTEdFQy1yRkN2MFMycXNzX2ZxaDdXZEV2SXZJSXdLcFE0VElF?oc=5",
       "source": "經濟日報",
@@ -504,6 +574,13 @@
       "source": "CMoney投資網誌",
       "published_at": "2026-10-21T10:02:36+00:00",
       "summary": "【美股盤前】科技財報大日夜登場，Meta與Tesla今晚誰先驚艷？（2026.10.21）&nbsp;&nbsp;CMoney投資網誌"
+    },
+    {
+      "title": "三大法人買賣超 – 外資買超(3231)緯創、(3026)禾伸堂，投信買超(3017)奇鋐、(2330)台積電，法人合計賣超968.04億元 - 永豐金證券",
+      "url": "https://news.google.com/rss/articles/CBMi0wRBVV95cUxPekF5MWlkLXFOX0RXM2pXS2RlUWtKMGpvOFppdlF4NWhCcWpXMnFLQl9LSDRxZmc3RklhMjlqMEtlVGo0SUtKOVoxZlpoMlVnNk1lTG1DYmRyYmF5ajcxNmNBbTI5UnBROWUzQW9oaS1KTFZPSnluQUtlRlJweWhXZ3hQcktlM01BUGh0VHFqZTdUV2FoOG1OTmdLcmVMYXFDaEMtbTc0b3VvM1RiYWhzNHM5X05XOVUzSUJHbE1waVpzTXhuNnVhTExkZWVBUEJvWVZ6cEgtX2RKYXpCS1RCZlljNlVzNWJRWWJnT04yaUpKdW5sLUdRbHhlTlFLdGExU0V5MGJoRWVPZERKWUlqSVFyeEV1ZkdJa2dybmFHVUs1TzJOZnN3dlRVbG1FVG5EaEVzUWdmanlmT05jQ1k2MnlXbFJTWlZmTF92YWxPaDB6bVVmNjNmZjJrbGZENEd4YklzZDRXWXJQaDJ6ejE4YjZvRTM0ejFOSlFrM0MzcHMzamZHSkp6N0RtN0VtTGxCVVI3dmdFeWZOeFRSSC1id1g0NUpNRkN6b0tTZUdnTHRJQlhaVFoxNmJOSC1LdU13ZDdZMjBPMjJUbW16SjAzdUFKOEdRNnNuSkJPREJVaDlEUnRRSzgzdWJvTFdXbmUzTUFMMVkyM0w3WUE1UEZoc2tRWWhKZnNSWWhmUWZJZ0RoYl9uR3ZwcHF6cl9IUnVkNlA2MkdHSXJfYk5QbC1hblpCbXplcWtaMzQ3M2tIbmJVekVUOTRDVDhlX1hvdnNsRmNF?oc=5",
+      "source": "永豐金證券",
+      "published_at": "2026-10-21T09:57:17+00:00",
+      "summary": "三大法人買賣超 – 外資買超(3231)緯創、(3026)禾伸堂，投信買超(3017)奇鋐、(2330)台積電，法人合計賣超968.04億元&nbsp;&nbsp;永豐金證券"
     },
     {
       "title": "【1019 週報】油價點燃通膨，Fed 又要升息？ / 台積電、艾司摩爾財報創高卻不漲/ Roadster 會飛，特斯拉真正考題是Robotaxi-Alpha's Newsletter - CMoney投資網誌",
@@ -567,6 +644,13 @@
       "source": "CMoney",
       "published_at": "2026-10-21T09:25:14+00:00",
       "summary": "TWA00 加權指數- 台股還是要靠散戶^_^ - 股市爆料同學會&nbsp;&nbsp;CMoney"
+    },
+    {
+      "title": "外資中止連10賣！台股期現貨齊翻多 買超友達、鴻海及南亞各逾2萬張 - Yahoo股市",
+      "url": "https://news.google.com/rss/articles/CBMipwNBVV95cUxPMmJCcFRDSGNDLUQzMXJkNVE3WVh1OUU5SzhLaWp3czNPb0ViblVWMjRsZ3puWkJlZHpYOWlBZExUNmFrX0xNMzY1QzdOMjExcTk2d3h0bGNsSEh4V2JJYy0tNExJOS15UlFUTGR1QXBjblVTUHpnXzN2aTlmSDRiWGtfbnZQMlFUZ1ZjZW9aa1pKSXhGSFZycEFJWmdLR1FWRy1fc0FiRG9wbVJDTVlDckRFdTFyMmhqM0FJT0pyM1daN3l6eGJXT2RKcDVCaWFnUEZVVU9JSFVJUnJqNXRvM3preWVpeFNMN0J3M3BOMEFMQ3Y2cFA2WkRfTzhtZTJ3MUZuSjAxVU1qZzJ2TXZROGVIR1hhY1VQQkdHOTVvemEtek5hanNMdG9OT1lsUFpqRzhwaVBHZUlrekdtSS1DeHlkaURfVnFSUlFGRTgtRFRaRjNub0Mwb3g4NmdxX3ZXVjlHQWRtWnhuNmcwMm5NdWh6bS1ZQzhvNFVBNVZxWmtqUVBkWlluT05XenEwZUdVcmhQYlVFR3JDTElDQmNFWW9Zd3pRbVE?oc=5",
+      "source": "Yahoo股市",
+      "published_at": "2026-10-21T09:17:38+00:00",
+      "summary": "外資中止連10賣！台股期現貨齊翻多 買超友達、鴻海及南亞各逾2萬張&nbsp;&nbsp;Yahoo股市"
     },
     {
       "title": "外資中止連10賣！台股期現貨齊翻多 買超友達、鴻海及南亞各逾2萬張 - 鉅亨網",
@@ -1024,6 +1108,13 @@
       "summary": "力積電財報｜Q3毛利率衝48%、每股賺1.38元 DRAM營收比重破6成&nbsp;&nbsp;壹蘋新聞網"
     },
     {
+      "title": "外資終止連10賣！三大法人僅買超5.68億元 台積電領軍台股收復5日線 - UDN",
+      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTFBNazZSMFFiRzY4SERuUkZreDJHRTBfVkZjTmNEcVIwVzVxUEhDeTB4TnZpQXJSS25fN1FwaC0yN1pIZTVDMnFmRk43R0ZqMWxP0gFWQVVfeXFMT1hqdUZ2WEMwY3BvdTdBMFBkM29rOXN1WjdNczZCOTNxTVRiVy1iRkZhOEJreVJTa1ZTc3lGS2E5N1lYLVA4VnVDdkM1R1BORHlFQ05sa2c?oc=5",
+      "source": "UDN",
+      "published_at": "2026-10-21T07:18:09+00:00",
+      "summary": "外資終止連10賣！三大法人僅買超5.68億元 台積電領軍台股收復5日線&nbsp;&nbsp;UDN"
+    },
+    {
       "title": "比亞迪還是Tesla：哪隻更值得買？ - HK MoneyClub",
       "url": "https://news.google.com/rss/articles/CBMi9AFBVV95cUxQNjBrc0FfVTBnNmZTWXJObWg0Q0YweHJvcXRHX0tWZko3aklvZ2NSbnlObkV4aktoeEIzdUhVcVhEWU4waktOSnVYNUFTMmJ3MFZiSkVCSjNxOV80Szg5U0xyQnBRUjcxX3pBNVJpWmJFUXpIeEhScEFOTkVWOTJmS2xXOTk0eldYRXJYaUwtT2hWNnZfVXJ4am8wQkxKb1RmTHpodkRCblhSZ1p5b25jZkl4cV9lVTFPclpKQU5PeTZjWEEwR3MwV3I2WlYxd0d5V2N0THdnU09WaVJFeFUtTnV1Ym1GbncyX0RqelhtT2M3bTJv?oc=5",
       "source": "HK MoneyClub",
@@ -1071,6 +1162,13 @@
       "source": "富聯網",
       "published_at": "2026-10-21T07:06:00+00:00",
       "summary": "期貨：至21日止三大法人期貨未平倉量淨空626,136口，選擇權淨空3,925口&nbsp;&nbsp;富聯網"
+    },
+    {
+      "title": "台股強彈站回5日線 外資終結連10賣、三大法人買超5.68億元 - Yahoo股市",
+      "url": "https://news.google.com/rss/articles/CBMi7wJBVV95cUxORjJhRXJOTm8tSW1xTzJYNW44N3VPaC02aTR0WmN5akZ5bmh4bzNHbHAwYUU0cjhMSUJkTnlmMVdhYXBucEhMOFlUOThvWHVHeGNwTkhLcVdRX0ZiR2FZLTRsSVJ5eFVfTU43MEtJdDRBY2FrZHhuSnFzMzlReGxfZzdORWc4WW5sRUk5T0Iwa1hXb1o2cExrOWVuUWxVaWZVQnE0TXFJS1Rkd2RpeWZUVFdUb2tMQy04eXRNc1ZxQlY4OHR3X002VjAzeU9YRGs3UDFTWWNWTjhIOExSeE1oMnFaSmpWX3RtaWlWYkhCRWxfX0JNUWJIejl1cW1DcnhDYVhLckEwdW1McV9CZTl0d3FySHU2aHhBMFNidS05U2xOcUdpNk5OcVVmWWJXRE4yMnJBb216M2lteWVIY2NoX05kMGt3eVE4TzhfZXRIM2dmd2hIYmtHbHlFdC1uTnlEdE95a21HS3V4UERIcnhn?oc=5",
+      "source": "Yahoo股市",
+      "published_at": "2026-10-21T07:04:33+00:00",
+      "summary": "台股強彈站回5日線 外資終結連10賣、三大法人買超5.68億元&nbsp;&nbsp;Yahoo股市"
     },
     {
       "title": "折疊手機掀科技熱潮！美股定期定額「小額展開」掌握科技趨勢 - 蕃新聞",
@@ -1157,11 +1255,11 @@
       "summary": "謝金河：資本支出王道　台積有多好台股格局有多大？&nbsp;&nbsp;ETtoday財經雲"
     },
     {
-      "title": "四大生技藥廠後期新藥報佳音 衝刺罕病與肥胖症市場 - 商傳媒 - SUN MEDIA",
+      "title": "四大生技藥廠後期新藥報佳音 衝刺罕病與肥胖症市場 - 商傳媒",
       "url": "https://news.google.com/rss/articles/CBMirgJBVV95cUxQTXVSVE5UMm93UU1kaklzNW50WVNsbFN6eDFVNmEtS2NKNF9nZmVUTzJaTVIyWkt3Wm42cHhjYUZqZTBBZEUyaXd2WFNSOHNoUlRnRjZTbFRhM2NRNDNMcERNUkF2ZGxzMFlHYUVfczZic3Vvcy0tNmNVeHAxQnp1R2tlbzMtZG9Eam1VQnBLM3Exd0dnOUk3OHBjTkYzU1M4eWcxSE9vZHhpMzUxWXMtVnpQTmZNSEkzQ1M2VUQ3WDNGZFgzQmxMdElXY2p5Q20weTU2Uk1LaG10VXJmZDU1YjZ0TVJtUThwSkJlRnpOMy1jQ21sNjRPNS1JUkN2SWRHYkkyazBQV3p3NE9sc2hVZmZHdDVxRV83Z2pNWUk3cGhpamRkV0Q2NldYeHhWUQ?oc=5",
-      "source": "商傳媒 - SUN MEDIA",
+      "source": "商傳媒",
       "published_at": "2026-10-21T06:13:15+00:00",
-      "summary": "四大生技藥廠後期新藥報佳音 衝刺罕病與肥胖症市場&nbsp;&nbsp;商傳媒 - SUN MEDIA"
+      "summary": "四大生技藥廠後期新藥報佳音 衝刺罕病與肥胖症市場&nbsp;&nbsp;商傳媒"
     },
     {
       "title": "四大生技藥廠後期新藥報佳音 衝刺罕病與肥胖症市場 - Life 生活網",
@@ -1169,6 +1267,13 @@
       "source": "Life 生活網",
       "published_at": "2026-10-21T06:13:15+00:00",
       "summary": "四大生技藥廠後期新藥報佳音 衝刺罕病與肥胖症市場&nbsp;&nbsp;Life 生活網"
+    },
+    {
+      "title": "四大生技藥廠後期新藥報佳音 衝刺罕病與肥胖症市場 - 商傳媒 - SUN MEDIA",
+      "url": "https://news.google.com/rss/articles/CBMirgJBVV95cUxQTXVSVE5UMm93UU1kaklzNW50WVNsbFN6eDFVNmEtS2NKNF9nZmVUTzJaTVIyWkt3Wm42cHhjYUZqZTBBZEUyaXd2WFNSOHNoUlRnRjZTbFRhM2NRNDNMcERNUkF2ZGxzMFlHYUVfczZic3Vvcy0tNmNVeHAxQnp1R2tlbzMtZG9Eam1VQnBLM3Exd0dnOUk3OHBjTkYzU1M4eWcxSE9vZHhpMzUxWXMtVnpQTmZNSEkzQ1M2VUQ3WDNGZFgzQmxMdElXY2p5Q20weTU2Uk1LaG10VXJmZDU1YjZ0TVJtUThwSkJlRnpOMy1jQ21sNjRPNS1JUkN2SWRHYkkyazBQV3p3NE9sc2hVZmZHdDVxRV83Z2pNWUk3cGhpamRkV0Q2NldYeHhWUQ?oc=5",
+      "source": "商傳媒 - SUN MEDIA",
+      "published_at": "2026-10-21T06:13:15+00:00",
+      "summary": "四大生技藥廠後期新藥報佳音 衝刺罕病與肥胖症市場&nbsp;&nbsp;商傳媒 - SUN MEDIA"
     },
     {
       "title": "台股強彈595點收復46800點！台積電漲15元　 - NOWnews今日新聞",
@@ -1584,13 +1689,6 @@
       "summary": "同族不同命！PCB族群全面噴發開轟趴 「它」竟慘吞跌停&nbsp;&nbsp;三立新聞網SETN.com"
     },
     {
-      "title": "聯準會28日會議 市場料利率連5凍 - 自由時報",
-      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTFBRa2V0ZElid1dxRi1zU1Z1V0lxXzh0eEYtQzB3eE9xM0lxSmhSU3d5S2g4MVhEbU9QdmtjSFdMV1dGRVNhY1pQX2QwejNtSVg3NmNmWnV2cGs?oc=5",
-      "source": "自由時報",
-      "published_at": "2026-10-21T02:44:50+00:00",
-      "summary": "聯準會28日會議 市場料利率連5凍&nbsp;&nbsp;自由時報"
-    },
-    {
       "title": "PCB族群全面噴發開轟趴　它竟慘吞跌停 - 鏡週刊Mirror Media",
       "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE5jM3JCMWN1aV9KN2hXMkwyNllQeHo4ZGhyM0ZwLWF2TlpzVnZZbkhtWHVYTm1CSGJBbUNuZkxkdHYzbDcyT2VCREcxS0RIeW1PdE1PWDRTYjNzaHla0gFiQVVfeXFMTkZQMmJwZ1hlOFBtTzVGNW9hMXRuNjk2UVJfOXpKaXlpRndZUXZRWDZ5eHNrd01aVDNfRWprXzh3ZTNuM3RPczZaUi15Nm94ZU1pSGF6alFhc240WVBOQjh1bVE?oc=5",
       "source": "鏡週刊Mirror Media",
@@ -1778,6 +1876,13 @@
       "source": "CMoney",
       "published_at": "2026-10-21T01:45:19+00:00",
       "summary": "【即時新聞】美國期中選舉逼近！標普500指數(^GSPC)狂飆11%，法人警告選前回跌風險與佈局時機&nbsp;&nbsp;CMoney"
+    },
+    {
+      "title": "聯準會28日會議 市場料利率連5凍 - 自由時報",
+      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTFBRa2V0ZElid1dxRi1zU1Z1V0lxXzh0eEYtQzB3eE9xM0lxSmhSU3d5S2g4MVhEbU9QdmtjSFdMV1dGRVNhY1pQX2QwejNtSVg3NmNmWnV2cGs?oc=5",
+      "source": "自由時報",
+      "published_at": "2026-10-21T01:43:11+00:00",
+      "summary": "聯準會28日會議 市場料利率連5凍&nbsp;&nbsp;自由時報"
     },
     {
       "title": "〈台股開盤〉權值軍團反彈引領大盤漲逾700點 慎防台指期結算 - 鉅亨網",
@@ -2037,13 +2142,6 @@
       "source": "CMoney",
       "published_at": "2026-10-20T23:36:58+00:00",
       "summary": "GS 美商高盛證券- 開盤：美股走高SpaceX股價大漲8% 特斯拉漲超3% - 股市爆料同學會&nbsp;&nbsp;CMoney"
-    },
-    {
-      "title": "《期貨三大法人多空淨額》 - 富聯網",
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxQRTJzYW8xRURVMTV6dk45OWRMaGRObGJyVE9yTC1vRnJjQnNWMFhGdzBhTFk2VDQ0Q0lPUFV0blBDQnQ4MGRJblRmaVY5cFE1RnFTWTlwd2xEV1dPdHo0dkJNSF9HaWk2TEtHZlZMUEJTcTlhQ1ZzWERoa0s2VmJkZlNDYUZoeElw?oc=5",
-      "source": "富聯網",
-      "published_at": "2026-10-20T23:31:00+00:00",
-      "summary": "《期貨三大法人多空淨額》&nbsp;&nbsp;富聯網"
     },
     {
       "title": "《期貨》賣壓持續遞減 留意46163點 - 富聯網",
@@ -3061,13 +3159,6 @@
       "summary": "新台幣重貶破32.6元！外資連十賣重挫台股529點，台積電等權值股承壓-財經焦點情報站&nbsp;&nbsp;CMoney投資網誌"
     },
     {
-      "title": "三大法人買賣超 – 外資買超(3231)緯創、(3026)禾伸堂，投信買超(3017)奇鋐、(2330)台積電，法人合計賣超968.04億元 - 永豐金證券",
-      "url": "https://news.google.com/rss/articles/CBMi0wRBVV95cUxPekF5MWlkLXFOX0RXM2pXS2RlUWtKMGpvOFppdlF4NWhCcWpXMnFLQl9LSDRxZmc3RklhMjlqMEtlVGo0SUtKOVoxZlpoMlVnNk1lTG1DYmRyYmF5ajcxNmNBbTI5UnBROWUzQW9oaS1KTFZPSnluQUtlRlJweWhXZ3hQcktlM01BUGh0VHFqZTdUV2FoOG1OTmdLcmVMYXFDaEMtbTc0b3VvM1RiYWhzNHM5X05XOVUzSUJHbE1waVpzTXhuNnVhTExkZWVBUEJvWVZ6cEgtX2RKYXpCS1RCZlljNlVzNWJRWWJnT04yaUpKdW5sLUdRbHhlTlFLdGExU0V5MGJoRWVPZERKWUlqSVFyeEV1ZkdJa2dybmFHVUs1TzJOZnN3dlRVbG1FVG5EaEVzUWdmanlmT05jQ1k2MnlXbFJTWlZmTF92YWxPaDB6bVVmNjNmZjJrbGZENEd4YklzZDRXWXJQaDJ6ejE4YjZvRTM0ejFOSlFrM0MzcHMzamZHSkp6N0RtN0VtTGxCVVI3dmdFeWZOeFRSSC1id1g0NUpNRkN6b0tTZUdnTHRJQlhaVFoxNmJOSC1LdU13ZDdZMjBPMjJUbW16SjAzdUFKOEdRNnNuSkJPREJVaDlEUnRRSzgzdWJvTFdXbmUzTUFMMVkyM0w3WUE1UEZoc2tRWWhKZnNSWWhmUWZJZ0RoYl9uR3ZwcHF6cl9IUnVkNlA2MkdHSXJfYk5QbC1hblpCbXplcWtaMzQ3M2tIbmJVekVUOTRDVDhlX1hvdnNsRmNF?oc=5",
-      "source": "永豐金證券",
-      "published_at": "2026-10-20T09:08:32+00:00",
-      "summary": "三大法人買賣超 – 外資買超(3231)緯創、(3026)禾伸堂，投信買超(3017)奇鋐、(2330)台積電，法人合計賣超968.04億元&nbsp;&nbsp;永豐金證券"
-    },
-    {
       "title": "CCL是什麼？CCL概念股有哪些？台光電、聯茂、台燿三雄一次看 - 數位時代",
       "url": "https://news.google.com/rss/articles/CBMiZkFVX3lxTE9pQmIyTFp2ajBvVlEyZ2ljYkNqLUtFNloxUEFlenN2ckdiSEFwUkRzLVZfWlFVb0YyLTlfd1lrTkt6ZVVqMEZzbTRMMC0xbWVHWkJQamtNb0xva1N3VlRmUW1QVG1mZw?oc=5",
       "source": "數位時代",
@@ -3409,97 +3500,6 @@
       "source": "工商時報",
       "published_at": "2026-10-20T07:21:00+00:00",
       "summary": "台股再跌529點！三大法人賣超968億 分析師示警「完美風暴」&nbsp;&nbsp;工商時報"
-    },
-    {
-      "title": "TWA00 加權指數- 今日大盤籌碼- 股市爆料同學會 - CMoney",
-      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE5iTE9ocDkydFhYX0JnZTVremNaakFVNE1QNW5pc1B3MnJOZWM3dEVzYzN5eDZISTZxLS1TUFhkcmZjSXJHVjZYU21OYVZqZV9MVnJnZEg3N0w?oc=5",
-      "source": "CMoney",
-      "published_at": "2026-10-20T07:20:07+00:00",
-      "summary": "TWA00 加權指數- 今日大盤籌碼- 股市爆料同學會&nbsp;&nbsp;CMoney"
-    },
-    {
-      "title": "三大法人賣超968億！台股量縮季線攻防 3千金跌破5千元、川湖收復萬元 - UDN",
-      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTFBOVUV0M3VXTVdPcjFfUGhrdlJyWjF5NW1aSWhyVUc5Wnc4VER1MEhXMFBlNHRNVEJ6TDlWNDNwZjBIQjRTU3lEN1I0TmpFc1FK0gFWQVVfeXFMTkxIOFJjaXlyS2s5UF9rS2JnbXJhUVUyTXBzYlBiZVplWmlZQjFoMFZ6YWF2WDVLckJIX1lrMzRPcHFYRmZtaFFlRmtMbWdsVU9TRXdhWHc?oc=5",
-      "source": "UDN",
-      "published_at": "2026-10-20T07:20:03+00:00",
-      "summary": "三大法人賣超968億！台股量縮季線攻防 3千金跌破5千元、川湖收復萬元&nbsp;&nbsp;UDN"
-    },
-    {
-      "title": "〈台股盤後〉量縮震盪挫529點再度下探季線 電子代工、散熱逆勢抗跌 - Yahoo股市",
-      "url": "https://news.google.com/rss/articles/CBMimwNBVV95cUxNMTk0enJLSk91Nlo1cG5FNXFTLXVNT0tsNWNRNGwyV1Z1TlFEZmdrMkRheF83Yk9XTFp0YXNkQnRKcU1ZZnRwcTFjU1ZZNGtCdXNHRUxRaDRpNU1lTXRYOFJ6emxtNGluSERmUVNEcGNmRzFKaGUtbUNBdmdhYjNxYkZuRjB5TjdtSDhEQ2hMOXZJRWF6Vk1QQmxIT0ozR1Q0bWpDNHZhRUNIbzJQWGV0R2pvLThjeTlMaWpkanM1NFA1WkV3b0ppeEtremZZSnU1UmxXaUVLd3ZqenBpNTV2YzB2RHpSc2VPV0xPSHdWeGpnUXlkeWdMdlpEN05BZjdNUWZrYy1zQUk3OUlGb3JmeWxnUW1LTUg1Uk54bU1oODVJM0tsdExNbms4Tk1RRXlsM2VReGpicktZb0VSMTQxZ2xZOHRMU1oycERNSlB3bHR0U0ZwUVRLN1pnV3dHdC1WaDN1VGtZeWY0SUFLVTEwOWZNdFZsNGRoUGMxWGFXMkc5MlN0a1ZBdWdFVHQ3YlcyYjQ5Tm5CWnFDWUU?oc=5",
-      "source": "Yahoo股市",
-      "published_at": "2026-10-20T07:18:53+00:00",
-      "summary": "〈台股盤後〉量縮震盪挫529點再度下探季線 電子代工、散熱逆勢抗跌&nbsp;&nbsp;Yahoo股市"
-    },
-    {
-      "title": "又演基本面鬼故事！南亞科、華邦電爆賺股價卻破底「散戶接刀驚喊：山頂好冷」2檔記憶體低本益比展現韌性- 上市櫃 - 旺得富理財網",
-      "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE1sLVRWMEJ1VzBHMmpfb2JwZzZlVG1KM1FwSl82RDJyX1hacE9iZktxYlpodzN1MjdjVGc5S3ZKWjh6a2xOWU9kNnFvMEdOWmhpbEhIQmN0SmNtSTVIb2ctRi1ZQzM0eTNERnc?oc=5",
-      "source": "旺得富理財網",
-      "published_at": "2026-10-20T07:16:43+00:00",
-      "summary": "又演基本面鬼故事！南亞科、華邦電爆賺股價卻破底「散戶接刀驚喊：山頂好冷」2檔記憶體低本益比展現韌性- 上市櫃&nbsp;&nbsp;旺得富理財網"
-    },
-    {
-      "title": "星展集團看好台星陸股 建議配置5%至10%於黃金 - Life 生活網",
-      "url": "https://news.google.com/rss/articles/CBMipAJBVV95cUxOVEdBelNZRHhqQUtPVFB3MTk2V2kwdS1WQ1BvTWdCcTdnTFBMRURpOU9WT09NMTVhb1FRd0N2U0xVeGhNRVpKQzhfT3Y5NFlpdGRNWk5HNk45OHRDZk9hWk5YSEtPNlI1Z1dBRTM0cXZvTkYwR19ybnJ0TW1SYjI3Wk9MaTlXLWVsQVZPSW1uNkN5RGI1cGRTdkxDNktRQk0xYkRLMUNBVHdLR0VXdGlmVU5zWFNFbV9YLVdvd3JTUGV0UTlJZ2JDTkpjaHQ2TUtZaXA1MkMyRWxuaVVUVkllbDV6NTBTTzQtZHZ2c3ZhZEZWZ1hlZXFjdXZSbXFtbEpoc3d5X2luUGFCNTBNWVRwM3hRNTVsQVZ4UUV2eklIY05wMnpk?oc=5",
-      "source": "Life 生活網",
-      "published_at": "2026-10-20T07:09:08+00:00",
-      "summary": "星展集團看好台星陸股 建議配置5%至10%於黃金&nbsp;&nbsp;Life 生活網"
-    },
-    {
-      "title": "台股收跌529點失守46300點 台積電跌15元 - 上報",
-      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE9GZGgwMEpEclMxRjZJNDhRMFlTMjVVMjVCWmxWSWp5YWxIem1EUm1xV0pKSEJiX2VxNE1pdDVNQ3hncTNFVlBPTkdIX09lRmUwTUJtaUlJa2s2Zw?oc=5",
-      "source": "上報",
-      "published_at": "2026-10-20T07:03:00+00:00",
-      "summary": "台股收跌529點失守46300點 台積電跌15元&nbsp;&nbsp;上報"
-    },
-    {
-      "title": "期貨：至週二(20日)止三大法人各種選擇權未平倉口數一覽表(一) - 富聯網",
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxNbFYtcjFoSzNqZjlYVndHWU5QYkh4d3Z6ajZ1ekdOSlJVYmpmNGJuTmRiYXgwcjYxbWJ3ckhUVjM1RFNmcTBqcHhJYWtoclhDdnJFUEVieFV6NUZ4MmgySGtFSDRVeU5fTXFRV0wwZzJhNHlGZTh3VkxNbnlxT0pXei1Tc1EtS0hR?oc=5",
-      "source": "富聯網",
-      "published_at": "2026-10-20T07:02:00+00:00",
-      "summary": "期貨：至週二(20日)止三大法人各種選擇權未平倉口數一覽表(一)&nbsp;&nbsp;富聯網"
-    },
-    {
-      "title": "期貨：週二(20日)三大法人各種選擇權交易口數一覽表(二) - 富聯網",
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxQbG1PV2hETXNsRjJqVTBMZ1lROEo2SlhRbHBMTzJIcVM1ZGxXOHdoV0FWOE40S0JTemJ0YmNoLVIxY0Z4UUZibWlOQkZ2LVpWRGFtRnhBSHNEbGFsNDRac1UycTR0c3FwSHNJTjMtYWZZWFdKMWVlTlRLeHFkbzV5eWV4RUVCS25n?oc=5",
-      "source": "富聯網",
-      "published_at": "2026-10-20T07:02:00+00:00",
-      "summary": "期貨：週二(20日)三大法人各種選擇權交易口數一覽表(二)&nbsp;&nbsp;富聯網"
-    },
-    {
-      "title": "期貨：至週二(20日)止三大法人各種選擇權未平倉口數一覽表(二) - 富聯網",
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOVlNleXJqa2M0OWFVUENNVFI4QmNpZHJiSG5xUEFKVUNMdFVpUU85UnZQOUxxMWdOWUt2V2lmTHQ3MzJKV2RfN3BuNWRDNlljdlRDbExrcEtIRTU4MUtpR2swMldWQzZoZzZsS3FITXpWWC1zMVB4bzVENWpLOVlQLUxtbi15N2wy?oc=5",
-      "source": "富聯網",
-      "published_at": "2026-10-20T07:02:00+00:00",
-      "summary": "期貨：至週二(20日)止三大法人各種選擇權未平倉口數一覽表(二)&nbsp;&nbsp;富聯網"
-    },
-    {
-      "title": "【Follow法人】V轉失敗兇手找到了？外資再砍795億元 連10刀已提款8380億元 - Yahoo股市",
-      "url": "https://news.google.com/rss/articles/CBMiqgNBVV95cUxQSEtvbWMwSnFHaGlOaGhleVNfcUF3d1p5ZFRKWmVsTUdSNG9BTGJ1TW9kaTFOWGNFSGFxRkllY19kbjRiQjFMamw1a2JOYVF5RDc4OXQ4X0RPUnE2MnRnWWlja1VicXJxTjNpMTIxMTVHclVyN0FXRlphRnN3ZEYzMmUybERQREpZamUzME9mQl9GQllZQXA3QkZYb2pXUHFVTUZ3WjlERE5PNjJoLVJjcWF0Nnh3a2JBR05ZZVRxUWM1X2ZDRTZ3N0xncU93Q0tGWGpWczhwdnZvZ1h3UENjSGprVW1wMEplUHpqR3FCbVdxTW0xbnlYZlM5VTZ2VzZibmdzZDc3UUo3X3lDU09OQUhHVHh4RjZjS0o5NmE3aXBiVkhLb3VKRHZJVlY3RnlCVzNRVnhLXzdOQzhMYzJMaFc2TVBOWENMbXNxRWdFeDF6UnpjVlEtU2Y4WE5MRXkyU01YUi1ZeVB4SHpiNlZ0NFRfY3V3UUNTc0lmdTcyZ3ZPRWxhWVFzeXdVU3BYMVBrWXFseWFMVFFNVzRoVlBpSUVnWUpXNnJTS0E?oc=5",
-      "source": "Yahoo股市",
-      "published_at": "2026-10-20T07:01:52+00:00",
-      "summary": "【Follow法人】V轉失敗兇手找到了？外資再砍795億元 連10刀已提款8380億元&nbsp;&nbsp;Yahoo股市"
-    },
-    {
-      "title": "期貨：週二(20日)三大法人各種選擇權交易口數一覽表(一) - 富聯網",
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOeGpNY2JxdFJTcU11NTZoRHJBaFJvWVRMVlhfZzMwelFUbXRCeEpYcUhLOVpyb29Ea0l3RXFmWVMtQ25WNGRvNzc4cXFRTG9lbkRmWGQ3TVk3c3JrX290TE5RSWdtUTVxMlY0X1lfcXBwamRHaGlJYnBRRGZRR1RpUkMxMXBEYmxv?oc=5",
-      "source": "富聯網",
-      "published_at": "2026-10-20T07:01:00+00:00",
-      "summary": "期貨：週二(20日)三大法人各種選擇權交易口數一覽表(一)&nbsp;&nbsp;富聯網"
-    },
-    {
-      "title": "期貨：至20日止三大法人期貨未平倉量淨空727,374口，選擇權淨多5,784口 - 富聯網",
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxPLXFfN3FsNzFibHVmTmdtQlNnSm9vakVESUtUekVheXJkNW5vbDhtTTN4Q1hiMUxpYUYxc1FaTVNHbmp1d19XQmlIRVpSRDVsNmozbi1fN0QycVNrN05qd1UxMlVBYzVDZ3l6ck9VNmMxOEpIZUk4VG02ZXZUMVpYRG00djJ2QjQ2?oc=5",
-      "source": "富聯網",
-      "published_at": "2026-10-20T07:01:00+00:00",
-      "summary": "期貨：至20日止三大法人期貨未平倉量淨空727,374口，選擇權淨多5,784口&nbsp;&nbsp;富聯網"
-    },
-    {
-      "title": "2317 鴻海 - 投信+967 緯創+8,333 廣達+401 - 股市爆料同學會 - CMoney",
-      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTFBkRTN3NXh5c09Rb2dacXlpc2xRUUk2UVdfd2duVFEwWUJqR09qVnhKMzhxemN2cDN0ZGxFcGl3RjYzQzZxZENzT3hId1JZc3dSUUd2OGRSYTM?oc=5",
-      "source": "CMoney",
-      "published_at": "2026-10-20T07:00:20+00:00",
-      "summary": "2317 鴻海 - 投信+967 緯創+8,333 廣達+401 - 股市爆料同學會&nbsp;&nbsp;CMoney"
     }
   ]
 }
