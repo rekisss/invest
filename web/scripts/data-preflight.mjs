@@ -8,6 +8,8 @@
 // 這裡把它變成「大聲的壞掉」:缺檔直接讓 build 失敗並告訴你要先跑什麼,
 // 過期則印警告(週末/連假本來就會有幾天沒新資料,不該擋 build)。
 
+import { checkPriceFreshness, latestBarFromHistories } from './price-freshness.mjs'
+
 export const STALE_WARN_DAYS = 3
 
 // 純函式,方便測試。回傳 { level: 'ok' | 'warn' | 'error', message }
@@ -79,4 +81,42 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1)
   }
   console.log(r.level === 'warn' ? `⚠ ${r.message}` : `✓ ${r.message}`)
+
+  // 第二道檢查:檔案新不新鮮 ≠ 裡面的價格新不新鮮。
+  // 2026-09-03 的凍結事件就是這樣溜過去的——掃描每天跑,generated_at 每天更新,
+  // 上面那個檢查一路顯示 ok,但 kline_cache.json 已經 7 週沒動,價格全是舊的。
+  // 所以這裡另外看 stock_histories.json 裡最新一根 K 棒的日期。
+  const histFile = join(here, '..', 'public', 'stock_histories.json')
+  if (existsSync(histFile)) {
+    // 同樣不整檔 parse(8~10 MB)。dates 是 build-data 寫在 generated_at 之後的
+    // 第二個 key,整個陣列只有幾 KB,讀開頭 64 KB 必定涵蓋。
+    let latestBar = null
+    const fd = openSync(histFile, 'r')
+    try {
+      const buf = Buffer.alloc(65536)
+      const n = readSync(fd, buf, 0, 65536, 0)
+      const head = buf.subarray(0, n).toString('utf8')
+      const m = head.match(/"dates"\s*:\s*\[([^\]]*)\]/)
+      if (m) {
+        const dates = m[1].split(',').map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean)
+        latestBar = latestBarFromHistories({ dates })
+      }
+    } finally {
+      closeSync(fd)
+    }
+
+    const p = checkPriceFreshness({ latestBar })
+    if (p.level === 'stale') {
+      // 不 exit 1:擋掉 build 等於連修好之後的部署一起擋掉,而且這種故障的修法
+      // 在 Python 抓取端,不在前端 build。但要吵到不可能被忽略。
+      console.error('')
+      console.error('╔════════════════════════════════════════════════════════════════╗')
+      console.error('║  ✗✗ 報價資料已停止更新 —— 這次 build 出來的是過期價格 ✗✗      ║')
+      console.error('╚════════════════════════════════════════════════════════════════╝')
+      console.error(`   ${p.message}`)
+      console.error('')
+    } else {
+      console.log(p.level === 'warn' ? `⚠ ${p.message}` : `✓ ${p.message}`)
+    }
+  }
 }

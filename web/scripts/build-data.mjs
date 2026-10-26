@@ -17,6 +17,7 @@ import { makeExpectancyRank, rankPicksByExpectancy } from './expectancy.mjs'
 import { enrichFromBars, isTradable, MIN_TURNOVER } from './pool-metrics.mjs'
 import { seededRank, summarizeControl, scoreAgainstControl, DEFAULT_SEEDS } from './random-control.mjs'
 import { makeKlineQualityGate } from './kline-quality.mjs'
+import { checkPriceFreshness, latestBarFromHistories } from './price-freshness.mjs'
 import { buildOrderTicket, summarizeTickets, addTradingDaysEst } from '../src/utils/tradePlan.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -204,7 +205,10 @@ function readPredictionHistory() {
   if (!existsSync(histFile)) return []
   try {
     const hist = JSON.parse(readFileSync(histFile, 'utf-8'))
-    return Array.isArray(hist) ? hist.slice(0, 90) : []
+    // 2026-09-14:不再截斷。預測驗證(校準分析/命中率追蹤/回測)要吃完整歷史,
+    // 舊的 slice(0, 90) 會在累積滿 90 個預測日後開始默默丟掉最舊的樣本。
+    // 每筆約 1.2KB,一年約 245 個交易日 ≈ 300KB,相對 data.json 現況可忽略。
+    return Array.isArray(hist) ? hist : []
   } catch { return [] }
 }
 
@@ -1527,6 +1531,18 @@ const historiesGeneratedAt = new Date().toISOString()
 writeFileSync(HISTORIES_FILE, JSON.stringify({ generated_at: historiesGeneratedAt, dates: historiesDates, stocks: historiesStocks, scan_stocks: scanStocksFiltered }), 'utf-8')
 console.log(`stock_histories.json written (${Object.keys(historiesStocks).length} kline + ${Object.keys(scanStocksFiltered).length} scan stocks, ${historiesDates.length} kline bars, ${(readFileSync(HISTORIES_FILE).length / 1024).toFixed(0)} KB)`)
 
+// 報價新鮮度:最新一根 K 棒離今天多遠。寫進 data.json 讓前端可以直接顯示。
+//
+// 為什麼要特別算這個:data.json 的 generated_at 只證明「管線今天跑過」,
+// header 的「資料日期」是最新**掃描日** —— 兩者在 2026-09-03 的凍結事件中
+// 都一路正常,實際上價格停在 7 週前。唯一能揭露那件事的就是 K 棒本身的日期。
+const priceFreshness = checkPriceFreshness({ latestBar: latestBarFromHistories({ dates: historiesDates }) })
+if (priceFreshness.level === 'stale') {
+  console.error(`✗ 報價新鮮度:${priceFreshness.message}`)
+} else {
+  console.log(`${priceFreshness.level === 'warn' ? '⚠' : '✓'} 報價新鮮度:${priceFreshness.message}`)
+}
+
 let prediction = readPrediction()
 const predictionHistory = readPredictionHistory()
 console.log(`Prediction: ${prediction ? prediction.date : 'none'}, history: ${predictionHistory.length} entries`)
@@ -1560,7 +1576,9 @@ try {
     }
   }
   realOutcomes = {
-    prediction: po.slice(-60),   // 最近 60 筆逐日紀錄（含 taiex 收盤、hit）
+    // 2026-09-14:不再截斷(原本只留最近 60 筆)。逐日驗證清單與策略回測都以
+    // 這份真實收盤紀錄為權威來源,截斷等於把較舊的驗證結果永久丟掉。
+    prediction: po,              // 全部逐日紀錄（含 taiex 收盤、hit）
     prediction_hit: scored.length ? { hits: scored.filter(e => e.hit).length, total: scored.length } : null,
     // 期距正確的命中率(模型預測的是 5 個交易日後)。前端應以此為準,隔日僅供參考。
     prediction_hit_h5: hScored.length ? { hits: hScored.filter(e => e[hKey]).length, total: hScored.length, horizon: PRED_HORIZON } : null,
@@ -2392,7 +2410,7 @@ try {
 } catch (e) { console.warn('Watch-five skipped:', e.message) }
 
 const dataGeneratedAt = new Date().toISOString()
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks, gradeDigest, modelHealth, watchFive, klineQuality }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks, gradeDigest, modelHealth, watchFive, klineQuality, priceFreshness }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
 
 // Small sidecar so the frontend can cheaply check "did anything change?" (a few
