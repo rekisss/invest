@@ -8,7 +8,10 @@
 //      price-freshness.test.mjs 留在 scripts/ 才會被跑到。
 export {
   checkPriceFreshness,
+  summarizeStockFreshness,
+  lastBarDateFor,
   latestBarFromHistories,
+  STALE_SHARE_WARN,
   weekdaysBetween,
   taipeiToday,
   parseBarDate,

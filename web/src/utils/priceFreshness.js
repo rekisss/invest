@@ -140,6 +140,80 @@ export function checkPriceFreshness({ latestBar, now = Date.now() } = {}) {
   }
 }
 
+/** 整體判定要降級時,容許多少比例的個股落後。超過就代表不是零星缺漏。 */
+export const STALE_SHARE_WARN = 0.1
+
+/**
+ * 找出某檔股票自己最後一根有價格的 K 棒日期。
+ *
+ * 欄式結構裡每檔的陣列都對齊共用的 dates,缺的 bar 是 null。所以「這檔最後
+ * 一根」要從尾端往前找第一個非 null,不能直接用 dates 的最後一個。
+ */
+export function lastBarDateFor(dates, closes) {
+  if (!Array.isArray(dates) || !Array.isArray(closes)) return null
+  for (let i = Math.min(dates.length, closes.length) - 1; i >= 0; i--) {
+    if (closes[i] != null) return dates[i] ?? null
+  }
+  return null
+}
+
+/**
+ * 逐檔檢查新鮮度,而不是只看共用 dates 的最大值。
+ *
+ * 為什麼必要(Codex review 指出的漏洞):dates 是**所有股票日期的聯集**。
+ * 只要有一檔抓到今天的 bar,聯集的最大值就是今天 —— 即使另外 300 檔都停在
+ * 三週前,只看聯集會報「新鮮度 OK」,使用者卻在畫面上看到那 300 檔的舊價格。
+ * 這種「部分落後」在本專案是已知會發生的狀況(kline-supplement.mjs 就是
+ * 為了補這種缺漏而存在)。
+ *
+ * 判定取兩者中較嚴重的:
+ *   1. 聯集最大值的新鮮度 —— 抓「整個管線停掉」
+ *   2. 落後個股的比例     —— 抓「部分股票停掉」
+ *
+ * 回傳在 checkPriceFreshness 的欄位之外,additionally 帶:
+ *   totalStocks, staleStocks, staleShare, worstStaleBar
+ */
+export function summarizeStockFreshness({ dates, stocks, now = Date.now() } = {}) {
+  const unionLatest = latestBarFromHistories({ dates })
+  const base = checkPriceFreshness({ latestBar: unionLatest, now })
+
+  const entries = stocks && typeof stocks === 'object' ? Object.entries(stocks) : []
+  if (entries.length === 0) return { ...base, totalStocks: 0, staleStocks: 0, staleShare: 0, worstStaleBar: null }
+
+  let staleStocks = 0
+  let worstStaleBar = null
+  let counted = 0
+  for (const [, s] of entries) {
+    const last = lastBarDateFor(dates, s?.c)
+    if (!last) continue          // 整檔沒有任何價格,不是「落後」,是沒資料
+    counted++
+    const r = checkPriceFreshness({ latestBar: last, now })
+    if (r.level === 'stale') {
+      staleStocks++
+      if (worstStaleBar == null || last < worstStaleBar) worstStaleBar = last
+    }
+  }
+  const staleShare = counted > 0 ? staleStocks / counted : 0
+
+  // 整體已經是 stale 就不必再降級;否則依落後比例決定是否蓋過 base。
+  if (base.level !== 'stale' && staleShare > STALE_SHARE_WARN) {
+    const pct = (staleShare * 100).toFixed(1)
+    return {
+      ...base,
+      level: 'warn',
+      totalStocks: counted,
+      staleStocks,
+      staleShare,
+      worstStaleBar,
+      message:
+        `共用交易日的最新 K 棒是 ${unionLatest},但 ${staleStocks}/${counted} 檔(${pct}%)` +
+        `自己的最後一根已落後超過 ${STALE_WEEKDAYS} 個交易日,最舊停在 ${worstStaleBar}。` +
+        `部分股票的報價是過期的 —— 可跑 kline-supplement.mjs 補抓。`,
+    }
+  }
+  return { ...base, totalStocks: counted, staleStocks, staleShare, worstStaleBar }
+}
+
 /**
  * 從 stock_histories.json 的結構取出最新一根 K 棒日期。
  * dates 是升冪排序的共用交易日陣列,最後一個就是最新。
