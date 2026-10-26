@@ -961,7 +961,10 @@
   "directional": true,
   "hit": true,
   "prev_gap_bdays": 1,
-  "hit_h5": null
+  "hit_h5": true,
+  "hit_h5_span_bdays": 7,
+  "ret_h5": -1.98,
+  "hit_h5_date": "2026-10-27"
  },
  {
   "date": "2026-10-20",
@@ -1021,6 +1024,21 @@
   "directional": true,
   "hit": false,
   "prev_gap_bdays": 1,
+  "hit_h5": null
+ },
+ {
+  "date": "2026-10-27",
+  "taiex_close": 46041.43,
+  "taiex_change": 0.0,
+  "taiex_pct": 0.0,
+  "actual_up": null,
+  "taiex_name": "發行量加權股價指數",
+  "pred_date": "2026-10-26",
+  "xgb_prob_up": 0.539,
+  "pred_label": "偏多",
+  "directional": false,
+  "hit": null,
+  "prev_gap_bdays": 2,
   "hit_h5": null
  }
 ]
