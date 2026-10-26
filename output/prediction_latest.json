@@ -1,40 +1,40 @@
 {
-  "date": "2026-10-23",
-  "generated_at": "08:02",
-  "xgb_prob_up": 0.587,
+  "date": "2026-10-26",
+  "generated_at": "08:01",
+  "xgb_prob_up": 0.539,
   "xgb_label": "偏多",
   "market_data": {
-    "vix": 19.03,
-    "sp500_ret": -0.0121,
-    "nasdaq_ret": -0.026,
-    "sox_ret": -0.0672,
-    "tsm_adr_ret": 0.016,
+    "vix": 19.45,
+    "sp500_ret": -0.0052,
+    "nasdaq_ret": -0.0021,
+    "sox_ret": 0.0044,
+    "tsm_adr_ret": 0.0149,
     "futures_net": -87297.0,
     "night_change": -616.0,
     "pcr": null,
-    "taiex_rsi": 39.72965975250137,
-    "macd_hist": -931.0542779920645,
-    "dist_ma20": -4.22264093128809,
+    "taiex_rsi": 39.72965976353395,
+    "macd_hist": -931.0542780868366,
+    "dist_ma20": -4.2226409312880575,
     "dist_ma60": -0.23846171912925707,
     "taiex_ret_5d": -1.9766436252973696,
     "taiex_ret_20d": -3.507516741734984,
     "buyback_count": 0,
-    "disposition_count": 19,
-    "jpy_ret": -0.0009,
-    "arkk_ret": 0.024,
-    "hyg_ret": 0.002,
+    "disposition_count": 6,
+    "jpy_ret": -0.0104,
+    "arkk_ret": 0.0016,
+    "hyg_ret": -0.0006,
     "night_trend": "↓ 走弱",
     "market_revenue_yoy": 0.1402,
-    "market_foreign_holding_chg": -3.3937
+    "market_foreign_holding_chg": -3.299
   },
   "regime": {
-    "label": "long_liquidate",
-    "label_zh": "💥 多殺多日",
-    "win_rate": 35.0
+    "label": "double_whipsaw",
+    "label_zh": "🔄 多空雙巴日",
+    "win_rate": 45.0
   },
   "scenario": {
-    "main_scenario": "夜盤大跌 -616pt，多頭倉位鬆動，開盤可能持續賣壓，避免搶反彈",
-    "best_strategy": "等開盤30分鐘後觀察量能是否縮減，再考慮進場",
+    "main_scenario": "VIX=19.5 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+    "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
     "danger_signals": [
       "外資空單極重（-87,297口），軋空風險高",
       "夜盤缺口 -616pt 過大，易反轉"
@@ -61,7 +61,7 @@
     ]
   },
   "news_sentiment": {
-    "market_impact": 0.18,
+    "market_impact": -0.14,
     "key_events": [],
     "bullish_count": 0,
     "bearish_count": 0
