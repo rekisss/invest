@@ -17,7 +17,7 @@ import { makeExpectancyRank, rankPicksByExpectancy } from './expectancy.mjs'
 import { enrichFromBars, isTradable, MIN_TURNOVER } from './pool-metrics.mjs'
 import { seededRank, summarizeControl, scoreAgainstControl, DEFAULT_SEEDS } from './random-control.mjs'
 import { makeKlineQualityGate } from './kline-quality.mjs'
-import { checkPriceFreshness, latestBarFromHistories } from './price-freshness.mjs'
+import { summarizeStockFreshness } from './price-freshness.mjs'
 import { buildOrderTicket, summarizeTickets, addTradingDaysEst } from '../src/utils/tradePlan.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -1536,7 +1536,9 @@ console.log(`stock_histories.json written (${Object.keys(historiesStocks).length
 // 為什麼要特別算這個:data.json 的 generated_at 只證明「管線今天跑過」,
 // header 的「資料日期」是最新**掃描日** —— 兩者在 2026-09-03 的凍結事件中
 // 都一路正常,實際上價格停在 7 週前。唯一能揭露那件事的就是 K 棒本身的日期。
-const priceFreshness = checkPriceFreshness({ latestBar: latestBarFromHistories({ dates: historiesDates }) })
+// 逐檔檢查,不是只看共用 dates 的最大值:dates 是所有股票日期的**聯集**,
+// 只要一檔抓到今天就會讓聯集看起來是新的,即使其餘幾百檔都停更了。
+const priceFreshness = summarizeStockFreshness({ dates: historiesDates, stocks: historiesStocks })
 if (priceFreshness.level === 'stale') {
   console.error(`✗ 報價新鮮度:${priceFreshness.message}`)
 } else {

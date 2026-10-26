@@ -102,7 +102,31 @@ function PriceFreshnessBadge({ freshness }) {
   const latestBar = freshness?.latestBar
   if (!latestBar) return null
   const live = checkPriceFreshness({ latestBar })
-  if (live.level === 'ok') return null
+
+  // 「部分個股落後」只有 build 時逐檔掃過才知道(前端手上沒有那 8MB 的歷史檔),
+  // 所以那個判定沿用 data.json 帶來的統計,不在這裡重算。
+  // 時間性的判定(整體落後幾個交易日)則即時重算,因為頁面可能開著好幾天。
+  const staleStocks = Number(freshness?.staleStocks) || 0
+  const totalStocks = Number(freshness?.totalStocks) || 0
+  const partial = live.level === 'ok' && staleStocks > 0 && freshness?.level === 'warn'
+
+  if (live.level === 'ok' && !partial) return null
+
+  if (partial) {
+    return (
+      <span
+        title={freshness.message || `${staleStocks}/${totalStocks} 檔的報價已過期`}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          padding: '1px 6px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+          color: 'var(--ios-orange)', border: '0.5px solid var(--ios-orange)',
+          background: 'rgba(255,159,10,0.10)', whiteSpace: 'nowrap', cursor: 'help',
+        }}
+      >
+        部分報價過期 {staleStocks}/{totalStocks}
+      </span>
+    )
+  }
 
   const stale = live.level === 'stale'
   return (

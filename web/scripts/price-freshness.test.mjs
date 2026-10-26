@@ -6,8 +6,11 @@ import {
   taipeiToday,
   parseBarDate,
   latestBarFromHistories,
+  summarizeStockFreshness,
+  lastBarDateFor,
   WARN_WEEKDAYS,
   STALE_WEEKDAYS,
+  STALE_SHARE_WARN,
 } from './price-freshness.mjs'
 
 // 2026-10-26 是星期一。UTC 06:00 = 台北 14:00(收盤後)。
@@ -113,4 +116,74 @@ test('latestBarFromHistories 取最大日期', () => {
 test('checkPriceFreshness 不需要參數也不該丟例外', () => {
   const r = checkPriceFreshness()
   assert.equal(r.level, 'unknown')
+})
+
+// ── 逐檔新鮮度(Codex review P2:聯集最大值會掩蓋部分落後)────────────────
+
+test('lastBarDateFor 從尾端找第一個非 null,不是直接取 dates 最後一個', () => {
+  const dates = ['2026-10-21', '2026-10-22', '2026-10-23', '2026-10-26']
+  assert.equal(lastBarDateFor(dates, [1, 2, 3, 4]), '2026-10-26')
+  assert.equal(lastBarDateFor(dates, [1, 2, null, null]), '2026-10-22')
+  assert.equal(lastBarDateFor(dates, [null, null, null, null]), null)
+  assert.equal(lastBarDateFor(dates, null), null)
+  assert.equal(lastBarDateFor(null, [1]), null)
+})
+
+test('全部個股都新鮮 → ok,且回報 0 檔落後', () => {
+  const dates = ['2026-10-23', '2026-10-26']
+  const stocks = { 2330: { c: [1, 2] }, 2317: { c: [3, 4] } }
+  const r = summarizeStockFreshness({ dates, stocks, now: MON })
+  assert.equal(r.level, 'ok')
+  assert.equal(r.staleStocks, 0)
+  assert.equal(r.totalStocks, 2)
+})
+
+test('回歸(Codex P2):只有一檔抓到今天,其餘全部停更 → 不可報 ok', () => {
+  // dates 的聯集最大值是 2026-10-26(今天),只看聯集會判 ok;
+  // 但 10 檔裡有 9 檔自己的最後一根停在 2026-09-03。
+  const dates = ['2026-09-03', '2026-10-26']
+  const stocks = { fresh: { c: [1, 2] } }
+  for (let i = 0; i < 9; i++) stocks['stale' + i] = { c: [1, null] }
+
+  // 先確認「只看聯集」確實會漏掉
+  assert.equal(checkPriceFreshness({ latestBar: '2026-10-26', now: MON }).level, 'ok')
+
+  const r = summarizeStockFreshness({ dates, stocks, now: MON })
+  assert.equal(r.level, 'warn')
+  assert.equal(r.staleStocks, 9)
+  assert.equal(r.totalStocks, 10)
+  assert.equal(r.worstStaleBar, '2026-09-03')
+  assert.match(r.message, /9\/10/)
+})
+
+test('零星缺漏(低於門檻)不該降級 —— 避免天天狼來了', () => {
+  const dates = ['2026-09-03', '2026-10-26']
+  const stocks = { stale0: { c: [1, null] } }
+  for (let i = 0; i < 29; i++) stocks['fresh' + i] = { c: [1, 2] }
+  const r = summarizeStockFreshness({ dates, stocks, now: MON })
+  assert.equal(r.staleStocks, 1)
+  assert.equal(r.totalStocks, 30)
+  assert.ok(r.staleShare <= STALE_SHARE_WARN)
+  assert.equal(r.level, 'ok')
+})
+
+test('整體已 stale 時不被逐檔統計蓋掉(維持最嚴重的判定)', () => {
+  const dates = ['2026-09-03']
+  const stocks = { a: { c: [1] }, b: { c: [1] } }
+  const r = summarizeStockFreshness({ dates, stocks, now: MON })
+  assert.equal(r.level, 'stale')
+  assert.equal(r.staleStocks, 2)
+})
+
+test('完全沒有價格的個股不算「落後」,只是沒資料', () => {
+  const dates = ['2026-10-23', '2026-10-26']
+  const stocks = { empty: { c: [null, null] }, ok: { c: [1, 2] } }
+  const r = summarizeStockFreshness({ dates, stocks, now: MON })
+  assert.equal(r.totalStocks, 1)
+  assert.equal(r.staleStocks, 0)
+})
+
+test('summarizeStockFreshness 參數殘缺也不該丟例外', () => {
+  assert.equal(summarizeStockFreshness().level, 'unknown')
+  assert.equal(summarizeStockFreshness({ dates: [], stocks: {} }).totalStocks, 0)
 })
