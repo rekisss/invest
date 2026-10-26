@@ -4,6 +4,7 @@ import Overview from './components/Overview.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { animateTabIn, installPressFeedback } from './utils/animeUtils.js'
 import { getStockHistories } from './utils/histCache.js'
+import { checkPriceFreshness } from './utils/priceFreshness.js'
 
 // Lazy-load non-landing tabs so the initial bundle only contains Overview
 const Dashboard = lazy(() => import('./components/Dashboard.jsx'))
@@ -85,6 +86,40 @@ function StudioPanel({ active, direction, onDone, style, children }) {
     <div ref={ref} style={{ ...style, display: active ? 'flex' : 'none' }}>
       {children}
     </div>
+  )
+}
+
+// 報價新鮮度徽章 —— 只在「價格落後」時出現,正常時完全不佔版面。
+//
+// 為什麼需要它:旁邊的「資料日期」顯示的是最新**掃描日**,掃描每天都在跑,
+// 所以它每天都在動。2026-09-03 之後 kline_cache.json 停止更新了 7 週,價格
+// 全是舊的,但這個 header 一路看起來都正常,使用者是從「AI 交易好像沒在跑了」
+// 才發現的。徽章揭露的是另一件事:畫面上的價格是哪一天的。
+//
+// level 在 build 時算過一次並寫進 data.json,但頁面可能開著好幾天,那個值會
+// 過期 —— 所以這裡用同一支純函式、以 latestBar 即時重算。
+function PriceFreshnessBadge({ freshness }) {
+  const latestBar = freshness?.latestBar
+  if (!latestBar) return null
+  const live = checkPriceFreshness({ latestBar })
+  if (live.level === 'ok') return null
+
+  const stale = live.level === 'stale'
+  return (
+    <span
+      title={live.message}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '1px 6px', borderRadius: 6, fontSize: 10,
+        fontWeight: stale ? 700 : 600,
+        color: stale ? 'var(--ios-red)' : 'var(--ios-orange)',
+        border: `0.5px solid ${stale ? 'var(--ios-red)' : 'var(--ios-orange)'}`,
+        background: stale ? 'rgba(255,51,64,0.10)' : 'rgba(255,159,10,0.10)',
+        whiteSpace: 'nowrap', cursor: 'help',
+      }}
+    >
+      {stale ? '⚠ 報價已停更' : '報價落後'} {latestBar}
+    </span>
   )
 }
 
@@ -472,6 +507,7 @@ export default function App() {
         {data?.dates?.[0] && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, fontSize: 10.5, color: 'var(--ios-label4)' }}>
             <span>資料日期 {data.dates[0]}</span>
+            <PriceFreshnessBadge freshness={data.priceFreshness} />
             <button
               onClick={hardRefresh}
               disabled={hardBusy}
