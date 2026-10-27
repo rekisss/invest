@@ -1,26 +1,26 @@
 {
-  "date": "2026-10-26",
+  "date": "2026-10-27",
   "generated_at": "08:01",
-  "xgb_prob_up": 0.539,
+  "xgb_prob_up": 0.575,
   "xgb_label": "偏多",
   "market_data": {
-    "vix": 19.45,
-    "sp500_ret": -0.0052,
-    "nasdaq_ret": -0.0021,
-    "sox_ret": 0.0044,
+    "vix": 18.39,
+    "sp500_ret": 0.007,
+    "nasdaq_ret": 0.0082,
+    "sox_ret": 0.0282,
     "tsm_adr_ret": 0.0149,
     "futures_net": -87297.0,
     "night_change": -616.0,
     "pcr": null,
-    "taiex_rsi": 39.72965976353395,
-    "macd_hist": -931.0542780868366,
-    "dist_ma20": -4.2226409312880575,
+    "taiex_rsi": 39.72965978299211,
+    "macd_hist": -931.0542781198129,
+    "dist_ma20": -4.22264093128809,
     "dist_ma60": -0.23846171912925707,
     "taiex_ret_5d": -1.9766436252973696,
     "taiex_ret_20d": -3.507516741734984,
     "buyback_count": 0,
     "disposition_count": 6,
-    "jpy_ret": -0.0104,
+    "jpy_ret": 0.0044,
     "arkk_ret": 0.0016,
     "hyg_ret": -0.0006,
     "night_trend": "↓ 走弱",
@@ -33,7 +33,7 @@
     "win_rate": 45.0
   },
   "scenario": {
-    "main_scenario": "VIX=19.5 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
+    "main_scenario": "VIX=18.4 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
     "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
     "danger_signals": [
       "外資空單極重（-87,297口），軋空風險高",
@@ -61,7 +61,7 @@
     ]
   },
   "news_sentiment": {
-    "market_impact": -0.14,
+    "market_impact": -0.06,
     "key_events": [],
     "bullish_count": 0,
     "bearish_count": 0
