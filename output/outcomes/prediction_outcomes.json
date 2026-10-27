@@ -1033,10 +1033,10 @@
   "taiex_pct": 0.0,
   "actual_up": null,
   "taiex_name": "發行量加權股價指數",
-  "pred_date": "2026-10-26",
-  "xgb_prob_up": 0.539,
+  "pred_date": "2026-10-27",
+  "xgb_prob_up": 0.575,
   "pred_label": "偏多",
-  "directional": false,
+  "directional": true,
   "hit": null,
   "prev_gap_bdays": 2,
   "hit_h5": null
