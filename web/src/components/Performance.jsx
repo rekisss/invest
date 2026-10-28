@@ -148,6 +148,24 @@ function StrategyValidation({ data }) {
                 color={colorOf(s.avg)} sub={`均報 ${pctStr(s.avg * 100, 1)} · n=${s.count}`} />
             })}
           </div>
+          {/* 同期全市場等權平均(build 期以 K 線真實交易日重算),判斷選股有沒有贏過大盤 */}
+          {[1, 5, 10, 20].some(h => ro.top20_summary[`ret_${h}d`]?.market_avg != null) && (
+            <div style={{ marginTop: 10, fontSize: 11.5, color: 'var(--ios-label2)', lineHeight: 1.7 }}>
+              <div style={{ fontSize: 11, color: 'var(--ios-label3)' }}>vs 同期全市場等權平均(超額報酬)</div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontFamily: 'var(--font-mono)' }}>
+                {[1, 5, 10, 20].map(h => {
+                  const s = ro.top20_summary[`ret_${h}d`]
+                  if (s?.market_avg == null) return null
+                  const ex = (s.avg - s.market_avg) * 100
+                  return (
+                    <span key={h}>
+                      {h}日 市場 {pctStr(s.market_avg * 100, 1)} · 超額 <b style={{ color: colorOf(ex) }}>{ex >= 0 ? '+' : ''}{ex.toFixed(2)}%</b>
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </Card>
       )}
     </>

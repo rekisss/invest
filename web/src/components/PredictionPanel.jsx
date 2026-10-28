@@ -3,6 +3,7 @@ import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { animateListRows } from '../utils/animeUtils'
 import { scoreProxyPredictions, summarizeProxy, PROXY_HORIZON } from '../utils/proxyScore.js'
+import ModelBaselineCard from './ModelBaselineCard.jsx'
 import { buildReviewRows, buildActualDirectionMap, summarizeReviewRows } from '../utils/reviewRows.js'
 gsap.registerPlugin(useGSAP)
 
@@ -1067,6 +1068,9 @@ export default function PredictionPanel({ prediction, history = [], benchCurve =
 
         {/* Probability trend across recent days */}
         <ProbTrend history={history} benchCurve={benchCurve} realOutcomes={realOutcomes} />
+
+        {/* 模型 vs 一律猜漲/猜跌(真實收盤、已校正日期錯位) */}
+        <ModelBaselineCard baseline={realOutcomes?.baseline} dataFix={realOutcomes?.data_fix} />
 
         {/* Daily prediction vs actual scoreboard */}
         <PredictionReviewPanel history={history} benchCurve={benchCurve} realOutcomes={realOutcomes} />

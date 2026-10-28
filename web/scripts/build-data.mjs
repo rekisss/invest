@@ -11,6 +11,7 @@ import { computeQualityPicks } from './pick-quality.mjs'
 import { computeGradeDigest } from './grade-digest.mjs'
 import { recomputeRealHits, scoreHorizonHits, PRED_HORIZON } from './outcome-fix.mjs'
 import { computeModelHealth } from './model-health.mjs'
+import { buildTradingCalendar, extendCalendar, buildMarketProxyReturns, detectTaiexLag, realignPredictionOutcomes, computeBaselineComparison, recomputeTop20Returns } from './outcome-realign.mjs'
 import { computePickRiskFlags } from './pick-risk.mjs'
 import { buildForwardReturn } from './forward-return.mjs'
 import { makeExpectancyRank, rankPicksByExpectancy } from './expectancy.mjs'
@@ -1558,12 +1559,53 @@ try {
   const po = readOutcomes('prediction_outcomes.json')
   const th = readOutcomes('top20_history.json')
   if (!po.length && !th.length) throw new Error('no outcome files yet')
-  // 修正 outcome_tracker 的符號 bug(見 outcome-fix.mjs):TWSE 漲跌點數只有幅度、
-  // 缺正負號 → actual_up 全 True → 真實命中率虛高。以 taiex_close 逐日差重算方向/命中。
-  const flippedHits = recomputeRealHits(po)
-  if (flippedHits > 0) console.log(`  ⚠️ 真實命中率修正:${flippedHits} 筆 hit 因符號錯誤被重算`)
-  // 依模型真正的 5 日期距打分(見 outcome-fix.mjs):隔日打分是錯的期距。
-  scoreHorizonHits(po)
+  // 2026-10:先用 K 線交易日曆偵測 taiex_close 是否錯位一天(見 outcome-realign.mjs)。
+  // 證據明確才校正並以真實交易日重新打分;偵測不出來(資料太少/Python 已修好)就走原本的修正。
+  let dataFix = null
+  let top20Market = null
+  let baseline = null
+  let tradingDays = []
+  const barsById = {}
+  try {
+    for (const [sid, entry] of Object.entries(klineMap || {})) {
+      const b = getKlineBars(entry, '1d')
+      if (b) barsById[sid] = b
+    }
+    const lastRecDate = po.map(e => e?.date).filter(Boolean).sort().at(-1)
+    tradingDays = extendCalendar(buildTradingCalendar(barsById), lastRecDate)
+    if (tradingDays.length && po.length) {
+      const lagInfo = detectTaiexLag(po, tradingDays, buildMarketProxyReturns(barsById, tradingDays))
+      dataFix = { taiex_lag: lagInfo.lag, lag_agree0: lagInfo.agree0, lag_agree1: lagInfo.agree1, lag_pairs: lagInfo.n1 }
+      if (lagInfo.lag != null) {
+        const st = realignPredictionOutcomes(po, tradingDays, { lag: lagInfo.lag, horizon: PRED_HORIZON })
+        Object.assign(dataFix, { duplicates: st.duplicates, non_trading: st.non_trading })
+        console.log(`  ⚠️ 真實結果日期校正:taiex_close 錯位 ${lagInfo.lag} 個交易日(方向一致率 lag0 ${lagInfo.agree0} / lag1 ${lagInfo.agree1}),剔除舊值 ${st.duplicates} 筆、休市日紀錄 ${st.non_trading} 筆`)
+      }
+    }
+  } catch (err) {
+    // 校正失敗不能讓整個 realOutcomes 消失 → 退回原本的修正流程
+    console.warn('  真實結果日期校正失敗,改用原本流程:', err.message)
+    dataFix = null
+  }
+  if (dataFix?.taiex_lag == null) {
+    // 修正 outcome_tracker 的符號 bug(見 outcome-fix.mjs):TWSE 漲跌點數只有幅度、
+    // 缺正負號 → actual_up 全 True → 真實命中率虛高。以 taiex_close 逐日差重算方向/命中。
+    const flippedHits = recomputeRealHits(po)
+    if (flippedHits > 0) console.log(`  ⚠️ 真實命中率修正:${flippedHits} 筆 hit 因符號錯誤被重算`)
+    // 依模型真正的 5 日期距打分(見 outcome-fix.mjs):隔日打分是錯的期距。
+    scoreHorizonHits(po)
+  }
+  // top20 報酬改以 K 線真實交易日重算(原本是「下一筆紀錄」,約 2 成跨錯天數)
+  try {
+    if (tradingDays.length && th.length) {
+      const t = recomputeTop20Returns(th, barsById, tradingDays)
+      top20Market = t.market
+      if (dataFix) dataFix.top20_changed = t.changed
+      console.log(`  top20 報酬重算:${t.rows} 列,${t.changed} 個數值與原紀錄不同`)
+    }
+    baseline = computeBaselineComparison(po, { horizon: PRED_HORIZON })
+  } catch (err) { console.warn('  top20 重算 / 基準對照失敗:', err.message) }
+  if (baseline) console.log(`  模型 vs 基準(${PRED_HORIZON}日):模型 ${baseline.model_rate} / 一律猜漲 ${baseline.always_up_rate} / 一律猜跌 ${baseline.always_down_rate}(n=${baseline.n},${baseline.verdict})`)
   const hKey = `hit_h${PRED_HORIZON}`
   const hScored = po.filter(e => e[hKey] != null)
   const scored = po.filter(e => e.hit != null)
@@ -1575,6 +1617,8 @@ try {
       count: rets.length,
       avg: +(rets.reduce((a, b) => a + b, 0) / rets.length).toFixed(4),
       win_rate: +(rets.filter(r => r > 0).length / rets.length).toFixed(3),
+      // 同期全市場等權平均(K 線重算),拿來判斷選股有沒有贏過大盤
+      market_avg: top20Market?.[`ret_${h}d`]?.avg ?? null,
     }
   }
   realOutcomes = {
@@ -1587,6 +1631,8 @@ try {
     horizon: PRED_HORIZON,
     top20_summary: Object.keys(top20Summary).length ? top20Summary : null,
     top20_snapshots: th.length,
+    baseline,
+    data_fix: dataFix,
   }
   console.log(`Real outcomes: ${po.length} pred days (隔日 scored ${scored.length} / ${PRED_HORIZON}日期距 scored ${hScored.length}), ${th.length} top20 snapshots`)
 } catch { console.log('Real outcomes: none yet (outcome_tracker not run)') }
