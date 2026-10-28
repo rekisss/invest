@@ -19,6 +19,7 @@ const ValidationPanel = lazy(() => import('./components/ValidationPanel.jsx'))
 const Performance = lazy(() => import('./components/Performance.jsx'))
 const AITrader = lazy(() => import('./components/AITrader.jsx'))
 const FuturesStrategyLab = lazy(() => import('./components/FuturesStrategyLab.jsx'))
+const PatternSearch = lazy(() => import('./components/PatternSearch.jsx'))
 const StockDetailModal = lazy(() => import('./components/StockDetailModal.jsx'))
 
 const BASE = import.meta.env.BASE_URL || '/'
@@ -26,6 +27,7 @@ const BASE = import.meta.env.BASE_URL || '/'
 const TABS = [
   { key: 'overview',   label: '總覽', icon: '⚡' },
   { key: 'dashboard',  label: '掃描', icon: '📊' },
+  { key: 'pattern',    label: '型態', icon: '✍️' },
   { key: 'validate',   label: '驗證', icon: '🔬' },
   { key: 'portfolio',  label: '持倉', icon: '💼' },
   { key: 'aitrader',   label: 'AI操盤', icon: '🤖' },
@@ -42,6 +44,7 @@ const TABS = [
 const TAB_TITLES = {
   overview:  '今日總覽',
   dashboard: '掃描結果',
+  pattern:   '手繪型態搜尋',
   validate:  '選股驗證',
   portfolio: '持倉追蹤',
   aitrader:  'AI 系統交易員',
@@ -432,6 +435,7 @@ export default function App() {
     switch (tab) {
       case 'overview':   return <Overview data={data} error={error} />
       case 'dashboard':  return <Dashboard data={data} error={error} />
+      case 'pattern':    return <PatternSearch data={data} />
       case 'validate':   return <ValidationPanel data={data} onRefresh={() => loadData(true)} />
       case 'portfolio':  return <Portfolio data={data} />
       case 'aitrader':   return <AITrader data={data} />
