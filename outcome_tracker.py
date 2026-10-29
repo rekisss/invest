@@ -18,6 +18,16 @@
    - 存 output/outcomes/top20_history.json
 
 冪等：同一天重跑會覆蓋當天紀錄，不會重複追加。
+
+2026-10 修正(日期錯位):
+   MI_INDEX openapi 在 17:45 執行時多半還是「前一交易日」的資料,舊版卻一律
+   當成「今天」寫入 → 每筆收盤都晚一天、休市日也有紀錄、偶爾重複舊值,隔日命中
+   等於拿今天的預測對昨天的漲跌。改為:
+   - 以 TWSE FMTQIK(每月每日市場成交資訊,每列自帶日期)建立「交易日 → 加權收盤」
+     序列並快取在 output/outcomes/taiex_daily.json,依**真實交易日**重建打分紀錄。
+   - TOP20 報酬改以同一份交易日曆 + kline_cache.json 計算,不再用「之後第 N 個快照」。
+   - 第一次改寫前把原檔備份成 *_raw.json(不刪資料)。
+   FMTQIK 抓不到時退回 MI_INDEX,但只採用回應裡自帶的日期;沒有日期就不寫(不猜)。
 """
 
 from __future__ import annotations
@@ -28,6 +38,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
@@ -37,7 +48,11 @@ PRED_HISTORY = os.path.join("output", "prediction_history.json")
 PRED_OUT = os.path.join(OUT_DIR, "prediction_outcomes.json")
 TOP20_OUT = os.path.join(OUT_DIR, "top20_history.json")
 TWSE_IDX = "https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX"
+TWSE_FMTQIK = "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date={ym}01&response=json"
+TAIEX_SERIES = os.path.join(OUT_DIR, "taiex_daily.json")
+KLINE_CACHE = os.path.join("output", "kline_cache.json")
 HORIZONS = (1, 5, 10, 20)
+DAILY_LIMIT = 0.105   # 台股漲跌停 10%,留一點四捨五入空間
 
 
 def _today() -> str:
@@ -156,6 +171,9 @@ def fetch_taiex() -> dict | None:
         # 沙盒連不到 TWSE 無法直接驗證,因此把來源名稱寫進紀錄供事後稽核。
         matched = next((str(v) for v in item.values() if TAIEX_NAME in str(v)), None)
         return {
+            # 這一列資料「屬於哪一天」。2026-10 診斷:17:45 抓到的常是前一交易日,
+            # 不能直接當今天。取不到日期時為 None,由呼叫端決定(不猜)。
+            "date": _parse_twse_date(_field(item, ["日期", "date"], excludes=["update", "time"])),
             "close": close,
             "change": chg,
             "pct": (chg / prev) if (chg is not None and prev) else None,
@@ -163,6 +181,258 @@ def fetch_taiex() -> dict | None:
         }
     print("[taiex] MI_INDEX 回應中找不到加權指數列(schema 可能再次改版)")
     return None
+
+
+def _parse_twse_date(v) -> str | None:
+    """TWSE 日期 → YYYY-MM-DD。支援民國 115/10/27、1151027 與西元 2026-10-27、20261027。"""
+    if v is None:
+        return None
+    s = re.sub(r"<[^>]*>", "", str(v)).strip()
+    m = re.fullmatch(r"(\d{2,4})[/\-.](\d{1,2})[/\-.](\d{1,2})", s)
+    if m:
+        y, mo, d = (int(x) for x in m.groups())
+    else:
+        digits = re.sub(r"\D", "", s)
+        if len(digits) == 8:
+            y, mo, d = int(digits[:4]), int(digits[4:6]), int(digits[6:])
+        elif len(digits) == 7:
+            y, mo, d = int(digits[:3]), int(digits[3:5]), int(digits[5:])
+        else:
+            return None
+    if y < 1911:
+        y += 1911
+    try:
+        return datetime(y, mo, d).strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def parse_fmtqik(payload: dict) -> dict[str, float]:
+    """FMTQIK JSON → {YYYY-MM-DD: 加權指數收盤}。欄位以名稱定位,避開報酬指數。"""
+    if not isinstance(payload, dict) or str(payload.get("stat", "OK")).upper() != "OK":
+        return {}
+    fields = [str(f) for f in payload.get("fields") or []]
+    di = next((i for i, f in enumerate(fields) if "日期" in f or f.lower() == "date"), None)
+    ci = next((i for i, f in enumerate(fields)
+               if "加權" in f and "指數" in f and "報酬" not in f), None)
+    if di is None or ci is None:
+        return {}
+    out: dict[str, float] = {}
+    for row in payload.get("data") or []:
+        if not isinstance(row, (list, tuple)) or len(row) <= max(di, ci):
+            continue
+        d, c = _parse_twse_date(row[di]), _f(row[ci])
+        if d and c and c > 0:
+            out[d] = c
+    return out
+
+
+def _fetch_fmtqik_month(ym: str) -> dict[str, float] | None:
+    """抓某個月(YYYYMM)的每日加權收盤;失敗回 None(與「該月沒有交易日」的 {} 區分)。"""
+    try:
+        req = urllib.request.Request(TWSE_FMTQIK.format(ym=ym), headers={"User-Agent": "outcome-tracker"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return parse_fmtqik(json.loads(r.read().decode("utf-8")))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[taiex] FMTQIK {ym} 抓取失敗: {exc}")
+        return None
+
+
+def _months_between(first: str, last: str) -> list[str]:
+    y, m = int(first[:4]), int(first[5:7])
+    ey, em = int(last[:4]), int(last[5:7])
+    out = []
+    while (y, m) <= (ey, em):
+        out.append(f"{y:04d}{m:02d}")
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return out
+
+
+def update_taiex_series(today: str, earliest: str | None, fetch=_fetch_fmtqik_month) -> dict[str, float]:
+    """維護「交易日 → 加權收盤」快取並回傳。
+
+    已結束且抓過的月份不重抓;本月與上個月每次都重抓(月初跑時上個月最後幾天
+    可能還沒進來)。快取格式:{"closes": {date: close}, "complete_months": [YYYYMM]}。
+    """
+    cache = _load_json(TAIEX_SERIES, {})
+    closes: dict[str, float] = dict(cache.get("closes") or {})
+    complete = set(cache.get("complete_months") or [])
+    if not earliest:
+        earliest = today
+    months = _months_between(earliest[:7], today[:7])
+    cur = today[:4] + today[5:7]
+    prev = months[-2] if len(months) >= 2 else None
+    fetched = 0
+    for ym in months:
+        if ym in complete and ym not in (cur, prev):
+            continue
+        if fetched:
+            time.sleep(1.5)   # TWSE 有頻率限制
+        got = fetch(ym)
+        fetched += 1
+        if got is None:
+            continue
+        closes.update(got)
+        if ym != cur:
+            complete.add(ym)
+    if fetched:
+        _save_json(TAIEX_SERIES, {"closes": dict(sorted(closes.items())),
+                                  "complete_months": sorted(complete)})
+        print(f"[taiex] FMTQIK 更新 {fetched} 個月,序列共 {len(closes)} 個交易日")
+    return closes
+
+
+def _backup_once(path: str) -> None:
+    """第一次改寫前,把原檔另存 *_raw.json(已存在就不覆蓋)。"""
+    raw = path.replace(".json", "_raw.json")
+    if os.path.exists(path) and not os.path.exists(raw):
+        _save_json(raw, _load_json(path, []))
+        print(f"[backup] 原始檔備份 → {raw}")
+
+
+def rebuild_prediction_outcomes(series: dict[str, float], preds: list, existing: list,
+                                horizon: int | None = None) -> list:
+    """以真實交易日序列重建打分紀錄(純函式,回傳新清單)。
+
+    - 交易日 D 的紀錄:taiex_close = D 的收盤;方向 = D vs 前一交易日。
+    - 預測只對「同一天」的那筆(盤前預測的 date 就是目標交易日);舊版會把
+      幾天前的預測套到沒有預測的日子上,造成同一個預測被重複計分。
+    - 5 日期距:base = D 的前一交易日(模型特徵的最後一根),target = base 之後
+      第 horizon 個交易日,門檻 >0.3%,與 market_predictor 訓練 target 一致。
+    - 既有紀錄中不是交易日的(休市日)保留但不計分;與序列不同的舊收盤留在
+      taiex_close_legacy 供稽核。序列涵蓋範圍以外的舊紀錄原封不動。
+    """
+    horizon = horizon or PRED_HORIZON
+    days = sorted(series)
+    if not days:
+        return existing
+    idx = {d: i for i, d in enumerate(days)}
+    pred_by_date = {}
+    for p in preds or []:
+        if p.get("date") and isinstance(p.get("xgb_prob_up"), (int, float)):
+            pred_by_date[p["date"]] = p
+    old_by_date = {e.get("date"): e for e in existing or [] if e.get("date")}
+    start_candidates = [d for d in list(pred_by_date) + list(old_by_date) if d]
+    start = max(min(start_candidates), days[0]) if start_candidates else days[0]
+
+    # 整個月份都沒有資料(該月 FMTQIK 抓取失敗)就不能據此判定「休市」
+    months = {d[:7] for d in days}
+    out = []
+    for date, old in sorted(old_by_date.items()):
+        if date < days[0] or date > days[-1] or date[:7] not in months:
+            out.append(old)                         # 序列涵蓋範圍外:不動
+        elif date not in idx:
+            e = dict(old)                           # 休市日紀錄:保留、不計分
+            if e.get("taiex_close") is not None and "taiex_close_legacy" not in e:
+                e["taiex_close_legacy"] = e["taiex_close"]
+            e.update({"taiex_close": None, "taiex_change": None, "taiex_pct": None,
+                      "actual_up": None, "hit": None, f"hit_h{horizon}": None,
+                      "directional": False, "non_trading_day": True})
+            out.append(e)
+
+    key, ret_key = f"hit_h{horizon}", f"ret_h{horizon}"
+    for d in days:
+        if d < start:
+            continue
+        i = idx[d]
+        e = dict(old_by_date.get(d) or {})
+        for k in ("hit", key, ret_key, f"{key}_date", f"{key}_span_bdays", "prev_gap_bdays",
+                  "close_suspect", "non_trading_day"):
+            e.pop(k, None)
+        close = series[d]
+        if e.get("taiex_close") is not None and e["taiex_close"] != close and "taiex_close_legacy" not in e:
+            e["taiex_close_legacy"] = e["taiex_close"]
+        e.update({"date": d, "taiex_close": close, "taiex_close_date": d, "close_source": "TWSE FMTQIK"})
+        base = series[days[i - 1]] if i >= 1 else None
+        if base:
+            e["taiex_change"] = round(close - base, 2)
+            e["taiex_pct"] = (close - base) / base
+            e["actual_up"] = close > base
+        else:
+            e["taiex_change"] = e["taiex_pct"] = e["actual_up"] = None
+        p = pred_by_date.get(d)
+        if p is None:
+            for k in ("pred_date", "xgb_prob_up", "pred_label", "directional"):
+                e.pop(k, None)
+            e["hit"] = None
+            e[key] = None
+            out.append(e)
+            continue
+        prob = float(p["xgb_prob_up"])
+        directional = abs(prob - 0.5) > 0.05
+        e.update({"pred_date": d, "xgb_prob_up": prob, "pred_label": p.get("xgb_label"),
+                  "directional": directional})
+        e["hit"] = ((prob > 0.5) == e["actual_up"]) if (directional and e["actual_up"] is not None) else None
+        e[key] = None
+        t = i - 1 + horizon
+        if base and i >= 1 and t < len(days):
+            target = series[days[t]]
+            e[ret_key] = round((target - base) / base * 100, 2)
+            e[f"{key}_date"] = days[t]
+            e[f"{key}_span_bdays"] = horizon        # 以真實交易日計,恆等於期距
+            if directional:
+                e[key] = (prob > 0.5) == (target > base * UP_THRESHOLD)
+        out.append(e)
+    out.sort(key=lambda e: e.get("date", ""))
+    return out
+
+
+def _load_kline_closes() -> dict[str, dict[str, float]]:
+    data = _load_json(KLINE_CACHE, {})
+    out: dict[str, dict[str, float]] = {}
+    for sid, entry in (data or {}).items():
+        bars = entry if isinstance(entry, list) else (entry or {}).get("1d") if isinstance(entry, dict) else None
+        if isinstance(bars, list):
+            m = {b.get("time"): _f(b.get("close")) for b in bars if isinstance(b, dict)}
+            out[str(sid)] = {k: v for k, v in m.items() if k and v}
+    return out
+
+
+def fill_top20_returns(hist: list, days: list[str], today: str,
+                       kline: dict[str, dict[str, float]], closes_today: dict[str, float]) -> tuple[int, int]:
+    """依真實交易日曆回填 ret_{h}d,回傳 (寫入數, 更正數)。
+
+    舊版用「之後第 N 個快照日」當 N 個交易日,掃描沒跑的日子會讓期距算錯
+    (約 2 成的 ret_1d 實際跨 0/2/3 天)。這裡:target = 快照日之後第 h 個交易日;
+    收盤優先取 kline_cache,當天則可用掃描 CSV。舊值不同時留在 ret_{h}d_legacy。
+    """
+    idx = {d: i for i, d in enumerate(days)}
+    written = corrected = 0
+    for snap in hist:
+        i = idx.get(snap.get("date"))
+        for st in snap.get("stocks") or []:
+            sid = str(st.get("stock_id", ""))
+            kc = kline.get(sid, {})
+            base = kc.get(snap.get("date")) or st.get("close")
+            for h in HORIZONS:
+                k = f"ret_{h}d"
+                new = None
+                if i is not None and base and i + h < len(days) and days[i + h] <= today:
+                    tgt = days[i + h]
+                    now = kc.get(tgt) or (closes_today.get(sid) if tgt == today else None)
+                    # 路徑上任一天漲跌超過漲跌停(±10%)→ 多半是減資/分割或 K 線髒資料,
+                    # 這種報酬不代表選股好壞,寧可不算(例:6669 一天 7800→2610)
+                    path = [base] + [kc[d] for d in days[i + 1:i + h + 1] if kc.get(d)]
+                    if now and path[-1] != now:
+                        path.append(now)
+                    jump = any(b / a > 1 + DAILY_LIMIT or b / a < 1 - DAILY_LIMIT
+                               for a, b in zip(path, path[1:]) if a)
+                    if now and not jump:
+                        new = round((now - base) / base, 4)
+                if new is None:
+                    # 算不出來:若舊值存在,它是用錯的期距算的 → 移到 legacy,不留著誤導
+                    if k in st:
+                        st.setdefault(f"{k}_legacy", st[k])
+                        del st[k]
+                        corrected += 1
+                    continue
+                if k in st and st[k] != new:
+                    st.setdefault(f"{k}_legacy", st[k])
+                    corrected += 1
+                if st.get(k) != new:
+                    written += 1
+                st[k] = new
+    return written, corrected
 
 
 # 模型的預測期距。MarketPredictor(horizon=5) 在 main.py / discord_bot.py 都是 5,
@@ -398,7 +668,7 @@ def _top20(date: str) -> list[dict]:
             for r in ranked]
 
 
-def track_top20(today: str) -> None:
+def track_top20(today: str, days: list[str] | None = None) -> None:
     hist = _load_json(TOP20_OUT, [])
     top = _top20(today)
     if top:
@@ -409,9 +679,17 @@ def track_top20(today: str) -> None:
     else:
         print(f"[top20] {today} 無掃描資料，跳過快照（僅回填）")
 
-    # 回填：今天是過去快照日之後的第 N 個「快照交易日」→ 對應 horizon 報酬
-    dates = [s["date"] for s in hist]
     closes_today = _load_closes(today)
+    if days:
+        # 有真實交易日曆:依交易日回填(並更正舊版用快照日數算錯的值)
+        _backup_once(TOP20_OUT)
+        written, corrected = fill_top20_returns(hist, days, today, _load_kline_closes(), closes_today)
+        print(f"[top20] 依交易日曆回填 {written} 筆 forward return(更正舊值 {corrected} 筆)")
+        _save_json(TOP20_OUT, hist)
+        return
+
+    # 退路(沒有交易日曆):今天是過去快照日之後的第 N 個「快照交易日」→ 對應 horizon 報酬
+    dates = [s["date"] for s in hist]
     filled = 0
     for i, snap in enumerate(hist):
         n_days = len([d for d in dates if snap["date"] < d <= today])  # 之後過了幾個掃描日
@@ -432,18 +710,46 @@ def track_top20(today: str) -> None:
 
 def main() -> int:
     today = os.getenv("TRACK_DATE", "").strip() or _today()
+    hist = _load_json(PRED_HISTORY, [])
+    if isinstance(hist, dict):
+        hist = hist.get("history", [])
+    existing = _load_json(PRED_OUT, [])
+    earliest = min([h["date"] for h in hist if h.get("date")] +
+                   [e["date"] for e in existing if e.get("date")], default=today)
+    series = update_taiex_series(today, earliest)
+    series = {d: c for d, c in series.items() if d <= today}
+
+    if series:
+        _backup_once(PRED_OUT)
+        out = rebuild_prediction_outcomes(series, hist, existing)
+        _save_json(PRED_OUT, out)
+        h_key = f"hit_h{PRED_HORIZON}"
+        s1 = [e for e in out if e.get("hit") is not None]
+        s5 = [e for e in out if e.get(h_key) is not None]
+        last = max(series)
+        print(f"[pred] 依真實交易日重建 {len(out)} 筆(最新收盤 {last} {series[last]:.2f})· "
+              f"隔日命中 {sum(e['hit'] for e in s1)}/{len(s1)} · "
+              f"{PRED_HORIZON}日期距命中 {sum(e[h_key] for e in s5)}/{len(s5)}")
+        if last < today:
+            print(f"[pred] 注意:FMTQIK 尚未有 {today} 的資料(最新 {last}),下次執行會補上")
+        track_top20(today, sorted(series))
+        return 0
+
+    # 退路:FMTQIK 抓不到 → MI_INDEX,但只採用回應自帶的日期
     taiex = fetch_taiex()
-    if taiex:
-        score_prediction(today, taiex)
+    if taiex and taiex.get("date"):
+        if taiex["date"] != today:
+            print(f"[pred] MI_INDEX 資料日期為 {taiex['date']}(不是 {today}),以資料日期寫入")
+        score_prediction(taiex["date"], taiex)
+    elif taiex:
+        print("[pred] MI_INDEX 沒有日期欄,無法確認是哪一天的收盤 → 不寫入(避免日期錯位)")
     else:
         print("[pred] 今日無指數資料（假日或 API 失敗），跳過預測打分")
-        # 即使今天沒新資料,也把歷史的方向/命中校正一次(修舊版符號 bug)
         recs = _load_json(PRED_OUT, [])
         if recs:
-            changed = repair_history(recs)
+            repair_history(recs)
             score_horizon_hits(recs)       # 到期的預測補上 5 日期距打分
-            if changed or recs:
-                _save_json(PRED_OUT, recs)
+            _save_json(PRED_OUT, recs)
     track_top20(today)
     return 0
 
