@@ -1,0 +1,50 @@
+name: 大盤模型走查評估
+
+# 只產報告(job summary + artifact),不改任何線上預測、不 commit 資料。
+# 依專案規則:新增 workflow 不加 schedule,需要時手動觸發(或由 cron-job.org 呼叫 workflow_dispatch)。
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: "抓幾年資料(含暖身)"
+        required: false
+        default: "6"
+      eval_years:
+        description: "評估最後幾年"
+        required: false
+        default: "4"
+      step:
+        description: "每幾個交易日重訓一次(1 = 與正式流程相同,最慢)"
+        required: false
+        default: "1"
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: 安裝套件
+        run: pip install -r requirements.txt
+      - name: 走查評估
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN_10 || secrets.FINMIND_TOKEN }}
+        run: |
+          python -u model_eval.py \
+            --years "${{ inputs.years }}" \
+            --eval-years "${{ inputs.eval_years }}" \
+            --step "${{ inputs.step }}" \
+            --out output/model_eval
+      - name: 上傳報告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-eval-report
+          path: output/model_eval/
+          if-no-files-found: ignore
