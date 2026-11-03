@@ -1,6 +1,34 @@
 {
-  "updated_at": "2026-11-03T20:03:12.467656+00:00",
+  "updated_at": "2026-11-03T21:01:55.690105+00:00",
   "articles": [
+    {
+      "title": "大摩按讚雲端台系鏈 - UDN",
+      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTFBnZGtDSDdwODJqT0p1Vlo2eFI3T0JobUN4YkRFUEN0OWNxSnNZdEYyWnQtNGt5bFZfLVU1Tk1kdXUzMzg3R1k0ZW5id20wYmxr0gFWQVVfeXFMTlFaeGduREJ3LU5ITlBjZGxKYmdhSkhHcWRyXzdzT2w3a1ptenRCUXZyUGlUWnhlamM2Zkw4cl92Ty1pTVM2T2RSdmE1eHpIbnlqUlVadGc?oc=5",
+      "source": "UDN",
+      "published_at": "2026-11-03T20:47:19+00:00",
+      "summary": "大摩按讚雲端台系鏈&nbsp;&nbsp;UDN"
+    },
+    {
+      "title": "中部半導體黃金廊帶 成形 - UDN",
+      "url": "https://news.google.com/rss/articles/CBMickFVX3lxTE9Mbi1RQXdSVjA0U1VKYzhfUURVeFVmYk1kY0hrTGRxaTBRRGp1eC1TZU9SbEdfeGViU1Z4RTVLU2VsdThXRE1XemhqRTlzMTJhNUtFTXJhRDlQblZsT3BXcGdBXy15UllIWVVSMFRQbnJGd9IBVkFVX3lxTE5lX0JZRHR5ZldtcDlmZ2J5Qng3VTVsLVA0SWItS3NnTVk2cDFKblA4SW9SVDRsTmVSZFl5a2tBRDR6RTQtYVBpb2czVlFiVENhWG1TeTdR?oc=5",
+      "source": "UDN",
+      "published_at": "2026-11-03T20:29:40+00:00",
+      "summary": "中部半導體黃金廊帶 成形&nbsp;&nbsp;UDN"
+    },
+    {
+      "title": "台積發148億元綠色債 - UDN",
+      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTFB2VmtWTWx1c21ibU9uQ2piQ0haUnNEVTlZZXNBZ3g3SUtjUG9TWUx1ZVJxRVNTQjZGRVJOekI2OUR4dzhsSDR5SzNQdEgtYlcx0gFWQVVfeXFMUDNVbVA3aHBXcDRkSGhhenFKYUYtMGxYTzljZXFidWNFb3hscnBrX2Jfa2YzZEw5MlNHMzNXcTVfZVVUSzZKRS1Qc1pTTFRhUkhBdHFaWGc?oc=5",
+      "source": "UDN",
+      "published_at": "2026-11-03T20:20:06+00:00",
+      "summary": "台積發148億元綠色債&nbsp;&nbsp;UDN"
+    },
+    {
+      "title": "台積電戰略夥伴重挫8％！法人逆勢喊進 - 鏡週刊Mirror Media",
+      "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE5Pbk9LZTVlRFFzUUE5RjhZem9sUDJ1RGs1NHBKa05jYy1uU3VvaGpqTDYwajRCdjJlVlJnN29ma0tyOXRzRkhVTjd2YTltNUZjQmJnSUYzV2lJUFJz0gFiQVVfeXFMTTliRDN2RGxUWGEzYzEzY2pmNjRZSi15OUFyMGpfU1VXQzhpU1lwQVhvMWVpaVlsZFJmem4zQmJJRjBNZk5TcC1lZEgzcF9Bb083Y2NpV1VodUVsSFNhZWdZV0E?oc=5",
+      "source": "鏡週刊Mirror Media",
+      "published_at": "2026-11-03T19:39:00+00:00",
+      "summary": "台積電戰略夥伴重挫8％！法人逆勢喊進&nbsp;&nbsp;鏡週刊Mirror Media"
+    },
     {
       "title": "台股強震 中長多格局不變 美期中選舉後資金有望回流 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTFBaN1gyZTBGQkJWMUJnZU5lQThmd3dYd2t2Y19ORzRIX0NPTDY2X0V0WXhFTnRWZWFlV2R3UHlVcXRnOXMtNVFPcUk5NnZCRExGMEw5bDZPR1FSUdIBX0FVX3lxTE5Jenl1QUlla0xJMTJuSldReHRVQ3hibmMtMmxWT3ZPS0J0emcxYl8xT1VpNE5qQ0MxTk1YQWszbkU5LU90dzZRdEFhSGJjN2JTMUlNRzVCWHluNXd1aGpR?oc=5",
@@ -17,14 +45,14 @@
     },
     {
       "title": "台積發 148 億元綠色債 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxPQTBjbXhvNHptTC1iOGtnSW15N0R0Sm5QOXAxQTl4QS0xc2lqQ3MxR19lTVJjWmM1TktWVVVsUlE4SWYwb3ZUVk5ZNHRsRUowTkVhYzE2Q1VDU0VOWVp4RjFUMlo3bGg1dzZKMWY3ZkYwSG0zV2hSSmpRTGVkQ0N5ZtIBX0FVX3lxTE1tejNlcEVVb1VBcm1PbHNFNkpUUk9OYmJKNXhxejhMYXV2d21WcFpKdmd0aUpYbGZZZ25GMk4wME1wN29TanQwMHc5eFljUkNBYy1jLXM0VUJOSE1hQjhj?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMiggFBVV95cUxQYzltRWN4alU3Y282Z212UkVwMTNoZnQ4NmQ2NXNHekRWdFdJT1FIUkxqdWhiSXMyRDJRYV9ON0lpQVdFcXFiS3hmal9Eem43WjJWZXAtTkhscHBMOTFaV2tzRGZSQ280LVRTMG1PdDZodjZ3dmZ2YjBWWWNsNjB4WVVB0gFfQVVfeXFMTW16M2VwRVVvVUFybU9sc0U2SlRST05iYko1eHF6OExhdXZ3bVZwWkp2Z3RpSlhsZllnbkYyTjAwTXA3b1NqdDAwdzl4WWNSQ0FjLWMtczRVQk5ITWFCOGM?oc=5",
       "source": "經濟日報",
       "published_at": "2026-11-03T18:18:10+00:00",
       "summary": "台積發 148 億元綠色債&nbsp;&nbsp;經濟日報"
     },
     {
       "title": "非金融業發穩定幣 訂出規則 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE5Ga3F1UHViMHJseE1mQ0lTRm1rZHIyLS13WlR4Z2pMSVBnWjBYczdzNkZ3VnV5R2FDQ3ZsUWZreHFyVHd0ZndaNlhHNmFGWnZpVDNuM2tUNVBId9IBX0FVX3lxTE5SYmtKVHpnUnplYWJlQ0FCeWFaQVEyMjJ4WmVGSUZvWTBmMUd1MGRaMGg4VFNwSnBSYktvR3QyWXdXSFByVHk4UXlEcFRpZ2pIOXN0OWdDbktZOEdqM21R?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxNMWY5WjJQRmltS254UHhmSm1HcFAyMkR3VDVuZzFPMmRSSUYzMVZHclRpQzJwRjlKaHRKTjVvaWM1TF9yZS1Ja1o3Mko0U0V6cnZHQmxkYllMa05ya3g3N1k3M3ZXV18xejNQNzN5SXNNOVo1eWlXcTFFeWVaNG1rQtIBX0FVX3lxTE5SYmtKVHpnUnplYWJlQ0FCeWFaQVEyMjJ4WmVGSUZvWTBmMUd1MGRaMGg4VFNwSnBSYktvR3QyWXdXSFByVHk4UXlEcFRpZ2pIOXN0OWdDbktZOEdqM21R?oc=5",
       "source": "經濟日報",
       "published_at": "2026-11-03T17:19:48+00:00",
       "summary": "非金融業發穩定幣 訂出規則&nbsp;&nbsp;經濟日報"
@@ -310,6 +338,13 @@
       "summary": "「2026台灣周」盛大開幕 賴總統提三大方向、持續推動亞資中心&nbsp;&nbsp;UDN"
     },
     {
+      "title": "〈達方法說〉AI摘要2026/11/3 - TradingView",
+      "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTFBRR29MUzJOQ0R2T080OXg0cFg5ZjZIN1N2RFZaV1BwSzVRZHgzYnFQWHVybVl0amdXcS1OMGpteFJ2UV9FdWk5VXpPcW9rdnJRMjZ2YkdpblVibHF1OWdwXzNwalI?oc=5",
+      "source": "TradingView",
+      "published_at": "2026-11-03T09:55:35+00:00",
+      "summary": "〈達方法說〉AI摘要2026/11/3&nbsp;&nbsp;TradingView"
+    },
+    {
       "title": "DDR4+LPDDR4帶頭衝營收！華邦電點名16nm將成新主力 再曝英飛凌收購完成時間 - FTNN 新聞網",
       "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTFB1STFnbVdXLXpjaEhUSDdrSFBKZzR4WU5YZEdnVUo2Ni1MU25sLWVLSGt4Q05KMFB3OGxMdndSTTdOb1dwN19PWHphMA?oc=5",
       "source": "FTNN 新聞網",
@@ -450,6 +485,13 @@
       "summary": "台積電發行148億元綠色債券，全數投入綠建築與環保支出&nbsp;&nbsp;鏈新聞 ABMedia"
     },
     {
+      "title": "股匯雙殺！新台幣重貶1.68角收32.76元 創1年半新低 - 自由時報",
+      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE10dEgxdnFuZHY4T0JieFQ1QVRKVEI2WFd4VlNZQkV3bVN3eVAwbnN1ZVJzQ3FnRjEtbWdBTldqekk4MjBJRWhBbC1fX2YtaG93LVlJZTV1QmE?oc=5",
+      "source": "自由時報",
+      "published_at": "2026-11-03T08:48:26+00:00",
+      "summary": "股匯雙殺！新台幣重貶1.68角收32.76元 創1年半新低&nbsp;&nbsp;自由時報"
+    },
+    {
       "title": "華邦電第三季EPS 7.58元 擬砸731億「做這事」 - 東森電視",
       "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE1wVWd1X0N5MTF1elBSRXJaWnFiM2g1WUN1NTFJZTFCSTNVYWdyTk9tNnlmZk9tNFdDbDRiRi1zVGY3a1RiMlN6WTRGNWJfaDBzVFd6T2NsdUx1dw?oc=5",
       "source": "東森電視",
@@ -462,13 +504,6 @@
       "source": "CMoney",
       "published_at": "2026-11-03T08:47:35+00:00",
       "summary": "仲琦(2419) 個股概覽 | 個股 - 股市&nbsp;&nbsp;CMoney"
-    },
-    {
-      "title": "股匯雙殺！新台幣重貶1.68角收32.76元 創1年半新低 - 自由時報",
-      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE10dEgxdnFuZHY4T0JieFQ1QVRKVEI2WFd4VlNZQkV3bVN3eVAwbnN1ZVJzQ3FnRjEtbWdBTldqekk4MjBJRWhBbC1fX2YtaG93LVlJZTV1QmE?oc=5",
-      "source": "自由時報",
-      "published_at": "2026-11-03T08:45:59+00:00",
-      "summary": "股匯雙殺！新台幣重貶1.68角收32.76元 創1年半新低&nbsp;&nbsp;自由時報"
     },
     {
       "title": "股匯雙殺！新台幣重貶1.68角收32.76元 創1年半新低 - 自由財經",
@@ -541,13 +576,6 @@
       "summary": "華邦電股價跌停、營收報喜！第3季狂賺354億元、EPS衝7.58元，獲利爆發背後「2大關鍵」 | 下班經濟學 | 財經&nbsp;&nbsp;風傳媒"
     },
     {
-      "title": "【Follow法人】外資再提款台積電273億元！同步砍華邦電、力積電各逾3萬張 反手敲進台玻 - Yahoo股市",
-      "url": "https://news.google.com/rss/articles/CBMijgRBVV95cUxQY3dRWkhMNkZxYWV3RmN4YlZ6VXQxRngwVmVOZ0w5aWpscHl0UTh0X0FHY0hpaW5IbFZYalNZYzZhZ2xjM0hvZVRRV3h5V05VYXJYQVpYNnI3eURpUk9KOE92RFU0UlUtdVdpNkZheWgzQ0dfOGNvYW05MWc3OEU0Y2p3YVdEYU5MeURuZGxBQ3NIcHFEV2VBc1BWVEJraVpOM1paT1BEYVh2NTNsbEpvSm5HS05nTWhmWUs0bU1IeWRNNkNBTHNMT3ROMzhoS1lOUXY0NmowNWNkZjJPTGx1ZWVjNXcxckhJcnR0SjVtMXF0S3FoUjMyd1ppTkJEUzhIdDBIQ1ZXVVNHM3BZbkwzVHBxM1lPMDBCbjc2Q05Gd0t4a3lzSW92WmxFVjVReXlQblBmNEpTYVdJalRQY0hqTXZGMGRSV3ZSWG83TGFuc2hhYkh5cGxHbDQ2bHlOSEJwNXBhaW5wZ2w1azIxVGV4b1VNWFZ2TXdQOEJ2QjFsV3liNUwwLUJFZmIzS1pDZHZpQ3lsd1pNc3J6ekN6VWtnVWVfQWpoTjF4TWs0N0ZkaTdPbGExRktFOEFDYUFUbFJyelhuQjZYdmltak5ZQ245YjdOazNZTG4ybWVidGRCTl8yc2ZUam9CNWc3Rk10V2xjMldTTGRSNzQyYVJ4ZHlZbWtVZkx4OXM2NWcwdEZR?oc=5",
-      "source": "Yahoo股市",
-      "published_at": "2026-11-03T08:30:08+00:00",
-      "summary": "【Follow法人】外資再提款台積電273億元！同步砍華邦電、力積電各逾3萬張 反手敲進台玻&nbsp;&nbsp;Yahoo股市"
-    },
-    {
       "title": "11/3新台幣兌美元匯率以32.760元作收，貶值1.68角 - CMoney",
       "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE8xR2VlOEhqNTJ1ZW9OU1pHWHhuRkNmMUF1aV9VTGhqRFJaSGJqTWQwMVJwVzU1Nk8tMW5UZVJkMGNqS3gxc1kyaFFfMXlmelhmV1YyN1pCR1M?oc=5",
       "source": "CMoney",
@@ -605,7 +633,7 @@
     },
     {
       "title": "〈合勤控法說〉Q3賺4.7億元季年雙減EPS 1.15元 記憶體飆漲致大客戶拉貨放緩 - 鉅亨網",
-      "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTFBsZ0ZWajRHYjF4VXZqbVFjMjN2bURtRWU2S1I2T3RCNVhWQnhIT3JJVHF0TDFtcVdNYkNfVVFnWkdObm1zaXhpdm1RTQ?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE5MOS1MM0pMdUZjVFJaTXZ1cDdHRkxDcEE1TXhJSHFwRFcxa0pfdW9OUm11Vkw4dEFyYXRJNW1QaEM0WnhuUzVKZHQzRk1MTGM?oc=5",
       "source": "鉅亨網",
       "published_at": "2026-11-03T08:06:30+00:00",
       "summary": "〈合勤控法說〉Q3賺4.7億元季年雙減EPS 1.15元 記憶體飆漲致大客戶拉貨放緩&nbsp;&nbsp;鉅亨網"
@@ -654,7 +682,7 @@
     },
     {
       "title": "統一台指期貨評論：台股電子權值股全面走跌，大盤終場重摔失守關卡 - 富聯網",
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxQSkVicTJmcmQwREtRbEhNZnI1WnNmdHI2VjV4YVp5Z0JBeVRlTlZaQ2poOGlOdHpIeTJKSUxuZEtoS0dENDUxNWRaNG9HVjZWb0RaZzVhUXBmNjc2SVpIS01ILVdoNFkzempnT09wNkowSDlod2Q1VUlLN0l0MGx3aFlqM2dYNVhN?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOWG8zMzJTbGMxQlBBdWpXWnNGR3gzOUJHQ0hXa1pfd0M1UlhVNkYtTWxtVWM2Y2xlcWV1OXFxcXctN2doS3J1a2R0OXY5d1I4aTlBX3MwZ2tkT0djRXBRbURGQ09pR0RCQTl5QTdScUZlYm8wMV9WVGF4R250UDZDRXJLUkhhVmox?oc=5",
       "source": "富聯網",
       "published_at": "2026-11-03T07:59:00+00:00",
       "summary": "統一台指期貨評論：台股電子權值股全面走跌，大盤終場重摔失守關卡&nbsp;&nbsp;富聯網"
@@ -749,6 +777,13 @@
       "source": "聚財網",
       "published_at": "2026-11-03T07:14:55+00:00",
       "summary": "1151103覆盤&nbsp;&nbsp;聚財網"
+    },
+    {
+      "title": "【Follow法人】外資再提款台積電273億元！同步砍華邦電、力積電各逾3萬張 反手敲進台玻 - Yahoo股市",
+      "url": "https://news.google.com/rss/articles/CBMijgRBVV95cUxQY3dRWkhMNkZxYWV3RmN4YlZ6VXQxRngwVmVOZ0w5aWpscHl0UTh0X0FHY0hpaW5IbFZYalNZYzZhZ2xjM0hvZVRRV3h5V05VYXJYQVpYNnI3eURpUk9KOE92RFU0UlUtdVdpNkZheWgzQ0dfOGNvYW05MWc3OEU0Y2p3YVdEYU5MeURuZGxBQ3NIcHFEV2VBc1BWVEJraVpOM1paT1BEYVh2NTNsbEpvSm5HS05nTWhmWUs0bU1IeWRNNkNBTHNMT3ROMzhoS1lOUXY0NmowNWNkZjJPTGx1ZWVjNXcxckhJcnR0SjVtMXF0S3FoUjMyd1ppTkJEUzhIdDBIQ1ZXVVNHM3BZbkwzVHBxM1lPMDBCbjc2Q05Gd0t4a3lzSW92WmxFVjVReXlQblBmNEpTYVdJalRQY0hqTXZGMGRSV3ZSWG83TGFuc2hhYkh5cGxHbDQ2bHlOSEJwNXBhaW5wZ2w1azIxVGV4b1VNWFZ2TXdQOEJ2QjFsV3liNUwwLUJFZmIzS1pDZHZpQ3lsd1pNc3J6ekN6VWtnVWVfQWpoTjF4TWs0N0ZkaTdPbGExRktFOEFDYUFUbFJyelhuQjZYdmltak5ZQ245YjdOazNZTG4ybWVidGRCTl8yc2ZUam9CNWc3Rk10V2xjMldTTGRSNzQyYVJ4ZHlZbWtVZkx4OXM2NWcwdEZR?oc=5",
+      "source": "Yahoo股市",
+      "published_at": "2026-11-03T07:06:47+00:00",
+      "summary": "【Follow法人】外資再提款台積電273億元！同步砍華邦電、力積電各逾3萬張 反手敲進台玻&nbsp;&nbsp;Yahoo股市"
     },
     {
       "title": "【Follow法人】台股暴跌1600點兇手是你？外資砍「歷史第8大賣超」 今提款1073億元 - Yahoo股市",
@@ -1036,6 +1071,13 @@
       "source": "UDN",
       "published_at": "2026-11-03T05:15:37+00:00",
       "summary": "美期中選舉在即！台股選後易震盪專家示警：空頭年年底反彈消失| 股市要聞| 股市&nbsp;&nbsp;UDN"
+    },
+    {
+      "title": "個股：匯率+零組件價格衝擊，致伸Q3獲利下滑，前三季EPS 3.38元，週四法說會 - 富聯網",
+      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxPY0gycThpV3QxZjdHeXpIVTBlT3JUU3pBVVJEVEExRWh1SU9FalpfN1FoNjRScjhITHpUdUJoamRSZ25iZ09Zbk1hZGdFM29rX2kzRW1qYnNjclp0SEsxc3Z1QmpHRkF5UkJnd0NjUENXbXZHNjEzQ0J2RDRfSnBFTFZtN3hfbm9S?oc=5",
+      "source": "富聯網",
+      "published_at": "2026-11-03T05:14:00+00:00",
+      "summary": "個股：匯率+零組件價格衝擊，致伸Q3獲利下滑，前三季EPS 3.38元，週四法說會&nbsp;&nbsp;富聯網"
     },
     {
       "title": "TWA00 加權指數- 今日融資有機會減150億 - 股市爆料同學會 - CMoney",
@@ -1367,18 +1409,18 @@
       "summary": "AI股重挫、蘋果財報卻優於預期！鴻海、大立光與AI伺服器股分歧 台股資金輪動訊號浮現？&nbsp;&nbsp;台灣好新聞"
     },
     {
-      "title": "中部半導體黃金廊帶 成形 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTE9vOWh3eGhBcFdRaGdPQVZzd0NRLUE1bFZNWjc3NTdhQUNtRk5lTmJBNlpwdmxNRjFKQ2hSWFBxc3BWaVdfWF9jbFNVX0tnQ3lQZzY4bWNZbzZhLTRtc1NHQ1d6R3N1S1I1NUpwUUVUdHhnNXFnRDhGeVBPVXHSAV9BVV95cUxNUUxfSnM0VS1CMkJTMWRBNGN6NHV2TjBUTllYa05Mb1lCZGtrOTlaUEJIWXQ4UXpMWUhZNWNWeE9FQWVZcG1QWUZWQTRackptaU1Oa21CekFwbHJKdkxZMA?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-11-03T02:00:00+00:00",
-      "summary": "中部半導體黃金廊帶 成形&nbsp;&nbsp;經濟日報"
-    },
-    {
       "title": "Anthropic 投資算力再加碼 金額近 9,000 億美元 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTFBBc0JNSzNhaXhPTk5zZUwxd3NHMFNMNzhXQVY4bno2Rk5NUVU2Y25IbjlwYTNpQVlJTDNSb01yQVk4aGd0aWxzemx6T3draGF0VmxfelhrT2psUdIBX0FVX3lxTE1val9oQWMyXzgzcUstM0k1TkxkR1NYczhkQWVMdkt5NG1IanJtV1NSQ241Y0JYNUE5ckM1TWlJTUlvLTVNRzRpVDgxbmtxZV9NM1VTOEkyR3d6d1BxNDlv?oc=5",
       "source": "經濟日報",
       "published_at": "2026-11-03T02:00:00+00:00",
       "summary": "Anthropic 投資算力再加碼 金額近 9,000 億美元&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "中部半導體黃金廊帶 成形 - 經濟日報",
+      "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTE9vOWh3eGhBcFdRaGdPQVZzd0NRLUE1bFZNWjc3NTdhQUNtRk5lTmJBNlpwdmxNRjFKQ2hSWFBxc3BWaVdfWF9jbFNVX0tnQ3lQZzY4bWNZbzZhLTRtc1NHQ1d6R3N1S1I1NUpwUUVUdHhnNXFnRDhGeVBPVXHSAV9BVV95cUxNUUxfSnM0VS1CMkJTMWRBNGN6NHV2TjBUTllYa05Mb1lCZGtrOTlaUEJIWXQ4UXpMWUhZNWNWeE9FQWVZcG1QWUZWQTRackptaU1Oa21CekFwbHJKdkxZMA?oc=5",
+      "source": "經濟日報",
+      "published_at": "2026-11-03T02:00:00+00:00",
+      "summary": "中部半導體黃金廊帶 成形&nbsp;&nbsp;經濟日報"
     },
     {
       "title": "發哥怎麼了？摜破3900元原因曝大摩、高盛、野村...8大法人扛不住這家外資價評雙降：目標價暴砍34％ - 上市櫃 - 旺得富理財網",
@@ -3458,48 +3500,6 @@
       "source": "TVBS新聞網",
       "published_at": "2026-11-02T04:32:00+00:00",
       "summary": "聯發科強攻AI ASIC！法人喊上「6字頭」天價 盤中黑翻紅&nbsp;&nbsp;TVBS新聞網"
-    },
-    {
-      "title": "財管教授「捨百張長債ETF」轉賽道 週刊曝原因 | 太報 - LINE TODAY",
-      "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE1KSGVGRlpaNmt3dER3NDRLSklxVXJiV1UxN1luY1cwbGdjS3U0NlJPcEN1WV9UVWk5R1lma2JSREZNOW5NTWhLdTZNaTIzU0doM2R2cXdUNno4Um1CM2N6djJ5NkdGN0lCT1UxNVQwZTA?oc=5",
-      "source": "LINE TODAY",
-      "published_at": "2026-11-02T04:30:17+00:00",
-      "summary": "財管教授「捨百張長債ETF」轉賽道 週刊曝原因 | 太報&nbsp;&nbsp;LINE TODAY"
-    },
-    {
-      "title": "台股狂拉逾700點！新台幣卻重貶2.18角　股匯上演兩樣情 - ETtoday財經雲",
-      "url": "https://news.google.com/rss/articles/CBMiUkFVX3lxTE1LNWdaTTVqWXUtVTIzdjZiLXVHSk4tNmhBcHpWeGo1OFB6NXNGRUFZY3Nudmh1d2JQY3NPemdOYzNoNTNTMHdrb0ZsdW1fajRfOXfSAVBBVV95cUxNcGl3bXZCb2JYQ1FSWG9zcE13azhDOXg2d0djWTlIb1VlRjhNdDkzdmRGTDg2U1QwMUpWNVdMd20wMEdtX09LeTdELWU3QlFqbw?oc=5",
-      "source": "ETtoday財經雲",
-      "published_at": "2026-11-02T04:29:00+00:00",
-      "summary": "台股狂拉逾700點！新台幣卻重貶2.18角　股匯上演兩樣情&nbsp;&nbsp;ETtoday財經雲"
-    },
-    {
-      "title": "台積電即將止穩？ 分析師：最慢明日會收紅 - 東森電視",
-      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTE5rQ3UtcWVKZFJ5V1FsRmF0Z2JWMU9HU0gzZ1B1c3lIRFhMWC1ycHRadlJrRU5PU0dWenRiZFM5S05nZGJYNUJCeThHZU1fTzA1cEpicmdB?oc=5",
-      "source": "東森電視",
-      "published_at": "2026-11-02T04:26:00+00:00",
-      "summary": "台積電即將止穩？ 分析師：最慢明日會收紅&nbsp;&nbsp;東森電視"
-    },
-    {
-      "title": "台股一度失守45K關卡 台積電開盤重挫60元 | NOWNEWS今日新聞 - LINE TODAY",
-      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTFAyY0RhYU9tc3VNajlITXRBTWExaHhsVXhBVVNNZFB4XzR4LXhYUHlNdkN5Q3M3YXFIdVRfelNRakJhMU5ZY1REY3RmbDZ1QnhYUHl6OVln?oc=5",
-      "source": "LINE TODAY",
-      "published_at": "2026-11-02T04:16:55+00:00",
-      "summary": "台股一度失守45K關卡 台積電開盤重挫60元 | NOWNEWS今日新聞&nbsp;&nbsp;LINE TODAY"
-    },
-    {
-      "title": "Vertex(VRTX)營收預期一路上修，財報後全年指引能否再調高？-許明哲的產業筆記本 - CMoney投資網誌",
-      "url": "https://news.google.com/rss/articles/CBMiggFBVV95cUxPVDluR1JGSkVLUUtWeTVDeG5rc183S0JKM3hsdEpsRnlpSXBRM29oak1tZ2pCWkNoNnhmWGI0MGZuQUVBNW5KZTNJV09SbXhWa0VfSzAzY2ZrYllQQmtHd2RZTk1SWC1zMThqclBVdEpCWEFWeWtVRmtUT1FlTC1YbmJ3?oc=5",
-      "source": "CMoney投資網誌",
-      "published_at": "2026-11-02T04:14:56+00:00",
-      "summary": "Vertex(VRTX)營收預期一路上修，財報後全年指引能否再調高？-許明哲的產業筆記本&nbsp;&nbsp;CMoney投資網誌"
-    },
-    {
-      "title": "焦點股》鴻海：穩定AI族群軍心 帶量上攻 - Yahoo股市",
-      "url": "https://news.google.com/rss/articles/CBMijwJBVV95cUxPVlNaRjczeWFTaHB6MUVuOGFkYVRlT09hREktRXpWZ213cnppTzZTa3VZZE1GRUtONkhyRFpqWThhbFpnT3NkX2dGWUNoeGloT3RubG9fNmpxV2J1MTB0dTN6Wmc0cWxGNzVnaVlrdXpkc2tLaXFhVzBXaWVwR18xTUdYSGZBYW1Lb0dyei1RUThYbUhCSHctUTl0RGV0Sk1fQXNUNjNOVUJqa0M5dVMtZC1jSU5DTHVFaDhSVnVnSktiT3ZpMmlHOF9mNW44dkNOU3VjcXlkdFV0dU16bm8tWVRSaVNoTVV3Y0JUTlNTcG5leW8ydlFkY0NZaEg3aVZYTHBzR3dFOEl2MXhwQTAw?oc=5",
-      "source": "Yahoo股市",
-      "published_at": "2026-11-02T04:14:46+00:00",
-      "summary": "焦點股》鴻海：穩定AI族群軍心 帶量上攻&nbsp;&nbsp;Yahoo股市"
     }
   ]
 }
