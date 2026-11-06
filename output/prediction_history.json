@@ -1,5 +1,81 @@
 [
   {
+    "date": "2026-11-06",
+    "generated_at": "08:02",
+    "xgb_prob_up": 0.563,
+    "xgb_label": "偏多",
+    "market_data": {
+      "vix": 28.18,
+      "sp500_ret": -0.0436,
+      "nasdaq_ret": -0.0552,
+      "sox_ret": -0.1225,
+      "tsm_adr_ret": -0.1078,
+      "futures_net": -95651.0,
+      "night_change": -3054.0,
+      "pcr": null,
+      "taiex_rsi": 23.786931429551274,
+      "macd_hist": -1442.8927658985012,
+      "dist_ma20": -10.85962899020414,
+      "dist_ma60": -10.499447552021168,
+      "taiex_ret_5d": -10.337809259781716,
+      "taiex_ret_20d": -16.367779575137753,
+      "buyback_count": 0,
+      "disposition_count": 11,
+      "jpy_ret": 0.0035,
+      "arkk_ret": -0.0898,
+      "hyg_ret": -0.0031,
+      "night_trend": "↓ 走弱",
+      "market_revenue_yoy": 0.1402,
+      "market_foreign_holding_chg": -7.4975
+    },
+    "regime": {
+      "label": "long_liquidate",
+      "label_zh": "💥 多殺多日",
+      "win_rate": 35.0
+    },
+    "scenario": {
+      "main_scenario": "夜盤大跌 -3054pt，多頭倉位鬆動，開盤可能持續賣壓，避免搶反彈",
+      "best_strategy": "等開盤30分鐘後觀察量能是否縮減，再考慮進場",
+      "danger_signals": [
+        "外資空單極重（-95,651口），軋空風險高",
+        "VIX=28.2 高波動，假突破機率高",
+        "夜盤缺口 -3054pt 過大，易反轉"
+      ],
+      "forbidden_actions": [
+        "禁止 ORB 策略（波動過大）",
+        "禁止追空缺口超過200pt",
+        "禁止反彈高點追多（軋空陷阱）"
+      ]
+    },
+    "risk": {
+      "level": "high",
+      "score": 0.65,
+      "factors": [
+        {
+          "name": "VIX偏高",
+          "description": "VIX=28.2，波動擴大",
+          "action": "縮小倉位50%"
+        },
+        {
+          "name": "外資空單極重",
+          "description": "-95,651口，軋空/崩潰雙向風險",
+          "action": "避免重押方向"
+        },
+        {
+          "name": "夜盤大缺口",
+          "description": "夜盤 -3054pt，開盤後可能快速反轉",
+          "action": "禁止追缺口超過200pt"
+        }
+      ]
+    },
+    "news_sentiment": {
+      "market_impact": -0.02,
+      "key_events": [],
+      "bullish_count": 0,
+      "bearish_count": 0
+    }
+  },
+  {
     "date": "2026-11-04",
     "generated_at": "08:02",
     "xgb_prob_up": 0.403,
@@ -6014,69 +6090,6 @@
     },
     "news_sentiment": {
       "market_impact": 0.11,
-      "key_events": [],
-      "bullish_count": 0,
-      "bearish_count": 0
-    }
-  },
-  {
-    "date": "2026-06-29",
-    "generated_at": "08:04",
-    "xgb_prob_up": 0.615,
-    "xgb_label": "偏多",
-    "market_data": {
-      "vix": null,
-      "sp500_ret": null,
-      "nasdaq_ret": null,
-      "sox_ret": null,
-      "tsm_adr_ret": null,
-      "futures_net": -76391.0,
-      "night_change": 95.0,
-      "pcr": null,
-      "taiex_rsi": 51.04020147786668,
-      "macd_hist": -390.85527484787144,
-      "dist_ma20": -1.5163933219597858,
-      "dist_ma60": 8.780246572562245,
-      "taiex_ret_5d": -4.009601742938573,
-      "taiex_ret_20d": 2.482957304991551,
-      "buyback_count": 0,
-      "disposition_count": 78,
-      "jpy_ret": null,
-      "arkk_ret": null,
-      "hyg_ret": null,
-      "night_trend": "↑ 偏強",
-      "market_revenue_yoy": 0.0937,
-      "market_foreign_holding_chg": -4.6913
-    },
-    "ai_insight": "# 今日操盤要點\n\n・ 夜盤偏強上漲95點，惟外資期貨大幅淨賣76,391口且現貨近日拋售力道強勁，反映多空分歧，短線易受外資動向牽制，應謹慎追高。\n\n・ 處置股高達78支創風險警示，加權指數距MA20僅-1.5%接近短期均線，RSI 51中性偏弱，宜留意技術面反轉訊號，避免追漲高風險個股。\n\n・ 市場月營收YoY正成長9.4%基本面支撐存在，但外資持股5日跌幅",
-    "regime": {
-      "label": "double_whipsaw",
-      "label_zh": "🔄 多空雙巴日",
-      "win_rate": 45.0
-    },
-    "scenario": {
-      "main_scenario": "VIX=20.0 高波動，方向不明，上下兩難，策略錯誤易被雙向停損",
-      "best_strategy": "縮小倉位 / 等待方向確認 / 以日內區間交易為主",
-      "danger_signals": [
-        "外資空單極重（-76,391口），軋空風險高"
-      ],
-      "forbidden_actions": [
-        "禁止反彈高點追多（軋空陷阱）"
-      ]
-    },
-    "risk": {
-      "level": "medium",
-      "score": 0.25,
-      "factors": [
-        {
-          "name": "外資空單極重",
-          "description": "-76,391口，軋空/崩潰雙向風險",
-          "action": "避免重押方向"
-        }
-      ]
-    },
-    "news_sentiment": {
-      "market_impact": -0.15,
       "key_events": [],
       "bullish_count": 0,
       "bearish_count": 0
