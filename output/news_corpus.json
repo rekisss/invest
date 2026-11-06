@@ -1,19 +1,19 @@
 {
-  "updated_at": "2026-11-06T20:01:53.792206+00:00",
+  "updated_at": "2026-11-06T21:01:39.247302+00:00",
   "articles": [
+    {
+      "title": "台積傳攻先進記憶體晶片 - UDN",
+      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTFBDQ2lZdi1OYmtrR1FXZHo2dzlpU3JKV1dnTkQ5M1pxRHEwV18yS0syZlpmbk5UVlVtOU9DXzBiUHZhR3ZMVkhucE9oRGRKMEpZY3RiQXdn0gFWQVVfeXFMUENDaVl2LU5ia2tHUVdkejZ3OWlTckpXV2dORDkzWnFEcTBXXzJLSzJmWmZuTlRWVW05T0NfMGJQdmFHdkxWSG5wT2hEZEowSlljdGJBd2c?oc=5",
+      "source": "UDN",
+      "published_at": "2026-11-06T18:10:59+00:00",
+      "summary": "台積傳攻先進記憶體晶片&nbsp;&nbsp;UDN"
+    },
     {
       "title": "台積傳攻先進記憶體晶片 - 經濟日報",
       "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTFBPT3JoQ3M3Qjl5XzhBTWhNSjFWaWVLNHd1SDhRQVQtazRlUGx1d1lzZVdWQmE2dXUwTVhYRWhoakg3Wk5YWExudUNmWEdlS0pXdE9tTnhCQmlxd1owcklJ0gFfQVVfeXFMUE9PcmhDczdCOXlfOEFNaE1KMVZpZUs0d3VIOFFBVC1rNGVQbHV3WXNlV1ZCYTZ1dTBNWFhFaGhqSDdaTlhYTG51Q2ZYR2VLSld0T21OeEJCaXF3WjBySUk?oc=5",
       "source": "經濟日報",
       "published_at": "2026-11-06T18:10:59+00:00",
       "summary": "台積傳攻先進記憶體晶片&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "台積傳攻先進記憶體晶片 - UDN",
-      "url": "https://news.google.com/rss/articles/CBMickFVX3lxTE1uTS1MMFNqYi14VnRSb2VIZkYwcWZDS2dGdW1DVF9US0lIYzN3ZndaS2JIejk4ODIwOWd2aDY0ZTAtdGR6LVQzNmZYOGwxR3NRcnNDTHlOWE5wZUJJQTlfMWh6d0FKZGZjb0g1b1ZSQ2lBUdIBVkFVX3lxTFBDQ2lZdi1OYmtrR1FXZHo2dzlpU3JKV1dnTkQ5M1pxRHEwV18yS0syZlpmbk5UVlVtOU9DXzBiUHZhR3ZMVkhucE9oRGRKMEpZY3RiQXdn?oc=5",
-      "source": "UDN",
-      "published_at": "2026-11-06T18:10:59+00:00",
-      "summary": "台積傳攻先進記憶體晶片&nbsp;&nbsp;UDN"
     },
     {
       "title": "世芯-KY(3661) 第3季 EPS 37.68 元創新高！毛利率跌破 20%，獲利為何照樣創高？ - 優分析UAnalyze",
@@ -28,6 +28,13 @@
       "source": "electrify.tw",
       "published_at": "2026-11-06T16:35:13+00:00",
       "summary": "Lunaz 如何將英國經典車變成電動車？從 DB6 到 Range Rover&nbsp;&nbsp;electrify.tw"
+    },
+    {
+      "title": "TWA00 加權指數 - 市值+槓桿大盤沒在退的 - 股市爆料同學會 - CMoney",
+      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE5teVRqMm4zOWJkVE1nYTZiOWpjcVF3TWJ1TUJRVFZmR0dqNGlFc3VhR00zWF9mRUlpTDdXcDlVQ0ZYeWg1UGdtUVI3VlB5bUMwSHlULWVYekY?oc=5",
+      "source": "CMoney",
+      "published_at": "2026-11-06T16:30:42+00:00",
+      "summary": "TWA00 加權指數 - 市值+槓桿大盤沒在退的 - 股市爆料同學會&nbsp;&nbsp;CMoney"
     },
     {
       "title": "美股強彈！費半飆逾5% 台積電ADR大漲近8% 道瓊獨憔悴 - BigGo 財經",
@@ -504,6 +511,13 @@
       "source": "工商時報",
       "published_at": "2026-11-06T08:07:00+00:00",
       "summary": "央行一直買、金價卻難大漲？高盛1理由大砍黃金目標價、花旗指出關鍵變數- 國際&nbsp;&nbsp;工商時報"
+    },
+    {
+      "title": "11/6新台幣兌美元匯率以32.768元作收、升值1.08角；惟週貶0.89% - Yahoo股市",
+      "url": "https://news.google.com/rss/articles/CBMiowJBVV95cUxQVXhmVG9pZzhvZ2lJNF9IZGZUNHdsdElCTjBVYVZMckJnRTlJenVRZWtILVRFbmZudE1nWVhYMXdFZ2NRQm9fajVKNEFqdUNCWGYtd3B1WlVMZmpfazdUY2ZjSFZLb0k0MjdJOFJKWTV3MFBRd1JOeDU3YmRwYWlTajVxNlNoMkpDNXFjZ1JlUEhxUWY1MVhMOHZDSEVIMGNTMjBGYmh6SUM0REZZZG1EbVlyMkJxRlBpbnR3T01xSWlQWnhBT0tFWjVLTjdsVEdwVHlDNEgtcWxuVnIyeXB0bmYzXzFPSzdLbng1YlJwSkYxY1g2RFUxVTRPUUVFbjJtV1hZU2lnMzN6bGFFLS1Fdm5XZ0NnSEZ4TnJEd1JDR1BwVms?oc=5",
+      "source": "Yahoo股市",
+      "published_at": "2026-11-06T08:03:00+00:00",
+      "summary": "11/6新台幣兌美元匯率以32.768元作收、升值1.08角；惟週貶0.89%&nbsp;&nbsp;Yahoo股市"
     },
     {
       "title": "國內匯市：新台幣匯率週五(6日)以32.768元作收，升值1.08角 - 富聯網",
@@ -1505,6 +1519,13 @@
       "source": "富聯網",
       "published_at": "2026-11-05T23:29:00+00:00",
       "summary": "《期貨》台股僅存雙支撐 重點觀察台積和金融股&nbsp;&nbsp;富聯網"
+    },
+    {
+      "title": "2330 台積電 - 🥰星期五台股全黑9成跌停機率高，跟去年川普關稅一樣，當放假- 股市爆料同學會 - CMoney",
+      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE9JSVZyaGZoNEM5T0xWQ1NXdHZudF91ajl5b0FZb3pMZ0IwT2FPNUJRVU4wUTFHamxNUlVZMFhweVhVdGVXWmZDZkZiYUFXbjQ2QlRIZXVYY0k?oc=5",
+      "source": "CMoney",
+      "published_at": "2026-11-05T23:21:24+00:00",
+      "summary": "2330 台積電 - 🥰星期五台股全黑9成跌停機率高，跟去年川普關稅一樣，當放假- 股市爆料同學會&nbsp;&nbsp;CMoney"
     },
     {
       "title": "美選後科技股大地震！美多州限制大型資料中心 費半狂瀉創2020年來新低 - TVBS新聞網",
@@ -3479,27 +3500,6 @@
       "source": "富聯網",
       "published_at": "2026-11-04T23:35:00+00:00",
       "summary": "期貨：至4日止三大法人期貨未平倉量淨空603,097口，選擇權淨空10,252口&nbsp;&nbsp;富聯網"
-    },
-    {
-      "title": "期貨：4日期貨交易三大法人淨多14,868口，選擇權交易三大法人淨空10,928口 - 富聯網",
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxPSktuREtIdDRmSnFjdlVpdy1HN3c4OVdpME42clVmUlA2VjltRHhUVGZqUlJJb01fV1hFYjNQSDFZc3o4SzY4UnlSbG1IeDh6d25feXZrbXdHQm1KN05xbmgtZ0Vvc0gwLU0wMnoxWWlsdXE4QW9vVXZtNGlmeThCUGN5emJYQkhF?oc=5",
-      "source": "富聯網",
-      "published_at": "2026-11-04T23:35:00+00:00",
-      "summary": "期貨：4日期貨交易三大法人淨多14,868口，選擇權交易三大法人淨空10,928口&nbsp;&nbsp;富聯網"
-    },
-    {
-      "title": "《期貨》重返兆元量能 觀察承接力道能否延續 - 富聯網",
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOdEd3Y2pobHVkUEVMY3F4R09kTXZwZmlSOXFzcEdxcmNuYlh5YlRPMURIZFNNOGxTV1d6ZnQ2MVlsZ1RBZXZLMExpMF92OC0tT2xscXVSTFp2QkxBUkJ2WUw2X0tBM0ZMRlpQaVRqVnc1UERZaWRiZ2t5Q0VKQXBtOEZOaFpuYUNo?oc=5",
-      "source": "富聯網",
-      "published_at": "2026-11-04T23:29:00+00:00",
-      "summary": "《期貨》重返兆元量能 觀察承接力道能否延續&nbsp;&nbsp;富聯網"
-    },
-    {
-      "title": "國內匯市：新台幣週三再貶6.1分收32.821元，外資擴大賣超加重匯價壓力 - 富聯網",
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxQN3poNmJfSFozRDFYUkpyTTd4b2lHcmlGbDIyZkJIYXF3TXVTdHkzdDIzTUtqeGh2ZkZuT3pTUWNvaUxDNE1UV2JkMjBRYk9aVGlKcHd4TVVhQzZod1VLOVRtMkNkY2RVaC1jdGpkdVN4RFhpdnR2Ul9vVDdTTTF1VGQ0QlI1RUtu?oc=5",
-      "source": "富聯網",
-      "published_at": "2026-11-04T23:00:00+00:00",
-      "summary": "國內匯市：新台幣週三再貶6.1分收32.821元，外資擴大賣超加重匯價壓力&nbsp;&nbsp;富聯網"
     }
   ]
 }
