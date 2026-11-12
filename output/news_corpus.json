@@ -1,6 +1,41 @@
 {
-  "updated_at": "2026-11-12T11:01:49.050952+00:00",
+  "updated_at": "2026-11-12T12:01:51.333392+00:00",
   "articles": [
+    {
+      "title": "【鴻海法說會 Q3】鴻海 ASIC AI 伺服器出貨年增 1.5 倍！成長快過 GPU，搶攻 AI Agent、CPO 商機 - 果仁家",
+      "url": "https://news.google.com/rss/articles/CBMiU0FVX3lxTE1mMVZKcWs4SWk4bHdrSDNvSEh1ZzVpa3dfbWhUQjJPV3NvT0RfX1dKRUJaeklSSjhKY2J0Mm01bDFodFFkc1BWREUtdU5STlFzd0hB?oc=5",
+      "source": "果仁家",
+      "published_at": "2026-11-12T11:55:02+00:00",
+      "summary": "【鴻海法說會 Q3】鴻海 ASIC AI 伺服器出貨年增 1.5 倍！成長快過 GPU，搶攻 AI Agent、CPO 商機&nbsp;&nbsp;果仁家"
+    },
+    {
+      "title": "華南金3大指標破紀錄！前10月賺284.56億贏過去年全年 EPS 2.02元 - 鉅亨網",
+      "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTFBvSjJmNVNYcGNVNkpTQm1xUnVTcFc2TlNRazdmcWxXXzRScVRxTDZQWU5RUXc0WjluSTZYY3luRnA3MHZkUFRqN0M0OA?oc=5",
+      "source": "鉅亨網",
+      "published_at": "2026-11-12T11:54:04+00:00",
+      "summary": "華南金3大指標破紀錄！前10月賺284.56億贏過去年全年 EPS 2.02元&nbsp;&nbsp;鉅亨網"
+    },
+    {
+      "title": "台股漲多狂殺1165點 外資狂買台玻14萬張 反手倒貨群創、台積電 - 鉅亨網",
+      "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE9OQlo0aTZ3TUkxcllCdnBUZld2Rk4wcUVCdjl2TThZQkxoSUVPemJIZXZEX1dlVkRLWmVrVlpzdmJNLXc5V2RiemsxbkZuZTg?oc=5",
+      "source": "鉅亨網",
+      "published_at": "2026-11-12T11:53:07+00:00",
+      "summary": "台股漲多狂殺1165點 外資狂買台玻14萬張 反手倒貨群創、台積電&nbsp;&nbsp;鉅亨網"
+    },
+    {
+      "title": "美元強彈、新台幣貶勢再起！尾盤收32.889元創下19個月新低| 金融 - 太報 TaiSounds",
+      "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE1sX1VsNkVveTdfNWI5M2FqbjdOMTFxZ0FYdFdrSU82YmVKdWE3YTFpZ2xJcjRsTU8zZTNOMng0TXE0ZGJkc1l3WVdvNDZWYjdJVVA0NzJ3d0llTFhR?oc=5",
+      "source": "太報 TaiSounds",
+      "published_at": "2026-11-12T11:26:36+00:00",
+      "summary": "美元強彈、新台幣貶勢再起！尾盤收32.889元創下19個月新低| 金融&nbsp;&nbsp;太報 TaiSounds"
+    },
+    {
+      "title": "〈台灣大法說〉前三季EPS 4.26元 估精誠淨利貢獻將提升至12.26億元 - 鉅亨網",
+      "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE1kX1Fmbnllb3k3a3BYWklqbDNHVDNmRnV1SURNTTNqQmVycS14eFY4Qnlzb2RCX2gzaWpqNktoX2NxbGtTYnh6YkJyZXl5SDg?oc=5",
+      "source": "鉅亨網",
+      "published_at": "2026-11-12T11:15:10+00:00",
+      "summary": "〈台灣大法說〉前三季EPS 4.26元 估精誠淨利貢獻將提升至12.26億元&nbsp;&nbsp;鉅亨網"
+    },
     {
       "title": "高盛上修Fed利率預測 估12月、明年3月各升息一碼 - 鉅亨網",
       "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE56ckhaMXlnZjNfZ2tHMTY3MWlMREhFRUlVZU1MSUVHaVVkUXpJUHRHbjg5cWh3ZFlGZEp1WVZMWnJkZWZlZE1nMnc1NjFqbVU?oc=5",
@@ -9,8 +44,15 @@
       "summary": "高盛上修Fed利率預測 估12月、明年3月各升息一碼&nbsp;&nbsp;鉅亨網"
     },
     {
+      "title": "日月光投控成長加速中，旗下矽品CoWoS、CPO背後共同貴人：輝達！研發大將還原10年布局新賽道點滴 - 財訊",
+      "url": "https://news.google.com/rss/articles/CBMie0FVX3lxTE8zWk9TcU9SV3VjMzlMenM0X0x5Qk53WXRONHZ0VTJaVVY1YjVITWZTRmtNYkRyQ3BuRy03OXN0V3Q2QU5lSEh0c0ZvNVBMcThINWJxWXplTG5HTVZvV2x6VW9VRmRNZ1pyTk1ZVExiUjlYVllzVjJoa18ybw?oc=5",
+      "source": "財訊",
+      "published_at": "2026-11-12T11:00:00+00:00",
+      "summary": "日月光投控成長加速中，旗下矽品CoWoS、CPO背後共同貴人：輝達！研發大將還原10年布局新賽道點滴&nbsp;&nbsp;財訊"
+    },
+    {
       "title": "台股擂台／「股市軒昂」張嘉軒：台股最壞已經過去 可趁拉回找尋低估及有潛力族群 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMie0FVX3lxTE1CUkREVldDQ3JEanl4ODdNYlRyNlBBOHpfcUZlc014dlJqanJBd0hJYkRFeHFfQ1luVUk0TmlnT2FxU09QZTlFdkZUaXNvcTRyd0dxYkJERFRicVZtMlVVS0NkWml4M1RrSlNUU3dEcGNQRnY5VDl5eWt5cw?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE03QWl0d2g3ZFpuN2tGT1d2eVB2VFNsTTlBcXFOd2pyLWhibjVyQXdzRlhDbmVZRGdrQXFuc0NDRXUxOHFmRTlnSkllS1RzemhpSHJ5UmRST01JX3V3?oc=5",
       "source": "經濟日報",
       "published_at": "2026-11-12T10:52:19+00:00",
       "summary": "台股擂台／「股市軒昂」張嘉軒：台股最壞已經過去 可趁拉回找尋低估及有潛力族群&nbsp;&nbsp;經濟日報"
@@ -37,6 +79,20 @@
       "summary": "〈東元法說〉前三季獲利55.82億元EPS 2.38元 今年AIDC接單超過百億元&nbsp;&nbsp;鉅亨網"
     },
     {
+      "title": "AI助攻鴻海大賺 Q3營收年增46% 前三季EPS達13.35元 - LINE TODAY",
+      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTFB3QklkLXQxMWJLSXU4U2tBcjM2MG52M2RJeHhUOFNxcVpGMW5UY3hUTklFSERBX3BIT0dQQWc2VFZ0NDZrZWJXRDVSS1pWZ0xfVVdVd1pn?oc=5",
+      "source": "LINE TODAY",
+      "published_at": "2026-11-12T10:17:43+00:00",
+      "summary": "AI助攻鴻海大賺 Q3營收年增46% 前三季EPS達13.35元&nbsp;&nbsp;LINE TODAY"
+    },
+    {
+      "title": "TWA00 加權指數- 台股重挫千點！起K篩出46檔特殊K 棒，明天誰先反攻？ - 股市爆料同學會 - CMoney",
+      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE8wTTVhWmF4RzBYcWNvLXY5RElSdzRmdXRjdHlITmx1czZHVzJfcVB0bGNJNmJLc3BtcHNZVGhzWVVocGVlV19UU2tfWFcyMENYZ2tvTlVIbUE?oc=5",
+      "source": "CMoney",
+      "published_at": "2026-11-12T10:04:11+00:00",
+      "summary": "TWA00 加權指數- 台股重挫千點！起K篩出46檔特殊K 棒，明天誰先反攻？ - 股市爆料同學會&nbsp;&nbsp;CMoney"
+    },
+    {
       "title": "AI商機不只GPU！連接器躍升「黃金動脈」，貿聯、佳必琪、信邦誰最有爆發力？-理財彥究院-台股 - 商周財富網",
       "url": "https://news.google.com/rss/articles/CBMidkFVX3lxTFBESzFqMktUa3pqQlJfUk93dDd6TzdLRnphX1IxUGxfdE9lRkNETmk2bHBMa0ZMTWUyVC1jOW5nOTJJTXpOM1U1anlMMV9YdEJybVJpVVc5OW1zOGZMNmQwbzVLaHlodE9LSjlXaVM5Z1dsTVNPcWc?oc=5",
       "source": "商周財富網",
@@ -52,7 +108,7 @@
     },
     {
       "title": "生達法說會／前三季 EPS 3.93元創高 日本市場與 CDMO 助攻明年成長 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMie0FVX3lxTE9WN0ZVQWN5dzI3Q1M5MTNEMUc5R3VoWDdBUzZaWkhlQ3RUd1dtV2tLb09wVnljazFRUkRaVENXWHhYR0VvQ0REb1MyWDF6M2ZwWnJvTE1YMU53MHhIOUtOUG9JR215OVU5dDloNHJwcjJuUU8wQjE2NHZMUdIBX0FVX3lxTE9BSk5KRGhseExhZVF6aWthVkxtVWdUVDNZSkdvdnlpNHRqM1B4di15VTdrcjNFbGV6eDZWbFI2NkZadUl6REpIamFLRldWREQtVWUtcFdWZkw2YmlnWVNV?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxPN2JGSTkzdnpiMjdhMDBGdEZ4U3dKUm4wWERqSFVMQzBUdG1fc2d4S2I4Ym15cXA5QVI1dklNX3c2N3hQNTgwb01IVjVrTDBUZmZxaS1GcUZ3SmdoanlqX20wS1dFOFZVYmdOV1JUWEFBbmsxYVhtaGVoZ2J0dXVlbNIBX0FVX3lxTE9BSk5KRGhseExhZVF6aWthVkxtVWdUVDNZSkdvdnlpNHRqM1B4di15VTdrcjNFbGV6eDZWbFI2NkZadUl6REpIamFLRldWREQtVWUtcFdWZkw2YmlnWVNV?oc=5",
       "source": "經濟日報",
       "published_at": "2026-11-12T09:39:55+00:00",
       "summary": "生達法說會／前三季 EPS 3.93元創高 日本市場與 CDMO 助攻明年成長&nbsp;&nbsp;經濟日報"
@@ -77,6 +133,13 @@
       "source": "UDN",
       "published_at": "2026-11-12T08:51:53+00:00",
       "summary": "2026台北國際期貨論壇圓滿落幕 深化國際交流共探期貨市場發展新契機&nbsp;&nbsp;UDN"
+    },
+    {
+      "title": "台積電4.6萬筆員工個資外洩！駭客開價740萬兜售　公司證實：但無系統遭入侵證據 | 生活 | CTWANT - CTWANT",
+      "url": "https://news.google.com/rss/articles/CBMiVEFVX3lxTE9ZMDIwU0hxSkZGSEhEQXdWYTlIVERDMTRpU211bmVWT0Q2SUNVRjJ6ckVSZTdKZ2hFZ0NaXy1fOGN2WlFoOTEtUDVQcTFwelFnbTBLT9IBVEFVX3lxTE9ZMDIwU0hxSkZGSEhEQXdWYTlIVERDMTRpU211bmVWT0Q2SUNVRjJ6ckVSZTdKZ2hFZ0NaXy1fOGN2WlFoOTEtUDVQcTFwelFnbTBLTw?oc=5",
+      "source": "CTWANT",
+      "published_at": "2026-11-12T08:50:04+00:00",
+      "summary": "台積電4.6萬筆員工個資外洩！駭客開價740萬兜售　公司證實：但無系統遭入侵證據 | 生活 | CTWANT&nbsp;&nbsp;CTWANT"
     },
     {
       "title": "鴻海法說／Q3營業利益首破千億 全面上調今年4大產品展望 - TVBS",
@@ -150,7 +213,7 @@
     },
     {
       "title": "獲利紅不讓！鴻海Q3本業大爆發獲利創新高　劉揚偉喊Q4旺、延續至明年 - 鏡週刊Mirror Media",
-      "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTFBTYnpMS0FKOVhQNlJrYktfNDV1RjNTZEtPWlJ2OWE5djNUOGFzcjVPcVlMdENKVktGNnRHNGV3S0hQdFQ4cFpLN3VsVE13NWdWeGwyQ1JHRWt1d1J4WUNhTUQ5QdIBaEFVX3lxTE03b05EWlBndlZ4dVBvMDlYbG5IT0l0Rldzb1phNlM4T3lrdkUyR2w2WGhiRF84eklpcjFjU0RQVU9CeFF5S0dNemlUNW5qX2VtY0FNOUdDMm01eXJmWXJ1bS1NYTZmbjVz?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTFAyZ25QZk4wMDhBc2J2dVFVbGY0M1Q4UWVCTWYyU1VMZUx2OXh1cGNtX1AzYVJnQU9NcEhJd29fcTVBemgzV2VkdW15QmNNYjBoSWNsb2FtNmpuMXdtZ3ZYNVZWVE3SAWhBVV95cUxNN29ORFpQZ3ZWeHVQbzA5WGxuSE9JdEZXc29aYTZTOE95a3ZFMkdsNlhoYkRfOHpJaXIxY1NEUFVPQnhReUtHTXppVDVual9lbWNBTTlHQzJtNXlyZllydW0tTWE2Zm41cw?oc=5",
       "source": "鏡週刊Mirror Media",
       "published_at": "2026-11-12T08:06:00+00:00",
       "summary": "獲利紅不讓！鴻海Q3本業大爆發獲利創新高　劉揚偉喊Q4旺、延續至明年&nbsp;&nbsp;鏡週刊Mirror Media"
@@ -352,6 +415,13 @@
       "summary": "2026 鴻海 Q3 財報出爐！EPS 5.51 元、營收突破 3 兆，AI 機櫃帶動全年展望上修&nbsp;&nbsp;果仁家"
     },
     {
+      "title": "鴻海財報／第3季獲利775.24億元、創新高 上修全年展望 2027審慎樂觀 - UDN",
+      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTE5WaTY3VUlYVlg1Rk1LcjZXanFGdk9JVjVZYnBoWTJRTnR4SnFGNnVMVF9tNXFpY3F1RnNUd1hfcnl2RUdaTDcydEZrcnBhcnIw0gFWQVVfeXFMUGNjQVQyVVNXZTB0TV83OVE2YU8wQ1hzQWR0ZzFIYmlGVUFfdzR1LTd3a3NjTFk3UWxhQjE3NnZXVGlGc3JzaWhPUjd4WGdyNzVRWU5odEE?oc=5",
+      "source": "UDN",
+      "published_at": "2026-11-12T06:36:50+00:00",
+      "summary": "鴻海財報／第3季獲利775.24億元、創新高 上修全年展望 2027審慎樂觀&nbsp;&nbsp;UDN"
+    },
+    {
       "title": "《匯市》外資狂賣台股10天不手軟！台幣貶不停 「33元防線又拉警報」 - 富聯網",
       "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxNeXVNVU5nLWRXMjFOLW5hZWNyU2hwS2VJYmhZMHlxS3N2R1dzbEZxazVuNU5lVk1td0ZLelRaVUtHaHBEODlsNjZ5ekFEVVhaTUk0TVhQWGFteWsxNl9GcFpnOTQxLVpTQVA0R0o1NWxsUHg4ZlBNVzZScnhhSGZ2ZFRPc2tLUG1s?oc=5",
       "source": "富聯網",
@@ -413,6 +483,13 @@
       "source": "自由財經",
       "published_at": "2026-11-12T05:31:56+00:00",
       "summary": "美元站上103、輝達人事風波擾台股 新台幣午盤貶至32.916元&nbsp;&nbsp;自由財經"
+    },
+    {
+      "title": "黃仁勳去留震盪全球AI產業！恐衝擊台廠供應鏈 - Life 生活網",
+      "url": "https://news.google.com/rss/articles/CBMirwJBVV95cUxPSTRmOVdEWmgzdTFfMFRwWFRVakE2Umt0SUtQMUxEQi12Ry1GbktUUXd6Tnp2VG93MjFqTVJGSXhNcFRCWG5nYzJGVUJUS3R2cFpCSFhlbmI4d0xzM2NBTjJHRTJnRGR1R2dKbUl4ODcyZWUxTGhlcmg3dWpoVk5lT1N2ZW5GcWpXM2RnYzBwTUNKUXc3YTBaNVdKbHZJS25GbURTYk5qQ2Y0QllkYzNBa0huMVFwWThYd3MxdG5ZWjh0eXpaQVVoYkpabTFwRHl3MFlTR1laX09jUHZQVGRQeG9xSFhsVGNjWHN6bnppek1GZlhhRXp6YnVXTmFPYmtVWUpwNmY0bHAxLWxTTmtYYUktbFA1akFPNDBHTTd1X1lTTWI2Vm5Tb19nSDMwWnM?oc=5",
+      "source": "Life 生活網",
+      "published_at": "2026-11-12T05:31:21+00:00",
+      "summary": "黃仁勳去留震盪全球AI產業！恐衝擊台廠供應鏈&nbsp;&nbsp;Life 生活網"
     },
     {
       "title": "4.6萬筆員工個資遭駭客兜售 台積電：系統無遭入侵證據 - 自由財經",
@@ -588,6 +665,13 @@
       "source": "鉅亨網",
       "published_at": "2026-11-12T03:46:38+00:00",
       "summary": "國泰金控攜手彭博簽署MOU 拓展三大領域合作&nbsp;&nbsp;鉅亨網"
+    },
+    {
+      "title": "11／12盤中熱門焦點股- 證券 - 工商時報",
+      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTFAyU1ByVkdEMGx1UGhXRXdzR1JVNFRVQzRGY1g0bGN1Q0htMHdkQUZXZE0zS3o0UWJ5VGtTbUlfdDVjYWVmR1hsLTFoUEF6WHhOMGdiUWJTeDBJVUkyWkJZ?oc=5",
+      "source": "工商時報",
+      "published_at": "2026-11-12T03:46:00+00:00",
+      "summary": "11／12盤中熱門焦點股- 證券&nbsp;&nbsp;工商時報"
     },
     {
       "title": "台積電、鴻海、廣達…黃仁勳背板股挫著等？市場認8成機率會下台，陸行之喊恐讓AI鏈改變「這兩家受惠」 - 今周刊",
@@ -1214,7 +1298,7 @@
     },
     {
       "title": "「輝達親兒子」CoreWeave 報喜 上修今年財測 鴻海、技嘉等受惠 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMie0FVX3lxTFBNVENjVEdSMUJMYTdzT0k0TVJ2YWVQend1Qmp1a29CSHAzNUxSMEstMDlQZnYxaHAyM0UyelVPTVdaZXM1QUZpNHlwNXgwdXhldGVYUnJXSXdIWWNzMjMyOVRqOTNpYkQwUWxnN0xsaE9pdTFtelZsc1lENNIBYEFVX3lxTE9xU29Eam9ROEhpWjllOEJjV1Z4Y29aYlhRaHQwalRrc0ZpT2JWT3h0ejJUakl1bEhXMW92QjFTeVZJV29oTEhiWGpxMVJqS29yeFVBUS1Odjk3VGc0WTV1eA?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTFB2X0ZKNVZZaFFFa0FNVzlGc0pRMnhRYXdxYjZhRS1OdklxRVh6REo3VEpZVDBxV1k1cVpuMXVQdXFHVkhpWUJBVmNGdkVtR3JGY0FfVTRnM1pkRm13T2FjdDZLbTB1Wm93VGVudlNQZk9xdHpmYVdiTnBn0gFgQVVfeXFMT3FTb0Rqb1E4SGlaOWU4QmNXVnhjb1piWFFodDBqVGtzRmlPYlZPeHR6MlRqSXVsSFcxb3ZCMVN5VklXb2hMSGJYanExUmpLb3J4VUFRLU52OTdUZzRZNXV4?oc=5",
       "source": "經濟日報",
       "published_at": "2026-11-11T18:13:34+00:00",
       "summary": "「輝達親兒子」CoreWeave 報喜 上修今年財測 鴻海、技嘉等受惠&nbsp;&nbsp;經濟日報"
@@ -2135,13 +2219,6 @@
       "source": "經濟日報",
       "published_at": "2026-11-11T07:24:52+00:00",
       "summary": "三大法人買超台股202.56億元&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "日月光投控成長加速中，旗下矽品CoWoS、CPO背後共同貴人：輝達！研發大將還原10年布局新賽道點滴| 專欄 - 非凡新聞台",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE9kMG9qT1VyNWxFdzB2MjRYd3R5SGhZa3R0MHdDLS1BZ2dQUzM2ZzN0ZHpENm9VbGhXLTMwV0RZQ1VwSlJxdTVFV3dNVlZoMmxBaFI0V2pTZEd3T3ZyX1Vn?oc=5",
-      "source": "非凡新聞台",
-      "published_at": "2026-11-11T07:22:27+00:00",
-      "summary": "日月光投控成長加速中，旗下矽品CoWoS、CPO背後共同貴人：輝達！研發大將還原10年布局新賽道點滴| 專欄&nbsp;&nbsp;非凡新聞台"
     },
     {
       "title": "台股3天急漲4,555點！三大法人終於轉買超202.56億元 但外資還是賣超 - udn",
@@ -3423,83 +3500,6 @@
       "source": "CMoney",
       "published_at": "2026-11-10T10:33:56+00:00",
       "summary": "TWA00 加權指數- CoreWeave國外最新分析- 股市爆料同學會&nbsp;&nbsp;CMoney"
-    },
-    {
-      "title": "神達財報／第3季本業續創新高 EPS 達1.42元 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE9faDhuMGJlWVdkMWJnY2U5dzhlRUVVRVV2aVQ1WVkzOEd0cGxvZHQzd3J2MmxCc21qTHpfOE1QOV9tTGhNbXZTX0hnOUk3SWNWUzczUXNkUnJZd9IBX0FVX3lxTE9nNjZLYVV0OUV3clBlQnhjenh3NW54U3R3YzFOX0lSSWpDLUUweTFoanBXa0JNazBXMVBzcDBpRWZVZlRlVTJmSEdKOFc5S1FMZUttUU5NWEl4ZXRBMTFz?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-11-10T10:24:16+00:00",
-      "summary": "神達財報／第3季本業續創新高 EPS 達1.42元&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "NVIDIA股價重挫 費半、那指竟能大漲？這反常現象反映2大因素 - 聚財網",
-      "url": "https://news.google.com/rss/articles/CBMiTEFVX3lxTE8wSjVfUlhIY3FpaFV6c1hKdUU1S0RuU1IyRTZoMFZ3VkNVMFh0NENyVDgycjlwOFZ4M1ptWVhrSGpXaGdoSjhvbVNBTzY?oc=5",
-      "source": "聚財網",
-      "published_at": "2026-11-10T10:16:12+00:00",
-      "summary": "NVIDIA股價重挫 費半、那指竟能大漲？這反常現象反映2大因素&nbsp;&nbsp;聚財網"
-    },
-    {
-      "title": "新台幣再逼近33元 央行尾盤急拉由貶翻升收32.865元 - 自由財經",
-      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE11bjlQd3I5c0xrN09vbExjUnhJY2pTMGRlY3MtSEUwRjdxZEFlQkpPbF9CSDdsQWZpY0JCZ3RmOHp5OHd2TjU1bFYzNXNjWUJwS1RxMHpteTlyQU01UnFR0gFkQVVfeXFMUDBESTJQZUtQRzZaR3pSQXJlSXFFZ2lhSFdlWFhzQjhHMWtMWFBWdEszRS1FZlUxSUFlOU1KNGhmMTJJMndLMC1oZWQwWUlrZVRtd0c5cjNxYndxRjdoVTZOSzJVcQ?oc=5",
-      "source": "自由財經",
-      "published_at": "2026-11-10T10:15:54+00:00",
-      "summary": "新台幣再逼近33元 央行尾盤急拉由貶翻升收32.865元&nbsp;&nbsp;自由財經"
-    },
-    {
-      "title": "新台幣再逼近33元 央行尾盤急拉由貶翻升收32.865元 - 自由時報",
-      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE1hWmRmWjAzTDNjUlRjeFlXSmpZWXlxMVBYTGRlNTltVFltQ0pVS0EyTGFkYklUYXlNdGhEbjBWS21Wa0QxclJydmxOYWN1UXR4eFFoc2c0OTg?oc=5",
-      "source": "自由時報",
-      "published_at": "2026-11-10T10:15:54+00:00",
-      "summary": "新台幣再逼近33元 央行尾盤急拉由貶翻升收32.865元&nbsp;&nbsp;自由時報"
-    },
-    {
-      "title": "良維財報／第3季獲利6.74億元、創單季新高 前三季與去年全年相當 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1wVmNCei1yLVNIZnFyUHp3bEtmLXQ2VnhDb19EUFZxOVZiTlBMY3FBTl9JSGplQUk1TFJFTV9va2Y5N2xieXFBWlotYkZUWXNmdmF2S2Qzd1dCeFXSAWBBVV95cUxNajJJcVV5SWhfcTFLUU1CaUNkWllkUm9DelQtSUJla21BdDc5VC16VHo4ekxjSmpvMWNSTXYyT3JlWGRscFhZYTg3VTlLdlFqd1NqLVZHLXEtYUdjMmlHbkc?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-11-10T10:13:45+00:00",
-      "summary": "良維財報／第3季獲利6.74億元、創單季新高 前三季與去年全年相當&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "一度收復4萬3大關！台股早盤漲1400點 湧賣壓收盤漲1050點 | TVBS - LINE TODAY",
-      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTFBTVkV6M09HOVRGQlRKbF9ETlpiZzd3S0ZKZnBOQTNzZUozeFVMMXhDV2xJQkROZUE2UkI5b2V5ZDA2ZkNoT094bjhCMFJtNzc0QUtaYWxB?oc=5",
-      "source": "LINE TODAY",
-      "published_at": "2026-11-10T10:09:09+00:00",
-      "summary": "一度收復4萬3大關！台股早盤漲1400點 湧賣壓收盤漲1050點 | TVBS&nbsp;&nbsp;LINE TODAY"
-    },
-    {
-      "title": "NVIDIA股價重挫 費半、那指竟能大漲？這反常現象反映2大因素 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTFBYY3ZLZndTbzhDTllXS0FZYnBDSVVsUEVncE9HNW5KOFdmY2l3UEJFMXBUZXdoTnp6YWtDVlU0YWFUS3dvV3JLQXdrQXJPZ1Zwa2hNdl94TjA4bGlxdmR0SHRR0gFiQVVfeXFMUFhjdktmd1NvOENOWVdLQVlicENJVWxQRWdwT0c1bko4V2ZjaXdQQkUxcFRld2hOenpha0NWVTRhYVRLd29XcktBd2tBck9nVnBraE12X3hOMDhsaXF2ZHRIdFE?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-11-10T09:51:54+00:00",
-      "summary": "NVIDIA股價重挫 費半、那指竟能大漲？這反常現象反映2大因素&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "輝達股價重挫 費半、那指竟能大漲？這反常現象反映兩大因素 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE1ubXBTNGdvNTc3QmxDa001ZFZLUlc0N1kwbU15amlWZlFhTkpMd3Y3M2JRcmNJLTJ4S1ZnYlpISDhhSkM4UDRaOEVMMXpTSHdwTnJnakkzUFkza09x0gFiQVVfeXFMUFhjdktmd1NvOENOWVdLQVlicENJVWxQRWdwT0c1bko4V2ZjaXdQQkUxcFRld2hOenpha0NWVTRhYVRLd29XcktBd2tBck9nVnBraE12X3hOMDhsaXF2ZHRIdFE?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-11-10T09:51:54+00:00",
-      "summary": "輝達股價重挫 費半、那指竟能大漲？這反常現象反映兩大因素&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "輝達股價重挫 費半、那指竟能大漲？這反常現象反映兩大因素 | 美股動態 | 國際 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE1ubXBTNGdvNTc3QmxDa001ZFZLUlc0N1kwbU15amlWZlFhTkpMd3Y3M2JRcmNJLTJ4S1ZnYlpISDhhSkM4UDRaOEVMMXpTSHdwTnJnakkzUFkza09x?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-11-10T09:51:54+00:00",
-      "summary": "輝達股價重挫 費半、那指竟能大漲？這反常現象反映兩大因素 | 美股動態 | 國際&nbsp;&nbsp;經濟日報"
-    },
-    {
-      "title": "NVIDIA股價重挫費半、那指竟能大漲？這反常現象反映2大因素| 全球財經| 全球 - UDN",
-      "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxNUlZPYmxwN0dXVk9obDJ5MjBXQ1pWYmliQnBEWk13ejVkczEwN0R3aTBJejV6ZXJ5YmsxWnppRnVKNG1XN0t1UFhCS1BlR0YwNDlCbjU2YVp0TDdmamNhUjZhRFdueUhjUTFfOF8tWDJwWlVQLVgxRklpVkRyb05BQw?oc=5",
-      "source": "UDN",
-      "published_at": "2026-11-10T09:51:51+00:00",
-      "summary": "NVIDIA股價重挫費半、那指竟能大漲？這反常現象反映2大因素| 全球財經| 全球&nbsp;&nbsp;UDN"
-    },
-    {
-      "title": "NVIDIA股價重挫費半、那指竟能大漲？ 這反常現象反映2大因素| 全球財經| 全球 - udn",
-      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTE9lanYxRm5EdmJuekwtTnkzVXNwbG05ejBCZDVYVnVjLWYxZlJsQlBhUzNxQXFFSnJ0Z2hzejg3bEVPV2F3ZGhjZG1NVnN3dFZI?oc=5",
-      "source": "udn",
-      "published_at": "2026-11-10T09:51:51+00:00",
-      "summary": "NVIDIA股價重挫費半、那指竟能大漲？ 這反常現象反映2大因素| 全球財經| 全球&nbsp;&nbsp;udn"
     }
   ]
 }
