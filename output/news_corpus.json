@@ -1,12 +1,40 @@
 {
-  "updated_at": "2026-11-12T15:01:45.920788+00:00",
+  "updated_at": "2026-11-12T16:01:57.005082+00:00",
   "articles": [
+    {
+      "title": "存0050的人注意 台積電權重近6成 - 短新聞SHOTNEWS",
+      "url": "https://news.google.com/rss/articles/CBMiVEFVX3lxTFByUVd2eW5ySHJtNF8zdVl6aDV2NHZ3em1QRThHM2k0SjlhbEJmZkVxZi1VcDlQNHloTVdsQndHT28yNmNYT1RYRk1zdEl2MVdhbkZkcA?oc=5",
+      "source": "短新聞SHOTNEWS",
+      "published_at": "2026-11-12T15:53:00+00:00",
+      "summary": "存0050的人注意 台積電權重近6成&nbsp;&nbsp;短新聞SHOTNEWS"
+    },
+    {
+      "title": "12檔中低價題材股逆勢揚 匯聚人氣 - 經濟日報",
+      "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE5vc1ZiS1o1Y1psdmMxSjF1QWpPTUhVNU1OOHRXSnJSOTlQUURGbldfbU1NMDRzRlhzRVZ0Y0VkeThjMTFIX3EtTmp4SmY2YVpXU25OWGJ3SmFpZ9IBX0FVX3lxTE9FbjBsS3FVdHZEellJdjZmR0ltN2d4ellLOHRUOFMtNjRKNHpWWE9raFFqalpfcnVJQkQ3RUNBa1lKUzhqVUN4LXl0Mkx6X0tyVVl3UlFXODNHTFZwa1Qw?oc=5",
+      "source": "經濟日報",
+      "published_at": "2026-11-12T15:45:49+00:00",
+      "summary": "12檔中低價題材股逆勢揚 匯聚人氣&nbsp;&nbsp;經濟日報"
+    },
+    {
+      "title": "美股早盤／黃仁勳辭職下台 Nvidia市值跌破4兆美元 - 世界新聞網",
+      "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE96UXM2WUZaX0RnZHZTaTN5b2lXTENvbV96MWg5a0JTTXJqalhoNjhpcGtNdXpZUlR6YmI4OVUxTzAwVTJ4QlVHSkY3WVE5LUZxdmNwbGhNTnZwXzVjSUZEWVhR0gFnQVVfeXFMTncxWTZVWFdQZ3VzdWJCOTdZRnF1VWw5cXdkOVJvYzFFRjhPaktGeEVGTUVNZnZmd1Z4ZU5PdU96aWtwazJkS2toZ3NMazZWaEFFYUpON0VzQnRma0s3b0g5Vzl6dXNqaw?oc=5",
+      "source": "世界新聞網",
+      "published_at": "2026-11-12T14:57:49+00:00",
+      "summary": "美股早盤／黃仁勳辭職下台 Nvidia市值跌破4兆美元&nbsp;&nbsp;世界新聞網"
+    },
     {
       "title": "黃仁勳請辭震撼市場！美股4大指數全倒、輝達一度崩跌12% 台積電ADR、台指期同步下挫 - FTNN 新聞網",
       "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTE1oVHZNNVBPMl9XdWJxcmp2ejZaT2x2OUR6T05zeU9EeUdBa2YyQTVRSUdsYndqQmo0Rk8tSVFnT0tOWTd2LVlSblpuYw?oc=5",
       "source": "FTNN 新聞網",
       "published_at": "2026-11-12T14:40:00+00:00",
       "summary": "黃仁勳請辭震撼市場！美股4大指數全倒、輝達一度崩跌12% 台積電ADR、台指期同步下挫&nbsp;&nbsp;FTNN 新聞網"
+    },
+    {
+      "title": "TWA00 加權指數- 黃仁勳婚外情風波以及大盤趨勢慣性改變- 股市爆料同學會 - CMoney",
+      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE5fbFU3R0hMU3hyTzBDcjVzbmRyVzB3dXkxN2RqUEk5LVNSS3hxcGo0RUZSSlAwbl9oQkdqX29BbVF2enRDYVdYSEtJc1RWanBoS290Tnd5VjE?oc=5",
+      "source": "CMoney",
+      "published_at": "2026-11-12T14:07:35+00:00",
+      "summary": "TWA00 加權指數- 黃仁勳婚外情風波以及大盤趨勢慣性改變- 股市爆料同學會&nbsp;&nbsp;CMoney"
     },
     {
       "title": "台股暴跌1165點！外資僅賣6.85億 專家揭「多軍互打」真相 - 三立新聞網SETN.com",
@@ -506,6 +534,13 @@
       "summary": "2317 鴻海 - 投信+29 緯創-232 廣達+906 - 股市爆料同學會&nbsp;&nbsp;CMoney"
     },
     {
+      "title": "輝達概念股慘綠！台股收跌1165點 法人曝後市三劇本 - Yahoo股市",
+      "url": "https://news.google.com/rss/articles/CBMi0wJBVV95cUxONFJUeC0xWXg1eVJUdW5uSkhSYmlMTW45Ukxib3pzTHotb2xkM2NJTFlteUFWTmhjWVFJeU1xZTFBbFFpSkE2UzNyWWd5a3pmRGdTdFFsc0JuWjA0dzN4SEhDbDBsNEZWRjR0SmNUMjhTdlp5RHhCM05hZlBQMDVob1g2czB6bm5uajBKd2t6eThYc0xUVXF2V05vZDJPQjU4REcyajctd0JSTUtKd3NPT09vTnp4ZEJhOVd2aGdoa3dkVVdBRm9yZnZqNjRMdko5Ukw2RV93bjgwNWFPOXJUdWtBaFQtdlZqWWJlX19KQTF1MnJXRFVnd1RwT2RCbDNoU0dDYWJocFRGNV9BbEpOQ2MyM3Y4X0JkM2JDQmlNU2pCRE5hdlNINTlHak5jV2tGRWU4bm1ncXJBU1JUQVg0aXk2NlF1NDJXVGtBUEtQUjFpcFk?oc=5",
+      "source": "Yahoo股市",
+      "published_at": "2026-11-12T06:54:27+00:00",
+      "summary": "輝達概念股慘綠！台股收跌1165點 法人曝後市三劇本&nbsp;&nbsp;Yahoo股市"
+    },
+    {
       "title": "外資賣超還沒完？緊盯台幣32.X元止跌訊號！該買台積電還聯發科？一張賺240萬？許博傑喊：現在不買什麼時候買 - 今周刊",
       "url": "https://news.google.com/rss/articles/CBMigAFBVV95cUxNdlM2dVA0dHBwZE9ScFlxeG14QVctbElLdkRKMm9FX3VlbFBBQ0hMNC1HdVNjSzFRNTExOUJhSnNoVzh0MEI4T3VOaklTSTBiUEFpRDhKczFMUmxreTlQWmd2bEpXQU1MZlRoVDZ1NE43MHBEZVF6bWhrcVpwN0pVYw?oc=5",
       "source": "今周刊",
@@ -555,13 +590,6 @@
       "summary": "《匯市》外資狂賣台股10天不手軟！台幣貶不停 「33元防線又拉警報」&nbsp;&nbsp;富聯網"
     },
     {
-      "title": "輝達概念股慘綠！台股收跌1165點 法人曝後市三劇本 - Yahoo股市",
-      "url": "https://news.google.com/rss/articles/CBMi0wJBVV95cUxONFJUeC0xWXg1eVJUdW5uSkhSYmlMTW45Ukxib3pzTHotb2xkM2NJTFlteUFWTmhjWVFJeU1xZTFBbFFpSkE2UzNyWWd5a3pmRGdTdFFsc0JuWjA0dzN4SEhDbDBsNEZWRjR0SmNUMjhTdlp5RHhCM05hZlBQMDVob1g2czB6bm5uajBKd2t6eThYc0xUVXF2V05vZDJPQjU4REcyajctd0JSTUtKd3NPT09vTnp4ZEJhOVd2aGdoa3dkVVdBRm9yZnZqNjRMdko5Ukw2RV93bjgwNWFPOXJUdWtBaFQtdlZqWWJlX19KQTF1MnJXRFVnd1RwT2RCbDNoU0dDYWJocFRGNV9BbEpOQ2MyM3Y4X0JkM2JDQmlNU2pCRE5hdlNINTlHak5jV2tGRWU4bm1ncXJBU1JUQVg0aXk2NlF1NDJXVGtBUEtQUjFpcFk?oc=5",
-      "source": "Yahoo股市",
-      "published_at": "2026-11-12T06:10:00+00:00",
-      "summary": "輝達概念股慘綠！台股收跌1165點 法人曝後市三劇本&nbsp;&nbsp;Yahoo股市"
-    },
-    {
       "title": "三大法人買賣超 – 外資買超(1802)台玻、(1815)富喬，投信買超(2330)台積電、(3443)創意，法人合計賣超945.26億元 - 永豐金證券",
       "url": "https://news.google.com/rss/articles/CBMixwRBVV95cUxPbnh2dzJRTXJRSUJ6NkRJaVdPc0Z5dlZxREpKM3V2Z0VrX09VLTRlZ2JGYXhZT1RjQ3NZeFpGaGExVXM0S2ZLMTB1dG1xeU5jMWw4eVR0S0RaSTVaSFFibnBvVGxuakRBWVI0WFJsNmhEeGMycmpFWW5wUk5RV0ZwSFI2cHJtb2tYU28zMy01X0Y2Q2pFS3RGQmxKUU13b1ltNk5FZnFVWjVFaV9ibzZaR3dRVTFjdVdGSFdRR09qaHNrT3c0RHY1dThaZDdmeWYxVVBrN284SWZORl9DMHNuVnhMOURab0M1ZkFiUDBHU3NsbkQwSU1SY3F4OWZZYXRuZ3d4TWVJdHZpS2E0NUhYT1ZkcXNSNEg0S0Job09oZGpnUTNZbEdiYlBOVUVhQ1hXckRtYzJCZG1jc25fMHM0ek1uazB0YzZFeHhHV3lRS1BqTDgzUl9JcElrVFN6SUY2elhxd1R5V3Jkb2xaMVJMS0szZ0hKbWdDQTZzN3Bsa29pVXlEdkRiZnVfWnI2VTN4SWNXVzgteDZYREpzMDM2Y3pPUjlOdGpzMGI0V2tpT1dTLWg3cm5UNXNVSVpsVEJtODAxNy1HNzlqYVNNUFh5cjBmQUpNbU5XT1AzVXdFTWNMNVFHSnlmZVJNeXcyNkhoeXowUTJJY1ZnMnlRMW9KLXQtb0ZiOTFSejU5OV9RU1l3WXpMdXVJblY2NS1nSWVPZExrcjU2R2oycmRvclc3RnhIb3RXTU5LaXhCVl9TOURYd0NpVndr?oc=5",
       "source": "永豐金證券",
@@ -569,18 +597,18 @@
       "summary": "三大法人買賣超 – 外資買超(1802)台玻、(1815)富喬，投信買超(2330)台積電、(3443)創意，法人合計賣超945.26億元&nbsp;&nbsp;永豐金證券"
     },
     {
-      "title": "今日台股》台股尾盤賣壓湧現！終場下跌1165元 上沖下洗逾1700點 - 蕃新聞",
-      "url": "https://news.google.com/rss/articles/CBMiUkFVX3lxTE5rVUU0S1FNMDBlV0hKeklSeVNvYVJWeTZvdVFMbjdEaTR2ZDY5UHVTaEd3aWlIRllaLURudVFITUV6ekxVYkI0WlAyTTFobENhZnc?oc=5",
-      "source": "蕃新聞",
-      "published_at": "2026-11-12T06:01:13+00:00",
-      "summary": "今日台股》台股尾盤賣壓湧現！終場下跌1165元 上沖下洗逾1700點&nbsp;&nbsp;蕃新聞"
-    },
-    {
       "title": "今日台股》台股尾盤賣壓湧現！終場下跌1165元 上沖下洗逾1700點 - PChome Online 新聞",
       "url": "https://news.google.com/rss/articles/CBMihwFBVV95cUxNS2xwenA1bHhnUGt3OUMyY2xCT1lzMTZ4YmhBZnp5R0pwek1aWFBuNEFpYl9keEhqNlJ4d0VFZ0Q2WUlZbzVTdEk1UWtZRTFaM0JybF9CSWJuNzJGMW5PTnVrVkhHd19OdjdsQjBwM2pUQXlTQ19HaDlMWXB5b3UtQlc4bjlHZlk?oc=5",
       "source": "PChome Online 新聞",
       "published_at": "2026-11-12T06:01:13+00:00",
       "summary": "今日台股》台股尾盤賣壓湧現！終場下跌1165元 上沖下洗逾1700點&nbsp;&nbsp;PChome Online 新聞"
+    },
+    {
+      "title": "今日台股》台股尾盤賣壓湧現！終場下跌1165元 上沖下洗逾1700點 - 蕃新聞",
+      "url": "https://news.google.com/rss/articles/CBMiUkFVX3lxTE5rVUU0S1FNMDBlV0hKeklSeVNvYVJWeTZvdVFMbjdEaTR2ZDY5UHVTaEd3aWlIRllaLURudVFITUV6ekxVYkI0WlAyTTFobENhZnc?oc=5",
+      "source": "蕃新聞",
+      "published_at": "2026-11-12T06:01:13+00:00",
+      "summary": "今日台股》台股尾盤賣壓湧現！終場下跌1165元 上沖下洗逾1700點&nbsp;&nbsp;蕃新聞"
     },
     {
       "title": "三福化衝CoWoS材料出貨，半導體占比續揚 - 台視全球資訊網",
@@ -609,6 +637,13 @@
       "source": "鉅亨號",
       "published_at": "2026-11-12T05:36:26+00:00",
       "summary": "理財有夠跩 - Jimmy高志銘&nbsp;&nbsp;鉅亨號"
+    },
+    {
+      "title": "資安危機？台積電：無證據顯示系統遭入侵 | 經濟日報 - LINE TODAY",
+      "url": "https://news.google.com/rss/articles/CBMiVkFVX3lxTFBNckRfNjQxMU05Z3Y3TE40MWkwbHJ2aHlzdkJZaVZ1TUlpbGNYbW9wbmxGZ21NRGxTVWpCNWlfVU9oR2JFZ3lad2pfMGZTZnZNeE43Q2ln?oc=5",
+      "source": "LINE TODAY",
+      "published_at": "2026-11-12T05:32:33+00:00",
+      "summary": "資安危機？台積電：無證據顯示系統遭入侵 | 經濟日報&nbsp;&nbsp;LINE TODAY"
     },
     {
       "title": "美元站上103、輝達人事風波擾台股 新台幣午盤貶至32.916元 - 自由財經",
@@ -905,6 +940,13 @@
       "summary": "老AI目標價一升一降！廣達「毛利率摔破5％」遭投顧下修緯創靠這優勢逆襲- 上市櫃&nbsp;&nbsp;旺得富理財網"
     },
     {
+      "title": "AI伺服器帶動台系代工營收｜新聞事件整理與重點摘要 - Yahoo股市",
+      "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTE1NenNhbFVGMW5BV01TajRYZlV5Q2JvQ3ZYaXVLN2oyVk92UTMyTFJNSlN0YmNDY2hWdHFTdjFvZ1dQTG5xNW5uMEtzWnFZeTZMQlNCUy1ZYkN4anhWejJINFRHUDVRV0w3NzF4TVlWWENZTzlvMjhwNVFRVUFnT1U?oc=5",
+      "source": "Yahoo股市",
+      "published_at": "2026-11-12T02:51:16+00:00",
+      "summary": "AI伺服器帶動台系代工營收｜新聞事件整理與重點摘要&nbsp;&nbsp;Yahoo股市"
+    },
+    {
       "title": "AI伺服器帶動台系代工營收｜新聞事件整理與重點摘要 - Yahoo新聞",
       "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTFBwMVRiMUpRYW9YeHEyb3VTd090S2RKZ1F3emVSdk5vbkFwM1UxcEJkWHZxMlhHSGdVN0F5VUJjS2RreHBQeFhVdW82V0RUc0pFdU1nZXU3TUI4cDZYd1o1ejVwMms1OHJmUUd4dm5sT3UzeS1pZTREVWhYcUJ5dw?oc=5",
       "source": "Yahoo新聞",
@@ -962,7 +1004,7 @@
     },
     {
       "title": "日東紡產能吃緊！台玻10月營收年增56% 爆量36萬張飆漲停 - TVBS新聞網",
-      "url": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE84Mkp4bnIwM3RQMHJURTB6NWRLTzNHeXh6NTYxV0JGLUNobFdpNWxzT3dBNjYyUTFFTWtTLVBsbnVwZkVsSzZfZXdnS1Atc2c?oc=5",
+      "url": "https://news.google.com/rss/articles/CBMiTkFVX3lxTFBnOG9RR1BMMl9WcXo1X0RYcGszTElFSWJleFFKLXlSUzNwanNzRnExUGR5QmstR0FVSFVtc29kbDRjc3N1Ri1tNnFjV2Judw?oc=5",
       "source": "TVBS新聞網",
       "published_at": "2026-11-12T02:20:00+00:00",
       "summary": "日東紡產能吃緊！台玻10月營收年增56% 爆量36萬張飆漲停&nbsp;&nbsp;TVBS新聞網"
@@ -1500,6 +1542,13 @@
       "summary": "台積：半導體聚落難複製&nbsp;&nbsp;UDN"
     },
     {
+      "title": "「輝達親兒子」CoreWeave 報喜 上修今年財測 鴻海、技嘉等受惠 - 經濟日報",
+      "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTFB2X0ZKNVZZaFFFa0FNVzlGc0pRMnhRYXdxYjZhRS1OdklxRVh6REo3VEpZVDBxV1k1cVpuMXVQdXFHVkhpWUJBVmNGdkVtR3JGY0FfVTRnM1pkRm13T2FjdDZLbTB1Wm93VGVudlNQZk9xdHpmYVdiTnBn0gFgQVVfeXFMT3FTb0Rqb1E4SGlaOWU4QmNXVnhjb1piWFFodDBqVGtzRmlPYlZPeHR6MlRqSXVsSFcxb3ZCMVN5VklXb2hMSGJYanExUmpLb3J4VUFRLU52OTdUZzRZNXV4?oc=5",
+      "source": "經濟日報",
+      "published_at": "2026-11-11T18:13:34+00:00",
+      "summary": "「輝達親兒子」CoreWeave 報喜 上修今年財測 鴻海、技嘉等受惠&nbsp;&nbsp;經濟日報"
+    },
+    {
       "title": "2317 鴻海 - 廣達及緯創已公告的Q3財報內容- 股市爆料同學會 - CMoney",
       "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE9HcE85REwzR0NRTW5uaUN2RmViWUhUQkdnOEFDV1ltUnI4UkhnQTctRnVNUi1tWU5Oc21aeFlIcnpyZ0Q3c2xLZEpGMWdYY0Y3cDRNcUE1SUk?oc=5",
       "source": "CMoney",
@@ -1542,13 +1591,6 @@
       "summary": "台股V型反彈 挑戰單周最大漲點！指數年底前上看48,200點&nbsp;&nbsp;udn"
     },
     {
-      "title": "「輝達親兒子」CoreWeave 報喜 上修今年財測 鴻海、技嘉等受惠 - 經濟日報",
-      "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTFAtdlF0aW40VVpMbEYtZk5VNzVPUUFKeTVQOEE3cmhfbldveGxVMTNGTFE0YzZXcjBtM2Z3Ym5zQ3EwdWtMYl95Zk1ZRThkZnZFT0g4MDZudy1DR1nSAWBBVV95cUxPcVNvRGpvUThIaVo5ZThCY1dWeGNvWmJYUWh0MGpUa3NGaU9iVk94dHoyVGpJdWxIVzFvdkIxU3lWSVdvaExIYlhqcTFSaktvcnhVQVEtTnY5N1RnNFk1dXg?oc=5",
-      "source": "經濟日報",
-      "published_at": "2026-11-11T17:00:00+00:00",
-      "summary": "「輝達親兒子」CoreWeave 報喜 上修今年財測 鴻海、技嘉等受惠&nbsp;&nbsp;經濟日報"
-    },
-    {
       "title": "台股主動式ETF量價俱揚 00992A飆近20%居冠 - UDN",
       "url": "https://news.google.com/rss/articles/CBMiU0FVX3lxTFAxMnBTeUxlQzF1eGROTmxyc1dVdzBZamg4YlNPU0Fpank2N1ZzWjdZSGo3NW9wUmxNRkJiZV9OQWZQcnlQUEc5Q3drQTlhNzdqLUhn0gFYQVVfeXFMTXI4X0NWYUNnVmRHYUJUTEtJcy1BTlQ0bWhtWmpmRTlvemI0MEFmY2VtMHFjdW5LUmpkTHNjUzdWZFdLcFBvSVVIN2xMdXB3NGVhUzdpdTEwWg?oc=5",
       "source": "UDN",
@@ -1577,11 +1619,25 @@
       "summary": "陳嘉偉警告無量急彈跌更快：恐再崩5000點&nbsp;&nbsp;鏡週刊Mirror Media"
     },
     {
+      "title": "(5269)祥碩法說會 2026/11、祥碩財報、祥碩展望、祥碩財報投資亮點｜理柴知道:法說最速報! - 方格子 - vocus",
+      "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTFBfeXBGUmtORHNha2lkTUdEMmI0V3B4eFpWMElYU1dGLUotWEZOUTVmQ3lHUGhlQlllQWRMTUpvbnQzQmwwVGwzSV8yd3BJbDJKaVZRMm5kTDNUYXU3RnZUcVpiZ9IBY0FVX3lxTFBfeXBGUmtORHNha2lkTUdEMmI0V3B4eFpWMElYU1dGLUotWEZOUTVmQ3lHUGhlQlllQWRMTUpvbnQzQmwwVGwzSV8yd3BJbDJKaVZRMm5kTDNUYXU3RnZUcVpiZw?oc=5",
+      "source": "vocus",
+      "published_at": "2026-11-11T16:19:16+00:00",
+      "summary": "(5269)祥碩法說會 2026/11、祥碩財報、祥碩展望、祥碩財報投資亮點｜理柴知道:法說最速報! - 方格子&nbsp;&nbsp;vocus"
+    },
+    {
       "title": "(3167)大量法說會 2026/11、大量財報、大量展望、大量財報投資亮點｜理柴知道:法說最速報! - 方格子 - vocus",
       "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTFByRGI5UmhQOTd4WW9Eakh2YkNDLXZnMW9senVreC1STWU4RURGMXo2VGp0eFg3VFpROVlock1nNk9mZjVFaGFuelRJaW5YLV9jZjBRaHNudlFvTnlpcWpZZmZ6VdIBY0FVX3lxTFByRGI5UmhQOTd4WW9Eakh2YkNDLXZnMW9senVreC1STWU4RURGMXo2VGp0eFg3VFpROVlock1nNk9mZjVFaGFuelRJaW5YLV9jZjBRaHNudlFvTnlpcWpZZmZ6VQ?oc=5",
       "source": "vocus",
       "published_at": "2026-11-11T16:19:15+00:00",
       "summary": "(3167)大量法說會 2026/11、大量財報、大量展望、大量財報投資亮點｜理柴知道:法說最速報! - 方格子&nbsp;&nbsp;vocus"
+    },
+    {
+      "title": "(3017)奇鋐法說會 2026/11、奇鋐財報、奇鋐展望、奇鋐財報投資亮點｜理柴知道:法說最速報! - 方格子 - vocus",
+      "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTE1UcmVBUnkwTTRzeTc3bVF5NXVkcUxMQVBMMmlSeFQ3WWlZZ3daalJkZGdYTVl1VXpPUXp5Qi1BQUhYV2FEVUtLeV8yY0EwVEhvVi14R085bEZMUWhSQ2x1Z3Rfc9IBY0FVX3lxTE1UcmVBUnkwTTRzeTc3bVF5NXVkcUxMQVBMMmlSeFQ3WWlZZ3daalJkZGdYTVl1VXpPUXp5Qi1BQUhYV2FEVUtLeV8yY0EwVEhvVi14R085bEZMUWhSQ2x1Z3Rfcw?oc=5",
+      "source": "vocus",
+      "published_at": "2026-11-11T16:19:15+00:00",
+      "summary": "(3017)奇鋐法說會 2026/11、奇鋐財報、奇鋐展望、奇鋐財報投資亮點｜理柴知道:法說最速報! - 方格子&nbsp;&nbsp;vocus"
     },
     {
       "title": "沛爾失智症新藥報捷 搶攻全球每年兆元商機 - 經濟日報",
@@ -1617,20 +1673,6 @@
       "source": "vocus",
       "published_at": "2026-11-11T15:56:01+00:00",
       "summary": "(6231)系微法說會 2026/11、系微財報、系微展望、系微財報投資亮點｜理柴知道:法說最速報! - 方格子&nbsp;&nbsp;vocus"
-    },
-    {
-      "title": "(5269)祥碩法說會 2026/11、祥碩財報、祥碩展望、祥碩財報投資亮點｜理柴知道:法說最速報! - 方格子 - vocus",
-      "url": "https://news.google.com/rss/articles/CBMiXkFVX3lxTE1IekJyUHJDLThWWlU3VUVFUTltUHhVT01fU2t1MGxyTUstS3QzemxGMnRMRjAwUFphQWJ2dFJReVlTWlJfT3pQdFJPdzhPcEJzVXRTR1FOZVg0YVNjbFHSAWNBVV95cUxQX3lwRlJrTkRzYWtpZE1HRDJiNFdweHhaVjBJWFNXRi1KLVhGTlE1ZkN5R1BoZUJZZUFkTE1Kb250M0JsMFRsM0lfMndwSWwySmlWUTJuZEwzVGF1N0Z2VHFaYmc?oc=5",
-      "source": "vocus",
-      "published_at": "2026-11-11T15:55:23+00:00",
-      "summary": "(5269)祥碩法說會 2026/11、祥碩財報、祥碩展望、祥碩財報投資亮點｜理柴知道:法說最速報! - 方格子&nbsp;&nbsp;vocus"
-    },
-    {
-      "title": "(3017)奇鋐法說會 2026/11、奇鋐財報、奇鋐展望、奇鋐財報投資亮點｜理柴知道:法說最速報! - 方格子 - vocus",
-      "url": "https://news.google.com/rss/articles/CBMiXkFVX3lxTE1GYlpPUktlWmRfRW0zdHFFcmlvTjZUcFJGVmd3TExqejJ5Tm1MRFhOcUxwYm1seWliLTg1Sy1Pdnh5TVVGS0d3MmVUMWRyYXE4dndmM2s4TjBLTFlVeEHSAWNBVV95cUxNVHJlQVJ5ME00c3k3N21ReTV1ZHFMTEFQTDJpUnhUN1lpWWd3WmpSZGRnWE1ZdVV6T1F6eUItQUFIWFdhRFVLS3lfMmNBMFRIb1YteEdPOWxGTFFoUkNsdWd0X3M?oc=5",
-      "source": "vocus",
-      "published_at": "2026-11-11T15:54:05+00:00",
-      "summary": "(3017)奇鋐法說會 2026/11、奇鋐財報、奇鋐展望、奇鋐財報投資亮點｜理柴知道:法說最速報! - 方格子&nbsp;&nbsp;vocus"
     },
     {
       "title": "台積、台達電 認購火 | 權證特區 | 證券 - 經濟日報",
@@ -3458,48 +3500,6 @@
       "source": "世界新聞網",
       "published_at": "2026-11-10T15:21:07+00:00",
       "summary": "美股早盤／費半摔1.5% 分析師：黃仁勳若離職 輝達價值恐減三成&nbsp;&nbsp;世界新聞網"
-    },
-    {
-      "title": "AI伺服器接單強英業達看旺明年　Q3獲利卻慘摔逾三成 - 鏡週刊Mirror Media",
-      "url": "https://news.google.com/rss/articles/CBMiZEFVX3lxTFBPcl9paVl0aDNrNHNPbkhELVBsN0dEaF81NWpCQUpzUjByVGl4RTR4Y1EwdG9JTUNSak85ZEVaNU03UXhqanQ5T01FNWI2aFNiUGhWbXVmN01nQkZwUUYtNmlOWW3SAWhBVV95cUxPNFZjYkYyUlpXTEp4bzk4NXIwVVowWVk3VG1hdFloa0YwTUZqdFZYU1VUY3ZtN1ExUWhJeDdWMlZnamxLYjJYWWpHVC1oTERiMVVrY3N0R0RWRUJVN0lvTDRYM2ZpUEg0Mw?oc=5",
-      "source": "鏡週刊Mirror Media",
-      "published_at": "2026-11-10T14:55:00+00:00",
-      "summary": "AI伺服器接單強英業達看旺明年　Q3獲利卻慘摔逾三成&nbsp;&nbsp;鏡週刊Mirror Media"
-    },
-    {
-      "title": "美股早盤／費半摔1.5%！分析師：黃仁勳若離職輝達價值恐減三成| 全球財經| 全球 - UDN",
-      "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTE5jTVNCMENhajRJczg2bkVMZ2NGTGs4VWNYVzE1XzZOd3pRNlBLTmxQenZBY3JIS0wyc0t5TUd1Z2p5U1JWdzh3Q2lZeElacW56?oc=5",
-      "source": "UDN",
-      "published_at": "2026-11-10T14:39:32+00:00",
-      "summary": "美股早盤／費半摔1.5%！分析師：黃仁勳若離職輝達價值恐減三成| 全球財經| 全球&nbsp;&nbsp;UDN"
-    },
-    {
-      "title": "【台灣】台積電 10 月營收再創歷史新高，Q4 營收有望超越財測 - TradingView",
-      "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTFBBM182aHpHSjQzN3FiSWw2WnRrbUN3Mmp2Qi1FN1pnM1dzWUpWVTMtejQxVHl0U1V6ZnQzQ2lOSnlJTkNwZFZXaktRNXBRMWpNUG5mN2dFSC1nUUV1UXNSWmVpZ1M4b2VoOUxN?oc=5",
-      "source": "TradingView",
-      "published_at": "2026-11-10T14:39:31+00:00",
-      "summary": "【台灣】台積電 10 月營收再創歷史新高，Q4 營收有望超越財測&nbsp;&nbsp;TradingView"
-    },
-    {
-      "title": "2330 台積電 - 台積電代子公司TSMC Partners, Ltd.公告擬投資OpenAI Group PBC - 股市爆料同學會 - CMoney",
-      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE9BQmQ2S3F5d1BHNzMtYkE2UGsyZGViZ1NzWWlFWElPNGcwNUwyenJNaWFNd01vanhPM3Awa1BvZnRBQlU2SENqOGVPNjF3V0tZUWx3SG5qN2Y?oc=5",
-      "source": "CMoney",
-      "published_at": "2026-11-10T14:34:23+00:00",
-      "summary": "2330 台積電 - 台積電代子公司TSMC Partners, Ltd.公告擬投資OpenAI Group PBC - 股市爆料同學會&nbsp;&nbsp;CMoney"
-    },
-    {
-      "title": "台股反彈有底？台積電漲50元收2285元 投顧：別急著追高 - FTNN 新聞網",
-      "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTE1YUzEtbTB3VTNPRHpDdEdaZnp0Y1ZWcXV5d2NsSDR5ZmFncU5PV3UtUS0yaFYwc1ozek5FYjZKYS1ZRmpjNzBSS3QzWQ?oc=5",
-      "source": "FTNN 新聞網",
-      "published_at": "2026-11-10T14:10:00+00:00",
-      "summary": "台股反彈有底？台積電漲50元收2285元 投顧：別急著追高&nbsp;&nbsp;FTNN 新聞網"
-    },
-    {
-      "title": "TWA00 加權指數- 以下針對目前台股的籌碼面與技術面進行客觀拆解。 - 股市爆料同學會 - CMoney",
-      "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTFAtT3RPNld0NE9qbG02c3ZrdW54cFRxZHUwQ0hiVWlEWVVhVHNEX2ZqQlp1LU9idHJhdExQZUtueXlUT3lxeGJkSkl0OWN2YVpSa0trWEFERDU?oc=5",
-      "source": "CMoney",
-      "published_at": "2026-11-10T14:06:52+00:00",
-      "summary": "TWA00 加權指數- 以下針對目前台股的籌碼面與技術面進行客觀拆解。 - 股市爆料同學會&nbsp;&nbsp;CMoney"
     }
   ]
 }
