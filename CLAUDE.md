@@ -46,7 +46,15 @@ React frontend (web/src/**, OK to modify)
 - 開 Pull Request（草稿）
 
 限制（硬規則）：
-- **不要自動 merge**（PR 一律交人工審核）
+- **合併 PR：有條件授權**（2026-11-16 使用者明確覆寫原本的「不要自動 merge」）
+  - 原規則為「PR 一律交人工審核」。使用者於 2026-11-16 以選項形式明確授權 Claude 合併，但附帶條件。
+  - **三個條件必須同時成立才可合併**：
+    1. CI 全綠（所有 check run 皆 success）
+    2. 無未解決的 review finding（含 Codex / 其他 review bot；已修正或已回覆說明才算解決）
+    3. 無 merge conflict（`mergeable_state` 為 `clean`）
+  - **任何一項不成立就停下來問使用者**，不得自行判斷「應該沒差」而合併。
+  - 合併後若發現問題，回報並修，不得隱匿。
+  - 此授權僅限合併「Claude 自己開的 PR」；他人開的 PR 一律不碰。
 - **不要改 API key、token、secrets**（不讀取、不輸出、不修改任何憑證）
 - **不要刪除資料庫或重要資料**（`output/`、`models/`、`training_data/` 等）
 - **不要直接改 `main`**；所有修改都開新 branch + PR
