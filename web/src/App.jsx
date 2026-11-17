@@ -8,7 +8,6 @@ import { checkPriceFreshness } from './utils/priceFreshness.js'
 
 // Lazy-load non-landing tabs so the initial bundle only contains Overview
 const Dashboard = lazy(() => import('./components/Dashboard.jsx'))
-const NewsFeed = lazy(() => import('./components/NewsFeed.jsx'))
 const PredictionPanel = lazy(() => import('./components/PredictionPanel.jsx'))
 const AgentPanel = lazy(() => import('./components/AgentPanel.jsx'))
 const QuotaPanel = lazy(() => import('./components/QuotaPanel.jsx'))
@@ -33,7 +32,6 @@ const TABS = [
   { key: 'aitrader',   label: 'AI操盤', icon: '🤖' },
   { key: 'perf',       label: '績效', icon: '💰' },
   { key: 'monitor',    label: '盯盤', icon: '📈' },
-  { key: 'news',       label: '新聞', icon: '📰' },
   { key: 'predict',    label: '預測', icon: '🔮' },
   { key: 'fstrategy',  label: '期策', icon: '🧪' },
   { key: 'studio',     label: '圓桌', icon: '🎯' },
@@ -50,7 +48,6 @@ const TAB_TITLES = {
   aitrader:  'AI 系統交易員',
   perf:      '績效驗證與持倉建議',
   monitor:   '即時盯盤',
-  news:      '市場新聞',
   predict:   '盤前預測',
   fstrategy: '自訂策略期貨預測',
   studio:    'AI 圓桌研究室',
@@ -441,7 +438,6 @@ export default function App() {
       case 'aitrader':   return <AITrader data={data} />
       case 'perf':       return <Performance data={data} />
       case 'monitor':    return <LiveMonitor data={data} />
-      case 'news':       return <NewsFeed staticNews={data?.news} refreshSignal={refreshCount} data={data} />
       case 'predict':    return <PredictionPanel prediction={data?.prediction} history={data?.predictionHistory || []} benchCurve={data?.aiTrader?.benchmark?.curve || []} realOutcomes={data?.realOutcomes || null} futuresChips={data?.futuresChips || null} modelHealth={data?.modelHealth || null} />
       case 'fstrategy':  return <FuturesStrategyLab prediction={data?.prediction} history={data?.predictionHistory || []} realOutcomes={data?.realOutcomes || null} futuresChips={data?.futuresChips || null} />
       case 'studio':     return null
