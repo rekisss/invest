@@ -5,6 +5,7 @@ gsap.registerPlugin(useGSAP)
 import StockDetailModal from './StockDetailModal'
 import { getStockHistories } from '../utils/histCache'
 import { industryCategoryLabel } from '../utils/industryCategory'
+import { currentAggregate } from '../utils/aggregateFreshness'
 
 /* ── Live Market Constants ───────────────────────────────────────── */
 const LIVE_CACHE_KEY = 'live_mkt_v1'
@@ -1092,7 +1093,9 @@ export default function Overview({ data, error }) {
   const marketData = pred?.market_data || null
   const winRate = pred?.regime?.win_rate || null
   const aiInsight = pred?.ai_insight || ''
-  const calendarRisk = data?.aggregateLatest?.calendar_risk || scan?.calendar_risk || ''
+  // 當期的 aggregate 才採用,否則會把幾個月前的行事曆風險當成本週的。
+  // Dashboard.jsx 早就是這個寫法(aggLatest?.date === selectedDate),這裡補上。
+  const calendarRisk = currentAggregate(data)?.calendar_risk || scan?.calendar_risk || ''
   const entryStocks = stocks.filter(s => s.entry_signal)
 
   return (

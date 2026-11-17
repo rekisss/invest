@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useLivePricesPlus, STREAM_PRIORITY } from '../hooks/ShioajiStreamContext.jsx'
+import { freshScanRows } from '../utils/aggregateFreshness'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const POS_KEY = 'tw_portfolio_positions'
@@ -13,17 +14,11 @@ function fmt(v, d = 2) { return v == null || isNaN(v) ? '—' : Number(v).toFixe
 function pctStr(v, d = 1) { return v == null || isNaN(v) ? '—' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(d)}%` }
 function colorOf(v) { return v == null ? 'var(--ios-label3)' : v >= 0 ? UP : DOWN }
 
-function latestScan(data) {
-  const scans = data?.scans || {}
-  for (const d of Object.keys(scans).sort().reverse()) {
-    const s = scans[d]
-    if (s && ((s.top_stocks && s.top_stocks.length) || (s.filter_stocks && s.filter_stocks.length))) return s
-  }
-  return null
-}
 function scanLookup(data) {
-  const s = latestScan(data)
-  const rows = [...(data?.aggregateLatest?.top_stocks || []), ...(s?.top_stocks || []), ...(s?.filter_stocks || [])]
+  // freshScanRows() 會把過期的 aggregate 整份擋掉(詳見 utils/aggregateFreshness.js)。
+  // 這裡特別需要那道閘門:下面的 tiebreak 是「欄位最多的那筆贏」,跟順序無關,
+  // 所以光把 aggregate 排到後面救不了——aggregate 的列欄位多,照樣會蓋過當日掃描。
+  const rows = freshScanRows(data)
   const byId = {}
   for (const r of rows) {
     const id = String(r.stock_id)

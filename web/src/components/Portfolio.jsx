@@ -4,6 +4,7 @@ import { isScanDataCurrent } from '../hooks/useLivePrices'
 import { useLivePricesPlus, STREAM_PRIORITY } from '../hooks/ShioajiStreamContext.jsx'
 import { getStockHistories } from '../utils/histCache'
 import { computeTargets } from '../utils/tradePlan'
+import { freshScanRows } from '../utils/aggregateFreshness'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 gsap.registerPlugin(useGSAP)
@@ -17,25 +18,14 @@ function savePositions(p) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)) } catch {}
 }
 
-// Find the most recent scan object that actually has stock rows.
-function latestScan(data) {
-  if (!data?.scans) return null
-  const dates = Object.keys(data.scans).sort().reverse()
-  for (const d of dates) {
-    const s = data.scans[d]
-    if (s && ((s.top_stocks && s.top_stocks.length) || (s.filter_stocks && s.filter_stocks.length))) return s
-  }
-  return null
-}
-
 // All searchable scan rows (top_stocks rich + filter_stocks slim), latest scan + aggregate.
+//
+// 順序很要緊:getScanClose() 用 .find() 取第一筆,所以排前面的會贏。
+// aggregate_latest.json 的內容可能凍了好幾個月(詳見 utils/aggregateFreshness.js),
+// 以前它排在最前面 → 持股只要落在它那 20 檔裡,損益就是用過期價算的。
+// 現在交給 freshScanRows():當日掃描在前,aggregate 只在當期時才納入、且排最後。
 function scanRows(data) {
-  const s = latestScan(data)
-  return [
-    ...(data?.aggregateLatest?.top_stocks || []),
-    ...(s?.top_stocks || []),
-    ...(s?.filter_stocks || []),
-  ]
+  return freshScanRows(data)
 }
 
 function getScanClose(stockId, rows) {

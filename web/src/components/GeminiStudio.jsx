@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { currentAggregate, freshScanRows } from '../utils/aggregateFreshness'
 
 // ── Claude-powered multi-agent roundtable ────────────────────────────────────
 // Six roles discuss a stock using scan data + system-computed technical levels:
@@ -275,7 +276,9 @@ function buildStrategyBrief(data) {
   }
 
   // Latest aggregate picks — concrete examples for the agents to analyze
-  const aggStocks = data?.aggregateLatest?.top_stocks || []
+  // 只在 aggregate 當期時才給。過期的話這段會把幾個月前的 20 檔標成
+  // 「最新精選」餵給 AI,AI 會照著過期價格與過期理由做分析。
+  const aggStocks = currentAggregate(data)?.top_stocks || []
   if (aggStocks.length) {
     lines.push(`\n【最新精選 TOP${Math.min(aggStocks.length, 10)} 範例（aggregateLatest）】`)
     aggStocks.slice(0, 10).forEach(s => {
@@ -286,7 +289,9 @@ function buildStrategyBrief(data) {
     })
   }
 
-  const market = data.prediction || data.aggregateLatest
+  // prediction 不在時才退到 aggregate,而且同樣只收當期的——
+  // 否則 prob / vix / 期貨淨額會是幾個月前的盤勢。
+  const market = data.prediction || currentAggregate(data)
   if (market) {
     const prob = market.xgb_prob_up ?? market.xgb_prob
     const extras = []
@@ -465,18 +470,10 @@ async function callClaude(apiKey, model, systemPrompt, userPrompt, onChunk, maxT
 
 // ── Stock resolution + technical level computation ───────────────────────────
 
+// resolveStock() 取第一筆相符的列,再據此算 levels / audit / brief,
+// 所以這份順序直接決定 AI 看到的價格。aggregate 過期時整份擋掉、當期時排最後。
 function allScanRows(data) {
-  const dates = Object.keys(data?.scans || {}).sort().reverse()
-  let scan = null
-  for (const d of dates) {
-    const sc = data.scans[d]
-    if (sc && ((sc.top_stocks && sc.top_stocks.length) || (sc.filter_stocks && sc.filter_stocks.length))) { scan = sc; break }
-  }
-  return [
-    ...(data?.aggregateLatest?.top_stocks || []),
-    ...(scan?.top_stocks || []),
-    ...(scan?.filter_stocks || []),
-  ]
+  return freshScanRows(data)
 }
 
 function resolveStock(stockId, data) {
@@ -686,9 +683,10 @@ export default function GeminiStudio({ data }) {
     }
   }, [])
 
-  const candidates = (data?.aggregateLatest?.top_stocks || []).slice(0, 20)
-  const market = (data?.prediction || data?.aggregateLatest) ? {
-    prob: data?.prediction?.xgb_prob_up ?? data?.aggregateLatest?.xgb_prob_up,
+  const aggCurrent = currentAggregate(data)
+  const candidates = (aggCurrent?.top_stocks || []).slice(0, 20)
+  const market = (data?.prediction || aggCurrent) ? {
+    prob: data?.prediction?.xgb_prob_up ?? aggCurrent?.xgb_prob_up,
     vix: data?.prediction?.vix,
     futures: data?.prediction?.futures_net,
   } : null
