@@ -52,13 +52,19 @@ React frontend (web/src/**, OK to modify)
 - 開 Pull Request（草稿）
 
 限制（硬規則）：
-- **合併 PR：有條件授權**（2026-11-16 使用者明確覆寫原本的「不要自動 merge」）
+- **合併 PR：有條件授權**（2026-11-16 使用者明確覆寫原本的「不要自動 merge」；
+  2026-11-17 使用者進一步指示「你自動幫我不用經過codex」，取消「等 review bot」這一關）
   - 原規則為「PR 一律交人工審核」。使用者於 2026-11-16 以選項形式明確授權 Claude 合併，但附帶條件。
-  - **三個條件必須同時成立才可合併**：
+  - **兩個條件必須同時成立才可合併**：
     1. CI 全綠（所有 check run 皆 success）
-    2. 無未解決的 review finding（含 Codex / 其他 review bot；已修正或已回覆說明才算解決）
-    3. 無 merge conflict（`mergeable_state` 為 `clean`）
-  - **任何一項不成立就停下來問使用者**，不得自行判斷「應該沒差」而合併。
+    2. 無 merge conflict（`mergeable_state` 為 `clean`）
+  - **不必等 Codex / 其他 review bot 的 review 回來**（2026-11-17 使用者明確指示）。
+    原本的條件②（無未解決的 review finding）就此取消。
+    CI 與衝突這兩關**仍然保留** —— 使用者沒有要求跳過，且紅燈或有衝突就合併會把問題帶進 `main`。
+  - 「不等 Codex」**不等於「忽視 Codex」**：
+    - finding 在合併前已經出現 → 仍要自己驗證（不照單全收），真的就修，不成立就在該 thread 回覆理由
+    - finding 在合併後才出現 → 依下面「合併後若發現問題，回報並修」處理，用後續 PR 修正
+  - **這兩項不成立就停下來問使用者**，不得自行判斷「應該沒差」而合併。
   - 合併後若發現問題，回報並修，不得隱匿。
   - 此授權僅限合併「Claude 自己開的 PR」；他人開的 PR 一律不碰。
 - **不要改 API key、token、secrets**（不讀取、不輸出、不修改任何憑證）
