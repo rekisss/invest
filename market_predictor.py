@@ -384,7 +384,12 @@ class MarketPredictor:
             df = self._merge_external(df, inst_df, _INST_FEATURES)
 
         # Require ≥0.3% gain to count as "up" — filters near-zero noise
-        df["target"] = (df["close"].shift(-self.horizon) > df["close"] * 1.003).astype(float)
+        # 最後 horizon 筆的未來收盤還不存在,標籤必須是 NaN(下面 dropna 才會丟掉)。
+        # 2026-11 修正:舊寫法 `(shift(-h) > close).astype(float)` 會把 NaN 比較成 False → 0,
+        # 最新 5 筆(包含 predict_proba 正要預測的那一列)全被當成「沒漲」拿去訓練,
+        # 等於先告訴模型答案是跌 → 系統性偏空(實測說漲比例 43.8% vs 實際上漲 53.8%)。
+        _future = df["close"].shift(-self.horizon)
+        df["target"] = np.where(_future.notna(), (_future > df["close"] * 1.003).astype(float), np.nan)
         feat_cols = (
             _BASE_FEATURES
             + [c for c in _US_FEATURES if c in df.columns]
