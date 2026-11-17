@@ -8,8 +8,14 @@
 - 所有功能改進只在 `web/` 前端加，或在 `build-data.mjs` 做 build-time enrichment
 
 ### 前端修改原則
-- 所有對 Dashboard / NewsFeed / PredictionPanel 的改動必須是**加法**（新增元件、新增欄位），不改現有邏輯
+- 所有對 Dashboard / PredictionPanel 的改動必須是**加法**（新增元件、新增欄位），不改現有邏輯
 - 不刪除現有功能
+  - **例外（2026-11-16 使用者明確指示）**：移除「新聞」分頁與 `NewsFeed.jsx` 元件。
+    使用者在知悉本條規則的情況下，仍選擇「分頁 + 刪掉 NewsFeed 元件」。
+    範圍僅限前端呈現層：`data.json` 的 `news` 欄位、`build-data.mjs` 的新聞讀取/抓取、
+    以及 `news_sentiment`（`PredictionPanel` / `GeminiStudio` 的預測輸入）**全部保留不動**，
+    因為那屬於策略輸入，不在此次授權範圍內。
+  - 此例外不擴及其他功能；要再刪任何功能仍須個別取得明確指示。
 
 ### 動畫一律使用 anime.js
 - 所有動畫**一律使用 anime.js**（https://github.com/juliangarnier/anime ，目前 v4，`import { animate, stagger, spring } from 'animejs'`）
