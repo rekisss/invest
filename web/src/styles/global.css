@@ -113,12 +113,23 @@
     --ios-fill3:  rgba(0,0,0,0.03);
     --ios-fill4:  rgba(0,0,0,0.02);
 
-    --ios-blue:   #007aff;
-    --ios-green:  #34c759;
-    --ios-red:    #ff3b30;
-    --ios-orange: #ff9500;
-    --ios-yellow: #ffcc00;
-    --ios-purple: #af52de;
+    /* 語意色:淺色模式用加深版,不是 Apple 的原值。
+       原因——Apple 這組值是給「色塊配白字」用的,當**文字色**放在淺色背景上
+       對比度遠低於 WCAG AA(4.5:1):
+         yellow #ffcc00 → 1.33:1   orange #ff9500 → 1.94:1   green #34c759 → 1.95:1
+         red    #ff3b30 → 3.12:1   blue   #007aff → 3.54:1   purple #af52de → 3.64:1
+       而這六個變數在本專案被大量當文字色用(光 --ios-yellow 就 61 處),
+       其中包含損益數字 —— 也就是說淺色模式下「賠多少」那個綠字幾乎看不見。
+       下面的值保留原色相、只降明度,量到 --ios-bg3(#f0f0f5,較暗的那個背景)
+       皆 ≥4.5:1。深色模式的原值全部已達 AA(4.98~9.41:1),所以不動。
+       這組值有回歸測試把關:web/scripts/theme-contrast.test.mjs
+       背景用途不受影響——它們一律搭配白字,調暗只會讓白字更清楚。 */
+    --ios-blue:   #0068d9;
+    --ios-green:  #187d31;
+    --ios-red:    #d90e02;
+    --ios-orange: #9e5c00;
+    --ios-yellow: #826800;
+    --ios-purple: #a32fde;
 
     --shadow-card:  0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.06);
     --shadow-modal: 0 16px 40px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.07);
@@ -147,12 +158,23 @@
   --ios-fill3:  rgba(0,0,0,0.03);
   --ios-fill4:  rgba(0,0,0,0.02);
 
-  --ios-blue:   #007aff;
-  --ios-green:  #34c759;
-  --ios-red:    #ff3b30;
-  --ios-orange: #ff9500;
-  --ios-yellow: #ffcc00;
-  --ios-purple: #af52de;
+  /* 語意色:淺色模式用加深版,不是 Apple 的原值。
+     原因——Apple 這組值是給「色塊配白字」用的,當**文字色**放在淺色背景上
+     對比度遠低於 WCAG AA(4.5:1):
+       yellow #ffcc00 → 1.33:1   orange #ff9500 → 1.94:1   green #34c759 → 1.95:1
+       red    #ff3b30 → 3.12:1   blue   #007aff → 3.54:1   purple #af52de → 3.64:1
+     而這六個變數在本專案被大量當文字色用(光 --ios-yellow 就 61 處),
+     其中包含損益數字 —— 也就是說淺色模式下「賠多少」那個綠字幾乎看不見。
+     下面的值保留原色相、只降明度,量到 --ios-bg3(#f0f0f5,較暗的那個背景)
+     皆 ≥4.5:1。深色模式的原值全部已達 AA(4.98~9.41:1),所以不動。
+     這組值有回歸測試把關:web/scripts/theme-contrast.test.mjs
+     背景用途不受影響——它們一律搭配白字,調暗只會讓白字更清楚。 */
+  --ios-blue:   #0068d9;
+  --ios-green:  #187d31;
+  --ios-red:    #d90e02;
+  --ios-orange: #9e5c00;
+  --ios-yellow: #826800;
+  --ios-purple: #a32fde;
 
   --shadow-card:  0 1px 3px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.06);
   --shadow-modal: 0 16px 40px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.07);
