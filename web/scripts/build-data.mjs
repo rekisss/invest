@@ -19,6 +19,7 @@ import { enrichFromBars, isTradable, MIN_TURNOVER } from './pool-metrics.mjs'
 import { seededRank, summarizeControl, scoreAgainstControl, DEFAULT_SEEDS } from './random-control.mjs'
 import { makeKlineQualityGate } from './kline-quality.mjs'
 import { summarizeStockFreshness } from './price-freshness.mjs'
+import { isAggregateCurrent, aggregateLagDays } from './aggregate-freshness.mjs'
 import { buildOrderTicket, summarizeTickets, addTradingDaysEst } from '../src/utils/tradePlan.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -1330,6 +1331,33 @@ if (aggregateLatest) {
   }
 }
 
+// 過期的 aggregate 不寫進 data.json ——────────────────────────────────────────
+//
+// 上面注入 scans 時早就有把關(而且註解明講過「stale aggregate 不可成為
+// dates[0]」),但檔案最後還是把原始 aggregateLatest 無條件寫出去,前端好幾處
+// 就直接把它當「最新」用。2026-06-22 那份凍結 148 天的 aggregate 因此讓持股
+// 用六月價算損益(誤差中位數 33.8%、最大 55.84%)。
+//
+// 前端已經有 utils/aggregateFreshness.js 擋著,這裡是第二道、也是更根本的一道:
+// 過期的資料連進 data.json 的機會都不給,前端就不必各自防守。判定沿用同一支
+// 共用函式,避免兩邊規則漂移。
+//
+// 注意順序:一定要在上面的注入區塊**之後**才算,這樣 scans 已包含任何注入,
+// 判定才會自洽(真的被注入 → 它就是最新 → 落後 0~1 天 → 當期 → 照寫)。
+const aggGateInput = { scans, aggregateLatest }
+const aggregateIsCurrent = isAggregateCurrent(aggGateInput)
+const aggregateForOutput = aggregateIsCurrent ? aggregateLatest : null
+if (aggregateLatest && !aggregateIsCurrent) {
+  const lag = aggregateLagDays(aggGateInput)
+  console.warn(
+    `  ⚠️  aggregate_latest.json 已過期(內部 date=${aggregateLatest.date}` +
+    `${lag == null ? '' : `,落後最新掃描日 ${lag} 天`}) —— 不寫入 data.json。` +
+    `沒有任何 workflow 會更新這個檔案,若已不需要可考慮移除。`
+  )
+} else if (aggregateLatest) {
+  console.log(`  aggregate_latest.json 當期(date=${aggregateLatest.date}),寫入 data.json`)
+}
+
 // Inject K-line data — read from kline_cache.json (populated by kline-fetch.yml workflow)
 // Falls back to live fetch (with TOKEN_10 → TOKEN_1) if cache is missing
 console.log('Loading K-line data...')
@@ -2458,7 +2486,7 @@ try {
 } catch (e) { console.warn('Watch-five skipped:', e.message) }
 
 const dataGeneratedAt = new Date().toISOString()
-writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks, gradeDigest, modelHealth, watchFive, klineQuality, priceFreshness }), 'utf-8')
+writeFileSync(OUTPUT_FILE, JSON.stringify({ generated_at: dataGeneratedAt, last_scan_exec_date: lastScanExecDate, dates, scans, prediction, predictionHistory, realOutcomes, news, quota, notionMap, aggregateLatest: aggregateForOutput, outcomeStats, strategyAccuracy, dataQuality, aiTrader, aiReports, futuresChips, pickConcentration, revGrowthPicks, gradeDigest, modelHealth, watchFive, klineQuality, priceFreshness }), 'utf-8')
 console.log(`data.json written (${(readFileSync(OUTPUT_FILE).length / 1024).toFixed(0)} KB)`)
 
 // Small sidecar so the frontend can cheaply check "did anything change?" (a few

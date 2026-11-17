@@ -149,3 +149,47 @@ test('回歸:aggregate 當期時仍要照用(閘門不能一律封死)', () => {
   assert.equal(rows.length, 2)
   assert.equal(rows.find(r => r.stock_id === '9999')?.close, 10, 'aggregate 獨有的列仍要可見')
 })
+
+// ── build 端:過期的 aggregate 不寫進 data.json ───────────────────────────────
+//
+// build-data.mjs 用同一支函式決定要不要把 aggregateLatest 寫出去。這裡用
+// build 端的輸入形狀({ scans, aggregateLatest })把那個決策固定下來,避免
+// 日後有人改動注入邏輯時讓兩邊的規則漂移。
+
+test('build 端:過期 aggregate → 不寫出(null)', () => {
+  // 真實情境:aggregate 停在 2026-06-22,最新掃描是 2026-11-16。
+  // 注意六月那份**會**被注入 scans 當成歷史掃描日(按時間順序插入,不是 dates[0]),
+  // 所以 scans 同時有兩個日期 —— 判定必須挑到最新那個才會算出 147 天。
+  const input = {
+    scans: {
+      '2026-06-22': { top_stocks: [{ stock_id: '6213', close: 308 }] },
+      '2026-11-16': { top_stocks: [{ stock_id: '6213', close: 480 }] },
+    },
+    aggregateLatest: { date: '2026-06-22', top_stocks: [{ stock_id: '6213', close: 308 }] },
+  }
+  assert.equal(aggregateLagDays(input), 147)
+  assert.equal(isAggregateCurrent(input), false)
+  assert.equal(currentAggregate(input), null, 'build 應寫出 null')
+})
+
+test('build 端:真的被注入成最新 → 當期,照寫出', () => {
+  // aggregate 比所有 CSV 掃描都新時,build-data.mjs 會把它注入成最新掃描日。
+  // 判定必須在注入**之後**才算,否則會把剛注入的那份誤判成過期。
+  const agg = { date: '2026-11-17', top_stocks: [{ stock_id: '2330', close: 1000 }] }
+  const input = {
+    scans: {
+      '2026-11-16': { top_stocks: [{ stock_id: '2330', close: 990 }] },
+      '2026-11-17': { top_stocks: agg.top_stocks, from_aggregate_json: true },
+    },
+    aggregateLatest: agg,
+  }
+  assert.equal(aggregateLagDays(input), 0)
+  assert.equal(isAggregateCurrent(input), true)
+  assert.equal(currentAggregate(input), agg, '當期就該照寫出,閘門不是一律封死')
+})
+
+test('build 端:沒有 aggregate 檔案時不丟例外', () => {
+  const input = { scans: { '2026-11-16': { top_stocks: [{ stock_id: '1' }] } }, aggregateLatest: null }
+  assert.equal(isAggregateCurrent(input), false)
+  assert.equal(currentAggregate(input), null)
+})
