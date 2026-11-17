@@ -12,7 +12,16 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from kline_fetch import DAILY_KEEP_BARS, merge_period_bars, trim_daily_bars
+from kline_fetch import (
+    CACHE_FAIL_MIB,
+    CACHE_WARN_MIB,
+    DAILY_KEEP_BARS,
+    MONTHLY_KEEP_BARS,
+    WEEKLY_KEEP_BARS,
+    merge_period_bars,
+    trim_daily_bars,
+    trim_period_bars,
+)
 
 
 def _bar(day: str, close: float = 100.0) -> dict:
@@ -125,3 +134,99 @@ def test_merge_with_empty_sides():
     assert merge_period_bars([], new) == new
     old = [_bar("2024-01-01")]
     assert merge_period_bars(old, []) == old
+
+
+# ── 週/月 K 的上限 (2026-11) ───────────────────────────────────────────────────
+#
+# 日 K 自 2026-09 起就有 DAILY_KEEP_BARS 把關,但週/月 K 當時刻意不裁
+# (merge_period_bars 的用意是「裁日 K 不要連累週/月 K」),於是它們成了整個檔案
+# 裡唯一無界成長的部分。實測 2026-11-16 的 kline_cache.json(67.7 MiB/1562 檔):
+#     日 K 44.6 MiB (65.8%) 平均 297.9 根 ← 有上限
+#     週 K 18.6 MiB (27.5%) 平均 122.7 根 ← 無上限,2024-06 起一路累積
+#     月 K  4.5 MiB ( 6.7%) 平均  29.5 根 ← 無上限
+# 合計每年約 +9.7 MiB → 約 3 年後再次撞上 100 MiB,2026-09 的故障會重演。
+
+
+def test_trim_period_從最舊那端裁():
+    """最新一根會被新資料覆蓋更新,不能動尾端。"""
+    bars = [_bar(f"2024-{m:02d}-01", float(m)) for m in range(1, 13)]
+    out = trim_period_bars(bars, 3)
+    assert [b["time"] for b in out] == ["2024-10-01", "2024-11-01", "2024-12-01"]
+    assert out[-1] is bars[-1], "最後一根必須原封不動"
+
+
+def test_trim_period_比上限短就不動():
+    bars = [_bar("2024-01-01"), _bar("2024-02-01")]
+    assert trim_period_bars(bars, 10) == bars
+    assert trim_period_bars(bars, 2) == bars
+
+
+def test_trim_period_上限為零或None代表不裁():
+    bars = [_bar(f"2024-{m:02d}-01") for m in range(1, 13)]
+    assert trim_period_bars(bars, 0) == bars
+    assert trim_period_bars(bars, None) == bars
+    assert trim_period_bars(bars, -5) == bars
+
+
+def test_trim_period_空陣列不丟例外():
+    assert trim_period_bars([], 10) == []
+
+
+def test_上限必須高於目前實際用量_才不會真的少給資料():
+    """上限的用意是「封住無界成長」,不是拿少給資料換檔案大小。
+
+    2026-11-16 實測的平均值是週 122.7 根、月 29.5 根;上限訂在其上,
+    所以導入當下一根都不會被裁(已用真實快取驗證:週 0 根、月 0 根)。
+    """
+    assert WEEKLY_KEEP_BARS > 123, "週 K 上限不可低於目前實際平均,否則會真的砍掉資料"
+    assert MONTHLY_KEEP_BARS > 30, "月 K 上限不可低於目前實際平均"
+
+
+def test_週K上限不可低於前端最大可選根數():
+    """StockDetailModal 的根數選擇器是 60/120/250/全。
+
+    250 以目前的資料量本來就是灰的(totalBarsAvail >= n 才可選),
+    但 120 必須留得住 —— 上限低於 120 會讓那個按鈕也變灰。
+    """
+    assert WEEKLY_KEEP_BARS >= 120
+
+
+def test_合併後再裁_順序不可顛倒():
+    """先裁再合併會把「日 K 還完整時算出來的」舊區間丟掉,上限也對不到最新那批。"""
+    old = [_bar(f"2024-{m:02d}-01", float(m)) for m in range(1, 13)]
+    new = [_bar("2025-01-01", 99.0)]
+    merged = merge_period_bars(old, new)
+    kept = trim_period_bars(merged, 3)
+    assert [b["time"] for b in kept] == ["2024-11-01", "2024-12-01", "2025-01-01"]
+
+
+# ── 檔案大小守門 ──────────────────────────────────────────────────────────────
+#
+# 2026-09 的守門只有 logger.warning,workflow 照樣 exit 0 → 沒人看到,
+# 快取停更 41 天。現在超過 CACHE_FAIL_MIB 會讓 main() 回傳 1。
+
+
+def test_守門門檻的相對關係():
+    assert CACHE_WARN_MIB < CACHE_FAIL_MIB, "警戒線要在失敗線之前"
+    assert CACHE_FAIL_MIB < 100, (
+        "失敗線必須在 GitHub 的 100 MiB 硬上限之前 —— "
+        "等到超過 100 才失敗,push 已經被擋掉了"
+    )
+    assert CACHE_WARN_MIB >= 80, "警戒線太低會天天狼來了"
+
+
+def test_天花板估算要留在警戒線以下():
+    """每檔都到上限時的最壞情況,必須明顯低於 CACHE_WARN_MIB。
+
+    一根 bar 的 JSON 約 96~103 bytes(實測)。用 1800 檔估(目前 1562,留成長空間)。
+    """
+    stocks = 1800
+    mib = (
+        DAILY_KEEP_BARS * stocks * 96
+        + WEEKLY_KEEP_BARS * stocks * 102
+        + MONTHLY_KEEP_BARS * stocks * 103
+    ) / 1024 / 1024
+    assert mib < CACHE_WARN_MIB, (
+        f"最壞情況約 {mib:.0f} MiB,已超過警戒線 {CACHE_WARN_MIB} MiB —— "
+        f"把 DAILY/WEEKLY/MONTHLY_KEEP_BARS 調小"
+    )

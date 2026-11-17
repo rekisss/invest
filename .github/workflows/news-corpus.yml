@@ -38,4 +38,17 @@ jobs:
           git add output/news_corpus.json
           git diff --staged --quiet && echo "No changes" && exit 0
           git commit -m "news: 更新語料庫 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M') CST"
-          for i in 1 2 3; do git push && break; sleep $((i*5)); git pull --rebase origin main || true; done
+          # push 全部失敗時要讓這個 step 失敗 —— 原本的寫法會吞掉。
+          # 迴圈的退出碼是最後一個指令(`... || true`)的,所以就算 N 次 push 全被拒,
+          # step 還是 exit 0 → run 全綠、資料卻沒進 repo。9 月那次 kline 快取
+          # 連續 41 天沒更新而沒人發現,就是這個模式造成的。
+          pushed=0
+          for i in 1 2 3; do
+            git push && { pushed=1; break; }
+            sleep $((i*5))
+            git pull --rebase origin main || true
+          done
+          if [ "$pushed" != 1 ]; then
+            echo "::error::news 語料庫 push 連續 3 次失敗 —— 本次更新沒有進到 repo"
+            exit 1
+          fi

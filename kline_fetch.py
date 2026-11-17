@@ -63,6 +63,31 @@ DAILY_LOOKBACK = 730   # ~500 trading bars / ~2 years
 #     但比原本更接近標籤。這裡不動它的行為。
 DAILY_KEEP_BARS = 300
 
+# 週/月 K 也要有上限。
+# 日 K 自 2026-09 起已經有 DAILY_KEEP_BARS 把關,但週/月 K 當時刻意不裁
+# (merge_period_bars 的用意是「裁日 K 不要連累週/月 K」),結果它們成了檔案裡
+# 唯一無界成長的部分:
+#     實測 2026-11-16 的 kline_cache.json(67.7 MiB / 1562 檔)
+#       日 K  44.6 MiB (65.8%)  平均 297.9 根  ← 已有上限
+#       週 K  18.6 MiB (27.5%)  平均 122.7 根  ← 無上限,2024-06 起一路累積
+#       月 K   4.5 MiB ( 6.7%)  平均  29.5 根  ← 無上限
+#     週/月 K 合計每年約 +9.7 MiB → 約 3 年後再次撞上 100 MiB 硬上限。
+#
+# 數字怎麼挑的:
+#   - 都高於目前的實際平均(122.7 / 29.5),所以現在幾乎不會裁到東西,
+#     不是拿「少給資料」換檔案大小。
+#   - 週 130 也高於前端根數選擇器裡最大且目前可選的 120
+#     (StockDetailModal 的選項是 60/120/250/全;250 以目前資料量本來就是灰的)。
+#   - 最壞情況(每檔都到上限)天花板約 71 MiB,離 90 MiB 警戒線仍有餘裕。
+# 設成 0 或 None 代表不裁。
+WEEKLY_KEEP_BARS = 130    # ≈2.5 年
+MONTHLY_KEEP_BARS = 40    # ≈3.3 年
+
+# 快取大小守門。超過 100 MiB 的檔案 GitHub 的 pre-receive hook 會直接擋掉 push,
+# 2026-09 那次就是這樣讓快取整整 41 天沒更新而沒人發現。
+CACHE_WARN_MIB = 90   # 接近上限 → 警告
+CACHE_FAIL_MIB = 98   # 幾乎篤定推不上去 → 直接讓這次執行失敗,不要再靜靜地「成功」
+
 NOTION_API = "https://api.notion.com/v1"
 NOTION_VER = "2022-06-28"
 
@@ -486,6 +511,13 @@ def sync_to_notion(kline_map: dict[str, list], token: str, db_id: str) -> None:
 
 
 # ── Cache size control ────────────────────────────────────────────────────────
+def _keep_last(bars: list[dict], keep: int | None) -> list[dict]:
+    """保留最後 `keep` 根（假設已依 time 升冪排序）;keep 為 0/None 代表不裁。"""
+    if not keep or keep <= 0 or len(bars) <= keep:
+        return bars
+    return bars[-keep:]
+
+
 def trim_daily_bars(bars: list[dict], keep: int | None = DAILY_KEEP_BARS) -> list[dict]:
     """只保留最近 `keep` 根日 K（假設 bars 已依 time 升冪排序）。
 
@@ -493,9 +525,19 @@ def trim_daily_bars(bars: list[dict], keep: int | None = DAILY_KEEP_BARS) -> lis
     （main() 用 cached_daily[sid][-1]["time"] 決定下次要從哪天開始抓），
     裁掉尾端會讓增量邏輯重抓或漏抓。
     """
-    if not keep or keep <= 0 or len(bars) <= keep:
-        return bars
-    return bars[-keep:]
+    return _keep_last(bars, keep)
+
+
+def trim_period_bars(bars: list[dict], keep: int | None) -> list[dict]:
+    """只保留最近 `keep` 根週/月 K。
+
+    跟日 K 的理由不同:日 K 是為了檔案大小,而週/月 K 原本**完全沒有上限** ——
+    merge_period_bars 會把舊的週/月 K 一直留著(那是為了避免裁日 K 時連累它們),
+    於是它們變成檔案裡唯一單調成長的部分。這裡補上上限。
+
+    一樣從最舊那端裁:週/月 K 的最新一根會被新資料覆蓋更新,不能動尾端。
+    """
+    return _keep_last(bars, keep)
 
 
 def merge_period_bars(old_bars: list[dict], new_bars: list[dict]) -> list[dict]:
@@ -522,7 +564,7 @@ def merge_period_bars(old_bars: list[dict], new_bars: list[dict]) -> list[dict]:
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-def main() -> None:
+def main() -> int:
     logger.info("=== K-line incremental fetch (yfinance) ===")
 
     # ── 1. Collect stock IDs from last 30 days of scan CSVs ──────────────────
@@ -609,6 +651,7 @@ def main() -> None:
     total_new_bars = 0
 
     trimmed_bars = 0
+    trimmed_period = 0
 
     for sid in all_sids:
         old_entry = existing_cache.get(sid, {})
@@ -623,10 +666,15 @@ def main() -> None:
         monthly = merge_period_bars(old_entry.get("1mo", []), _resample(merged_daily, "M"))
         kept_daily = trim_daily_bars(merged_daily)
         trimmed_bars += len(merged_daily) - len(kept_daily)
+        # 先合併再裁:合併保住「日 K 被裁之前算出來的」舊區間,裁切才是依上限
+        # 取最近的 N 根。順序反過來會讓上限對不到真正最新的那批。
+        kept_weekly  = trim_period_bars(weekly,  WEEKLY_KEEP_BARS)
+        kept_monthly = trim_period_bars(monthly, MONTHLY_KEEP_BARS)
+        trimmed_period += (len(weekly) - len(kept_weekly)) + (len(monthly) - len(kept_monthly))
         kline_map[sid] = {
             "1d":  kept_daily,
-            "1wk": weekly,
-            "1mo": monthly,
+            "1wk": kept_weekly,
+            "1mo": kept_monthly,
         }
 
     covered = sum(1 for sid in stock_ids if kline_map.get(sid, {}).get("1d"))
@@ -637,7 +685,12 @@ def main() -> None:
     if trimmed_bars:
         logger.info(
             f"Trimmed {trimmed_bars} old daily bars "
-            f"(keeping last {DAILY_KEEP_BARS} per stock; weekly/monthly preserved)"
+            f"(keeping last {DAILY_KEEP_BARS} per stock)"
+        )
+    if trimmed_period:
+        logger.info(
+            f"Trimmed {trimmed_period} old weekly/monthly bars "
+            f"(keeping last {WEEKLY_KEEP_BARS} weekly / {MONTHLY_KEEP_BARS} monthly per stock)"
         )
 
     # ── 6. Save updated cache ─────────────────────────────────────────────────
@@ -646,8 +699,20 @@ def main() -> None:
     logger.info(
         f"Cache saved: {CACHE_FILE.name} ({len(kline_map)} stocks, 3 intervals, {size_mib:.1f} MiB)"
     )
-    # GitHub 單檔上限 100MiB，超過的話 push 會被 pre-receive hook 直接擋掉
-    if size_mib > 90:
+    # GitHub 單檔上限 100MiB，超過的話 push 會被 pre-receive hook 直接擋掉。
+    # 2026-09 那次只有 logger.warning,workflow 照樣 exit 0 → 沒人看到,
+    # 快取就這樣停更 41 天。超過 CACHE_FAIL_MIB 一定要讓這次執行失敗。
+    oversized = False
+    if size_mib >= CACHE_FAIL_MIB:
+        oversized = True
+        logger.error(
+            f"{CACHE_FILE.name} is {size_mib:.1f} MiB — at or past {CACHE_FAIL_MIB} MiB, "
+            f"GitHub's 100 MiB hard limit will reject the push and the cache will "
+            f"silently stop updating (this already happened in 2026-09). "
+            f"Lower DAILY_KEEP_BARS ({DAILY_KEEP_BARS}) / WEEKLY_KEEP_BARS "
+            f"({WEEKLY_KEEP_BARS}) / MONTHLY_KEEP_BARS ({MONTHLY_KEEP_BARS})."
+        )
+    elif size_mib > CACHE_WARN_MIB:
         logger.warning(
             f"{CACHE_FILE.name} is {size_mib:.1f} MiB — approaching GitHub's 100 MiB "
             f"file limit; consider lowering DAILY_KEEP_BARS (currently {DAILY_KEEP_BARS})"
@@ -673,7 +738,12 @@ def main() -> None:
         logger.error(f"Notion sync failed: {exc}")
 
     logger.info("=== Done ===")
+    # Excel / Notion 等後續工作照常做完才回報失敗 —— 快取過大不該讓它們也跟著不做。
+    if oversized:
+        logger.error("=== Finished with errors: cache file is too large to push ===")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
