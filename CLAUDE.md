@@ -5,6 +5,14 @@
 ### 絕對不能修改現有的 Python 程式
 - **不要改動** `main.py`, `data_loader.py`, `strategy.py`, `indicators.py`, `market_predictor.py`, `backtest.py`, `fundamentals.py`, `notifier.py`, `notion_sync.py`, `news_service.py`, `taiwan_futures.py`, `economic_calendar.py`, `claude_insight.py`, `universe.py`, `collect_training_data.py`, `train_model.py` 等所有 Python 檔案
 - **唯一例外**：用戶明確說「請修改 XXX Python 程式」才動
+  - **已用掉的一次性授權（2026-11-17）**：使用者以選項形式明確授權修改下列三項，
+    用詞為「你幫我解決」＋勾選「改 Python 3 項」。
+    1. `outcome_tracker.py` —— TOP20 快照日改以掃描資料自己的日期為準（CST/UTC 錯位）
+    2. `.github/workflows/` 的 `news-corpus` / `outcome-tracker` / `daily_report` /
+       `full_market_scan` —— retry 迴圈吞掉 `git push` 失敗
+    3. `kline_fetch.py` —— 週/月 K 加上保留上限、檔案過大時改為真的失敗
+  - **此授權僅限上述三項，已執行完畢，不得延伸到其他 Python 檔案或其他需求。**
+    之後要再動任何 Python，仍須重新取得明確授權。
 - 所有功能改進只在 `web/` 前端加，或在 `build-data.mjs` 做 build-time enrichment
 
 ### 前端修改原則

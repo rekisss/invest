@@ -34,6 +34,10 @@ Claude Code 開草稿 PR,Codex 自動審查每個 PR(在 Codex 設定開啟 *Aut
   合併後才出現的以後續 PR 修正。
   任一項不成立即停下詢問使用者。他人開的 PR 一律不碰。
   完整條文見 CLAUDE.md「自動化代理規則」。
+- 不改現有 Python,除非使用者明確授權。
+  已用掉的一次性授權(2026-11-17):`outcome_tracker.py` 的 TOP20 快照日錯位、
+  四個 workflow 吞掉 `git push` 失敗、`kline_fetch.py` 的週/月 K 上限與大小守門。
+  **僅限這三項且已執行完畢**,不延伸到其他 Python 檔案。詳見 CLAUDE.md「核心原則」。
 - 不要直接改 `main`;所有修改走 branch + PR。
 - 不要讀取、輸出或修改任何 secrets / token / API key。
 - 不要刪除 `output/`、`models/`、`training_data/` 等資料。

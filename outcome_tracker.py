@@ -668,22 +668,77 @@ def _top20(date: str) -> list[dict]:
             for r in ranked]
 
 
+def _scan_dates(upto: str) -> list[str]:
+    """output/full_scan 裡不晚於 upto 的掃描日(升冪,去重)。"""
+    out: set[str] = set()
+    for p in glob.glob(os.path.join(SCAN_DIR, "batch_seq*_*.csv")):
+        m = re.search(r"_(\d{4}-\d{2}-\d{2})\.csv$", os.path.basename(p))
+        if m and m.group(1) <= upto:
+            out.add(m.group(1))
+    return sorted(out)
+
+
+def _pending_scan_dates(hist: list, upto: str) -> list[str]:
+    """還沒快照、該補的掃描日(升冪)。
+
+    規則是「最後一筆既有快照之後、不晚於 upto 的所有掃描日」:
+      - 正常情況只有 0~1 天,日常行為跟以前一樣。
+      - 中斷過就會一次補齊中間漏掉的,不必人工一天一天跑 TRACK_DATE。
+      - 第一次執行(還沒有任何快照)只取最新一天,不回頭把整個歷史建起來。
+      - 刻意不補「早於既有快照起點」的日子 —— 那會改變資料集的起點,
+        不是修 bug 的範圍。
+    """
+    dates = _scan_dates(upto)
+    if not dates:
+        return []
+    have = {s.get("date") for s in hist if s.get("date")}
+    if not have:
+        return dates[-1:]
+    newest = max(have)
+    return [d for d in dates if d > newest]
+
+
 def track_top20(today: str, days: list[str] | None = None) -> None:
     hist = _load_json(TOP20_OUT, [])
-    top = _top20(today)
-    if top:
-        hist = [s for s in hist if s.get("date") != today]  # 冪等
-        hist.append({"date": today, "stocks": top})
-        hist.sort(key=lambda s: s["date"])
-        print(f"[top20] {today} 快照 {len(top)} 支")
-    else:
-        print(f"[top20] {today} 無掃描資料，跳過快照（僅回填）")
 
-    closes_today = _load_closes(today)
+    # 快照日以「掃描資料自己的日期」為準,不用時鐘。
+    #
+    # 為什麼——本檔排程寫的是 09:45 UTC,但實際執行會被 GitHub 延遲到
+    # 15:30~20:05 UTC 不等。一旦跑在 16:00 UTC 之後(= CST 午夜之後),
+    # _today() 就已經是隔天,而 CSV 檔名用的是台股交易日,於是
+    # glob("batch_seq*_<隔天>.csv") 什麼都找不到,印一行「無掃描資料」就跳過,
+    # 然後 exit 0 —— run 是綠的,資料卻整天沒進來。
+    #
+    # 實際後果:2026-10-27 那次跑在 15:31 UTC(壓線成功),隔天 16:15 UTC 起
+    # 連續 14 個交易日全部靜靜漏掉,CSV 都還在、沒人發現。
+    #
+    # main() 的 MI_INDEX 退路早就是「資料日期不是 today 就以資料日期寫入」,
+    # 這裡照同一個慣例,不發明新模式。
+    pending = _pending_scan_dates(hist, today)
+    if not pending:
+        print(f"[top20] 沒有新的掃描日需要快照(時鐘日 {today})")
+    for date in pending:
+        top = _top20(date)
+        if not top:
+            print(f"[top20] {date} 的 CSV 讀不出可用資料,跳過快照")
+            continue
+        hist = [s for s in hist if s.get("date") != date]  # 冪等
+        hist.append({"date": date, "stocks": top})
+        late = "" if date == today else f"(補快照;時鐘日是 {today})"
+        print(f"[top20] {date} 快照 {len(top)} 支{late}")
+    hist.sort(key=lambda s: s.get("date") or "")
+
+    # 回填的基準日同樣用資料日,不用時鐘日 —— closes_today 是從這天的 CSV 讀的,
+    # 兩者必須一致,否則 fill_top20_returns 裡 `tgt == as_of` 永遠不成立。
+    scan_dates = _scan_dates(today)
+    as_of = scan_dates[-1] if scan_dates else today
+    if not scan_dates:
+        print(f"[top20] 警告:{SCAN_DIR} 裡找不到任何 batch_seq CSV —— 掃描流程可能壞了")
+    closes_today = _load_closes(as_of)
     if days:
         # 有真實交易日曆:依交易日回填(並更正舊版用快照日數算錯的值)
         _backup_once(TOP20_OUT)
-        written, corrected = fill_top20_returns(hist, days, today, _load_kline_closes(), closes_today)
+        written, corrected = fill_top20_returns(hist, days, as_of, _load_kline_closes(), closes_today)
         print(f"[top20] 依交易日曆回填 {written} 筆 forward return(更正舊值 {corrected} 筆)")
         _save_json(TOP20_OUT, hist)
         return
@@ -692,7 +747,7 @@ def track_top20(today: str, days: list[str] | None = None) -> None:
     dates = [s["date"] for s in hist]
     filled = 0
     for i, snap in enumerate(hist):
-        n_days = len([d for d in dates if snap["date"] < d <= today])  # 之後過了幾個掃描日
+        n_days = len([d for d in dates if snap["date"] < d <= as_of])  # 之後過了幾個掃描日
         if n_days not in HORIZONS:
             continue
         key = f"ret_{n_days}d"

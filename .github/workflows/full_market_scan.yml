@@ -195,14 +195,25 @@ jobs:
           git add output/full_scan/ || true
           CTS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
           git diff --staged --quiet || git commit -m "scan: seg${{ matrix.seg }} ${CTS} CST"
+          # push 全部失敗時要讓這個 step 失敗 —— 原本的寫法會吞掉。
+          # 迴圈的退出碼是最後一個指令(`... || true`)的,所以就算 N 次 push 全被拒,
+          # step 還是 exit 0 → run 全綠、資料卻沒進 repo。9 月那次 kline 快取
+          # 連續 41 天沒更新而沒人發現,就是這個模式造成的。
+          # 這個 step 保留 continue-on-error:單一 seg 推不上去不該讓整個 matrix 掛掉
+          # (9 個 seg 並發 push,偶爾耗盡重試是可能的),但也不該靜悄悄。
+          pushed=0
           for i in 1 2 3 4; do
-            git push && break
+            git push && { pushed=1; break; }
             sleep $((i * 10))
             git pull --rebase -X theirs origin main || true
             git add output/full_scan/ || true
             CTS=$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')
             git diff --staged --quiet || git commit -m "scan: seg${{ matrix.seg }} ${CTS} CST" || true
           done
+          if [ "$pushed" != 1 ]; then
+            echo "::error::seg${{ matrix.seg }} 掃描進度 push 連續 4 次失敗 —— 本段資料沒有進到 repo"
+            exit 1
+          fi
 
       - name: Notify Discord on failure
         if: failure()
