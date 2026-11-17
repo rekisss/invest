@@ -15,11 +15,17 @@ Claude Code 開草稿 PR,Codex 自動審查每個 PR(在 Codex 設定開啟 *Aut
   strategy/market_predictor… )不應被改;功能改進應在 `web/` 或 `build-data.mjs`。
 - **安全**:任何把外部資料(新聞 RSS、Notion、API 回應)放進 `href`/`innerHTML` 的地方要做
   scheme/sanitize 檢查;不得新增會洩漏或硬編 secrets / API key / token 的程式。
-- **前端為加法**:對 Dashboard/NewsFeed/PredictionPanel 應是新增,不破壞既有邏輯;動畫用 anime.js。
+- **前端為加法**:對 Dashboard/PredictionPanel 應是新增,不破壞既有邏輯;動畫用 anime.js。
+  (2026-11-16 使用者明確指示移除「新聞」分頁與 `NewsFeed.jsx`,該元件已不存在;
+   資料層 `news` / `news_sentiment` 保留不動。詳見 CLAUDE.md「前端修改原則」。)
 - **股票安全**:不得有自動下單、交易 API、或「保證獲利」敘述;策略改動需附理由與風險。
 - **測試與風險**:邏輯改動是否有測試;PR 描述是否說明 改了什麼/為什麼/測試/風險。
 
 ## 限制（硬規則,與 CLAUDE.md 一致）
-- 不要自動 merge;不要直接改 `main`;所有修改走 branch + PR。
+- 合併 PR:**有條件授權**(2026-11-16 使用者明確覆寫原本的「不要自動 merge」)。
+  Claude 僅可合併自己開的 PR,且必須同時滿足:①CI 全綠 ②無未解決的 review finding
+  ③無 merge conflict。任一項不成立即停下詢問使用者。他人開的 PR 一律不碰。
+  完整條文見 CLAUDE.md「自動化代理規則」。
+- 不要直接改 `main`;所有修改走 branch + PR。
 - 不要讀取、輸出或修改任何 secrets / token / API key。
 - 不要刪除 `output/`、`models/`、`training_data/` 等資料。
