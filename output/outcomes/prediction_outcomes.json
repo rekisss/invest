@@ -150,15 +150,8 @@
   "taiex_change": 25.91,
   "taiex_pct": 0.0005712759959791566,
   "actual_up": true,
-  "pred_date": "2026-07-13",
-  "xgb_prob_up": 0.409,
-  "pred_label": "偏空",
-  "directional": true,
-  "hit": false,
-  "hit_h5": true,
-  "ret_h5": -5.92,
-  "hit_h5_date": "2026-07-17",
-  "hit_h5_span_bdays": 5
+  "hit": null,
+  "hit_h5": null
  },
  {
   "date": "2026-07-14",
@@ -1830,7 +1823,10 @@
   "pred_label": "中性",
   "directional": false,
   "hit": null,
-  "hit_h5": null
+  "hit_h5": null,
+  "ret_h5": -9.18,
+  "hit_h5_date": "2026-11-18",
+  "hit_h5_span_bdays": 5
  },
  {
   "date": "2026-11-13",
@@ -1875,6 +1871,21 @@
   "pred_label": "中性",
   "directional": false,
   "hit": null,
+  "hit_h5": null
+ },
+ {
+  "date": "2026-11-18",
+  "taiex_close": 40194.91,
+  "taiex_close_date": "2026-11-18",
+  "close_source": "TWSE FMTQIK",
+  "taiex_change": 102.8,
+  "taiex_pct": 0.0025640955290206205,
+  "actual_up": true,
+  "pred_date": "2026-11-18",
+  "xgb_prob_up": 0.634,
+  "pred_label": "看多",
+  "directional": true,
+  "hit": true,
   "hit_h5": null
  }
 ]
