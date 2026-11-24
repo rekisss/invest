@@ -1,74 +1,75 @@
 {
-  "date": "2026-11-23",
+  "date": "2026-11-24",
   "generated_at": "08:01",
-  "xgb_prob_up": 0.624,
+  "xgb_prob_up": 0.584,
   "xgb_label": "偏多",
   "market_data": {
-    "vix": 35.89,
-    "sp500_ret": -0.037,
-    "nasdaq_ret": -0.0528,
-    "sox_ret": -0.1073,
-    "tsm_adr_ret": -0.0948,
-    "futures_net": -97863.0,
-    "night_change": -2024.0,
+    "vix": 26.62,
+    "sp500_ret": 0.0473,
+    "nasdaq_ret": 0.0651,
+    "sox_ret": 0.1403,
+    "tsm_adr_ret": 0.1408,
+    "futures_net": -103432.0,
+    "night_change": 3158.0,
     "pcr": null,
-    "taiex_rsi": 25.662298308808204,
-    "macd_hist": -1290.4918302387996,
-    "dist_ma20": -15.646124219400514,
-    "dist_ma60": -21.13057256899299,
-    "taiex_ret_5d": -17.491043060639456,
-    "taiex_ret_20d": -23.143544483148126,
+    "taiex_rsi": 29.486646955373203,
+    "macd_hist": -1346.1606983604051,
+    "dist_ma20": -12.882672405588691,
+    "dist_ma60": -19.194560848176,
+    "taiex_ret_5d": -10.296133678591158,
+    "taiex_ret_20d": -20.039539747421276,
     "buyback_count": 0,
-    "disposition_count": 20,
+    "disposition_count": 43,
     "jpy_ret": 0.002,
-    "arkk_ret": -0.0683,
-    "hyg_ret": -0.0026,
-    "night_trend": "↓ 走弱",
+    "arkk_ret": 0.08,
+    "hyg_ret": 0.0025,
+    "night_trend": "↑ 偏強",
     "market_revenue_yoy": 0.1408,
-    "market_foreign_holding_chg": -4.378
+    "market_foreign_holding_chg": -3.6269
   },
   "regime": {
-    "label": "extreme_vol",
-    "label_zh": "⚡ 極端波動日",
-    "win_rate": 40.0
+    "label": "short_squeeze",
+    "label_zh": "⚠️ 軋空日",
+    "win_rate": 55.0
   },
   "scenario": {
-    "main_scenario": "VIX=35.9 極端波動，市場失序，停止交易等待結構明朗",
-    "best_strategy": "場外觀望 / 縮小倉位至 20% 以下",
+    "main_scenario": "外資空單 -103,432 口，若開盤方向錯誤，空方被迫回補 → 先拉高再轉弱",
+    "best_strategy": "等開盤15分鐘方向確認後再進場，避免追空缺口",
     "danger_signals": [
-      "外資空單極重（-97,863口），軋空風險高",
-      "VIX=35.9 高波動，假突破機率高",
-      "夜盤缺口 -2024pt 過大，易反轉"
+      "軋空風險：若開盤跳空向上超過150pt，空單需謹慎",
+      "外資空單極重（-103,432口），軋空風險高",
+      "VIX=26.6 高波動，假突破機率高",
+      "夜盤缺口 +3158pt 過大，易反轉"
     ],
     "forbidden_actions": [
-      "禁止 ORB 策略（波動過大）",
-      "禁止追空缺口超過200pt",
-      "禁止反彈高點追多（軋空陷阱）"
+      "禁止追多缺口超過200pt",
+      "禁止反彈高點追多（軋空陷阱）",
+      "開盤前30分鐘禁止追空"
     ]
   },
   "risk": {
-    "level": "extreme",
-    "score": 0.9,
+    "level": "high",
+    "score": 0.65,
     "factors": [
       {
-        "name": "VIX極高",
-        "description": "VIX=35.9，市場恐慌",
-        "action": "停止交易"
+        "name": "VIX偏高",
+        "description": "VIX=26.6，波動擴大",
+        "action": "縮小倉位50%"
       },
       {
         "name": "外資空單極重",
-        "description": "-97,863口，軋空/崩潰雙向風險",
+        "description": "-103,432口，軋空/崩潰雙向風險",
         "action": "避免重押方向"
       },
       {
         "name": "夜盤大缺口",
-        "description": "夜盤 -2024pt，開盤後可能快速反轉",
+        "description": "夜盤 +3158pt，開盤後可能快速反轉",
         "action": "禁止追缺口超過200pt"
       }
     ]
   },
   "news_sentiment": {
-    "market_impact": -0.16,
+    "market_impact": 0.03,
     "key_events": [],
     "bullish_count": 0,
     "bearish_count": 0
